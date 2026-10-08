@@ -44,6 +44,8 @@ Drop an epic or standalone issue when any of these is true:
 - Every one of its open sub-issues is blocked from outside the epic.
 - It has an assignee other than the user.
 - An open PR closes it (`closingIssuesReferences`).
+- A branch is linked to it on GitHub (`gh issue develop --list <n> -R "$R"`
+  prints a branch).
 - A local branch for it exists in a worktree (branch `<type>/<n>-<slug>`).
 
 ## 3. Rank

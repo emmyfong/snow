@@ -48,14 +48,19 @@ values first, then use them in every later command:
 - `<wt>`: `<root>/.worktrees/<branch with / replaced by ->`, for example
   `<root>/.worktrees/feat-12-shell-in-pane`.
 
+Create the branch on GitHub, linked to the epic, so the epic shows it under
+Development and other agents see the work has started. Then check it out in
+a worktree:
+
 ```sh
-git -C <root> fetch origin
-git -C <root> worktree add --no-track -b <branch> <wt> origin/main
+gh issue develop <epic> -R "$R" --name <branch> --base main
+git -C <root> fetch origin <branch>
+git -C <root> worktree add --no-track -b <branch> <wt> origin/<branch>
 ln -s <root>/docs <wt>/docs
 ```
 
-`--no-track` keeps the branch from tracking `origin/main`, so a bare
-`git push` can never target main.
+`--no-track` keeps the new local branch without an upstream until the first
+`git push -u`, so a bare `git push` never targets another branch.
 
 Do all further work inside `<wt>`. Create its `.context/CONTEXT.md` with the
 `context` skill. Record `<root>`, `<branch>`, `<wt>`, and the sub-issue order
