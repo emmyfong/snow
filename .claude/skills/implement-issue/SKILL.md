@@ -63,8 +63,8 @@ Stop and wait for the go-ahead. Revise until the user approves.
 ## 4. Build
 
 - Follow `AGENTS.md`: Code quality, Comments, Tests.
-- Commit at each working step. Conventional Commit, scope is the package. End
-  each message with the `Co-Authored-By` trailer for your model.
+- Commit at each working step. Conventional Commit, scope is the package. No
+  trailers that name an agent (see `AGENTS.md`, Authorship).
 - Update `CONTEXT.md` at each milestone.
 - Check locally, only the touched packages:
   ```sh
@@ -88,7 +88,7 @@ git -C <wt> push -u origin <branch>
 
 Write the body to `<wt>/.context/pr-<n>.md` from `.github/pull_request_template.md`.
 Fill `Closes #<n>`, the summary, and how it was tested. End the body with the
-`Co-Authored-By` line. Then:
+plain line `Co-authored by Claude Code.` Then:
 
 ```sh
 gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<n>.md

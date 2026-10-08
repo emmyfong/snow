@@ -78,8 +78,14 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► backend, 
 
 ## Authorship
 
-- The commit author is the user's configured git identity. Agents add a
-  `Co-Authored-By` trailer and never set or change the author.
+- Every commit belongs to the user: author, committer, and push all use the
+  user's configured git identity and `gh` login. Never set or change them.
+- Commit messages carry no trailers that name an agent: no `Co-Authored-By`,
+  no `Generated with`. GitHub links them to accounts and lists the agent as a
+  contributor.
+- Credit the agent only in a PR description, as the plain last line
+  `Co-authored by Claude Code.` Not the trailer form `Name <email>`, because
+  the PR body becomes the squash commit message.
 - Never force push. Never push to `main`. Never change git config.
 - Hooks enforce these rules. If a command is blocked, stop and tell the user.
 

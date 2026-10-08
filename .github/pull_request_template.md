@@ -15,4 +15,5 @@ Closes #
 - [ ] The PR title is a Conventional Commit.
 - [ ] `.context/CONTEXT.md` is updated.
 
-Co-Authored-By: <agent, if any>
+<!-- If an agent helped, keep the next line. Delete it otherwise. -->
+Co-authored by Claude Code.
