@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	uv "github.com/charmbracelet/ultraviolet"
 	"github.com/charmbracelet/x/xpty"
 )
@@ -17,18 +20,23 @@ type redrawMsg struct{}
 
 type exitedMsg struct{ err error }
 
-// pane is the Bubble Tea model: one shell drawn full screen.
+// statusStyle is literal here because the spike has no theme package.
+var statusStyle = lipgloss.NewStyle().Reverse(true)
+
+// pane is the Bubble Tea model: one shell above a one-line status bar.
 type pane struct {
 	*shell
-	err error
+	name          string
+	width, height int
+	err           error
 }
 
 func newPane(name string, args []string, width, height int) (*pane, error) {
-	s, err := startShell(name, args, width, height)
+	s, err := startShell(name, args, width, height-1)
 	if err != nil {
 		return nil, err
 	}
-	return &pane{shell: s}, nil
+	return &pane{shell: s, name: filepath.Base(name), width: width, height: height}, nil
 }
 
 func (p *pane) Init() tea.Cmd {
@@ -54,7 +62,8 @@ func (p *pane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		p.emu.Paste(msg.Content)
 	case tea.WindowSizeMsg:
-		if err := p.resize(msg.Width, msg.Height); err != nil {
+		p.width, p.height = msg.Width, msg.Height
+		if err := p.resize(msg.Width, max(1, msg.Height-1)); err != nil {
 			p.err = err
 			return p, tea.Quit
 		}
@@ -68,7 +77,9 @@ func (p *pane) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (p *pane) View() tea.View {
-	v := tea.NewView(p.emu.Render())
+	status := fmt.Sprintf(" snow-spike │ %s │ %dx%d │ type exit to quit ", p.name, p.width, p.height)
+	bar := statusStyle.Width(p.width).MaxWidth(p.width).Render(status)
+	v := tea.NewView(p.emu.Render() + "\n" + bar)
 	v.AltScreen = true
 	pos := p.emu.CursorPosition()
 	v.Cursor = tea.NewCursor(pos.X, pos.Y)

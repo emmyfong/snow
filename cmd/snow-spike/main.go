@@ -26,4 +26,5 @@ func main() {
 		fmt.Fprintln(os.Stderr, "snow-spike:", err)
 		os.Exit(1)
 	}
+	fmt.Printf("snow-spike: %s exited\n", *shell)
 }
