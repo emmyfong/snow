@@ -8,3 +8,17 @@
 /snow
 /snow.exe
 /dist/
+*.exe
+*.test
+*.out
+coverage.*
+
+# Personal Claude Code settings
+.claude/settings.local.json
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
