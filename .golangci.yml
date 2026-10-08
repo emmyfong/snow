@@ -23,11 +23,7 @@ linters:
         leaf-packages:
           files: ["**/internal/term/**", "**/internal/layout/**"]
           deny:
-            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "term and layout are leaf packages" }
-            - { pkg: "github.com/emmyfong/snow/internal/client", desc: "term and layout are leaf packages" }
-            - { pkg: "github.com/emmyfong/snow/internal/backend", desc: "term and layout are leaf packages" }
-            - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "term and layout are leaf packages" }
-            - { pkg: "github.com/emmyfong/snow/pkg/api", desc: "term and layout are leaf packages" }
+            - { pkg: "github.com/emmyfong/snow", desc: "term and layout are leaf packages and import no other Snow package" }
 
 formatters:
   enable:
