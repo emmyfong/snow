@@ -1,6 +1,6 @@
 # Local agent working memory, docs, and worktrees. Never committed.
 .context/
-docs/
+/docs
 .worktrees/
 .superpowers/
 
