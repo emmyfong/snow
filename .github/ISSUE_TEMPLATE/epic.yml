@@ -1,4 +1,5 @@
 name: Epic
+title: "[Epic] "
 description: One concern a user can name. One PR closes it and all its sub-issues. Add one priority label.
 labels: [epic]
 body:

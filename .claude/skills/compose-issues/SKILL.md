@@ -48,8 +48,11 @@ bodies.
   work it scopes; an interface before its implementations; a shared helper
   before its callers. Arrows run between sub-issues inside an epic (build
   order) and between epics (PR order). Say which items are independent.
-- **Titles.** Plain and specific, no prefixes: `Shell in a pane on every OS`.
-  Priority and type live in labels only.
+- **Titles.** One type tag, then a plain, specific title. Epics use `[Epic]`:
+  `[Epic] Shell in a pane on every OS`. Other issues use the tag of their main
+  type label: `[Feature]`, `[Enhancement]`, `[Bug]`, `[Optimization]`,
+  `[Tests]`, `[Docs]`. The tag matches a type label on the issue. Priority
+  lives in labels only.
 - **Labels.** Issues can have several labels. Give each epic and sub-issue one
   priority label and one or more type labels from `gh label list -R "$R"`:
   `feature`, `enhancement`, `bug`, `optimization`, `tests`, `docs`. Epics also
@@ -89,7 +92,7 @@ Bodies go only through `--body-file` and titles only in single quotes. A
 double-quoted body loses backticks and `$` text.
 
 ```sh
-gh issue create -R "$R" --title '<title>' --body-file .context/compose/<key>.md \
+gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>.md \
   --label 'Priority: Medium' --label 'feature'
 ```
 

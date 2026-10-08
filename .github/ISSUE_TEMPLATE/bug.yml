@@ -1,4 +1,5 @@
 name: Bug
+title: "[Bug] "
 description: Shipped behavior is wrong.
 labels: [bug]
 body:

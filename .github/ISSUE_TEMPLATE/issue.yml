@@ -1,4 +1,5 @@
 name: Issue
+title: "[Feature] "
 description: One step of an epic, or a standalone issue. Add one priority label.
 body:
   - type: textarea

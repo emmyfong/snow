@@ -98,7 +98,11 @@ folder, without edits across the codebase.
   `Closes #N` line per issue.
 - Labels: one priority (`Priority: Critical`, `High`, `Medium`, `Low`) and one
   or more types (`feature`, `enhancement`, `bug`, `optimization`, `tests`,
-  `docs`). Titles have no prefixes.
+  `docs`).
+- Titles start with one type tag: `[Epic]` for epics, otherwise the main type
+  label: `[Feature]`, `[Enhancement]`, `[Bug]`, `[Optimization]`, `[Tests]`,
+  `[Docs]`. Example: `[Feature] Detect shell profiles`. Priority stays in
+  labels only.
 
 ## Git
 

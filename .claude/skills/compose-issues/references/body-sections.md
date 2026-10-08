@@ -85,6 +85,8 @@ screen ◄── vt emulator ◄── PTY output ◄── shell
 - Issue references are `#N`. No `NEW-` placeholders remain before posting
   epics.
 - The sub-issue diagram shows this step's change, not the epic's map.
-- Titles have no priority or type prefix. Every issue has one priority label.
+- Titles start with one type tag (`[Epic]`, `[Feature]`, `[Bug]`, ...) that
+  matches a type label. No priority in titles; every issue has one priority
+  label.
 - Acceptance items are observable and name their test.
 - No internal planning words: no task ids, waves, or model names.
