@@ -12,6 +12,7 @@ This skill reads only. It changes nothing on GitHub.
 
 ```sh
 R=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
+mkdir -p .context
 gh issue list -R "$R" --state open --limit 200 \
   --json number,title,labels,assignees > .context/issues.json
 gh pr list -R "$R" --state open --limit 100 \

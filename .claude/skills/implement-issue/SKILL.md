@@ -28,17 +28,26 @@ Branch type from the labels: `bug` gives `fix`, `documentation` gives `docs`,
 `ci` gives `ci`, `spike` gives `spike`, anything else gives `feat`. The slug is
 three to five words of the title in kebab case.
 
+Shell variables do not survive between Bash calls. Work out the literal
+values first, then use them in every later command:
+
+- `<root>`: the output of `git rev-parse --show-toplevel` in the main checkout.
+- `<branch>`: `<type>/<n>-<slug>`, for example `feat/12-shell-in-pane`.
+- `<wt>`: `<root>/.worktrees/<branch with / replaced by ->`, for example
+  `<root>/.worktrees/feat-12-shell-in-pane`.
+
 ```sh
-ROOT=$(git rev-parse --show-toplevel)
-BRANCH=<type>/<n>-<slug>
-DIR=.worktrees/$(echo "$BRANCH" | tr / -)
-git fetch origin
-git worktree add -b "$BRANCH" "$ROOT/$DIR" origin/main
-ln -s "$ROOT/docs" "$ROOT/$DIR/docs"
+git -C <root> fetch origin
+git -C <root> worktree add --no-track -b <branch> <wt> origin/main
+ln -s <root>/docs <wt>/docs
 ```
 
-Do all further work inside `$ROOT/$DIR`. Create its `.context/CONTEXT.md`
-with the `context` skill: goal, acceptance criteria, next step.
+`--no-track` keeps the branch from tracking `origin/main`, so a bare
+`git push` can never target main.
+
+Do all further work inside `<wt>`. Create its `.context/CONTEXT.md` with the
+`context` skill. Record `<root>`, `<branch>`, and `<wt>` in its Files that
+matter section, so a later session has the literal values.
 
 ## 3. Plan gate
 
@@ -69,23 +78,25 @@ Stop and wait for the go-ahead. Revise until the user approves.
 
 ## 5. Open the PR
 
-Before the first push, rebase on main: `git fetch origin && git rebase origin/main`.
+Before the first push, rebase on main: `git -C <wt> fetch origin && git -C <wt> rebase origin/main`.
 After the first push, never rebase. Merge `origin/main` into the branch
 instead, because force push is blocked.
 
 ```sh
-git push -u origin "$BRANCH"
+git -C <wt> push -u origin <branch>
 ```
 
-Write the body to `.context/pr-<n>.md` from `.github/pull_request_template.md`.
+Write the body to `<wt>/.context/pr-<n>.md` from `.github/pull_request_template.md`.
 Fill `Closes #<n>`, the summary, and how it was tested. End the body with the
 `Co-Authored-By` line. Then:
 
 ```sh
-gh pr create --title '<type>(<scope>): <summary>' --body-file .context/pr-<n>.md
+gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<n>.md
 ```
 
 The title is a Conventional Commit. It becomes the squash commit on `main`.
+The title type is not always the branch type: a spike branch uses `docs` for
+a written finding, or `chore` for throwaway code.
 Pass the title in single quotes and the body only through `--body-file`.
 
 ## 6. Get CI green
@@ -118,8 +129,8 @@ gh pr view <pr> --json state --jq .state   # must print MERGED
 Run the graduation step of the `context` skill. Then:
 
 ```sh
-git worktree remove "$ROOT/$DIR"
-git branch -D "$BRANCH"
+git -C <root> worktree remove <wt>
+git -C <root> branch -D <branch>
 ```
 
 ## Spikes

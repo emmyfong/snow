@@ -21,6 +21,7 @@ Use AskUserQuestion, one call, three questions:
 ## 2. Collect the artifact
 
 ```sh
+mkdir -p .context/reviews
 gh pr view <pr> --json number,title,body,headRefOid,baseRefName,files,closingIssuesReferences
 gh pr diff <pr> > .context/reviews/pr-<pr>.diff
 gh issue view <issue> --json title,body   # each linked issue
