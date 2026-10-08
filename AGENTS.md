@@ -108,10 +108,14 @@ folder, without edits across the codebase.
 
 - Conventional Commits: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`,
   `ci`, `perf`. The scope is the package: `feat(term): add resize`.
-- Commit often, at each working step.
+- Commit at milestones worth saving: a finished sub-issue, or a tested step
+  you would want to return to. No work-in-progress or fix-up commits; amend
+  local commits before the first push instead.
 - Branch: `<type>/<epic#>-<slug>`, for example `feat/12-shell-in-pane`.
 - The PR title is a Conventional Commit. It becomes the squash commit on
   `main`.
+- Open the PR and stop. Do not watch CI. The user handles CI failures and
+  merges.
 - Only the user merges.
 
 ## Authorship

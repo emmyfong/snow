@@ -1,6 +1,6 @@
 ---
 name: issue-handler
-description: Handle one epic end to end in Snow, with all its sub-issues, in one worktree, one branch, and one PR that closes the epic and every sub-issue. Gets the user's go-ahead on a plan, builds sub-issues in blocker order with frequent Conventional Commits, opens the PR, and gets CI green. Never merges. Use when the user names an epic or issue to work on, or after next-issue hands one over.
+description: Handle one epic end to end in Snow, with all its sub-issues, in one worktree, one branch, and one PR that closes the epic and every sub-issue. Gets the user's go-ahead on a plan, builds sub-issues in blocker order with milestone Conventional Commits, and opens the PR. Leaves CI and the merge to the user. Use when the user names an epic or issue to work on, or after next-issue hands one over.
 ---
 
 # Handle one epic
@@ -83,8 +83,10 @@ Stop and wait for the go-ahead. Revise until the user approves.
 Work one sub-issue at a time, in the approved order.
 
 - Follow `AGENTS.md`: Code quality, Comments, Tests.
-- Commit at each working step. Conventional Commit, scope is the package.
-  Reference the sub-issue in the body: `Part of #<n>`. No trailers that name
+- Commit at milestones: usually one commit per finished sub-issue, more only
+  for a tested step worth returning to. No work-in-progress or fix-up commits.
+  Conventional Commit, scope is the package. Reference the sub-issue in the
+  body: `Part of #<n>`. No trailers that name
   an agent (see `AGENTS.md`, Authorship).
 - Check locally, only the touched packages:
   ```sh
@@ -124,25 +126,14 @@ Pass the title in single quotes and the body only through `--body-file`.
 If a sub-issue was left out, do not close the epic. Leave out its `Closes`
 line and tell the user which sub-issues remain open.
 
-## 6. Get CI green
+## 6. Report and stop
 
-```sh
-gh pr checks <pr> --watch
-```
+Tell the user: the PR link, the issues it closes, what changed, and anything
+they must decide. Do not watch CI: it runs on its own, and the user handles
+failures and merges. Update `CONTEXT.md` with a Handoff. Do not merge.
+`gh pr merge` is blocked by a hook.
 
-On red, read the failure, fix it, commit, push, and watch again:
-
-```sh
-gh run view <run-id> --log-failed | tail -100
-```
-
-## 7. Report and stop
-
-Tell the user: the PR link, the CI state, the issues it closes, what changed,
-and anything they must decide. Update `CONTEXT.md` with a Handoff. Do not
-merge. `gh pr merge` is blocked by a hook.
-
-## 8. After the user merges
+## 7. After the user merges
 
 Confirm the merge first. A squash merge leaves the branch unmerged in git's
 view, so `-D` is required and safe only after this check.
