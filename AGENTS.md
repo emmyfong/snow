@@ -65,15 +65,30 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► backend, 
   packages you touched. Do not run the full suite. CI runs everything on
   Linux, macOS, and Windows and gates the merge.
 
+## Issues and worktrees
+
+- Work is tracked only in GitHub Issues.
+- An epic (label `epic`) is one unit of work: one worktree, one branch, one PR.
+  Its sub-issues are the steps. A standalone issue counts as an epic of one.
+- Take on an epic with the `issue-handler` skill, in its own worktree under
+  `.worktrees/`. Never build an epic in the main checkout.
+- Sub-issues may be blocked by other issues. A blocker inside the epic sets
+  the build order. A blocker outside the epic stops that sub-issue; ask the
+  user.
+- The epic's PR closes the epic and every sub-issue it completes, with one
+  `Closes #N` line per issue.
+- Labels: one priority (`Priority: Critical`, `High`, `Medium`, `Low`) and one
+  or more types (`feature`, `enhancement`, `bug`, `optimization`, `tests`,
+  `docs`). Titles have no prefixes.
+
 ## Git
 
 - Conventional Commits: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`,
   `ci`, `perf`. The scope is the package: `feat(term): add resize`.
 - Commit often, at each working step.
-- One issue, one branch, one PR. Branch: `<type>/<issue#>-<slug>`. Build it in
-  a worktree under `.worktrees/`.
+- Branch: `<type>/<epic#>-<slug>`, for example `feat/12-shell-in-pane`.
 - The PR title is a Conventional Commit. It becomes the squash commit on
-  `main`. The PR body contains `Closes #N`.
+  `main`.
 - Only the user merges.
 
 ## Authorship

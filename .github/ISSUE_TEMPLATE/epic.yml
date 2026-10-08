@@ -1,6 +1,5 @@
 name: Epic
-description: One concern a user or operator can name, with child issues.
-title: "[P1][Epic] "
+description: One concern a user can name. One PR closes it and all its sub-issues. Add one priority label.
 labels: [epic]
 body:
   - type: textarea
@@ -13,7 +12,7 @@ body:
     validations: { required: true }
   - type: textarea
     id: children
-    attributes: { label: Children, description: "Table: priority, title, blocked by." }
+    attributes: { label: Sub-issues, description: "Table: order, sub-issue, priority, blocked by." }
     validations: { required: true }
   - type: textarea
     id: done

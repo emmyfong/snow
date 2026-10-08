@@ -11,10 +11,10 @@
 where it changes the system.>
 
 ## Children
-| Priority | Issue | Blocked by |
-|---|---|---|
-| P1 | #12 Run a shell in a pane | none |
-| P1 | #13 Resize the PTY with the pane | #12 |
+| Order | Sub-issue | Priority | Blocked by |
+|---|---|---|---|
+| 1 | #12 Run a shell in a pane | High | none |
+| 2 | #13 Resize the PTY with the pane | High | #12 |
 
 ## Definition of done
 - <Observable outcome a user can check.>
@@ -23,7 +23,7 @@ where it changes the system.>
 - <Other epics, ADRs by number and title.>
 ```
 
-## Issue body
+## Sub-issue body
 
 ```markdown
 ## Problem
@@ -48,7 +48,7 @@ failure path. More specific than the epic's concept map.>
 - <ADRs, issues, docs>
 ```
 
-## Example issue (short)
+## Example sub-issue (short)
 
 ```markdown
 ## Problem
@@ -84,6 +84,7 @@ screen ◄── vt emulator ◄── PTY output ◄── shell
   thing in every body (check the glossary).
 - Issue references are `#N`. No `NEW-` placeholders remain before posting
   epics.
-- The issue diagram shows this issue's change, not the epic's map.
+- The sub-issue diagram shows this step's change, not the epic's map.
+- Titles have no priority or type prefix. Every issue has one priority label.
 - Acceptance items are observable and name their test.
 - No internal planning words: no task ids, waves, or model names.

@@ -1,13 +1,15 @@
 ---
 name: compose-issues
-description: Turn a set of planned or deferred work items into GitHub epics and prioritized sub-issues with a blocker DAG, get the user's approval on the structure and then on the bodies, and post them with native sub-issue and blocked-by links and existing labels. Use when the user wants to plan work as issues, break a roadmap or spec into epics, or file follow-ups from a review.
+description: Turn a set of planned or deferred work items into GitHub epics (one PR each) and their sub-issues with a blocker DAG, get the user's approval on the structure and then on the bodies, and post them with native sub-issue and blocked-by links, type labels, and priority labels. Use when the user wants to plan work as issues, break a roadmap or spec into epics, or file follow-ups from a review.
 ---
 
 # Compose epics and issues
 
-Turn loose items into vertical epics with prioritized sub-issues and a blocker
-DAG. Two approval gates come before anything is created: the structure, then
-the bodies.
+Turn loose items into vertical epics with sub-issues and a blocker DAG. An
+epic is one PR: one worktree and one PR close the epic and all its sub-issues
+(see the `issue-handler` skill). Sub-issues are the steps inside that PR. Two
+approval gates come before anything is created: the structure, then the
+bodies.
 
 ## Preconditions
 
@@ -31,22 +33,31 @@ the bodies.
 
 - **Group vertically.** An epic is one concern a user can name, for example
   "Shell in a pane on every OS". Do not group by package or by layer.
-- **Size issues for one PR.** One issue is one branch and one PR. Split an
-  item that would touch many packages at once.
-- **Prioritize.** P0 blocks users now. P1 is next. P2 is planned. P3 is when
-  convenient. An epic's priority equals its highest child. Give one sentence
-  of reason for each call that is not obvious.
+- **Size each epic for one PR.** A reviewer must be able to read the whole PR.
+  If an epic would need more than about eight sub-issues or touch many
+  packages, split it into two epics with a blocked-by arrow between them.
+- **Size each sub-issue as one step.** One sub-issue is a few commits that
+  leave the build green.
+- **Prioritize with labels.** `Priority: Critical` blocks users or other work
+  now. `High` is next. `Medium` is planned. `Low` is when convenient. Every
+  epic and every sub-issue gets exactly one priority label. An epic's priority
+  equals its highest sub-issue. Give one sentence of reason for each call that
+  is not obvious.
 - **Build the DAG.** For each pair of items ask: must one finish first for the
   other to be correct or cheap? Typical arrows: a decision or spike before the
   work it scopes; an interface before its implementations; a shared helper
-  before its callers. Say which items are independent.
-- **Titles.** Epics: `[P1][Epic] <title>`. Issues: `[P2] <title>`.
-- **Labels.** Pick one type label and at most one component label per issue
-  from `gh label list -R "$R"`.
+  before its callers. Arrows run between sub-issues inside an epic (build
+  order) and between epics (PR order). Say which items are independent.
+- **Titles.** Plain and specific, no prefixes: `Shell in a pane on every OS`.
+  Priority and type live in labels only.
+- **Labels.** Issues can have several labels. Give each epic and sub-issue one
+  priority label and one or more type labels from `gh label list -R "$R"`:
+  `feature`, `enhancement`, `bug`, `optimization`, `tests`, `docs`. Epics also
+  get `epic`.
 
 ## 3. Approve the structure
 
-Present one message: the epics, every issue with priority and labels, the DAG
+Present one message: the epics, every sub-issue with its labels, the DAG
 as an ASCII diagram, and any re-homed or retitled items. End the turn. In the
 next turn, ask for approval with AskUserQuestion. Apply corrections and
 present again when a grouping, priority, or arrow changes. Write no bodies
@@ -72,14 +83,14 @@ an ambiguity after approval, ask again before you change a body.
 
 ## 6. Create
 
-Order: issues, then placeholder substitution, then epics, then links, then
-labels.
+Order: sub-issues, then placeholder substitution, then epics, then links.
 
 Bodies go only through `--body-file` and titles only in single quotes. A
 double-quoted body loses backticks and `$` text.
 
 ```sh
-gh issue create -R "$R" --title '[P2] <title>' --body-file .context/compose/<key>.md
+gh issue create -R "$R" --title '<title>' --body-file .context/compose/<key>.md \
+  --label 'Priority: Medium' --label 'feature'
 ```
 
 After all issues exist, replace every `NEW-<key>` with `#<n>` in all drafts.
@@ -90,7 +101,7 @@ bodies that had placeholders:
 gh issue edit <n> -R "$R" --body-file .context/compose/<key>.md
 ```
 
-Then create the epics with `--label epic`. Then link:
+Then create the epics the same way, with `--label epic` added. Then link:
 
 ```sh
 CHILD_ID=$(gh api "repos/$R/issues/<child>" --jq .id)
@@ -101,9 +112,9 @@ gh api -X POST "repos/$R/issues/<later>/dependencies/blocked_by" -F issue_id="$B
 
 Every arrow in the DAG becomes a blocked-by link. State it in the body too.
 
-Apply labels with `gh issue edit <n> -R "$R" --add-label '<label>'`. A needed
-label that does not exist is a question for the user. Never create a label
-yourself.
+Fix labels later with `gh issue edit <n> -R "$R" --add-label '<label>'`. A
+needed label that does not exist is a question for the user. Never create a
+label yourself.
 
 ## 7. Check
 
@@ -120,3 +131,4 @@ file if not.
 
 One message: the epics with numbers and priorities, the DAG with real
 numbers, the labels applied, and the counts of created and retitled issues.
+Every epic is ready for `issue-handler`.

@@ -1,6 +1,5 @@
 name: Issue
-description: One unit of work, sized for one PR.
-title: "[P2] "
+description: One step of an epic, or a standalone issue. Add one priority label.
 body:
   - type: textarea
     id: problem

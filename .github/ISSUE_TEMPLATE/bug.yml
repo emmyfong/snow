@@ -1,6 +1,5 @@
 name: Bug
 description: Shipped behavior is wrong.
-title: "[P2] "
 labels: [bug]
 body:
   - type: textarea

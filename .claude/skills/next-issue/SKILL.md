@@ -1,12 +1,13 @@
 ---
 name: next-issue
-description: Choose the next GitHub issue to work on in Snow. Reads open issues, priorities, epics, and blocked-by links, drops blocked or in-progress work, and offers the top three for the user to pick. Use when the user asks what to work on next, or before starting implement-issue without a named issue.
+description: Choose the next epic to work on in Snow. Reads open epics and standalone issues, their priority labels, sub-issues, and blocked-by links, drops blocked or in-progress work, and offers the top three for the user to pick. Use when the user asks what to work on next, or before starting issue-handler without a named epic.
 ---
 
-# Choose the next issue
+# Choose the next epic
 
-Find the open issues that are ready to start, rank them, and let the user pick.
-This skill reads only. It changes nothing on GitHub.
+Find the open epics that are ready to start, rank them, and let the user pick.
+An epic is one PR. A standalone issue (no parent epic, no sub-issues) counts as
+an epic of one. This skill reads only. It changes nothing on GitHub.
 
 ## 1. Collect
 
@@ -14,19 +15,21 @@ This skill reads only. It changes nothing on GitHub.
 R=$(gh repo view --json nameWithOwner --jq .nameWithOwner)
 mkdir -p .context
 gh issue list -R "$R" --state open --limit 200 \
-  --json number,title,labels,assignees > .context/issues.json
+  --json number,title,labels,assignees,body > .context/issues.json
 gh pr list -R "$R" --state open --limit 100 \
   --json number,headRefName,closingIssuesReferences > .context/prs.json
 git worktree list --porcelain | grep '^branch ' | sed 's#branch refs/heads/##'
 ```
 
-For each open epic (label `epic`), list its children in order:
+For each open epic (label `epic`), list its open sub-issues:
 
 ```sh
 gh api "repos/$R/issues/<epic>/sub_issues" --jq '.[] | select(.state=="open") | .number'
 ```
 
-For each candidate issue, list its open blockers:
+An open issue that is in no epic's list and has no sub-issues is standalone.
+
+For each epic, its sub-issues, and each standalone issue, list open blockers:
 
 ```sh
 gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state=="open") | .number'
@@ -34,37 +37,37 @@ gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state==
 
 ## 2. Filter
 
-Drop an issue when any of these is true:
+Drop an epic or standalone issue when any of these is true:
 
-- It is an epic (label `epic`).
-- It has an open blocker.
+- It has an open blocker outside itself. A sub-issue blocked by another
+  sub-issue of the same epic does not count; that only sets the build order.
+- Every one of its open sub-issues is blocked from outside the epic.
 - It has an assignee other than the user.
 - An open PR closes it (`closingIssuesReferences`).
 - A local branch for it exists in a worktree (branch `<type>/<n>-<slug>`).
 
 ## 3. Rank
 
-1. Priority from the title: `[P0]` first, then `[P1]`, `[P2]`, `[P3]`. A title
-   with no priority ranks last. Report it as a defect.
-2. Then the parent epic's priority.
-3. Then the order of the issue among its epic's sub-issues.
-4. Then the lower issue number.
+1. Priority label: `Priority: Critical`, then `High`, `Medium`, `Low`. An epic
+   with no priority label ranks last. Report it as a defect.
+2. Then how many other epics or issues it unblocks. More first.
+3. Then the lower issue number.
 
-Then prefer independence. If work is already in progress in a worktree, move
-an issue down one place when it shares a component label (`term`, `layout`,
-`server`, ...) with that work. Parallel work in one package causes merge
-conflicts.
+Then prefer independence. If work is in progress in a worktree, move a
+candidate down one place when its body names the same `internal/<pkg>`
+packages as that work. Parallel work in one package causes merge conflicts.
 
 ## 4. Offer
 
 Ask the user with AskUserQuestion. Offer the top three. Each option has:
 
-- Label: `#<n> [P<x>] <short title>`.
-- Description: one line on why it is ready and what it unblocks
-  (for example: "unblocks #14 and #15").
+- Label: `#<n> <short title>` and its priority, for example
+  `#12 Shell in a pane (High)`.
+- Description: the number of open sub-issues, and what it unblocks (for
+  example: "4 sub-issues; unblocks #20").
 
-If nothing is ready, say why: list the blocked issues and their blockers.
+If nothing is ready, say why: list the blocked epics and their blockers.
 
 ## 5. Hand off
 
-Start the `implement-issue` skill with the chosen issue number.
+Start the `issue-handler` skill with the chosen epic or issue number.

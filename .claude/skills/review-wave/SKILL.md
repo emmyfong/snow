@@ -27,8 +27,8 @@ gh pr diff <pr> > .context/reviews/pr-<pr>.diff
 gh issue view <issue> --json title,body   # each linked issue
 ```
 
-Record the head SHA. Every finding refers to it. Read the linked issue's
-acceptance criteria. Read the ADRs in `docs/decisions/` that the change
+Record the head SHA. Every finding refers to it. The PR usually closes an
+epic and its sub-issues. Read the acceptance criteria of every closed issue. Read the ADRs in `docs/decisions/` that the change
 touches.
 
 If a report exists for this PR in `.context/reviews/`, this is a re-review.
