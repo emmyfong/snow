@@ -1,0 +1,34 @@
+version: "2"
+
+linters:
+  enable:
+    - depguard
+    - errorlint
+    - revive
+  settings:
+    depguard:
+      rules:
+        client-uses-api-only:
+          files: ["**/internal/client/**"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "the client talks to the server only through pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/backend", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
+        api-is-public:
+          files: ["**/pkg/api/**"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal", desc: "pkg/api is public and must not expose internal types" }
+        leaf-packages:
+          files: ["**/internal/term/**", "**/internal/layout/**"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "term and layout are leaf packages" }
+            - { pkg: "github.com/emmyfong/snow/internal/client", desc: "term and layout are leaf packages" }
+            - { pkg: "github.com/emmyfong/snow/internal/backend", desc: "term and layout are leaf packages" }
+            - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "term and layout are leaf packages" }
+            - { pkg: "github.com/emmyfong/snow/pkg/api", desc: "term and layout are leaf packages" }
+
+formatters:
+  enable:
+    - gofmt
