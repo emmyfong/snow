@@ -1,0 +1,25 @@
+name: Issue
+description: One unit of work, sized for one PR.
+title: "[P2] "
+body:
+  - type: textarea
+    id: problem
+    attributes: { label: Problem, description: "What is wrong or missing. Include file paths and numbers." }
+    validations: { required: true }
+  - type: textarea
+    id: scope
+    attributes: { label: Scope, description: "What changes and what does not." }
+    validations: { required: true }
+  - type: textarea
+    id: acceptance
+    attributes: { label: Acceptance, description: "Observable outcomes. Name the tests or fixtures." }
+    validations: { required: true }
+  - type: textarea
+    id: diagram
+    attributes: { label: Diagram, description: "ASCII diagram of this change: data flow, before and after, or failure path.", render: text }
+  - type: textarea
+    id: relations
+    attributes: { label: Blocked by / Blocks, description: "Issue numbers. Also link them natively." }
+  - type: textarea
+    id: related
+    attributes: { label: Related }

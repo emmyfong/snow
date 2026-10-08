@@ -1,0 +1,24 @@
+name: Bug
+description: Shipped behavior is wrong.
+title: "[P2] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: { label: What happens }
+    validations: { required: true }
+  - type: textarea
+    id: expected
+    attributes: { label: What should happen }
+    validations: { required: true }
+  - type: textarea
+    id: repro
+    attributes: { label: Steps to reproduce }
+    validations: { required: true }
+  - type: dropdown
+    id: os
+    attributes: { label: OS, multiple: true, options: [Windows, Linux, macOS] }
+    validations: { required: true }
+  - type: input
+    id: version
+    attributes: { label: snow version, description: "Output of `snow version`." }

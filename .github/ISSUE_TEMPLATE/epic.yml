@@ -1,0 +1,24 @@
+name: Epic
+description: One concern a user or operator can name, with child issues.
+title: "[P1][Epic] "
+labels: [epic]
+body:
+  - type: textarea
+    id: why
+    attributes: { label: Why }
+    validations: { required: true }
+  - type: textarea
+    id: concept-map
+    attributes: { label: Concept map, description: "ASCII diagram of the surfaces and pieces, with child issues placed on it.", render: text }
+    validations: { required: true }
+  - type: textarea
+    id: children
+    attributes: { label: Children, description: "Table: priority, title, blocked by." }
+    validations: { required: true }
+  - type: textarea
+    id: done
+    attributes: { label: Definition of done }
+    validations: { required: true }
+  - type: textarea
+    id: related
+    attributes: { label: Related epics }
