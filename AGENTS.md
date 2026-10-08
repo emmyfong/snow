@@ -15,8 +15,9 @@ Go standard layout. No `src/`.
 ```
 cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
-                     term, layout, server, client, backend, skills,
-                     context, gate, editor, store, hook, worktree
+                     term, layout, shell, server, client, store,
+                     later: backend, skills, context, gate, editor,
+                     hook, worktree
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -43,8 +44,26 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► backend, 
 - Bubble Tea: never touch the model from another goroutine. Deliver PTY output
   and server events as messages.
 - No cgo. Never assume bash; shells differ per OS.
-- Keep files small and focused. Add an abstraction only when a second caller
-  needs it.
+
+## Modularity
+
+Snow must be easy to iterate on: a feature can be redesigned by replacing its
+folder, without edits across the codebase.
+
+- **Reuse first.** Before you write a helper or a UI component, search for one
+  (`grep`, the catalog in the `tui` skill). Extend it instead of copying it.
+- **Extract on the second copy.** When the same logic appears a second time,
+  move it into a shared package and call it from both places. Do not build an
+  abstraction for a single caller.
+- **One concern per file.** Name each file after what it holds (`border.go`,
+  `picker.go`). Split a file when it mixes responsibilities or passes about
+  300 lines.
+- **Folders mean something.** Each feature lives in its own package, for
+  example `internal/client/home/`. Changing a feature should touch its folder,
+  not the rest of the app.
+- **Plug in through small interfaces.** Features connect through a narrow
+  interface (for example, a client `Screen`), so one can be replaced without
+  editing the others.
 
 ## Comments
 
