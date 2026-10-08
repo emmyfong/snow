@@ -1,0 +1,10 @@
+# Local agent working memory, docs, and worktrees. Never committed.
+.context/
+docs/
+.worktrees/
+.superpowers/
+
+# Build output
+/snow
+/snow.exe
+/dist/
