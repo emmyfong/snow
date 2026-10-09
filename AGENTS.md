@@ -115,6 +115,8 @@ folder, without edits across the codebase.
 - Branch: `<type>/<epic#>-<slug>`, for example `feat/12-shell-in-pane`.
 - The PR title is a Conventional Commit. It becomes the squash commit on
   `main`.
+- Before opening a PR, run the `review-wave` skill on the branch and fix the
+  findings the user chooses.
 - Open the PR and stop. Do not watch CI. The user handles CI failures and
   merges.
 - Only the user merges.

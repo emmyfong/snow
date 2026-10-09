@@ -1,6 +1,6 @@
 ---
 name: issue-handler
-description: Handle one epic end to end in Snow, with all its sub-issues, in one worktree, one branch, and one PR that closes the epic and every sub-issue. Gets the user's go-ahead on a plan, builds sub-issues in blocker order with milestone Conventional Commits, and opens the PR. Leaves CI and the merge to the user. Use when the user names an epic or issue to work on, or after next-issue hands one over.
+description: Handle one epic end to end in Snow, with all its sub-issues, in one worktree, one branch, and one PR that closes the epic and every sub-issue. Gets the user's go-ahead on a plan, builds sub-issues in blocker order with milestone Conventional Commits, runs a review wave on the branch, and opens the PR. Leaves CI and the merge to the user. Use when the user names an epic or issue to work on, or after next-issue hands one over.
 ---
 
 # Handle one epic
@@ -99,7 +99,17 @@ Work one sub-issue at a time, in the approved order.
 - Scope grows: stop and ask the user. Put new work in a new sub-issue or a new
   epic, not silently in this PR.
 
-## 5. Open the PR
+## 5. Review the branch
+
+Before the PR, run the `review-wave` skill on the branch. It asks the user
+for the reviewer models and count, then writes a curated report.
+
+- Show the user the report and let them choose which findings to fix.
+- Fix the chosen findings. Behavior fixes get a test that fails first.
+- Commit the fixes as milestone commits.
+- Findings the user defers become new issues, or lines in the PR body.
+
+## 6. Open the PR
 
 Before the first push, rebase on main:
 `git -C <wt> fetch origin && git -C <wt> rebase origin/main`. After the first
@@ -109,6 +119,8 @@ push is blocked.
 ```sh
 git -C <wt> push -u origin <branch>
 ```
+
+Offer to post the review report as the PR's first comment.
 
 Write the body to `<wt>/.context/pr-<epic>.md` from
 `.github/pull_request_template.md`. Put one `Closes #<n>` line for the epic and
@@ -126,14 +138,14 @@ Pass the title in single quotes and the body only through `--body-file`.
 If a sub-issue was left out, do not close the epic. Leave out its `Closes`
 line and tell the user which sub-issues remain open.
 
-## 6. Report and stop
+## 7. Report and stop
 
 Tell the user: the PR link, the issues it closes, what changed, and anything
 they must decide. Do not watch CI: it runs on its own, and the user handles
 failures and merges. Update `CONTEXT.md` with a Handoff. Do not merge.
 `gh pr merge` is blocked by a hook.
 
-## 7. After the user merges
+## 8. After the user merges
 
 Confirm the merge first. A squash merge leaves the branch unmerged in git's
 view, so `-D` is required and safe only after this check.
