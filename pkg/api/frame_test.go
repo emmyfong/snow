@@ -6,6 +6,8 @@ import (
 	"errors"
 	"io"
 	"reflect"
+	"runtime"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -74,6 +76,41 @@ func rawFrame(length uint32, typ byte, payload []byte) []byte {
 	return append(b, payload...)
 }
 
+func TestUnknownTypeIsSkipped(t *testing.T) {
+	var buf bytes.Buffer
+	buf.Write(rawFrame(4, 250, []byte(`{"a":1}`)[:4]))
+	if err := WriteFrame(&buf, &Bell{Pane: 9}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := ReadFrame(&buf); !errors.Is(err, ErrUnknownType) {
+		t.Fatalf("first read error = %v, want ErrUnknownType", err)
+	}
+	m, err := ReadFrame(&buf)
+	if err != nil {
+		t.Fatalf("second read: %v (the unknown payload was not skipped)", err)
+	}
+	if b, ok := m.(*Bell); !ok || b.Pane != 9 {
+		t.Fatalf("second read = %#v, want Bell{9}", m)
+	}
+}
+
+func TestWriteFrameRejects(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteFrame(&buf, nil); !errors.Is(err, ErrNilMessage) {
+		t.Fatalf("nil message error = %v, want ErrNilMessage", err)
+	}
+	if err := WriteFrame(&buf, (*Bell)(nil)); !errors.Is(err, ErrNilMessage) {
+		t.Fatalf("typed nil error = %v, want ErrNilMessage", err)
+	}
+	big := &Input{Pane: 1, Paste: strings.Repeat("x", MaxFrameSize)}
+	if err := WriteFrame(&buf, big); !errors.Is(err, ErrFrameTooLarge) {
+		t.Fatalf("oversize error = %v, want ErrFrameTooLarge", err)
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("rejected frames wrote %d bytes", buf.Len())
+	}
+}
+
 func TestFrameErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -83,6 +120,7 @@ func TestFrameErrors(t *testing.T) {
 		{"too large", rawFrame(MaxFrameSize+1, byte(TypeBell), nil), ErrFrameTooLarge},
 		{"unknown type", rawFrame(2, 250, []byte("{}")), ErrUnknownType},
 		{"bad json", rawFrame(5, byte(TypeBell), []byte("{nope")), ErrBadPayload},
+		{"null payload", rawFrame(4, byte(TypeBell), []byte("null")), ErrBadPayload},
 		{"truncated payload", rawFrame(10, byte(TypeBell), []byte("{}")), io.ErrUnexpectedEOF},
 		{"clean end of stream", nil, io.EOF},
 	}
@@ -96,12 +134,29 @@ func TestFrameErrors(t *testing.T) {
 	}
 }
 
+// splitWriter writes each frame in two pieces with a yield between them, like
+// a buffered or TLS writer. Without Conn's lock, frames from different
+// goroutines interleave. io.Pipe alone serializes whole writes and would hide
+// a missing lock.
+type splitWriter struct{ w io.Writer }
+
+func (s splitWriter) Write(p []byte) (int, error) {
+	half := len(p) / 2
+	n, err := s.w.Write(p[:half])
+	if err != nil {
+		return n, err
+	}
+	runtime.Gosched()
+	m, err := s.w.Write(p[half:])
+	return n + m, err
+}
+
 func TestConnConcurrentSends(t *testing.T) {
 	r, w := io.Pipe()
 	c := NewConn(struct {
 		io.Reader
 		io.Writer
-	}{r, w})
+	}{r, splitWriter{w}})
 	const senders, each = 50, 20
 	var wg sync.WaitGroup
 	for i := range senders {

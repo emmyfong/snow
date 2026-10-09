@@ -3,7 +3,9 @@ package api
 import (
 	"errors"
 	"net"
+	"os"
 	"testing"
+	"time"
 )
 
 func pair(t *testing.T) (client, server *Conn) {
@@ -51,7 +53,8 @@ func TestHandshakeMismatch(t *testing.T) {
 		t.Fatalf("client error = %v, want ErrVersionMismatch", err)
 	}
 	var mismatch *VersionMismatchError
-	if !errors.As(err, &mismatch) || mismatch.ClientVersion != "0.2.0" || mismatch.ServerVersion != "0.1.0" {
+	if !errors.As(err, &mismatch) || mismatch.ClientVersion != "0.2.0" || mismatch.ServerVersion != "0.1.0" ||
+		mismatch.ClientProtocol != 2 || mismatch.ServerProtocol != 1 {
 		t.Fatalf("client error = %#v, want both versions", err)
 	}
 	if w == nil || w.ServerVersion != "0.1.0" {
@@ -68,8 +71,48 @@ func TestHandshakeUnexpectedFirstMessage(t *testing.T) {
 	if err := client.Send(&Bell{Pane: 1}); err != nil {
 		t.Fatal(err)
 	}
+	// The client learns why instead of seeing a bare disconnect.
+	reply, err := client.Receive()
+	if err != nil {
+		t.Fatalf("client got no reply: %v", err)
+	}
+	if e, ok := reply.(*Error); !ok || e.Code != CodeBadHandshake {
+		t.Fatalf("client got %#v, want Error{bad-handshake}", reply)
+	}
 	if r := <-res; !errors.Is(r.err, ErrUnexpectedMessage) {
 		t.Fatalf("server error = %v, want ErrUnexpectedMessage", r.err)
+	}
+}
+
+func TestServerHandshakeTimesOut(t *testing.T) {
+	defer setHandshakeTimeout(50 * time.Millisecond)()
+	_, server := pair(t)
+	select {
+	case r := <-runServer(server, Welcome{Protocol: ProtocolVersion}):
+		if !errors.Is(r.err, os.ErrDeadlineExceeded) {
+			t.Fatalf("server error = %v, want a deadline error", r.err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ServerHandshake waited forever for a silent client")
+	}
+}
+
+func TestClientHandshakeTimesOut(t *testing.T) {
+	defer setHandshakeTimeout(50 * time.Millisecond)()
+	client, server := pair(t)
+	go func() { _, _ = server.Receive() }() // read Hello, never answer
+	done := make(chan error, 1)
+	go func() {
+		_, err := ClientHandshake(client, Hello{Protocol: ProtocolVersion})
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		if !errors.Is(err, os.ErrDeadlineExceeded) {
+			t.Fatalf("client error = %v, want a deadline error", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ClientHandshake waited forever for a silent server")
 	}
 }
 

@@ -2,12 +2,20 @@ package api
 
 import (
 	"slices"
+	"unicode"
 	"unicode/utf8"
 )
 
-// Key is one key press. Code is a single character ("a", "é") or one of the
-// Key* names; Text is what the key types, if anything; Mod lists modifiers by
-// name. Names keep the protocol readable and independent of any emulator.
+// Key is one key press. Names keep the protocol readable and independent of
+// any emulator.
+//
+//   - Code is the key itself, without Shift: a single lower-case or
+//     non-letter character ("a", "1", "é"), or one of the Key* names. Space
+//     is KeySpace, never " ". Shift+a is Code "a" with ModShift.
+//   - Text is what the key types, if anything ("A" for Shift+a). It may be
+//     empty for keys that type nothing.
+//   - Mod is a set of modifier names: order does not matter, and no name
+//     repeats.
 type Key struct {
 	Code string   `json:"code"`
 	Text string   `json:"text,omitempty"`
@@ -62,13 +70,16 @@ var NamedKeys = []string{
 
 var modNames = []string{ModShift, ModAlt, ModCtrl, ModMeta}
 
-// Valid reports whether k has a known code and known modifiers.
+// Valid reports whether k follows the rules above.
 func (k Key) Valid() bool {
-	if utf8.RuneCountInString(k.Code) != 1 && !slices.Contains(NamedKeys, k.Code) {
-		return false
+	if !slices.Contains(NamedKeys, k.Code) {
+		r, size := utf8.DecodeRuneInString(k.Code)
+		if size == 0 || size != len(k.Code) || unicode.IsSpace(r) || unicode.IsUpper(r) {
+			return false
+		}
 	}
-	for _, m := range k.Mod {
-		if !slices.Contains(modNames, m) {
+	for i, m := range k.Mod {
+		if !slices.Contains(modNames, m) || slices.Contains(k.Mod[:i], m) {
 			return false
 		}
 	}

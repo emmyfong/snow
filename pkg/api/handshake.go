@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"fmt"
+	"time"
 )
 
 // Handshake errors. Callers match them with errors.Is.
@@ -18,6 +19,7 @@ type VersionMismatchError struct {
 	ClientProtocol, ServerProtocol int
 }
 
+// Error describes both sides' versions.
 func (e *VersionMismatchError) Error() string {
 	return fmt.Sprintf("api: client %s (protocol %d) cannot talk to server %s (protocol %d)",
 		e.ClientVersion, e.ClientProtocol, e.ServerVersion, e.ServerProtocol)
@@ -26,12 +28,36 @@ func (e *VersionMismatchError) Error() string {
 // Is makes errors.Is(err, ErrVersionMismatch) true.
 func (e *VersionMismatchError) Is(target error) bool { return target == ErrVersionMismatch }
 
-// Error makes a server's Error message usable as a Go error.
-func (e *Error) Error() string { return fmt.Sprintf("server: %s: %s", e.Code, e.Message) }
+// handshakeTimeout bounds each side's wait during the handshake, so a peer
+// that connects and stays silent cannot pin a goroutine forever.
+var handshakeTimeout = 5 * time.Second
 
-// ClientHandshake sends h and reads the server's Welcome. On a protocol
-// mismatch it returns the Welcome together with a *VersionMismatchError.
+// withDeadline runs f under the handshake deadline, then clears it.
+func withDeadline(c *Conn, f func() error) error {
+	if err := c.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		return fmt.Errorf("set handshake deadline: %w", err)
+	}
+	err := f()
+	if clearErr := c.SetDeadline(time.Time{}); err == nil && clearErr != nil {
+		err = fmt.Errorf("clear handshake deadline: %w", clearErr)
+	}
+	return err
+}
+
+// ClientHandshake sends h and reads the server's Welcome within the handshake
+// timeout. On a protocol mismatch it returns the Welcome together with a
+// *VersionMismatchError. A server Error is returned as a *Error.
 func ClientHandshake(c *Conn, h Hello) (*Welcome, error) {
+	var w *Welcome
+	err := withDeadline(c, func() error {
+		var err error
+		w, err = clientHandshake(c, h)
+		return err
+	})
+	return w, err
+}
+
+func clientHandshake(c *Conn, h Hello) (*Welcome, error) {
 	if err := c.Send(&h); err != nil {
 		return nil, err
 	}
@@ -52,16 +78,31 @@ func ClientHandshake(c *Conn, h Hello) (*Welcome, error) {
 	}
 }
 
-// ServerHandshake reads the client's Hello and always answers with w, so a
-// client on another protocol still learns the server's version.
+// ServerHandshake reads the client's Hello within the handshake timeout and
+// always answers with w, so a client on another protocol still learns the
+// server's version. A first message that is not a readable Hello gets an
+// Error with CodeBadHandshake before the error is returned.
 func ServerHandshake(c *Conn, w Welcome) (*Hello, error) {
+	var h *Hello
+	err := withDeadline(c, func() error {
+		var err error
+		h, err = serverHandshake(c, w)
+		return err
+	})
+	return h, err
+}
+
+func serverHandshake(c *Conn, w Welcome) (*Hello, error) {
 	m, err := c.Receive()
+	if errors.Is(err, ErrBadPayload) || errors.Is(err, ErrUnknownType) {
+		return nil, rejectHandshake(c, fmt.Errorf("read hello: %w", err))
+	}
 	if err != nil {
 		return nil, fmt.Errorf("read hello: %w", err)
 	}
 	h, ok := m.(*Hello)
 	if !ok {
-		return nil, fmt.Errorf("%w: %T before hello", ErrUnexpectedMessage, m)
+		return nil, rejectHandshake(c, fmt.Errorf("%w: %T before hello", ErrUnexpectedMessage, m))
 	}
 	if err := c.Send(&w); err != nil {
 		return h, err
@@ -77,4 +118,11 @@ func mismatch(h *Hello, w *Welcome) error {
 		ClientVersion: h.ClientVersion, ServerVersion: w.ServerVersion,
 		ClientProtocol: h.Protocol, ServerProtocol: w.Protocol,
 	}
+}
+
+// rejectHandshake tells the client why the handshake failed, then returns
+// cause.
+func rejectHandshake(c *Conn, cause error) error {
+	sendErr := c.Send(&Error{Code: CodeBadHandshake, Message: "the first message must be a Hello"})
+	return errors.Join(cause, sendErr)
 }

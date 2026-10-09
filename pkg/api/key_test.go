@@ -35,6 +35,11 @@ func TestKeyValid(t *testing.T) {
 		{Key{Code: "a", Text: "a"}, true},
 		{Key{Code: "é", Text: "é"}, true},
 		{Key{Code: "ab"}, false},
+		{Key{Code: " "}, false},            // space is KeySpace
+		{Key{Code: "A", Text: "A"}, false}, // Code is the unshifted key: "a" with shift
+		{Key{Code: "a", Text: "A", Mod: []string{ModShift}}, true},
+		{Key{Code: "1", Text: "1"}, true},
+		{Key{Code: KeyUp, Mod: []string{ModCtrl, ModCtrl}}, false}, // Mod is a set
 		{Key{Code: "up", Mod: []string{"hyper"}}, false},
 		{Key{}, false},
 	}

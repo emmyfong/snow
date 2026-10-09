@@ -1,12 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"sync"
+	"reflect"
 )
 
 // MaxFrameSize bounds a payload so a corrupt length cannot exhaust memory.
@@ -17,13 +18,16 @@ var (
 	ErrFrameTooLarge = errors.New("api: frame too large")
 	ErrUnknownType   = errors.New("api: unknown message type")
 	ErrBadPayload    = errors.New("api: malformed payload")
+	ErrNilMessage    = errors.New("api: nil message")
 )
 
 const headerSize = 5 // 4-byte length + 1-byte type
 
-// WriteFrame writes m as one frame. It writes the whole frame in one call, so
-// a writer shared under a lock never interleaves frames.
+// WriteFrame writes m as one frame, in one Write call.
 func WriteFrame(w io.Writer, m Message) error {
+	if m == nil || reflect.ValueOf(m).IsNil() {
+		return ErrNilMessage
+	}
 	payload, err := json.Marshal(m)
 	if err != nil {
 		return fmt.Errorf("encode %T: %w", m, err)
@@ -42,6 +46,11 @@ func WriteFrame(w io.Writer, m Message) error {
 
 // ReadFrame reads one frame. It returns io.EOF only when the stream ends
 // cleanly between frames.
+//
+// ErrUnknownType and ErrBadPayload leave the stream usable: the payload has
+// been consumed, so the caller may ignore the frame and read the next one. A
+// newer peer can therefore add message types. Any other error leaves the
+// stream in an unknown state; close the connection.
 func ReadFrame(r io.Reader) (Message, error) {
 	var header [headerSize]byte
 	if _, err := io.ReadFull(r, header[:]); err != nil {
@@ -56,6 +65,10 @@ func ReadFrame(r io.Reader) (Message, error) {
 	}
 	m := newMessage(MsgType(header[4]))
 	if m == nil {
+		// size is already bounded, so skipping the payload is safe.
+		if _, err := io.CopyN(io.Discard, r, int64(size)); err != nil {
+			return nil, fmt.Errorf("skip unknown frame: %w", err)
+		}
 		return nil, fmt.Errorf("%w: %d", ErrUnknownType, header[4])
 	}
 	payload := make([]byte, size)
@@ -65,28 +78,11 @@ func ReadFrame(r io.Reader) (Message, error) {
 		}
 		return nil, fmt.Errorf("read frame payload: %w", err)
 	}
+	if bytes.Equal(bytes.TrimSpace(payload), []byte("null")) {
+		return nil, fmt.Errorf("%w: null", ErrBadPayload)
+	}
 	if err := json.Unmarshal(payload, m); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrBadPayload, err)
 	}
 	return m, nil
 }
-
-// Conn sends and receives frames over one connection. Send is safe to call
-// from many goroutines; Receive must be called from one goroutine at a time.
-type Conn struct {
-	rw io.ReadWriter
-	mu sync.Mutex // serializes whole frames on the writer
-}
-
-// NewConn wraps rw, usually a net.Conn.
-func NewConn(rw io.ReadWriter) *Conn { return &Conn{rw: rw} }
-
-// Send writes m as one frame.
-func (c *Conn) Send(m Message) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return WriteFrame(c.rw, m)
-}
-
-// Receive reads the next frame.
-func (c *Conn) Receive() (Message, error) { return ReadFrame(c.rw) }
