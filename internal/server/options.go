@@ -2,6 +2,7 @@ package server
 
 import (
 	"log/slog"
+	"time"
 
 	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/term"
@@ -10,8 +11,9 @@ import (
 // Options configures a Server. The zero value plus a Version works.
 type Options struct {
 	Version    string
-	Scrollback int          // lines per pane; 0 means term.DefaultScrollback
-	Log        *slog.Logger // nil discards logs
+	Scrollback int           // lines per pane; 0 means term.DefaultScrollback
+	Log        *slog.Logger  // nil discards logs
+	IdleExit   time.Duration // exit if no session starts within this; 0 means 10 s
 	// Spec returns the program for a new pane and its profile name. Nil means
 	// the first detected shell profile, with its folder hook.
 	Spec func() (term.Spec, string)
