@@ -8,15 +8,25 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
+// DetachMsg asks the client to detach from the session.
+type DetachMsg struct{}
+
 // Model is the session screen. Send queues a message for the server; it must
-// not block and must keep order.
+// keep order.
 type Model struct {
 	send       func(api.Message)
 	pane       int
 	lines      []string
 	cursor     api.Cursor
 	cols, rows int
+	prefixed   bool // the prefix key was pressed; the next key is a command
 }
+
+// prefix is the key that starts a Snow command, as in tmux. Rebinding comes
+// with the config file.
+var prefix = tea.Key{Code: 'b', Mod: tea.ModCtrl}
+
+func isPrefix(k tea.Key) bool { return k.Code == prefix.Code && k.Mod == prefix.Mod }
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message)) *Model { return &Model{send: send} }
@@ -31,8 +41,44 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.applyLayout(msg)
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
+	case tea.KeyPressMsg:
+		return m.key(msg.Key())
+	case tea.PasteMsg:
+		if m.pane != 0 {
+			m.send(&api.Input{Pane: m.pane, Paste: msg.Content})
+		}
 	}
 	return nil
+}
+
+// key handles one key press: the prefix, a command after the prefix, or a
+// key for the pane.
+func (m *Model) key(k tea.Key) tea.Cmd {
+	if m.prefixed {
+		m.prefixed = false
+		switch {
+		case isPrefix(k):
+			m.sendKey(k) // prefix twice types the prefix key itself
+		case k.Code == 'd' && k.Mod == 0:
+			return func() tea.Msg { return DetachMsg{} }
+		}
+		return nil
+	}
+	if isPrefix(k) {
+		m.prefixed = true
+		return nil
+	}
+	m.sendKey(k)
+	return nil
+}
+
+func (m *Model) sendKey(k tea.Key) {
+	if m.pane == 0 {
+		return
+	}
+	if key, ok := toAPIKey(k); ok {
+		m.send(&api.Input{Pane: m.pane, Key: &key})
+	}
 }
 
 func (m *Model) applyLayout(l *api.Layout) {

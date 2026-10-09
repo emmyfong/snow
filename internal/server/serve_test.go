@@ -202,3 +202,45 @@ func floodSpec() (spec termSpec, profile string) {
 	}
 	return termSpec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood"
 }
+
+func TestInputReachesShell(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 120, 24)
+	c.send(&api.Attach{Session: "work", Create: true})
+	c.waitScreen(strings.TrimRight(prompt(), " "))
+	for _, r := range "echo typed" {
+		code := string(r)
+		if r == ' ' {
+			code = api.KeySpace // the protocol names space; " " is invalid
+		}
+		c.send(&api.Input{Pane: 1, Key: &api.Key{Code: code, Text: string(r)}})
+	}
+	c.send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
+	c.waitScreen("\ntyped\n")
+}
+
+func TestPasteReachesShell(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 120, 24)
+	c.send(&api.Attach{Session: "work", Create: true})
+	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.send(&api.Input{Pane: 1, Paste: "echo pasted\r"})
+	c.waitScreen("\npasted\n")
+}
+
+func TestInputForOtherSessionsPaneIgnored(t *testing.T) {
+	s := newTestServer(t)
+	other := connect(t, s, 80, 24)
+	other.send(&api.Attach{Session: "other", Create: true})
+	other.waitScreen(strings.TrimRight(prompt(), " "))
+	c := connect(t, s, 80, 24)
+	c.send(&api.Attach{Session: "mine", Create: true})
+	c.waitScreen(strings.TrimRight(prompt(), " "))
+	// Pane 1 belongs to "other": a client attached to "mine" must not reach it.
+	c.send(&api.Input{Pane: 1, Paste: "echo intruder\r"})
+	time.Sleep(500 * time.Millisecond)
+	other.drain(300 * time.Millisecond)
+	if strings.Contains(other.screen(), "intruder") {
+		t.Fatal("a client typed into a pane of a session it is not attached to")
+	}
+}

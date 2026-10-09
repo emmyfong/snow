@@ -5,6 +5,7 @@ import (
 	"net"
 	"time"
 
+	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -70,6 +71,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.attach(c, m) })
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m.Cols, m.Rows) })
+		case *api.Input:
+			s.input(c, m)
 		}
 	}
 }
@@ -125,4 +128,43 @@ func (st *state) resize(c *client, cols, rows int) {
 		st.fitSession(sess)
 		st.enqueue(c, st.layout(sess))
 	}
+}
+
+// input sends a key or paste to a pane of c's session. The model goroutine
+// only finds the pane; the write happens here, so a busy program cannot stall
+// the model goroutine.
+func (s *Server) input(c *client, in *api.Input) {
+	if err := in.Validate(); err != nil {
+		s.log.Info("ignored input", "err", err)
+		return
+	}
+	var tp *term.Pane
+	s.call(func(st *state) {
+		if p := st.paneOf(c, in.Pane); p != nil {
+			tp = p.term
+		}
+	})
+	if tp == nil {
+		return
+	}
+	if in.Key != nil {
+		tp.SendKey(toTermKey(*in.Key))
+		return
+	}
+	tp.Paste(in.Paste)
+}
+
+// paneOf returns the pane with id in c's attached session, or nil. A client
+// never reaches panes of other sessions.
+func (st *state) paneOf(c *client, id int) *pane {
+	sess, ok := st.sessions[c.session]
+	if !ok {
+		return nil
+	}
+	for _, w := range sess.windows {
+		if w.pane.id == id {
+			return w.pane
+		}
+	}
+	return nil
 }
