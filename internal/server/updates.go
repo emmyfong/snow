@@ -4,11 +4,29 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// fitSession sizes a session and its panes to its attached client.
+// fitSession sizes a session to the smallest of its attached clients, as
+// tmux does, so every client can show the whole pane. When the size changes,
+// every attached client gets the new layout.
 func (st *state) fitSession(sess *session) {
+	cols, rows := 0, 0
 	for c := range st.clients {
-		if c.session == sess.name && c.cols > 0 && c.rows > 0 {
-			sess.cols, sess.rows = c.cols, c.rows
+		if c.session != sess.name || c.cols <= 0 || c.rows <= 0 {
+			continue
+		}
+		if cols == 0 || c.cols < cols {
+			cols = c.cols
+		}
+		if rows == 0 || c.rows < rows {
+			rows = c.rows
+		}
+	}
+	if cols == 0 || (cols == sess.cols && rows == sess.rows) {
+		return
+	}
+	sess.cols, sess.rows = cols, rows
+	for c := range st.clients {
+		if c.session == sess.name {
+			st.enqueue(c, st.layout(sess))
 		}
 	}
 	for _, w := range sess.windows {

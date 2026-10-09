@@ -98,6 +98,9 @@ func (st *state) dropClient(c *client) {
 	c.dropped = true
 	delete(st.clients, c)
 	close(c.out)
+	if sess, ok := st.sessions[c.session]; ok {
+		st.fitSession(sess) // the session may grow back
+	}
 }
 
 // attach shows a session to c, creating it if asked.
@@ -118,15 +121,14 @@ func (st *state) attach(c *client, m *api.Attach) {
 	c.last = map[int][]string{}
 	c.seen = map[int]uint64{}
 	sess.lastUsed = time.Now()
-	st.fitSession(sess)
 	st.enqueue(c, st.layout(sess))
+	st.fitSession(sess)
 }
 
 func (st *state) resize(c *client, cols, rows int) {
 	c.cols, c.rows = cols, rows
 	if sess, ok := st.sessions[c.session]; ok {
 		st.fitSession(sess)
-		st.enqueue(c, st.layout(sess))
 	}
 }
 

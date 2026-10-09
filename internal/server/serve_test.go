@@ -17,6 +17,7 @@ import (
 // goroutines at once, or frames interleave.
 type testClient struct {
 	t        *testing.T
+	raw      net.Conn
 	conn     *api.Conn
 	incoming chan received
 	rows     map[int]string
@@ -39,7 +40,7 @@ func connect(t *testing.T, s *Server, cols, rows int) *testClient {
 	if _, err := api.ClientHandshake(c, api.Hello{ClientVersion: "test", Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
-	tc := &testClient{t: t, conn: c, incoming: make(chan received, 1024), rows: map[int]string{}}
+	tc := &testClient{t: t, raw: a, conn: c, incoming: make(chan received, 1024), rows: map[int]string{}}
 	go func() {
 		for {
 			m, err := c.Receive()
@@ -51,6 +52,8 @@ func connect(t *testing.T, s *Server, cols, rows int) *testClient {
 	}()
 	return tc
 }
+
+func (c *testClient) close() { _ = c.raw.Close() }
 
 func (c *testClient) send(m api.Message) {
 	c.t.Helper()
