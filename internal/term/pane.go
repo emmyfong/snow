@@ -41,6 +41,7 @@ type Pane struct {
 	done    chan struct{}
 	exitErr error
 	folder  string // last OSC 7 report; guarded by mu
+	hidden  bool   // the program hid the cursor (DECTCEM); guarded by mu
 
 	closeOnce sync.Once
 	closeErr  error
@@ -68,6 +69,8 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 		}
 		return true
 	})
+	// Called from inside emu.Write too, with mu held.
+	emu.SetCallbacks(vt.Callbacks{CursorVisibility: func(visible bool) { p.hidden = !visible }})
 
 	// The copies end with an error when Close shuts their source; that end is
 	// expected, so the errors are dropped.
@@ -201,12 +204,13 @@ func (p *Pane) Lines() []string {
 // Text returns the screen as plain text.
 func (p *Pane) Text() string { return ansi.Strip(p.Render()) }
 
-// Cursor returns the cursor position in cells, from the top left.
-func (p *Pane) Cursor() (x, y int) {
+// Cursor returns the cursor position in cells, from the top left, and
+// whether the program shows it.
+func (p *Pane) Cursor() (x, y int, visible bool) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	pos := p.emu.CursorPosition()
-	return pos.X, pos.Y
+	return pos.X, pos.Y, !p.hidden
 }
 
 // ScrollbackLen returns how many lines are kept above the screen.

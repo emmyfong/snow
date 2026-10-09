@@ -92,6 +92,6 @@ func (st *state) flushPane(c *client, p *pane) {
 	}
 	c.last[p.id] = rows
 	c.seen[p.id] = v
-	x, y := p.term.Cursor()
-	st.enqueue(c, &api.PaneUpdate{Pane: p.id, Lines: changed, Cursor: &api.Cursor{X: x, Y: y, Visible: true}})
+	x, y, visible := p.term.Cursor()
+	st.enqueue(c, &api.PaneUpdate{Pane: p.id, Lines: changed, Cursor: &api.Cursor{X: x, Y: y, Visible: visible}})
 }
