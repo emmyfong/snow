@@ -26,7 +26,14 @@ func TestSocketFolderPrivate(t *testing.T) {
 	if !ok || !strings.Contains(flags, "P") {
 		t.Fatalf("folder ACL %s is not protected from inherited entries", got)
 	}
-	if want := "A;OICI;FA;;;" + sid + ")"; aces != want {
-		t.Fatalf("folder ACL %s, want exactly one entry: full control for %s", got, sid)
+	// Windows abbreviates well-known accounts in SDDL (the built-in
+	// Administrator prints as LA), so format the expected entry the same way.
+	want, err := windows.SecurityDescriptorFromString("D:P(A;OICI;FA;;;" + sid + ")")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, wantACE, _ := strings.Cut(want.String(), "(")
+	if aces != wantACE {
+		t.Fatalf("folder ACL %s, want exactly one entry (%s): full control for %s", got, wantACE, sid)
 	}
 }
