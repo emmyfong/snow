@@ -225,6 +225,7 @@ const (
 	CodeBadHandshake = "bad-handshake" // the first message was not a readable Hello
 	CodeNoSession    = "no-session"    // Attach named a session that does not exist
 	CodeAttachFailed = "attach-failed" // the server could not create the session
+	CodeBadSize      = "bad-size"      // a Hello or Resize size is outside 1..MaxCols by 1..MaxRows
 )
 
 // Error makes a server's Error message usable as a Go error.
@@ -290,7 +291,8 @@ func (i *Input) Validate() error {
 	case (i.Key == nil) == (i.Paste == ""):
 		return fmt.Errorf("%w: need exactly one of key and paste", ErrInvalidInput)
 	case i.Key != nil && !i.Key.Valid():
-		return fmt.Errorf("%w: unknown key %+v", ErrInvalidInput, *i.Key)
+		// The key's text is what the user typed; servers log this error.
+		return fmt.Errorf("%w: unknown key", ErrInvalidInput)
 	}
 	return nil
 }

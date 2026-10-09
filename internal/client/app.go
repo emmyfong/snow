@@ -30,7 +30,8 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.screen.SetSize(msg.Width, msg.Height)
-		a.send(&api.Resize{Cols: msg.Width, Rows: msg.Height})
+		cols, rows := acceptedSize(msg.Width, msg.Height)
+		a.send(&api.Resize{Cols: cols, Rows: rows})
 		return a, nil
 	case *api.Layout:
 		a.result.Session = msg.Session

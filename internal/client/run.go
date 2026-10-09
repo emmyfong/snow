@@ -36,7 +36,7 @@ func Run(opts Options) (Result, error) {
 	defer func() { _ = raw.Close() }()
 	conn := api.NewConn(raw)
 
-	cols, rows := terminalSize(opts.Output)
+	cols, rows := acceptedSize(terminalSize(opts.Output))
 	hello := api.Hello{ClientVersion: opts.Version, Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}
 	if _, err := api.ClientHandshake(conn, hello); err != nil {
 		return Result{}, fmt.Errorf("connect to server: %w", err)

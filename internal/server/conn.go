@@ -35,7 +35,14 @@ func (s *Server) serveConn(raw net.Conn) {
 		_ = raw.Close()
 		return
 	}
-	c := &client{conn: conn, raw: raw, out: make(chan api.Message, outboxSize), cols: hello.Cols, rows: hello.Rows}
+	c := &client{conn: conn, raw: raw, out: make(chan api.Message, outboxSize)}
+	// A bad size is not fatal: the client gets the default size until it
+	// sends a valid Resize.
+	if err := hello.Validate(); err == nil {
+		c.cols, c.rows = hello.Cols, hello.Rows
+	} else {
+		s.log.Info("ignored hello size", "err", err)
+	}
 	if !s.call(func(st *state) { st.clients[c] = struct{}{} }) {
 		_ = raw.Close()
 		return
@@ -70,7 +77,7 @@ func (s *Server) read(c *client) {
 		case *api.Attach:
 			s.call(func(st *state) { st.attach(c, m) })
 		case *api.Resize:
-			s.call(func(st *state) { st.resize(c, m.Cols, m.Rows) })
+			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:
 			s.input(c, m)
 		}
@@ -125,8 +132,14 @@ func (st *state) attach(c *client, m *api.Attach) {
 	st.fitSession(sess)
 }
 
-func (st *state) resize(c *client, cols, rows int) {
-	c.cols, c.rows = cols, rows
+// resize records c's terminal size and refits its session. An invalid size
+// is answered with an error and changes nothing.
+func (st *state) resize(c *client, m *api.Resize) {
+	if err := m.Validate(); err != nil {
+		st.enqueue(c, &api.Error{Code: api.CodeBadSize, Message: err.Error()})
+		return
+	}
+	c.cols, c.rows = m.Cols, m.Rows
 	if sess, ok := st.sessions[c.session]; ok {
 		st.fitSession(sess)
 	}

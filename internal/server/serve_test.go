@@ -247,3 +247,39 @@ func TestInputForOtherSessionsPaneIgnored(t *testing.T) {
 		t.Fatal("a client typed into a pane of a session it is not attached to")
 	}
 }
+
+func TestOversizeResizeIgnored(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 80, 24)
+	c.send(&api.Attach{Session: "work", Create: true})
+	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.send(&api.Resize{Cols: 1 << 40, Rows: 3})
+	for {
+		m, err := c.next(5 * time.Second)
+		if err != nil {
+			t.Fatalf("no reply to an oversize Resize: %v", err)
+		}
+		if e, ok := m.(*api.Error); ok {
+			if e.Code != api.CodeBadSize {
+				t.Fatalf("error %q, want %s", e.Code, api.CodeBadSize)
+			}
+			break
+		}
+	}
+	if cols, rows := s.pane(t, "work").Size(); cols != 80 || rows != 24 {
+		t.Fatalf("pane is %dx%d after an oversize Resize, want 80x24 kept", cols, rows)
+	}
+	if len(s.Sessions()) != 1 {
+		t.Fatal("server lost its session")
+	}
+}
+
+func TestOversizeHelloUsesDefaultSize(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 100000, 100000)
+	c.send(&api.Attach{Session: "big", Create: true})
+	c.waitScreen(strings.TrimRight(prompt(), " "))
+	if cols, rows := s.pane(t, "big").Size(); cols > api.MaxCols || rows > api.MaxRows {
+		t.Fatalf("pane is %dx%d, want within %dx%d", cols, rows, api.MaxCols, api.MaxRows)
+	}
+}
