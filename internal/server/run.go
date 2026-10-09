@@ -50,17 +50,29 @@ func Run(ctx context.Context, opts Options, path string) error {
 	}
 }
 
+// Accept failures, such as running out of file descriptors, usually last a
+// while. Waiting between retries, as net/http does, keeps a failing accept
+// loop from spinning the CPU and filling the log.
+const (
+	minAcceptDelay = 5 * time.Millisecond
+	maxAcceptDelay = time.Second
+)
+
 // accept serves each connection in its own goroutine until l closes.
 func (s *Server) accept(l net.Listener) {
+	var delay time.Duration
 	for {
 		c, err := l.Accept()
 		if errors.Is(err, net.ErrClosed) {
 			return
 		}
 		if err != nil {
-			s.log.Warn("accept", "err", err)
+			delay = min(max(2*delay, minAcceptDelay), maxAcceptDelay)
+			s.log.Warn("accept", "err", err, "retry", delay)
+			time.Sleep(delay)
 			continue
 		}
+		delay = 0
 		go s.serveConn(c)
 	}
 }
