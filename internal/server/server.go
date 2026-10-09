@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // Server errors. Callers match them with errors.Is.
@@ -106,4 +107,38 @@ func (s *Server) Done() <-chan struct{} { return s.done }
 func (s *Server) Close() {
 	s.once.Do(func() { close(s.quit) })
 	<-s.stopped
+}
+
+// CreateSession starts a session in the user's home folder and returns its
+// name. An empty name takes the lowest free number.
+func (s *Server) CreateSession(name string) (string, error) {
+	var (
+		got string
+		err error
+	)
+	if !s.call(func(st *state) {
+		var sess *session
+		if sess, err = st.createSession(name, 0, 0, ""); err == nil {
+			got = sess.name
+		}
+	}) {
+		return "", ErrClosed
+	}
+	return got, err
+}
+
+// KillSession ends a session and every program in it.
+func (s *Server) KillSession(name string) error {
+	var err error
+	if !s.call(func(st *state) { err = st.killSession(name) }) {
+		return ErrClosed
+	}
+	return err
+}
+
+// Sessions lists the running sessions by name.
+func (s *Server) Sessions() []api.SessionInfo {
+	var out []api.SessionInfo
+	s.call(func(st *state) { out = st.sessionList() })
+	return out
 }

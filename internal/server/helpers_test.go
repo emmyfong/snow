@@ -57,5 +57,3 @@ func typeLine(p *term.Pane, s string) {
 }
 
 func screenHas(p *term.Pane, s string) bool { return strings.Contains(p.Text(), s) }
-
-type termSpec = term.Spec

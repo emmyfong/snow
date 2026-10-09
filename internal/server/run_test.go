@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -29,11 +30,11 @@ func runAsync(ctx context.Context, t *testing.T, opts Options, path string) <-ch
 }
 
 // briefSpec runs a program that exits after about a second.
-func briefSpec(string) (termSpec, string) {
+func briefSpec(string) (term.Spec, string) {
 	if runtime.GOOS == "windows" {
-		return termSpec{Path: "cmd.exe", Args: []string{"/c", "ping -n 2 127.0.0.1 >nul"}}, "brief"
+		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "ping -n 2 127.0.0.1 >nul"}}, "brief"
 	}
-	return termSpec{Path: "/bin/sh", Args: []string{"-c", "sleep 1"}}, "brief"
+	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "sleep 1"}}, "brief"
 }
 
 func TestRunExitsAfterLastSession(t *testing.T) {

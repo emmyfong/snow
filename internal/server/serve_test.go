@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -109,11 +110,11 @@ func TestSessionEndClosesConnection(t *testing.T) {
 }
 
 // floodSpec prints x forever.
-func floodSpec(string) (spec termSpec, profile string) {
+func floodSpec(string) (spec term.Spec, profile string) {
 	if runtime.GOOS == "windows" {
-		return termSpec{Path: "cmd.exe", Args: []string{"/c", "for /l %i in () do @echo x"}}, "flood"
+		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "for /l %i in () do @echo x"}}, "flood"
 	}
-	return termSpec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood"
+	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood"
 }
 
 func TestInputReachesShell(t *testing.T) {

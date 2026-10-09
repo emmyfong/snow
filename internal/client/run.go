@@ -7,9 +7,9 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/charmbracelet/x/term"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/pkg/api"
+	"golang.org/x/term"
 )
 
 // Options configures a client run.
@@ -50,8 +50,12 @@ func Run(opts Options) (Result, error) {
 	go func() {
 		for m := range out {
 			if conn.Send(m) != nil {
-				return
+				break
 			}
+		}
+		// Keep draining after a failed send: a full queue would block
+		// send, and with it the screen, until the receiver sees the close.
+		for range out {
 		}
 	}()
 	send := func(m api.Message) { out <- m }
@@ -105,7 +109,7 @@ func terminalSize(out io.Writer) (cols, rows int) {
 		f, ok = os.Stdout, true
 	}
 	if ok {
-		if w, h, err := term.GetSize(f.Fd()); err == nil && w > 0 && h > 0 {
+		if w, h, err := term.GetSize(int(f.Fd())); err == nil && w > 0 && h > 0 {
 			return w, h
 		}
 	}
