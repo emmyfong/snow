@@ -21,6 +21,7 @@ linters:
           deny:
             - { pkg: "github.com/charmbracelet/x/xpty", desc: "experimental; use internal/term" }
             - { pkg: "github.com/charmbracelet/x/vt", desc: "experimental; use internal/term" }
+            - { pkg: "github.com/creack/pty", desc: "use internal/term" }
         api-is-public:
           files: ["**/pkg/api/**"]
           deny:

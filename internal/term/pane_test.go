@@ -84,8 +84,15 @@ func TestPaneCloseStopsGoroutines(t *testing.T) {
 	f := newFakePTY()
 	p := newPane(f, 80, 24, Options{})
 	f.shellWrites("some output")
-	if err := p.Close(); err != nil {
-		t.Fatalf("Close: %v", err)
+	closed := make(chan error, 1)
+	go func() { closed <- p.Close() }()
+	select {
+	case err := <-closed:
+		if err != nil {
+			t.Fatalf("Close: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close hung: a copy goroutine did not stop")
 	}
 	eventually(t, "goroutines to stop", func() bool { return runtime.NumGoroutine() <= before })
 	if err := p.Close(); err != nil {
