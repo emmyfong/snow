@@ -38,9 +38,9 @@ func newState(s *Server) *state {
 	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1}
 }
 
-// createSession starts a session with one window and one pane. An empty name
-// takes the lowest free number: "0", "1", ...
-func (st *state) createSession(name string, cols, rows int) (*session, error) {
+// createSession starts a session with one window and one pane in dir. An
+// empty name takes the lowest free number: "0", "1", ...
+func (st *state) createSession(name string, cols, rows int, dir string) (*session, error) {
 	if name == "" {
 		name = st.freeNumber()
 	}
@@ -50,7 +50,7 @@ func (st *state) createSession(name string, cols, rows int) (*session, error) {
 	if cols <= 0 || rows <= 0 {
 		cols, rows = defaultCols, defaultRows
 	}
-	p, err := st.srv.startPane(st.nextPane, cols, rows)
+	p, err := st.srv.startPane(st.nextPane, cols, rows, dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
@@ -150,8 +150,8 @@ func (st *state) closeAll() {
 	st.sessions = map[string]*session{}
 }
 
-// CreateSession starts a session and returns its name. An empty name takes
-// the lowest free number.
+// CreateSession starts a session in the user's home folder and returns its
+// name. An empty name takes the lowest free number.
 func (s *Server) CreateSession(name string) (string, error) {
 	var (
 		got string
@@ -159,7 +159,7 @@ func (s *Server) CreateSession(name string) (string, error) {
 	)
 	if !s.call(func(st *state) {
 		var sess *session
-		if sess, err = st.createSession(name, 0, 0); err == nil {
+		if sess, err = st.createSession(name, 0, 0, ""); err == nil {
 			got = sess.name
 		}
 	}) {

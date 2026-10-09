@@ -2,6 +2,7 @@ package client
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 )
 
@@ -10,6 +11,12 @@ import (
 func StartServer(exe string, args ...string) error {
 	cmd := exec.Command(exe, args...)
 	cmd.SysProcAttr = detached()
+	// The server outlives this terminal. Starting it in the home folder
+	// keeps it from holding the client's folder open (Windows cannot
+	// delete a folder in use); sessions get their folder from Attach.
+	if home, err := os.UserHomeDir(); err == nil {
+		cmd.Dir = home
+	}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("launch %s: %w", exe, err)
 	}

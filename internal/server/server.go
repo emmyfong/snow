@@ -23,7 +23,7 @@ var (
 type Server struct {
 	opts   Options
 	log    *slog.Logger
-	spec   func() (term.Spec, string)
+	spec   func(dir string) (term.Spec, string)
 	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)

@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
@@ -14,11 +16,11 @@ import (
 	"github.com/emmyfong/snow/internal/term"
 )
 
-func testShell() (term.Spec, string) {
+func testShell(dir string) (term.Spec, string) {
 	if runtime.GOOS == "windows" {
-		return term.Spec{Path: "cmd.exe"}, "cmd"
+		return term.Spec{Path: "cmd.exe", Dir: dir}, "cmd"
 	}
-	return term.Spec{Path: "/bin/sh"}, "sh"
+	return term.Spec{Path: "/bin/sh", Dir: dir}, "sh"
 }
 
 func startServer(t *testing.T) string {
@@ -51,11 +53,16 @@ type runResult struct {
 // attachClient runs a real client against path with keys from the returned
 // writer.
 func attachClient(path, session string) (io.WriteCloser, <-chan runResult) {
+	return attachClientIn(path, session, "")
+}
+
+// attachClientIn is attachClient for a client run from dir.
+func attachClientIn(path, session, dir string) (io.WriteCloser, <-chan runResult) {
 	in, keys := io.Pipe()
 	done := make(chan runResult, 1)
 	go func() {
 		res, err := client.Run(client.Options{
-			Version: "e2e", Socket: path, Session: session,
+			Version: "e2e", Socket: path, Session: session, Dir: dir,
 			Start: func() error { return nil },
 			Input: in, Output: io.Discard,
 		})
@@ -80,16 +87,19 @@ func waitResult(t *testing.T, done <-chan runResult) client.Result {
 
 const ctrlB = "\x02"
 
+func shellPrompt() string {
+	if runtime.GOOS == "windows" {
+		return ">"
+	}
+	return "$"
+}
+
 func TestDetachAndReattach(t *testing.T) {
 	path := startServer(t)
 
 	keys, done := attachClient(path, "e2e")
 	watch := observe(t, path, "e2e")
-	prompt := "$"
-	if runtime.GOOS == "windows" {
-		prompt = ">"
-	}
-	watch.WaitScreen(prompt)
+	watch.WaitScreen(shellPrompt())
 
 	if _, err := io.WriteString(keys, "echo e2emark\r"); err != nil {
 		t.Fatal(err)
@@ -133,4 +143,28 @@ func TestPlainSnowCreatesNumberedSessions(t *testing.T) {
 			t.Fatalf("new session %q, want %q", res.Session, want)
 		}
 	}
+}
+
+func TestSessionStartsInClientFolder(t *testing.T) {
+	dir, err := os.MkdirTemp("", "snowdir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	path := startServer(t)
+	keys, done := attachClientIn(path, "here", dir)
+	watch := observe(t, path, "here")
+	watch.WaitScreen(shellPrompt())
+	show := "pwd\r"
+	if runtime.GOOS == "windows" {
+		show = "cd\r"
+	}
+	if _, err := io.WriteString(keys, show); err != nil {
+		t.Fatal(err)
+	}
+	watch.WaitScreen(filepath.Base(dir) + "\n")
+	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
+		t.Fatal(err)
+	}
+	waitResult(t, done)
 }

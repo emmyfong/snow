@@ -14,7 +14,7 @@ import (
 // reads its input must not stall the server for everyone else.
 func TestPasteIntoBlockedProgramDoesNotFreeze(t *testing.T) {
 	opts := testOptions()
-	opts.Spec = func() (termSpec, string) {
+	opts.Spec = func(string) (termSpec, string) {
 		return termSpec{Path: "/bin/sh", Args: []string{"-c", "stty raw -echo; echo ready; sleep 600"}}, "stuck"
 	}
 	s := New(opts)

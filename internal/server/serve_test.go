@@ -102,7 +102,7 @@ func TestSessionEndClosesConnection(t *testing.T) {
 }
 
 // floodSpec prints x forever.
-func floodSpec() (spec termSpec, profile string) {
+func floodSpec(string) (spec termSpec, profile string) {
 	if runtime.GOOS == "windows" {
 		return termSpec{Path: "cmd.exe", Args: []string{"/c", "for /l %i in () do @echo x"}}, "flood"
 	}

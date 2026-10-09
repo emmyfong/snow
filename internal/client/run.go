@@ -17,6 +17,7 @@ type Options struct {
 	Version string
 	Socket  string
 	Session string       // the session to attach to or create; "" creates a numbered one
+	Dir     string       // the folder a new session starts in; "" means the current one
 	Start   func() error // starts a server when none answers
 	Input   io.Reader    // nil means standard input
 	Output  io.Writer    // nil means standard output
@@ -56,7 +57,13 @@ func Run(opts Options) (Result, error) {
 	send := func(m api.Message) { out <- m }
 	defer close(out)
 
-	send(&api.Attach{Session: opts.Session, Create: true})
+	dir := opts.Dir
+	if dir == "" {
+		// Without a folder the session starts in the home folder; an error
+		// here only loses that convenience.
+		dir, _ = os.Getwd()
+	}
+	send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
 	a := &app{screen: session.New(send), send: send}
 	a.screen.SetSize(cols, rows)
 

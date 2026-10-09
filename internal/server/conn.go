@@ -123,7 +123,7 @@ func (st *state) attach(c *client, m *api.Attach) {
 	}
 	if !ok {
 		var err error
-		if sess, err = st.createSession(m.Session, c.cols, c.rows); err != nil {
+		if sess, err = st.createSession(m.Session, c.cols, c.rows, m.Dir); err != nil {
 			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 			return
 		}

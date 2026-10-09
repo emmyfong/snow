@@ -13,11 +13,11 @@ import (
 func testOptions() Options {
 	return Options{
 		Version: "test",
-		Spec: func() (term.Spec, string) {
+		Spec: func(dir string) (term.Spec, string) {
 			if runtime.GOOS == "windows" {
-				return term.Spec{Path: "cmd.exe"}, "cmd"
+				return term.Spec{Path: "cmd.exe", Dir: dir}, "cmd"
 			}
-			return term.Spec{Path: "/bin/sh"}, "sh"
+			return term.Spec{Path: "/bin/sh", Dir: dir}, "sh"
 		},
 	}
 }
