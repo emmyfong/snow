@@ -9,6 +9,7 @@ import (
 func TestWindowsCmdEcho(t *testing.T) {
 	p := startReal(t, Spec{Path: "cmd.exe"})
 	waitForPrompt(t, p, ">")
+	widen(t, p)
 	typeLine(p, "echo snowterm")
 	waitForCount(t, p, "snowterm", 2)
 }
@@ -26,6 +27,7 @@ func TestWindowsPwshEcho(t *testing.T) {
 	}
 	p := startReal(t, Spec{Path: path, Args: []string{"-NoLogo", "-NoProfile"}})
 	waitForPrompt(t, p, "PS ")
+	widen(t, p)
 	typeLine(p, "Write-Output snowterm")
 	waitForCount(t, p, "snowterm", 2)
 }
