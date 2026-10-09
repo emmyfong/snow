@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/term"
 )
 
@@ -57,3 +58,8 @@ func typeLine(p *term.Pane, s string) {
 }
 
 func screenHas(p *term.Pane, s string) bool { return strings.Contains(p.Text(), s) }
+
+type termSpec = term.Spec
+
+// stripANSI removes escape sequences from a styled line.
+func stripANSI(s string) string { return ansi.Strip(s) }

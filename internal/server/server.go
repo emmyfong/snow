@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log/slog"
 	"sync"
+	"time"
 
 	"github.com/emmyfong/snow/internal/term"
 )
@@ -50,13 +51,21 @@ func New(opts Options) *Server {
 	return s
 }
 
+// frameInterval caps pane updates at about 30 per second per client, so a
+// flood of output cannot flood the connection.
+const frameInterval = 33 * time.Millisecond
+
 func (s *Server) loop() {
 	st := newState(s)
 	defer close(s.stopped)
+	tick := time.NewTicker(frameInterval)
+	defer tick.Stop()
 	for {
 		select {
 		case f := <-s.requests:
 			f(st)
+		case <-tick.C:
+			st.flush()
 		case <-s.quit:
 			st.closeAll()
 			return

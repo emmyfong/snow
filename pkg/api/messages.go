@@ -78,7 +78,8 @@ type Welcome struct {
 	Protocol      int    `json:"protocol"`
 }
 
-// Attach asks to show a session, creating it when Create is set.
+// Attach asks to show a session, creating it when Create is set. An empty
+// Session with Create set asks for a new session with the lowest free number.
 type Attach struct {
 	Session string `json:"session"`
 	Create  bool   `json:"create,omitempty"`
@@ -222,6 +223,8 @@ type Error struct {
 // Error codes.
 const (
 	CodeBadHandshake = "bad-handshake" // the first message was not a readable Hello
+	CodeNoSession    = "no-session"    // Attach named a session that does not exist
+	CodeAttachFailed = "attach-failed" // the server could not create the session
 )
 
 // Error makes a server's Error message usable as a Go error.

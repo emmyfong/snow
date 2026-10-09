@@ -16,14 +16,16 @@ const defaultCols, defaultRows = 80, 24
 type state struct {
 	srv      *Server
 	sessions map[string]*session
+	clients  map[*client]struct{}
 	nextPane int
 	hadOne   bool // a session has existed; the last one ending closes Done
 }
 
 type session struct {
-	name     string
-	windows  []*window
-	lastUsed time.Time
+	name       string
+	windows    []*window
+	lastUsed   time.Time
+	cols, rows int
 }
 
 type window struct {
@@ -33,19 +35,22 @@ type window struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, nextPane: 1}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1}
 }
 
 // createSession starts a session with one window and one pane. An empty name
 // takes the lowest free number: "0", "1", ...
-func (st *state) createSession(name string) (*session, error) {
+func (st *state) createSession(name string, cols, rows int) (*session, error) {
 	if name == "" {
 		name = st.freeNumber()
 	}
 	if _, ok := st.sessions[name]; ok {
 		return nil, fmt.Errorf("%w: %s", ErrSessionExists, name)
 	}
-	p, err := st.srv.startPane(st.nextPane, defaultCols, defaultRows)
+	if cols <= 0 || rows <= 0 {
+		cols, rows = defaultCols, defaultRows
+	}
+	p, err := st.srv.startPane(st.nextPane, cols, rows)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
@@ -54,6 +59,8 @@ func (st *state) createSession(name string) (*session, error) {
 		name:     name,
 		windows:  []*window{{index: 1, name: p.profile, pane: p}},
 		lastUsed: time.Now(),
+		cols:     cols,
+		rows:     rows,
 	}
 	st.sessions[name] = sess
 	st.hadOne = true
@@ -84,6 +91,11 @@ func (st *state) killSession(name string) error {
 // endSession forgets sess and closes Done when no session is left.
 func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
+	for c := range st.clients {
+		if c.session == sess.name {
+			st.dropClient(c)
+		}
+	}
 	st.srv.log.Info("session ended", "session", sess.name)
 	if st.hadOne && len(st.sessions) == 0 {
 		select {
@@ -127,6 +139,9 @@ func (st *state) sessionList() []api.SessionInfo {
 }
 
 func (st *state) closeAll() {
+	for c := range st.clients {
+		st.dropClient(c)
+	}
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
 			_ = w.pane.term.Close()
@@ -144,7 +159,7 @@ func (s *Server) CreateSession(name string) (string, error) {
 	)
 	if !s.call(func(st *state) {
 		var sess *session
-		if sess, err = st.createSession(name); err == nil {
+		if sess, err = st.createSession(name, 0, 0); err == nil {
 			got = sess.name
 		}
 	}) {
