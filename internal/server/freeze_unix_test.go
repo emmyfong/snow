@@ -20,17 +20,17 @@ func TestPasteIntoBlockedProgramDoesNotFreeze(t *testing.T) {
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "stuck", Create: true})
-	c.waitScreen("ready")
-	c.send(&api.Input{Pane: 1, Paste: strings.Repeat("x", 512*1024)})
+	c.Send(&api.Attach{Session: "stuck", Create: true})
+	c.WaitScreen("ready")
+	c.Send(&api.Input{Pane: 1, Paste: strings.Repeat("x", 512*1024)})
 	time.Sleep(200 * time.Millisecond)
 
 	answered := make(chan struct{})
 	go func() {
 		_ = s.Sessions()
 		other := connect(t, s, 80, 24)
-		other.send(&api.Attach{Session: "stuck"})
-		other.waitScreen("ready")
+		other.Send(&api.Attach{Session: "stuck"})
+		other.WaitScreen("ready")
 		close(answered)
 	}()
 	select {

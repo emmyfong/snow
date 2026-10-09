@@ -9,120 +9,23 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// testClient is a protocol client that rebuilds the screen from PaneUpdates.
-// One goroutine reads the connection: Conn.Receive must never run in two
-// goroutines at once, or frames interleave.
-type testClient struct {
-	t        *testing.T
-	raw      net.Conn
-	conn     *api.Conn
-	incoming chan received
-	rows     map[int]string
-	updates  int
-	lastLen  int // rows in the most recent PaneUpdate
-}
-
-type received struct {
-	m   api.Message
-	err error
-}
-
 // connect runs the handshake over an in-memory connection served by s.
-func connect(t *testing.T, s *Server, cols, rows int) *testClient {
+func connect(t *testing.T, s *Server, cols, rows int) *apitest.Client {
 	t.Helper()
 	a, b := net.Pipe()
 	go s.serveConn(b)
-	t.Cleanup(func() { _ = a.Close() })
-	c := api.NewConn(a)
-	if _, err := api.ClientHandshake(c, api.Hello{ClientVersion: "test", Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}); err != nil {
-		t.Fatalf("handshake: %v", err)
-	}
-	tc := &testClient{t: t, raw: a, conn: c, incoming: make(chan received, 1024), rows: map[int]string{}}
-	go func() {
-		for {
-			m, err := c.Receive()
-			tc.incoming <- received{m, err}
-			if err != nil {
-				return
-			}
-		}
-	}()
-	return tc
-}
-
-func (c *testClient) close() { _ = c.raw.Close() }
-
-func (c *testClient) send(m api.Message) {
-	c.t.Helper()
-	if err := c.conn.Send(m); err != nil {
-		c.t.Fatalf("send %T: %v", m, err)
-	}
-}
-
-// next receives one message, applying PaneUpdates to the local screen.
-func (c *testClient) next(timeout time.Duration) (api.Message, error) {
-	select {
-	case r := <-c.incoming:
-		if u, ok := r.m.(*api.PaneUpdate); ok {
-			c.updates++
-			c.lastLen = len(u.Lines)
-			for _, l := range u.Lines {
-				c.rows[l.Row] = l.Text
-			}
-		}
-		return r.m, r.err
-	case <-time.After(timeout):
-		return nil, errTimeout
-	}
-}
-
-var errTimeout = errors.New("timed out")
-
-// screen returns the rebuilt screen as plain text, one row per line, with
-// each row's trailing padding removed.
-func (c *testClient) screen() string {
-	var b strings.Builder
-	for i := range 200 {
-		if l, ok := c.rows[i]; ok {
-			b.WriteString(strings.TrimRight(stripANSI(l), " "))
-			b.WriteByte('\n')
-		}
-	}
-	return b.String()
-}
-
-// waitScreen reads messages until the rebuilt screen contains want.
-func (c *testClient) waitScreen(want string) {
-	c.t.Helper()
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		if strings.Contains(c.screen(), want) {
-			return
-		}
-		if _, err := c.next(time.Second); err != nil && !errors.Is(err, errTimeout) {
-			c.t.Fatalf("waiting for %q: %v; screen:\n%s", want, err, c.screen())
-		}
-	}
-	c.t.Fatalf("screen never showed %q:\n%s", want, c.screen())
-}
-
-// drain reads until no message arrives for quiet.
-func (c *testClient) drain(quiet time.Duration) {
-	for {
-		if _, err := c.next(quiet); err != nil {
-			return
-		}
-	}
+	return apitest.New(t, a, cols, rows)
 }
 
 func TestAttachSendsScreen(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	m, err := c.next(5 * time.Second)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	m, err := c.Next(5 * time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,14 +36,14 @@ func TestAttachSendsScreen(t *testing.T) {
 	if r := l.Windows[0].Panes[0].Rect; r.W != 80 || r.H != 24 {
 		t.Fatalf("pane rect %+v, want 80x24", r)
 	}
-	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
 
 func TestAttachMissingSession(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "nope"})
-	m, err := c.next(5 * time.Second)
+	c.Send(&api.Attach{Session: "nope"})
+	m, err := c.Next(5 * time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,13 +55,13 @@ func TestAttachMissingSession(t *testing.T) {
 func TestChangedLinesOnly(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
-	c.drain(300 * time.Millisecond)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	c.Drain(300 * time.Millisecond)
 	typeLine(s.pane(t, "work"), "echo snowmark")
-	c.waitScreen("snowmark\n")
-	if c.lastLen >= 24 {
-		t.Fatalf("an update after the first screen carried %d rows; want only changed rows", c.lastLen)
+	c.WaitScreen("snowmark\n")
+	if c.LastLen >= 24 {
+		t.Fatalf("an update after the first screen carried %d rows; want only changed rows", c.LastLen)
 	}
 }
 
@@ -168,30 +71,30 @@ func TestUpdateRateCapped(t *testing.T) {
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "flood", Create: true})
-	c.waitScreen("x")
-	c.updates = 0
+	c.Send(&api.Attach{Session: "flood", Create: true})
+	c.WaitScreen("x")
+	c.Updates = 0
 	start := time.Now()
 	for time.Since(start) < time.Second {
-		if _, err := c.next(time.Second); err != nil {
+		if _, err := c.Next(time.Second); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if c.updates > 35 {
-		t.Fatalf("%d updates in one second under a flood of output, want at most about 30", c.updates)
+	if c.Updates > 35 {
+		t.Fatalf("%d updates in one second under a flood of output, want at most about 30", c.Updates)
 	}
 }
 
 func TestSessionEndClosesConnection(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	typeLine(s.pane(t, "work"), "exit")
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		_, err := c.next(time.Second)
-		if errors.Is(err, io.EOF) || (err != nil && !errors.Is(err, errTimeout)) {
+		_, err := c.Next(time.Second)
+		if errors.Is(err, io.EOF) || (err != nil && !errors.Is(err, apitest.ErrTimeout)) {
 			return
 		}
 	}
@@ -209,41 +112,44 @@ func floodSpec() (spec termSpec, profile string) {
 func TestInputReachesShell(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 120, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	for _, r := range "echo typed" {
 		code := string(r)
 		if r == ' ' {
 			code = api.KeySpace // the protocol names space; " " is invalid
 		}
-		c.send(&api.Input{Pane: 1, Key: &api.Key{Code: code, Text: string(r)}})
+		c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: code, Text: string(r)}})
 	}
-	c.send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
-	c.waitScreen("\ntyped\n")
+	c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
+	c.WaitScreen("\ntyped\n")
 }
 
 func TestPasteReachesShell(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 120, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
-	c.send(&api.Input{Pane: 1, Paste: "echo pasted\r"})
-	c.waitScreen("\npasted\n")
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Input{Pane: 1, Paste: "echo pasted\r"})
+	c.WaitScreen("\npasted\n")
 }
 
 func TestInputForOtherSessionsPaneIgnored(t *testing.T) {
 	s := newTestServer(t)
 	other := connect(t, s, 80, 24)
-	other.send(&api.Attach{Session: "other", Create: true})
-	other.waitScreen(strings.TrimRight(prompt(), " "))
+	other.Send(&api.Attach{Session: "other", Create: true})
+	other.WaitScreen(strings.TrimRight(prompt(), " "))
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "mine", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Attach{Session: "mine", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	// Pane 1 belongs to "other": a client attached to "mine" must not reach it.
-	c.send(&api.Input{Pane: 1, Paste: "echo intruder\r"})
-	time.Sleep(500 * time.Millisecond)
-	other.drain(300 * time.Millisecond)
-	if strings.Contains(other.screen(), "intruder") {
+	c.Send(&api.Input{Pane: 1, Paste: "echo intruder\r"})
+	// The server handles one connection's input in order, so once c's own
+	// pane shows this, the intruding input was handled too.
+	c.Send(&api.Input{Pane: 2, Paste: "echo mine\r"})
+	c.WaitScreen("\nmine\n")
+	other.Drain(300 * time.Millisecond)
+	if strings.Contains(other.Screen(), "intruder") {
 		t.Fatal("a client typed into a pane of a session it is not attached to")
 	}
 }
@@ -251,11 +157,11 @@ func TestInputForOtherSessionsPaneIgnored(t *testing.T) {
 func TestOversizeResizeIgnored(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
-	c.send(&api.Attach{Session: "work", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
-	c.send(&api.Resize{Cols: 1 << 40, Rows: 3})
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Resize{Cols: 1 << 40, Rows: 3})
 	for {
-		m, err := c.next(5 * time.Second)
+		m, err := c.Next(5 * time.Second)
 		if err != nil {
 			t.Fatalf("no reply to an oversize Resize: %v", err)
 		}
@@ -277,8 +183,8 @@ func TestOversizeResizeIgnored(t *testing.T) {
 func TestOversizeHelloUsesDefaultSize(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 100000, 100000)
-	c.send(&api.Attach{Session: "big", Create: true})
-	c.waitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Attach{Session: "big", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	if cols, rows := s.pane(t, "big").Size(); cols > api.MaxCols || rows > api.MaxRows {
 		t.Fatalf("pane is %dx%d, want within %dx%d", cols, rows, api.MaxCols, api.MaxRows)
 	}

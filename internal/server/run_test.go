@@ -3,24 +3,14 @@ package server
 import (
 	"context"
 	"os"
-	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
 )
-
-func shortSocket(t *testing.T) string {
-	t.Helper()
-	dir, err := os.MkdirTemp("", "snow")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = os.RemoveAll(dir) })
-	return filepath.Join(dir, "run", "default.sock")
-}
 
 func runAsync(ctx context.Context, t *testing.T, opts Options, path string) <-chan error {
 	t.Helper()
@@ -47,7 +37,7 @@ func briefSpec() (termSpec, string) {
 }
 
 func TestRunExitsAfterLastSession(t *testing.T) {
-	path := shortSocket(t)
+	path := apitest.SocketPath(t)
 	opts := testOptions()
 	opts.Spec = briefSpec
 	done := runAsync(context.Background(), t, opts, path)
@@ -80,7 +70,7 @@ func TestRunExitsAfterLastSession(t *testing.T) {
 func TestRunIdleExit(t *testing.T) {
 	opts := testOptions()
 	opts.IdleExit = 200 * time.Millisecond
-	done := runAsync(context.Background(), t, opts, shortSocket(t))
+	done := runAsync(context.Background(), t, opts, apitest.SocketPath(t))
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
@@ -90,7 +80,7 @@ func TestRunIdleExit(t *testing.T) {
 
 func TestRunStopsOnCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	done := runAsync(ctx, t, testOptions(), shortSocket(t))
+	done := runAsync(ctx, t, testOptions(), apitest.SocketPath(t))
 	cancel()
 	select {
 	case <-done:
@@ -100,7 +90,7 @@ func TestRunStopsOnCancel(t *testing.T) {
 }
 
 func TestRunRefusesSecondServer(t *testing.T) {
-	path := shortSocket(t)
+	path := apitest.SocketPath(t)
 	runAsync(context.Background(), t, testOptions(), path)
 	if err := Run(context.Background(), testOptions(), path); err == nil {
 		t.Fatal("a second Run on the same socket succeeded")
