@@ -5,6 +5,8 @@ import (
 	"context"
 	"io"
 	"sync"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // fakePTY stands in for a real PTY in unit tests. The test plays the shell:
@@ -63,3 +65,5 @@ func (f *fakePTY) sent() string {
 	defer f.mu.Unlock()
 	return f.in.String()
 }
+
+func ansiStripped(s string) string { return ansi.Strip(s) }

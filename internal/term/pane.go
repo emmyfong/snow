@@ -20,9 +20,15 @@ var ErrReplyPipe = errors.New("term: emulator reply pipe is not closable")
 //
 // Two goroutines move bytes: one feeds program output into the emulator, the
 // other sends the emulator's encoded keys and replies back to the program.
+//
+// Pane locks the emulator itself instead of using vt.SafeEmulator, which
+// embeds the unlocked Emulator: its unwrapped methods and the pointer that
+// Scrollback returns skip the lock. Every emulator call here holds mu, except
+// the blocking Read of replies, which touches no screen state.
 type Pane struct {
 	pty  PTY
-	emu  *vt.SafeEmulator
+	mu   sync.Mutex
+	emu  *vt.Emulator
 	stop context.CancelFunc
 	wg   sync.WaitGroup
 
@@ -43,7 +49,7 @@ func Start(spec Spec, cols, rows int, opts Options) (*Pane, error) {
 }
 
 func newPane(pty PTY, cols, rows int, opts Options) *Pane {
-	emu := vt.NewSafeEmulator(cols, rows)
+	emu := vt.NewEmulator(cols, rows)
 	emu.SetScrollbackSize(opts.scrollback())
 	ctx, stop := context.WithCancel(context.Background())
 	p := &Pane{pty: pty, emu: emu, stop: stop, done: make(chan struct{})}
@@ -51,7 +57,7 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 	// The copies end with an error when Close shuts their source; that end is
 	// expected, so the errors are dropped.
 	p.wg.Add(3)
-	go func() { defer p.wg.Done(); _, _ = io.Copy(emu, pty) }()
+	go func() { defer p.wg.Done(); p.feed() }()
 	// io.Pipe is synchronous: this reader must always drain, or emu.Write
 	// blocks while it answers the program's queries.
 	go func() { defer p.wg.Done(); _, _ = io.Copy(pty, emu) }()
@@ -63,15 +69,41 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 	return p
 }
 
+// feed parses program output into the emulator until the PTY closes.
+func (p *Pane) feed() {
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := p.pty.Read(buf)
+		if n > 0 {
+			p.mu.Lock()
+			_, _ = p.emu.Write(buf[:n]) // the emulator's writer never fails
+			p.mu.Unlock()
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
 // SendKey encodes k for the program's current terminal mode and sends it.
-func (p *Pane) SendKey(k Key) { p.emu.SendKey(k.event()) }
+func (p *Pane) SendKey(k Key) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.emu.SendKey(k.event())
+}
 
 // Paste sends text as a paste, bracketed if the program asked for that.
-func (p *Pane) Paste(text string) { p.emu.Paste(text) }
+func (p *Pane) Paste(text string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.emu.Paste(text)
+}
 
 // Resize changes the screen and the PTY to cols by rows cells.
 func (p *Pane) Resize(cols, rows int) error {
+	p.mu.Lock()
 	p.emu.Resize(cols, rows)
+	p.mu.Unlock()
 	if err := p.pty.Resize(cols, rows); err != nil {
 		return fmt.Errorf("resize pane: %w", err)
 	}
@@ -79,18 +111,54 @@ func (p *Pane) Resize(cols, rows int) error {
 }
 
 // Size returns the screen size in cells.
-func (p *Pane) Size() (cols, rows int) { return p.emu.Width(), p.emu.Height() }
+func (p *Pane) Size() (cols, rows int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.emu.Width(), p.emu.Height()
+}
 
 // Render returns the screen with styles as ANSI escape sequences.
-func (p *Pane) Render() string { return p.emu.Render() }
+func (p *Pane) Render() string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.emu.Render()
+}
 
 // Text returns the screen as plain text.
-func (p *Pane) Text() string { return ansi.Strip(p.emu.Render()) }
+func (p *Pane) Text() string { return ansi.Strip(p.Render()) }
 
 // Cursor returns the cursor position in cells, from the top left.
 func (p *Pane) Cursor() (x, y int) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	pos := p.emu.CursorPosition()
 	return pos.X, pos.Y
+}
+
+// ScrollbackLen returns how many lines are kept above the screen.
+func (p *Pane) ScrollbackLen() int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.emu.ScrollbackLen()
+}
+
+// ScrollbackLines returns up to n lines from index from, oldest first, with
+// styles as ANSI escape sequences. Index 0 is the oldest kept line. Out of
+// range requests return fewer lines or none.
+func (p *Pane) ScrollbackLines(from, n int) []string {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	sb := p.emu.Scrollback()
+	total := sb.Len()
+	if from < 0 || from >= total || n <= 0 {
+		return nil
+	}
+	end := min(from+n, total)
+	lines := make([]string, 0, end-from)
+	for i := from; i < end; i++ {
+		lines = append(lines, sb.Line(i).Render())
+	}
+	return lines
 }
 
 // Done is closed when the program exits.
@@ -115,7 +183,9 @@ func (p *Pane) Close() error {
 		ptyErr := p.pty.Close()
 		pipeErr := p.closeReplyPipe()
 		p.wg.Wait()
+		p.mu.Lock()
 		emuErr := p.emu.Close()
+		p.mu.Unlock()
 		p.closeErr = errors.Join(ptyErr, pipeErr, emuErr)
 	})
 	return p.closeErr
