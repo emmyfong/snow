@@ -82,6 +82,9 @@ folder, without edits across the codebase.
   for terminal code.
 - Do not mock Snow's own packages. Fakes are allowed at the `Backend` and
   `Gate` boundaries.
+- Real-shell tests wait for the prompt before typing: shells discard input
+  that arrives while they start. Match only screen text that cannot wrap;
+  widen the pane or shorten the expected text.
 - Locally, run only: `go build ./...`, then `go vet` and `go test` on the
   packages you touched. Do not run the full suite. CI runs everything on
   Linux, macOS, and Windows and gates the merge.
