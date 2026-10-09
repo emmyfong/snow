@@ -115,6 +115,9 @@ func (st *state) paneExited(id int) {
 			if w.pane.id != id {
 				continue
 			}
+			// The exit status explains a shell that exits at once, such as
+			// a broken profile.
+			st.srv.log.Info("pane exited", "session", sess.name, "pane", id, "err", w.pane.term.Err())
 			_ = w.pane.term.Close()
 			sess.windows = slices.Delete(sess.windows, i, i+1)
 			if len(sess.windows) == 0 {

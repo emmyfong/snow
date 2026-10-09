@@ -136,22 +136,33 @@ func (st *state) forget(c *client) {
 func (st *state) attach(c *client, m *api.Attach) {
 	sess, ok := st.sessions[m.Session]
 	if !ok && !m.Create {
-		st.enqueue(c, &api.Error{Code: api.CodeNoSession, Message: "no session named " + m.Session})
+		msg := "no session named " + m.Session
+		if m.Session == "" {
+			msg = "no session name given"
+		}
+		st.enqueue(c, &api.Error{Code: api.CodeNoSession, Message: msg})
 		return
 	}
 	if !ok {
 		var err error
 		if sess, err = st.createSession(m.Session, c.cols, c.rows, m.Dir); err != nil {
+			st.srv.log.Warn("attach failed", "session", m.Session, "err", err)
+			// The client runs as the same user, so the error's paths are
+			// not secret, and they say what to fix.
 			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 			return
 		}
 	}
+	prev := c.session
 	c.session = sess.name
 	c.last = map[int][]string{}
 	c.seen = map[int]uint64{}
 	sess.lastUsed = time.Now()
 	st.enqueue(c, st.layout(sess))
 	st.fitSession(sess)
+	if old, ok := st.sessions[prev]; ok && prev != sess.name {
+		st.fitSession(old) // the session c left may grow back
+	}
 }
 
 // resize records c's terminal size and refits its session. An invalid size

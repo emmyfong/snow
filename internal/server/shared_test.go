@@ -88,3 +88,23 @@ func TestSmallestSizeWins(t *testing.T) {
 		t.Fatalf("after the small client left: pane %dx%d, want 120x40", w, h)
 	}
 }
+
+// TestSwitchingSessionRefitsTheOldOne: when the smaller client moves to
+// another session, the session it left grows back.
+func TestSwitchingSessionRefitsTheOldOne(t *testing.T) {
+	s := newTestServer(t)
+	big := connect(t, s, 120, 40)
+	big.Send(&api.Attach{Session: "a", Create: true})
+	if w, h := paneSize(t, big); w != 120 || h != 40 {
+		t.Fatalf("alone: pane %dx%d, want 120x40", w, h)
+	}
+	small := connect(t, s, 80, 24)
+	small.Send(&api.Attach{Session: "a"})
+	if w, h := paneSize(t, big); w != 80 || h != 24 {
+		t.Fatalf("shared: pane %dx%d, want 80x24", w, h)
+	}
+	small.Send(&api.Attach{Session: "b", Create: true})
+	if w, h := paneSize(t, big); w != 120 || h != 40 {
+		t.Fatalf("after the small client left for b: pane %dx%d, want 120x40", w, h)
+	}
+}
