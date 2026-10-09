@@ -16,6 +16,11 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
+        charm-x-only-in-term:
+          files: ["$all", "!**/internal/term/**"]
+          deny:
+            - { pkg: "github.com/charmbracelet/x/xpty", desc: "experimental; use internal/term" }
+            - { pkg: "github.com/charmbracelet/x/vt", desc: "experimental; use internal/term" }
         api-is-public:
           files: ["**/pkg/api/**"]
           deny:
