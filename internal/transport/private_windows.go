@@ -24,6 +24,15 @@ func makePrivateDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("create socket folder: %w", err)
 	}
+	// SetNamedSecurityInfo follows symbolic links and junctions, so a reparse
+	// point here would move the ACL change to another folder.
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return fmt.Errorf("check socket folder: %w", err)
+	}
+	if !info.IsDir() || info.Mode()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+		return fmt.Errorf("socket folder %s is not a plain folder", dir)
+	}
 	sid, err := currentUserSID()
 	if err != nil {
 		return err
