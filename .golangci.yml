@@ -27,9 +27,9 @@ linters:
           deny:
             - { pkg: "github.com/emmyfong/snow/internal", desc: "pkg/api is public and must not expose internal types" }
         leaf-packages:
-          files: ["**/internal/term/**", "**/internal/layout/**"]
+          files: ["**/internal/term/**", "**/internal/layout/**", "**/internal/shell/**"]
           deny:
-            - { pkg: "github.com/emmyfong/snow", desc: "term and layout are leaf packages and import no other Snow package" }
+            - { pkg: "github.com/emmyfong/snow", desc: "term, layout, and shell are leaf packages and import no other Snow package" }
 
 formatters:
   enable:
