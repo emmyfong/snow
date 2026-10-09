@@ -71,7 +71,13 @@ func (st *state) flush() {
 	}
 }
 
+// flushPane sends c the rows of p that changed since the last update c was
+// sent. A client with a half-full outbox is skipped; c.last stays as it was,
+// so the next update it gets carries every row changed in between.
 func (st *state) flushPane(c *client, p *pane) {
+	if len(c.out) >= cap(c.out)/2 {
+		return
+	}
 	v := p.term.Version()
 	if prev, ok := c.seen[p.id]; ok && prev == v {
 		return

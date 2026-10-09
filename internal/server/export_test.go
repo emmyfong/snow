@@ -20,3 +20,10 @@ func (s *Server) pane(t *testing.T, session string) *term.Pane {
 	}
 	return p
 }
+
+// clientCount returns the number of connected clients, for tests.
+func (s *Server) clientCount() int {
+	n := 0
+	s.call(func(st *state) { n = len(st.clients) })
+	return n
+}

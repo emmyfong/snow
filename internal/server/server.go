@@ -21,9 +21,10 @@ var (
 
 // Server holds sessions. Create one with New and stop it with Close.
 type Server struct {
-	opts Options
-	log  *slog.Logger
-	spec func() (term.Spec, string)
+	opts   Options
+	log    *slog.Logger
+	spec   func() (term.Spec, string)
+	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)
 	quit     chan struct{}
@@ -37,6 +38,7 @@ type Server struct {
 func New(opts Options) *Server {
 	s := &Server{
 		opts:     opts,
+		outbox:   outboxSize,
 		log:      opts.logger(),
 		requests: make(chan func(*state)),
 		quit:     make(chan struct{}),

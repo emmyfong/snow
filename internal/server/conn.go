@@ -9,8 +9,9 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// outboxSize bounds queued messages per client. A client that falls this far
-// behind is disconnected instead of stalling the model goroutine.
+// outboxSize bounds queued messages per client. Screen updates stop at half
+// of it (see flushPane); a client whose control messages overflow it is
+// disconnected instead of stalling the model goroutine.
 const outboxSize = 256
 
 // client is one connected snow client. The model goroutine owns every field
@@ -35,7 +36,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		_ = raw.Close()
 		return
 	}
-	c := &client{conn: conn, raw: raw, out: make(chan api.Message, outboxSize)}
+	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox)}
 	// A bad size is not fatal: the client gets the default size until it
 	// sends a valid Resize.
 	if err := hello.Validate(); err == nil {
@@ -97,7 +98,9 @@ func (st *state) enqueue(c *client, m api.Message) {
 	}
 }
 
-// dropClient forgets c and closes its outbox, which closes the connection.
+// dropClient forgets c and closes its connection. Closing the connection,
+// not only the outbox, matters: a writer blocked on a peer that stopped
+// reading would otherwise keep the connection, and its read loop, open.
 func (st *state) dropClient(c *client) {
 	if c.dropped {
 		return
@@ -105,6 +108,7 @@ func (st *state) dropClient(c *client) {
 	c.dropped = true
 	delete(st.clients, c)
 	close(c.out)
+	_ = c.raw.Close()
 	if sess, ok := st.sessions[c.session]; ok {
 		st.fitSession(sess) // the session may grow back
 	}
@@ -173,7 +177,7 @@ func (s *Server) input(c *client, in *api.Input) {
 // never reaches panes of other sessions.
 func (st *state) paneOf(c *client, id int) *pane {
 	sess, ok := st.sessions[c.session]
-	if !ok {
+	if !ok || c.dropped {
 		return nil
 	}
 	for _, w := range sess.windows {
