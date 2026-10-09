@@ -91,10 +91,17 @@ func TestSessionEndClosesConnection(t *testing.T) {
 	c.Send(&api.Attach{Session: "work", Create: true})
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	typeLine(s.pane(t, "work"), "exit")
+	ended := false
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		_, err := c.Next(time.Second)
+		m, err := c.Next(time.Second)
+		if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
+			ended = true
+		}
 		if errors.Is(err, io.EOF) || (err != nil && !errors.Is(err, apitest.ErrTimeout)) {
+			if !ended {
+				t.Fatal("connection closed without saying the session ended")
+			}
 			return
 		}
 	}

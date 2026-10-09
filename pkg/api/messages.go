@@ -229,6 +229,10 @@ const (
 	CodeNoSession    = "no-session"    // Attach named a session that does not exist
 	CodeAttachFailed = "attach-failed" // the server could not create the session
 	CodeBadSize      = "bad-size"      // a Hello or Resize size is outside 1..MaxCols by 1..MaxRows
+	// CodeSessionEnded is the last message before the server closes the
+	// connection because the attached session ended. A close without it
+	// means the connection was lost.
+	CodeSessionEnded = "session-ended"
 )
 
 // Error makes a server's Error message usable as a Go error.

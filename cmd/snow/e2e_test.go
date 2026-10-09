@@ -168,3 +168,18 @@ func TestSessionStartsInClientFolder(t *testing.T) {
 	}
 	waitResult(t, done)
 }
+
+// TestShellExitEndsClient: when the shell exits, the client reports that the
+// session ended, not a lost connection.
+func TestShellExitEndsClient(t *testing.T) {
+	path := startServer(t)
+	keys, done := attachClient(path, "brief")
+	watch := observe(t, path, "brief")
+	watch.WaitScreen(shellPrompt())
+	if _, err := io.WriteString(keys, "exit\r"); err != nil {
+		t.Fatal(err)
+	}
+	if res := waitResult(t, done); !res.Ended || res.Session != "brief" {
+		t.Fatalf("result %+v, want session brief ended", res)
+	}
+}

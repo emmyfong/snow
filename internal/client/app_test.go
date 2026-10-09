@@ -1,6 +1,7 @@
 package client
 
 import (
+	"errors"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -61,5 +62,24 @@ func TestDetachBeforeLayoutWaitsForName(t *testing.T) {
 	}
 	if !a.result.Detached || a.result.Session != "3" {
 		t.Fatalf("result %+v, want detached from 3", a.result)
+	}
+}
+
+func TestEndAndLostConnectionDiffer(t *testing.T) {
+	newApp := func() *app {
+		send := func(api.Message) {}
+		return &app{screen: session.New(send), send: send}
+	}
+	ended := newApp()
+	ended.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
+	ended.Update(connClosedMsg{})
+	if !ended.result.Ended || ended.result.Err != nil {
+		t.Fatalf("after session-ended: %+v, want Ended and no error", ended.result)
+	}
+
+	lost := newApp()
+	lost.Update(connClosedMsg{})
+	if lost.result.Ended || !errors.Is(lost.result.Err, ErrConnectionLost) {
+		t.Fatalf("after a bare close: %+v, want ErrConnectionLost", lost.result)
 	}
 }

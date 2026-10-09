@@ -1,6 +1,8 @@
 package client
 
 import (
+	"errors"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/pkg/api"
@@ -10,8 +12,13 @@ import (
 type Result struct {
 	Session  string // the attached session's name
 	Detached bool   // the user detached; the session keeps running
-	Err      error  // the server refused the request, for example *api.Error
+	Ended    bool   // the session ended, for example because its shell exited
+	Err      error  // a refused request (*api.Error) or ErrConnectionLost
 }
+
+// ErrConnectionLost reports that the connection closed without the server
+// saying why: the server crashed or was killed, or dropped this client.
+var ErrConnectionLost = errors.New("lost connection to the server")
 
 // connClosedMsg reports that the server closed the connection.
 type connClosedMsg struct{}
@@ -40,9 +47,16 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 	case *api.Error:
-		a.result.Err = msg
+		if msg.Code == api.CodeSessionEnded {
+			a.result.Ended = true
+		} else {
+			a.result.Err = msg
+		}
 		return a, tea.Quit
 	case connClosedMsg:
+		if !a.result.Ended && !a.result.Detached && a.result.Err == nil {
+			a.result.Err = ErrConnectionLost
+		}
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true

@@ -98,17 +98,35 @@ func (st *state) enqueue(c *client, m api.Message) {
 	}
 }
 
-// dropClient forgets c and closes its connection. Closing the connection,
-// not only the outbox, matters: a writer blocked on a peer that stopped
-// reading would otherwise keep the connection, and its read loop, open.
+// lingerTimeout bounds how long a closing client may take to receive its
+// last messages.
+const lingerTimeout = 5 * time.Second
+
+// dropClient forgets c and closes its connection at once. Closing the
+// connection, not only the outbox, matters: a writer blocked on a peer that
+// stopped reading would otherwise keep the connection, and its read loop,
+// open.
 func (st *state) dropClient(c *client) {
+	st.forget(c)
+	_ = c.raw.Close()
+}
+
+// closeClient forgets c and closes its connection after the messages
+// already queued are written, or after lingerTimeout.
+func (st *state) closeClient(c *client) {
+	st.forget(c)
+	_ = c.raw.SetWriteDeadline(time.Now().Add(lingerTimeout))
+}
+
+// forget removes c from the server and closes its outbox; its writer then
+// closes the connection.
+func (st *state) forget(c *client) {
 	if c.dropped {
 		return
 	}
 	c.dropped = true
 	delete(st.clients, c)
 	close(c.out)
-	_ = c.raw.Close()
 	if sess, ok := st.sessions[c.session]; ok {
 		st.fitSession(sess) // the session may grow back
 	}

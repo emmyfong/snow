@@ -93,7 +93,8 @@ func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
 	for c := range st.clients {
 		if c.session == sess.name {
-			st.dropClient(c)
+			st.enqueue(c, &api.Error{Code: api.CodeSessionEnded, Message: "session " + sess.name + " ended"})
+			st.closeClient(c)
 		}
 	}
 	st.srv.log.Info("session ended", "session", sess.name)
