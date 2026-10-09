@@ -20,8 +20,9 @@ var ErrReplyPipe = errors.New("term: emulator reply pipe is not closable")
 // Pane is one program on a PTY plus the screen its output draws. All methods
 // are safe for concurrent use.
 //
-// Two goroutines move bytes: one feeds program output into the emulator, the
-// other sends the emulator's encoded keys and replies back to the program.
+// Three goroutines move bytes: feed parses program output into the emulator;
+// drain takes the emulator's encoded keys and replies off its pipe into a
+// queue; write sends the queue to the program with no lock held.
 //
 // Pane locks the emulator itself instead of using vt.SafeEmulator, which
 // embeds the unlocked Emulator: its unwrapped methods and the pointer that
@@ -34,7 +35,8 @@ type Pane struct {
 	stop context.CancelFunc
 	wg   sync.WaitGroup
 
-	version atomic.Uint64 // bumped after each chunk of output is parsed
+	version atomic.Uint64 // bumped after each change to the screen
+	dropped atomic.Uint64 // input bytes dropped while the program was not reading
 
 	done    chan struct{}
 	exitErr error
@@ -69,11 +71,11 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 
 	// The copies end with an error when Close shuts their source; that end is
 	// expected, so the errors are dropped.
-	p.wg.Add(3)
+	queue := make(chan []byte, inputQueue)
+	p.wg.Add(4)
 	go func() { defer p.wg.Done(); p.feed() }()
-	// io.Pipe is synchronous: this reader must always drain, or emu.Write
-	// blocks while it answers the program's queries.
-	go func() { defer p.wg.Done(); _, _ = io.Copy(pty, emu) }()
+	go func() { defer p.wg.Done(); p.drain(queue) }()
+	go func() { defer p.wg.Done(); p.write(queue) }()
 	go func() {
 		defer p.wg.Done()
 		p.exitErr = pty.Wait(ctx)
@@ -99,6 +101,46 @@ func (p *Pane) feed() {
 	}
 }
 
+// inputQueue bounds chunks of input waiting for the program to read them.
+// A program that stops reading fills it; further input is dropped and
+// counted instead of blocking the pane.
+const inputQueue = 256
+
+// drain moves the emulator's encoded keys, pastes, and replies into the
+// queue. io.Pipe is synchronous, so this reader must never block: SendKey,
+// Paste, and emu.Write all wait for it while holding mu.
+func (p *Pane) drain(queue chan<- []byte) {
+	defer close(queue)
+	buf := make([]byte, 32*1024)
+	for {
+		n, err := p.emu.Read(buf)
+		if n > 0 {
+			select {
+			case queue <- append([]byte(nil), buf[:n]...):
+			default:
+				p.dropped.Add(uint64(n))
+			}
+		}
+		if err != nil {
+			return
+		}
+	}
+}
+
+// write sends queued input to the program. It holds no lock, so a program
+// that stops reading blocks only this goroutine.
+func (p *Pane) write(queue <-chan []byte) {
+	for chunk := range queue {
+		// After the program exits, writes fail; keep draining until the
+		// queue closes so drain never blocks.
+		_, _ = p.pty.Write(chunk)
+	}
+}
+
+// DroppedInput returns how many bytes of input were dropped because the
+// program stopped reading.
+func (p *Pane) DroppedInput() uint64 { return p.dropped.Load() }
+
 // SendKey encodes k for the program's current terminal mode and sends it.
 func (p *Pane) SendKey(k Key) {
 	p.mu.Lock()
@@ -118,6 +160,7 @@ func (p *Pane) Resize(cols, rows int) error {
 	p.mu.Lock()
 	p.emu.Resize(cols, rows)
 	p.mu.Unlock()
+	p.version.Add(1)
 	if err := p.pty.Resize(cols, rows); err != nil {
 		return fmt.Errorf("resize pane: %w", err)
 	}
