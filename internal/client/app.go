@@ -46,8 +46,13 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, a.screen.Update(msg)
 }
 
+// View shows the screen and names the session in the terminal's title, so
+// the tab says which session it is. Bubble Tea clears the title on exit.
 func (a *app) View() tea.View {
 	v := a.screen.View()
 	v.AltScreen = true
+	if a.result.Session != "" {
+		v.WindowTitle = "snow: " + a.result.Session
+	}
 	return v
 }
