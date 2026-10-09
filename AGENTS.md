@@ -23,7 +23,8 @@ pkg/api/             the only public package: API types for other clients
 
 - One folder is one package. Tests sit beside the code (`x_test.go`).
 - Platform code uses filename suffixes (`_windows.go`, `_unix.go`), not runtime
-  checks.
+  checks. Go treats `_windows.go` and `_linux.go` as build constraints, but not
+  `_unix.go`: start every `_unix.go` file with `//go:build !windows`.
 - Grow by adding packages or sub-packages. Do not add top-level folders.
 
 Import direction. depguard fails CI on a wrong import.
