@@ -3,6 +3,7 @@
 package term
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -45,10 +46,15 @@ func TestUnixCloseEndsLongRunningProgram(t *testing.T) {
 }
 
 func TestUnixDirAndTerm(t *testing.T) {
-	p := startReal(t, Spec{Path: "/bin/sh", Dir: "/tmp"})
+	// macOS links /tmp to /private/tmp, and pwd prints the resolved path.
+	dir, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := startReal(t, Spec{Path: "/bin/sh", Dir: dir})
 	waitForPrompt(t, p, "$ ")
 	typeLine(p, `echo "dir=$(pwd) term=$TERM"`)
-	waitForCount(t, p, "dir=/tmp term=xterm-256color", 1)
+	waitForCount(t, p, "dir="+dir+" term=xterm-256color", 1)
 }
 
 func TestUnixControllingTerminal(t *testing.T) {

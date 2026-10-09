@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestWriteHooks(t *testing.T) {
@@ -21,6 +22,28 @@ func TestWriteHooks(t *testing.T) {
 		}
 		if strings.Contains(string(b), "\r\n") {
 			t.Fatalf("hook %s has CRLF line endings; shells inside WSL reject them", name)
+		}
+	}
+}
+
+// TestWriteHooksNormalizesLineEndings covers a Windows checkout where git
+// turned the embedded scripts into CRLF. bash and zsh reject CR characters.
+func TestWriteHooksNormalizesLineEndings(t *testing.T) {
+	src := fstest.MapFS{
+		"hooks/bash.sh":     {Data: []byte("echo one\r\necho two\r\n")},
+		"hooks/zsh/.zshenv": {Data: []byte("a=1\r\n")},
+	}
+	h, err := writeHooks(src, t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"bash.sh", "zsh/.zshenv"} {
+		b, err := os.ReadFile(filepath.Join(h.Dir, filepath.FromSlash(name)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "\r") {
+			t.Fatalf("%s still has CR characters: %q", name, b)
 		}
 	}
 }

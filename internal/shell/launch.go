@@ -1,6 +1,7 @@
 package shell
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
 	"io/fs"
@@ -29,8 +30,13 @@ func DefaultHooksDir() (string, error) {
 }
 
 // WriteHooks writes the hook scripts into dir, replacing older copies.
-func WriteHooks(dir string) (Hooks, error) {
-	err := fs.WalkDir(hookFiles, "hooks", func(name string, d fs.DirEntry, err error) error {
+func WriteHooks(dir string) (Hooks, error) { return writeHooks(hookFiles, dir) }
+
+// writeHooks copies the hooks folder of src into dir. It writes LF line
+// endings: a Windows checkout can turn the embedded scripts into CRLF, and
+// bash and zsh reject CR characters.
+func writeHooks(src fs.FS, dir string) (Hooks, error) {
+	err := fs.WalkDir(src, "hooks", func(name string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -38,11 +44,11 @@ func WriteHooks(dir string) (Hooks, error) {
 		if d.IsDir() {
 			return os.MkdirAll(target, 0o700)
 		}
-		b, err := hookFiles.ReadFile(name)
+		b, err := fs.ReadFile(src, name)
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(target, b, 0o600)
+		return os.WriteFile(target, bytes.ReplaceAll(b, []byte("\r\n"), []byte("\n")), 0o600)
 	})
 	if err != nil {
 		return Hooks{}, fmt.Errorf("write shell hooks: %w", err)
