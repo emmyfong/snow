@@ -24,6 +24,15 @@ func waitForPrompt(t *testing.T, p *Pane, prompt string) {
 	waitForCount(t, p, prompt, 1)
 }
 
+// widen makes the pane wide enough that a prompt holding a long folder path
+// and a typed command stay on one line, so screen matches cannot split.
+func widen(t *testing.T, p *Pane) {
+	t.Helper()
+	if err := p.Resize(400, 24); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // typeLine types text and Enter through the emulator, the path real keys take.
 func typeLine(p *Pane, text string) {
 	for _, r := range text {

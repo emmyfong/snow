@@ -39,6 +39,16 @@ const (
 	KeyBackspace = uv.KeyBackspace
 	KeyEscape    = uv.KeyEscape
 	KeyF1        = uv.KeyF1
+	KeyF2        = uv.KeyF2
+	KeyF3        = uv.KeyF3
+	KeyF4        = uv.KeyF4
+	KeyF5        = uv.KeyF5
+	KeyF6        = uv.KeyF6
+	KeyF7        = uv.KeyF7
+	KeyF8        = uv.KeyF8
+	KeyF9        = uv.KeyF9
+	KeyF10       = uv.KeyF10
+	KeyF11       = uv.KeyF11
 	KeyF12       = uv.KeyF12
 )
 

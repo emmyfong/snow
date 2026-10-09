@@ -78,10 +78,14 @@ type Welcome struct {
 	Protocol      int    `json:"protocol"`
 }
 
-// Attach asks to show a session, creating it when Create is set.
+// Attach asks to show a session, creating it when Create is set. An empty
+// Session with Create set asks for a new session with the lowest free number.
+// Dir is the folder a new session starts in, usually the client's working
+// folder; empty, or a folder the server cannot use, means the user's home.
 type Attach struct {
 	Session string `json:"session"`
 	Create  bool   `json:"create,omitempty"`
+	Dir     string `json:"dir,omitempty"`
 }
 
 // Input is one key press or one paste for a pane. Exactly one of Key and
@@ -222,6 +226,13 @@ type Error struct {
 // Error codes.
 const (
 	CodeBadHandshake = "bad-handshake" // the first message was not a readable Hello
+	CodeNoSession    = "no-session"    // Attach named a session that does not exist
+	CodeAttachFailed = "attach-failed" // the server could not create the session
+	CodeBadSize      = "bad-size"      // a Hello or Resize size is outside 1..MaxCols by 1..MaxRows
+	// CodeSessionEnded is the last message before the server closes the
+	// connection because the attached session ended. A close without it
+	// means the connection was lost.
+	CodeSessionEnded = "session-ended"
 )
 
 // Error makes a server's Error message usable as a Go error.
@@ -287,7 +298,8 @@ func (i *Input) Validate() error {
 	case (i.Key == nil) == (i.Paste == ""):
 		return fmt.Errorf("%w: need exactly one of key and paste", ErrInvalidInput)
 	case i.Key != nil && !i.Key.Valid():
-		return fmt.Errorf("%w: unknown key %+v", ErrInvalidInput, *i.Key)
+		// The key's text is what the user typed; servers log this error.
+		return fmt.Errorf("%w: unknown key", ErrInvalidInput)
 	}
 	return nil
 }

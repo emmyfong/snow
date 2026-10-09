@@ -60,11 +60,11 @@ internal/client/
 
 ## Component catalog
 
-Empty until the home-page epic builds the first components. Each entry:
-name, exact signature, one line of use, and notable options.
+Each entry: name, exact signature, one line of use, and notable options.
 
 | Component | Signature | Use |
 |---|---|---|
+| PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
 
 ## Theme tokens
 

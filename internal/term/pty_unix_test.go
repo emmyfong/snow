@@ -53,10 +53,7 @@ func TestUnixDirAndTerm(t *testing.T) {
 	}
 	p := startReal(t, Spec{Path: "/bin/sh", Dir: dir})
 	waitForPrompt(t, p, "$ ")
-	// macOS temp paths are long; a wide pane keeps the output on one line.
-	if err := p.Resize(400, 24); err != nil {
-		t.Fatal(err)
-	}
+	widen(t, p) // macOS temp paths are long
 	typeLine(p, `echo "dir=$(pwd) term=$TERM"`)
 	waitForCount(t, p, "dir="+dir+" term=xterm-256color", 1)
 }

@@ -19,8 +19,11 @@ type fakePTY struct {
 	in     bytes.Buffer
 	exited chan struct{}
 	once   sync.Once
-	cols   int
-	rows   int
+	// stuck makes Write block until it is closed, like a program that has
+	// stopped reading its input.
+	stuck chan struct{}
+	cols  int
+	rows  int
 }
 
 func newFakePTY() *fakePTY {
@@ -31,6 +34,9 @@ func newFakePTY() *fakePTY {
 func (f *fakePTY) Read(p []byte) (int, error) { return f.out.Read(p) }
 
 func (f *fakePTY) Write(p []byte) (int, error) {
+	if f.stuck != nil {
+		<-f.stuck
+	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return f.in.Write(p)
