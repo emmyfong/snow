@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/emmyfong/snow/internal/client"
 	"github.com/emmyfong/snow/internal/server"
@@ -25,9 +25,10 @@ var version = "dev"
 const usage = `usage:
   snow           start a new session
   snow <name>    attach to session <name>, or create it
-  snow version   print the version
-  snow help      show this help
+  snow version   print the version (also -v, --version)
+  snow help      show this help (also -h, --help)
 
+The names version, help, and server are commands, not sessions.
 Inside a session, press Ctrl+b then d to detach.
 `
 
@@ -35,48 +36,61 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-// command is what the arguments ask for.
+// kind is what a command line asks snow to do.
+type kind int
+
+const (
+	kindAttach kind = iota
+	kindServer
+	kindVersion
+	kindHelp
+)
+
+// command is a parsed command line.
 type command struct {
-	kind    string // "attach", "server", "version", "help"
-	session string
+	kind    kind
+	session string // for kindAttach; "" creates a numbered session
 }
 
-func parseArgs(args []string) (command, bool) {
+func parseArgs(args []string) (command, error) {
 	switch {
 	case len(args) == 0:
-		return command{kind: "attach"}, true
+		return command{kind: kindAttach}, nil
 	case len(args) > 1:
-		return command{}, false
+		return command{}, errors.New("too many arguments")
 	}
 	switch a := args[0]; a {
-	case "version":
-		return command{kind: "version"}, true
+	case "version", "-v", "--version":
+		return command{kind: kindVersion}, nil
 	case "help", "-h", "--help":
-		return command{kind: "help"}, true
+		return command{kind: kindHelp}, nil
 	case "server":
-		return command{kind: "server"}, true
+		return command{kind: kindServer}, nil
 	default:
-		if strings.HasPrefix(a, "-") || strings.ContainsAny(a, `/\`) {
-			return command{}, false
+		if strings.HasPrefix(a, "-") {
+			return command{}, fmt.Errorf("unknown option %s", a)
 		}
-		return command{kind: "attach", session: a}, true
+		if strings.ContainsAny(a, `/\`) {
+			return command{}, fmt.Errorf("session names cannot contain / or \\: %s", a)
+		}
+		return command{kind: kindAttach, session: a}, nil
 	}
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	cmd, ok := parseArgs(args)
-	if !ok {
-		_, _ = fmt.Fprint(stderr, usage)
+	cmd, err := parseArgs(args)
+	if err != nil {
+		_, _ = fmt.Fprintf(stderr, "snow: %v\n%s", err, usage)
 		return 2
 	}
 	switch cmd.kind {
-	case "version":
+	case kindVersion:
 		_, _ = fmt.Fprintf(stdout, "snow %s\n", version)
 		return 0
-	case "help":
+	case kindHelp:
 		_, _ = fmt.Fprint(stdout, usage)
 		return 0
-	case "server":
+	case kindServer:
 		return serve(stderr)
 	default:
 		return attach(cmd.session, stdout, stderr)
@@ -103,14 +117,15 @@ func serve(stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
-	logFile, err := os.OpenFile(filepath.Join(filepath.Dir(path), "server.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+	log, logFile, err := server.OpenLog(filepath.Dir(path))
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
 	defer func() { _ = logFile.Close() }()
-	log := slog.New(slog.NewTextHandler(logFile, nil))
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	// SIGTERM is what kill and service managers send; stopping cleanly
+	// removes the socket and ends the shells.
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := server.Run(ctx, server.Options{Version: version, Log: log}, path); err != nil {
 		log.Error("server stopped", "err", err)
