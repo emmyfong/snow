@@ -2,27 +2,41 @@ package main
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 )
 
-func TestRun(t *testing.T) {
+func TestParseArgs(t *testing.T) {
 	tests := []struct {
-		name     string
-		args     []string
-		wantOut  string
-		wantCode int
+		args []string
+		want command
+		ok   bool
 	}{
-		{"version", []string{"version"}, "snow dev\n", 0},
-		{"no args", nil, "usage: snow version\n", 2},
-		{"unknown", []string{"nope"}, "usage: snow version\n", 2},
+		{nil, command{kind: "attach"}, true},
+		{[]string{"work"}, command{kind: "attach", session: "work"}, true},
+		{[]string{"version"}, command{kind: "version"}, true},
+		{[]string{"help"}, command{kind: "help"}, true},
+		{[]string{"--help"}, command{kind: "help"}, true},
+		{[]string{"server"}, command{kind: "server"}, true},
+		{[]string{"-x"}, command{}, false},
+		{[]string{"a/b"}, command{}, false},
+		{[]string{"a", "b"}, command{}, false},
 	}
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var out bytes.Buffer
-			code := run(tt.args, &out)
-			if code != tt.wantCode || out.String() != tt.wantOut {
-				t.Errorf("run(%q) = %d, %q; want %d, %q", tt.args, code, out.String(), tt.wantCode, tt.wantOut)
-			}
-		})
+		got, ok := parseArgs(tt.args)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("parseArgs(%q) = %+v, %v; want %+v, %v", tt.args, got, ok, tt.want, tt.ok)
+		}
+	}
+}
+
+func TestRunVersionAndUsage(t *testing.T) {
+	var out, errOut bytes.Buffer
+	if code := run([]string{"version"}, &out, &errOut); code != 0 || out.String() != "snow dev\n" {
+		t.Fatalf("version: code %d, output %q", code, out.String())
+	}
+	out.Reset()
+	if code := run([]string{"a", "b"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage:") {
+		t.Fatalf("bad args: code %d, stderr %q", code, errOut.String())
 	}
 }
