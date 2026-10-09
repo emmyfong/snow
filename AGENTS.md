@@ -15,7 +15,8 @@ Go standard layout. No `src/`.
 ```
 cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
-                     term, layout, shell, server, client, store,
+                     term, layout, shell, transport, server, client,
+                     store,
                      later: backend, skills, context, gate, editor,
                      hook, worktree
 pkg/api/             the only public package: API types for other clients
