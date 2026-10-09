@@ -30,11 +30,15 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.screen.SetSize(msg.Width, msg.Height)
-		cols, rows := acceptedSize(msg.Width, msg.Height)
-		a.send(&api.Resize{Cols: cols, Rows: rows})
+		if cols, rows, ok := acceptedSize(msg.Width, msg.Height); ok {
+			a.send(&api.Resize{Cols: cols, Rows: rows})
+		}
 		return a, nil
 	case *api.Layout:
 		a.result.Session = msg.Session
+		if a.result.Detached {
+			return a, tea.Quit
+		}
 	case *api.Error:
 		a.result.Err = msg
 		return a, tea.Quit
@@ -42,6 +46,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
+		// Before the first Layout the session may not have a name yet
+		// (plain snow); quit once the Layout names it.
+		if a.result.Session == "" {
+			return a, nil
+		}
 		return a, tea.Quit
 	}
 	return a, a.screen.Update(msg)

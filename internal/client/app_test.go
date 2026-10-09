@@ -34,3 +34,32 @@ func TestHugeTerminalSendsAcceptedSize(t *testing.T) {
 		t.Fatalf("client sent a size the server rejects: %v", err)
 	}
 }
+
+// TestUnknownSizeNotSent: without a terminal, Bubble Tea reports 0x0. That
+// must not shrink a shared session to one cell.
+func TestUnknownSizeNotSent(t *testing.T) {
+	var sent []api.Message
+	send := func(m api.Message) { sent = append(sent, m) }
+	a := &app{screen: session.New(send), send: send}
+	a.Update(tea.WindowSizeMsg{Width: 0, Height: 0})
+	if len(sent) != 0 {
+		t.Fatalf("sent %v for an unknown size, want nothing", sent)
+	}
+}
+
+// TestDetachBeforeLayoutWaitsForName: a detach right after plain snow starts
+// still reports which session it left.
+func TestDetachBeforeLayoutWaitsForName(t *testing.T) {
+	send := func(api.Message) {}
+	a := &app{screen: session.New(send), send: send}
+	if _, cmd := a.Update(session.DetachMsg{}); cmd != nil {
+		t.Fatal("quit before the session had a name")
+	}
+	_, cmd := a.Update(&api.Layout{Session: "3", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
+	if cmd == nil {
+		t.Fatal("did not quit after the Layout")
+	}
+	if !a.result.Detached || a.result.Session != "3" {
+		t.Fatalf("result %+v, want detached from 3", a.result)
+	}
+}

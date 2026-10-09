@@ -19,8 +19,13 @@ type Model struct {
 	lines      []string
 	cursor     api.Cursor
 	cols, rows int
-	prefixed   bool // the prefix key was pressed; the next key is a command
+	prefixed   bool        // the prefix key was pressed; the next key is a command
+	early      []api.Input // input typed before the first Layout named a pane
 }
+
+// maxEarly bounds input held before the first Layout. The Layout follows
+// Attach at once, so only a fast typist or a paste can fill it.
+const maxEarly = 256
 
 // prefix is the key that starts a Snow command, as in tmux. Rebinding comes
 // with the config file.
@@ -44,9 +49,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
 	case tea.PasteMsg:
-		if m.pane != 0 {
-			m.send(&api.Input{Pane: m.pane, Paste: msg.Content})
-		}
+		m.input(api.Input{Paste: msg.Content})
 	}
 	return nil
 }
@@ -73,12 +76,23 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 }
 
 func (m *Model) sendKey(k tea.Key) {
+	if key, ok := toAPIKey(k); ok {
+		m.input(api.Input{Key: &key})
+	}
+}
+
+// input sends in to the active pane. Before the first Layout there is no
+// pane yet, so input waits; dropping it would lose what the user typed right
+// after starting snow.
+func (m *Model) input(in api.Input) {
 	if m.pane == 0 {
+		if len(m.early) < maxEarly {
+			m.early = append(m.early, in)
+		}
 		return
 	}
-	if key, ok := toAPIKey(k); ok {
-		m.send(&api.Input{Pane: m.pane, Key: &key})
-	}
+	in.Pane = m.pane
+	m.send(&in)
 }
 
 func (m *Model) applyLayout(l *api.Layout) {
@@ -91,6 +105,13 @@ func (m *Model) applyLayout(l *api.Layout) {
 			m.pane, m.lines = p.ID, nil
 		}
 		m.lines = resize(m.lines, p.Rect.H)
+	}
+	if m.pane != 0 {
+		early := m.early
+		m.early = nil
+		for _, in := range early {
+			m.input(in)
+		}
 	}
 }
 
