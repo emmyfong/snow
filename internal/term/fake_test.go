@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"strings"
 	"sync"
 
 	"github.com/charmbracelet/x/ansi"
@@ -67,3 +68,5 @@ func (f *fakePTY) sent() string {
 }
 
 func ansiStripped(s string) string { return ansi.Strip(s) }
+
+func contains(s, sub string) bool { return strings.Contains(s, sub) }

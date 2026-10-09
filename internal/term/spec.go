@@ -7,7 +7,7 @@ package term
 type Spec struct {
 	Path string   // program to run, looked up in PATH if not absolute
 	Args []string // arguments, without the program name
-	Env  []string // full environment; nil means the current process's
+	Env  []string // KEY=value pairs added to the inherited environment; later wins
 	Dir  string   // working directory; empty means the current one
 }
 

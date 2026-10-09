@@ -34,6 +34,7 @@ type Pane struct {
 
 	done    chan struct{}
 	exitErr error
+	folder  string // last OSC 7 report; guarded by mu
 
 	closeOnce sync.Once
 	closeErr  error
@@ -53,6 +54,14 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 	emu.SetScrollbackSize(opts.scrollback())
 	ctx, stop := context.WithCancel(context.Background())
 	p := &Pane{pty: pty, emu: emu, stop: stop, done: make(chan struct{})}
+	// vt calls OSC handlers from inside emu.Write, which feed runs with mu
+	// held, so the handler must not lock mu again.
+	emu.RegisterOscHandler(oscFolder, func(data []byte) bool {
+		if folder, ok := parseOSC7(data); ok {
+			p.folder = folder
+		}
+		return true
+	})
 
 	// The copies end with an error when Close shuts their source; that end is
 	// expected, so the errors are dropped.

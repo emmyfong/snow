@@ -19,20 +19,14 @@ type PTY interface {
 // paneTerm is the terminal type every pane presents: vt emulates xterm.
 const paneTerm = "TERM=xterm-256color"
 
-// withTerm returns the pane's environment. An inherited environment always
-// gets paneTerm, because the outer TERM (for example tmux-256color when Snow
-// runs inside tmux) describes a different terminal. A TERM set explicitly in
-// spec.Env is kept. Windows programs ignore TERM; WSL and Unix programs need it.
-func withTerm(env []string) []string {
-	if env == nil {
-		return append(dropTerm(os.Environ()), paneTerm)
-	}
-	for _, kv := range env {
-		if strings.HasPrefix(kv, "TERM=") {
-			return env
-		}
-	}
-	return append(env[:len(env):len(env)], paneTerm)
+// withTerm returns the pane's environment: this process's environment with
+// TERM set to paneTerm, then spec's additions, which win on conflict. The
+// outer TERM (for example tmux-256color when Snow runs inside tmux) describes
+// a different terminal than the vt emulator. Windows programs ignore TERM;
+// WSL and Unix programs need it.
+func withTerm(extra []string) []string {
+	env := append(dropTerm(os.Environ()), paneTerm)
+	return append(env, extra...)
 }
 
 func dropTerm(env []string) []string {
