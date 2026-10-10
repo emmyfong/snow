@@ -1,0 +1,43 @@
+# GoReleaser builds the release archives. The release workflow runs it on
+# v* tags. Check a change locally with: goreleaser release --snapshot --clean
+version: 2
+
+project_name: snow
+
+builds:
+  - id: snow
+    main: ./cmd/snow
+    binary: snow
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, windows, darwin]
+    goarch: [amd64, arm64]
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }}
+
+archives:
+  - id: snow
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    # No version in the name, so releases/latest/download/<name> always
+    # points at the newest archive.
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^chore"
+      - "^ci"
+
+release:
+  prerelease: auto
