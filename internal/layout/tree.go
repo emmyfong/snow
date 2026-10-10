@@ -84,3 +84,24 @@ func (t *Tree) find(id PaneID) (*Node, []step, bool) {
 	n := walk(t.Root)
 	return n, path, n != nil
 }
+
+// clone returns a deep copy of t, so a caller can try an operation without
+// touching the original.
+func (t *Tree) clone() *Tree {
+	var cp func(*Node) *Node
+	cp = func(n *Node) *Node {
+		out := &Node{Pane: n.Pane, Axis: n.Axis}
+		if n.Ratios != nil {
+			out.Ratios = append([]float64(nil), n.Ratios...)
+		}
+		for _, c := range n.Children {
+			out.Children = append(out.Children, cp(c))
+		}
+		return out
+	}
+	out := &Tree{Zoomed: t.Zoomed}
+	if t.Root != nil {
+		out.Root = cp(t.Root)
+	}
+	return out
+}

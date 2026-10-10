@@ -13,4 +13,6 @@ var (
 	ErrLastPane         = errors.New("layout: cannot close the last pane")
 	ErrNoEdge           = errors.New("layout: pane has no movable edge on that side")
 	ErrInvalidTree      = errors.New("layout: invalid tree")
+	ErrTooSmall         = errors.New("layout: pane would be smaller than the minimum")
+	ErrNoNeighbor       = errors.New("layout: no pane on that side")
 )
