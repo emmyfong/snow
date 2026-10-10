@@ -5,6 +5,8 @@
 package theme
 
 import (
+	"errors"
+	"fmt"
 	"image/color"
 
 	"charm.land/lipgloss/v2"
@@ -58,4 +60,16 @@ func Default() Theme {
 			TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		},
 	}
+}
+
+// ErrUnknownTheme means a theme name that Snow does not define.
+var ErrUnknownTheme = errors.New("unknown theme")
+
+// Named returns the theme called name, as set in the config file. Only
+// "default" exists until the home-page epic (#56) adds more.
+func Named(name string) (Theme, error) {
+	if name == "default" {
+		return Default(), nil
+	}
+	return Theme{}, fmt.Errorf("%w %q; the available themes are: default", ErrUnknownTheme, name)
 }

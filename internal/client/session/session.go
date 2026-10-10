@@ -56,8 +56,12 @@ type clearMessageMsg struct{ at time.Time }
 type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
-func New(send func(api.Message)) *Model {
-	return &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}}
+func New(send func(api.Message), opts ...Option) *Model {
+	m := &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
 }
 
 // SetSize sets the screen size in cells.

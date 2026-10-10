@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -41,5 +43,25 @@ func TestRunVersionAndUsage(t *testing.T) {
 	if code := run([]string{"a", "b"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage:") ||
 		!strings.Contains(errOut.String(), "too many arguments") {
 		t.Fatalf("bad args: code %d, stderr %q", code, errOut.String())
+	}
+}
+
+func TestBadConfigStopsAttachAndNamesTheLine(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir reads this on Windows
+	if err := os.MkdirAll(filepath.Join(home, ".snow"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	body := "[scrollback]\nlines = 0\n"
+	if err := os.WriteFile(filepath.Join(home, ".snow", "config.toml"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out, errOut bytes.Buffer
+	if code := run([]string{"work"}, &out, &errOut); code != 1 {
+		t.Fatalf("code %d, want 1", code)
+	}
+	if got := errOut.String(); !strings.Contains(got, "line 2") || !strings.Contains(got, "scrollback.lines") {
+		t.Fatalf("stderr %q, want the line and the key", got)
 	}
 }
