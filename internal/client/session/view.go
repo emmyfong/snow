@@ -22,7 +22,7 @@ func (m *Model) View() tea.View {
 		}
 	}
 	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
-	content = m.overlayHint(m.overlayPicker(content, area), area)
+	content = m.overlayMenu(m.overlayHint(m.overlayPicker(content, area), area), area)
 	bar := ui.StatusBar(m.theme, m.statusOptions())
 	if content != "" {
 		content += "\n"

@@ -1,0 +1,24 @@
+pane 1 row 0                            [32m│[mpane 2 row 0                           
+pane 1 row 1                            [32m│[mpane 2 row 1                           
+pane 1 row 2                            [32m│[mpane 2 row 2                           
+pane 1 row 3                            [32m│[mpane 2 row 3                           
+pane 1 row 4                            [32m│[mpane 2 row 4                           
+pane 1 row 5                            [32m│[mpane 2 row 5                           
+pane 1 row 6                            [32m│[mpane 2 row 6                           
+pane 1 row 7                            [32m│[mpane 2 row 7                           
+pane 1 row 8                            [32m│[mpane 2 row 8                           
+pane 1 row 9                            [32m│[mpane 2 row 9                           
+pane 1 row 10                           [32m│[mpane 2 row 10                          
+pane 1 row 11                           [32m├[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m
+pane 1 row 12                           [90m│[mpane 3 row 0                           
+pane 1 row 13                           [90m│[mpane 3 row 1                           
+pane 1 row 14                           [90m│[mpane 3 row 2                           
+pane 1 row 15                           [90m│[mpane 3 row [32m┌──────────────────────────┐[m[90m[m
+pane 1 row 16                           [90m│[mpane 3 row [32m│[m[1;44m> Split right    Ctrl+b % [m[32m│[m[90m[m
+pane 1 row 17                           [90m│[mpane 3 row [32m│[m  Split down     [90mCtrl+b "[m [32m│[m[90m[m
+pane 1 row 18                           [90m│[mpane 3 row [32m│[m  Zoom           [90mCtrl+b z[m [32m│[m[90m[m
+pane 1 row 19                           [90m│[mpane 3 row [32m│[m  Even out       [90mCtrl+b E[m [32m│[m[90m[m
+pane 1 row 20                           [90m│[mpane 3 row [32m│[m  Rename window  [90mCtrl+b ,[m [32m│[m[90m[m
+pane 1 row 21                           [90m│[mpane 3 row [32m│[m  Close pane     [90mCtrl+b x[m [32m│[m[90m[m
+pane 1 row 22                           [90m│[mpane 3 row [32m└──────────────────────────┘[m[90m[m
+[30;42m [api][m[30;42m [m[1;97;42m1:dev*[m[30;42m                                                    [m[30;42m Ubuntu  14:02 [m

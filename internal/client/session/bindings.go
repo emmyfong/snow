@@ -18,6 +18,8 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	case m.rename != nil:
 		m.renameKey(k)
 		return nil
+	case m.menu != nil:
+		return m.menuKey(k)
 	case m.prefixed:
 		m.endPrefix()
 		if a, ok := m.keys.Lookup(k); ok {

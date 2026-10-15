@@ -20,6 +20,11 @@ type grab struct {
 // pane whose program asked for the mouse also gets the event, so htop sees
 // the click that focuses it. The wheel goes to the pane under the pointer.
 func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
+	// When copy mode (#55) merges, route to it before anything below: no
+	// border drag or focus change may start while it is open.
+	if m.menu != nil {
+		return m.menuMouse(msg)
+	}
 	if m.modal() {
 		return nil
 	}
@@ -67,10 +72,18 @@ func (m *Model) mousePress(ev tea.Mouse) {
 		if p == nil {
 			return
 		}
-		if ev.Button == tea.MouseLeft && !p.Focused {
+		if (ev.Button == tea.MouseLeft || ev.Button == tea.MouseRight) && !p.Focused {
 			m.send(&api.Command{Op: api.OpFocus, Target: p.ID})
 		}
-		if st := m.panes[p.ID]; st != nil && st.mouse {
+		st := m.panes[p.ID]
+		wantsMouse := st != nil && st.mouse
+		// A program that uses the mouse gets the right click too; Ctrl keeps
+		// the menu reachable inside it.
+		if ev.Button == tea.MouseRight && (!wantsMouse || ev.Mod.Contains(tea.ModCtrl)) {
+			m.openMenu(ev.X, ev.Y)
+			return
+		}
+		if wantsMouse {
 			if b := apiButton(ev.Button); b != "" {
 				m.send(&api.Mouse{Pane: p.ID, X: h.X, Y: h.Y, Button: b, Action: api.ActionPress})
 				m.grab = &grab{pane: p.ID, button: b}

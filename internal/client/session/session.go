@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/menu"
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -38,6 +39,7 @@ type Model struct {
 	picker     *picker.Model
 	confirm    *confirmation // a question waiting for y or n
 	rename     *renaming     // the window name being typed
+	menu       *menu.Model   // the right-click menu
 	drag       *mouse.Drag   // a border held by the pointer
 	grab       *grab         // the pane a held button belongs to
 	pending    api.Command   // the command the open picker completes
@@ -222,4 +224,6 @@ func resize(lines []string, rows int) []string {
 }
 
 // modal reports whether a popup or a question holds the keyboard.
-func (m *Model) modal() bool { return m.picker != nil || m.confirm != nil || m.rename != nil }
+func (m *Model) modal() bool {
+	return m.picker != nil || m.confirm != nil || m.rename != nil || m.menu != nil
+}
