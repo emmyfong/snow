@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -37,6 +38,8 @@ type Model struct {
 	picker     *picker.Model
 	confirm    *confirmation // a question waiting for y or n
 	rename     *renaming     // the window name being typed
+	drag       *mouse.Drag   // a border held by the pointer
+	grab       *grab         // the pane a held button belongs to
 	pending    api.Command   // the command the open picker completes
 }
 
@@ -44,6 +47,7 @@ type Model struct {
 type paneState struct {
 	lines  []string
 	cursor api.Cursor
+	mouse  bool // the program asked for mouse events
 }
 
 // maxEarly bounds input held before the first Layout. The Layout follows
@@ -100,6 +104,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return tick()
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
+	case tea.MouseMsg:
+		return m.mouseMsg(msg)
 	case tea.PasteMsg:
 		if !m.modal() {
 			m.input(api.Input{Paste: msg.Content})
@@ -158,6 +164,7 @@ func (m *Model) input(in api.Input) {
 
 func (m *Model) applyLayout(l *api.Layout) {
 	m.layout = l
+	defer m.syncDrag()
 	present := map[int]bool{}
 	for _, w := range l.Windows {
 		for _, p := range w.Panes {
@@ -201,6 +208,7 @@ func (m *Model) applyUpdate(u *api.PaneUpdate) {
 	if u.Cursor != nil {
 		st.cursor = *u.Cursor
 	}
+	st.mouse = u.Mouse
 }
 
 func resize(lines []string, rows int) []string {

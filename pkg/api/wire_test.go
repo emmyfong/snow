@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ func TestWireFormat(t *testing.T) {
 		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev"}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[]}]}`},
 		{&PaneUpdate{Pane: 1}, `{"pane":1,"lines":[]}`},
 		{&PaneUpdate{Pane: 1, Lines: []LineUpdate{{Row: 0, Text: "a"}}, Cursor: &Cursor{X: 1, Visible: true}}, `{"pane":1,"lines":[{"row":0,"text":"a"}],"cursor":{"x":1,"y":0,"visible":true}}`},
+		{&PaneUpdate{Pane: 1, Mouse: true}, `{"pane":1,"lines":[],"mouse":true}`},
 		{&SessionList{}, `{"sessions":[]}`},
 		{&SessionList{Sessions: []SessionInfo{{Name: "api", Windows: 1, State: StateSaved, LastUsed: when}}}, `{"sessions":[{"name":"api","windows":1,"attached":0,"state":"saved","lastUsed":"2026-10-09T09:14:00Z"}]}`},
 		{&Bell{Pane: 2}, `{"pane":2}`},
@@ -69,5 +71,31 @@ func TestInputValidate(t *testing.T) {
 				t.Fatalf("Validate() = %v, want ok=%v", err, tt.ok)
 			}
 		})
+	}
+}
+
+func TestMouseValidate(t *testing.T) {
+	ok := Mouse{Pane: 1, X: 0, Y: 3, Button: ButtonLeft, Action: ActionPress}
+	tests := []struct {
+		name string
+		edit func(*Mouse)
+		ok   bool
+	}{
+		{"valid", func(*Mouse) {}, true},
+		{"wheel", func(m *Mouse) { m.Button = ButtonWheelUp }, true},
+		{"motion with no button", func(m *Mouse) { m.Button, m.Action = ButtonNone, ActionMotion }, true},
+		{"no pane", func(m *Mouse) { m.Pane = 0 }, false},
+		{"negative x", func(m *Mouse) { m.X = -1 }, false},
+		{"negative y", func(m *Mouse) { m.Y = -1 }, false},
+		{"unknown button", func(m *Mouse) { m.Button = "back" }, false},
+		{"unknown action", func(m *Mouse) { m.Action = "hover" }, false},
+	}
+	for _, tt := range tests {
+		m := ok
+		tt.edit(&m)
+		err := m.Validate()
+		if (err == nil) != tt.ok || (err != nil && !errors.Is(err, ErrInvalidMouse)) {
+			t.Errorf("%s: Validate() = %v, want ok=%v", tt.name, err, tt.ok)
+		}
 	}
 }

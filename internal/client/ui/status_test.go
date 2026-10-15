@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -78,5 +79,41 @@ func TestStatusBarPromptTakesTheBar(t *testing.T) {
 	opts.Prompt = ""
 	if plain := StatusBar(th, opts); strings.Contains(out, plain[:8]) && out[:8] == plain[:8] {
 		t.Fatal("the question uses the normal bar colors")
+	}
+}
+
+func TestTabSpansMatchTheDrawnBar(t *testing.T) {
+	tabs := []Tab{{Index: 0, Name: "dev"}, {Index: 1, Name: "logs", Active: true}, {Index: 2, Name: "漢字", Zoomed: true}}
+	tests := []struct {
+		name string
+		o    StatusOptions
+		want []string // the text under each returned span
+	}{
+		{"all fit", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02"}, []string{"0:dev", "1:logs*", "2:漢字Z"}},
+		{"cut by the width", StatusOptions{Width: 22, Session: "api", Tabs: tabs}, []string{"0:dev", "1:logs*", "2"}},
+		{"tab cut", StatusOptions{Width: 14, Session: "api", Tabs: tabs}, []string{"0:dev", "1"}},
+		{"tab hidden", StatusOptions{Width: 7, Session: "api", Tabs: tabs}, nil},
+		{"cut by a message", StatusOptions{Width: 30, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{"0:dev"}},
+		{"no tabs", StatusOptions{Width: 30, Session: "api"}, nil},
+	}
+	for _, tt := range tests {
+		bar := ansi.Strip(StatusBar(theme.Default(), tt.o))
+		spans := TabSpans(theme.Default(), tt.o)
+		var got []string
+		for _, sp := range spans {
+			got = append(got, ansi.Cut(bar, sp.X, sp.X+sp.W))
+		}
+		if !slices.Equal(got, tt.want) {
+			t.Errorf("%s: text under spans = %q, want %q (bar %q)", tt.name, got, tt.want, bar)
+		}
+	}
+}
+
+func TestTabSpansForPromptAndNoWidth(t *testing.T) {
+	if got := TabSpans(theme.Default(), StatusOptions{Width: 40, Tabs: []Tab{{Name: "a"}}, Prompt: "close? y/n"}); got != nil {
+		t.Errorf("a prompt leaves spans %v", got)
+	}
+	if got := TabSpans(theme.Default(), StatusOptions{Tabs: []Tab{{Name: "a"}}}); got != nil {
+		t.Errorf("width 0 leaves spans %v", got)
 	}
 }

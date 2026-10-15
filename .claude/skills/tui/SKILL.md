@@ -23,6 +23,7 @@ internal/client/
   picker/        the profile picker popup
   menu/          the right-click menu
   whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
+  mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
 ```
@@ -70,6 +71,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted. Nothing below 4 cells. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
+| TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. None while a `Prompt` shows. |
 | Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
 
 ## Theme tokens
