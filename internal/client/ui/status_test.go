@@ -62,9 +62,21 @@ func TestStatusBarUsesThemeGlyphs(t *testing.T) {
 	}
 }
 
-func TestStatusBarPromptWins(t *testing.T) {
-	got := ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 50, Session: "a", Right: "14:02", Message: "no room", Prompt: "close pane 3? (y/n)"}))
-	if !strings.Contains(got, "close pane 3? (y/n)") || strings.Contains(got, "no room") || strings.Contains(got, "14:02") {
-		t.Fatalf("status %q, want only the prompt on the right", got)
+// TestStatusBarPromptTakesTheBar: a question replaces the whole bar, in its
+// own colors, as tmux does, so it cannot be missed.
+func TestStatusBarPromptTakesTheBar(t *testing.T) {
+	th := theme.Default()
+	opts := StatusOptions{Width: 50, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev", Active: true}}, Right: "14:02", Message: "no room", Prompt: "close this pane? y/n"}
+	out := StatusBar(th, opts)
+	got := ansi.Strip(out)
+	if strings.TrimSpace(got) != "close this pane? y/n" {
+		t.Fatalf("status %q, want only the question", got)
+	}
+	if w := ansi.StringWidth(out); w != 50 {
+		t.Fatalf("width %d, want 50", w)
+	}
+	opts.Prompt = ""
+	if plain := StatusBar(th, opts); strings.Contains(out, plain[:8]) && out[:8] == plain[:8] {
+		t.Fatal("the question uses the normal bar colors")
 	}
 }

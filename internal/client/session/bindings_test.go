@@ -111,8 +111,8 @@ func TestCloseAsksFirst(t *testing.T) {
 		op       string
 		target   int
 	}{
-		{press('x', 0, "x"), "close pane 7? (y/n)", api.OpClose, 7},
-		{press('&', 0, "&"), "close window 1? (y/n)", api.OpCloseWindow, 1},
+		{press('x', 0, "x"), "close this pane (1 of 1)? y/n", api.OpClose, 7},
+		{press('&', 0, "&"), "close window 1 and its 1 pane? y/n", api.OpCloseWindow, 1},
 	} {
 		m, r := newPrefixScreen(t)
 		m.Update(ctrlB)
@@ -128,7 +128,7 @@ func TestCloseAsksFirst(t *testing.T) {
 		if c.Op != tt.op || c.Target != tt.target {
 			t.Fatalf("y sent %+v, want %s on %d", c, tt.op, tt.target)
 		}
-		if strings.Contains(statusLine(m), "(y/n)") {
+		if strings.Contains(statusLine(m), "y/n") {
 			t.Fatal("the question stayed after the answer")
 		}
 	}
@@ -142,5 +142,23 @@ func TestCloseCancelledByAnyOtherKey(t *testing.T) {
 	m.Update(press('l', 0, "l"))
 	if got := r.keys(); len(r.sent) != 1 || got[0] != "l" {
 		t.Fatalf("sent %v, want only the key l after the cancelled close", r.sent)
+	}
+}
+
+// TestCloseQuestionNamesThePane: pane IDs only grow, so the question names
+// the pane by its program, folder, and place in the window.
+func TestCloseQuestionNamesThePane(t *testing.T) {
+	m, _ := pickerScreen(t, 80, 24)
+	m.layout.Windows[0].Name = "logs"
+	m.Update(ctrlB)
+	m.Update(press('x', 0, "x"))
+	if got := statusLine(m); !strings.Contains(got, "close this pane (Ubuntu /src, 2 of 3)? y/n") {
+		t.Fatalf("status %q, want the pane named by profile, folder, and place", got)
+	}
+	m.Update(press('n', 0, "n"))
+	m.Update(ctrlB)
+	m.Update(press('&', 0, "&"))
+	if got := statusLine(m); !strings.Contains(got, `close window 1 "logs" and its 3 panes? y/n`) {
+		t.Fatalf("status %q, want the window named with its pane count", got)
 	}
 }

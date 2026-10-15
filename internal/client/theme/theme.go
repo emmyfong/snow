@@ -19,6 +19,8 @@ type Theme struct {
 	TabActive   color.Color // the shown window's tab
 	Muted       color.Color // secondary text
 	Error       color.Color // a refused request's message
+	PromptFG    color.Color // a question that takes the status bar
+	PromptBG    color.Color
 	Selection   color.Color // the selected item in a list
 	Glyphs      Glyphs
 }
@@ -44,6 +46,8 @@ func Default() Theme {
 		TabActive:   lipgloss.Color("15"),
 		Muted:       lipgloss.Color("8"),
 		Error:       lipgloss.Color("1"),
+		PromptFG:    lipgloss.Color("0"),
+		PromptBG:    lipgloss.Color("3"),
 		Selection:   lipgloss.Color("4"),
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
