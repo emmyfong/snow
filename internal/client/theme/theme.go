@@ -22,6 +22,8 @@ type Theme struct {
 	PromptFG    color.Color // a question that takes the status bar
 	PromptBG    color.Color
 	Selection   color.Color // the selected item in a list
+	IndicatorFG color.Color // copy mode's position marker
+	IndicatorBG color.Color
 	Glyphs      Glyphs
 }
 
@@ -49,6 +51,8 @@ func Default() Theme {
 		PromptFG:    lipgloss.Color("0"),
 		PromptBG:    lipgloss.Color("3"),
 		Selection:   lipgloss.Color("4"),
+		IndicatorFG: lipgloss.Color("15"),
+		IndicatorBG: lipgloss.Color("8"),
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",

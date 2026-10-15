@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/copymode"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -30,8 +31,9 @@ type Model struct {
 	messageAt  time.Time
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
-	confirm    *confirmation // a question waiting for y or n
-	pending    api.Command   // the command the open picker completes
+	confirm    *confirmation   // a question waiting for y or n
+	pending    api.Command     // the command the open picker completes
+	copy       *copymode.Model // copy mode over a pane, when open
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
@@ -76,6 +78,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.applyUpdate(msg)
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.Scrollback:
+		if m.copy != nil {
+			m.copy.Receive(msg)
+		}
 	case *api.Error:
 		m.message, m.messageAt = msg.Message, m.now()
 		at := m.messageAt
@@ -89,7 +95,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
 	case tea.PasteMsg:
-		if m.picker == nil {
+		if m.picker == nil && m.copy == nil {
 			m.input(api.Input{Paste: msg.Content})
 		}
 	}
@@ -146,6 +152,7 @@ func (m *Model) input(in api.Input) {
 
 func (m *Model) applyLayout(l *api.Layout) {
 	m.layout = l
+	defer m.syncCopy()
 	present := map[int]bool{}
 	for _, w := range l.Windows {
 		for _, p := range w.Panes {

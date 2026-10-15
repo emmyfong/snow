@@ -82,6 +82,8 @@ func (s *Server) read(c *client) {
 			s.input(c, m)
 		case *api.Command:
 			s.call(func(st *state) { st.command(c, m) })
+		case *api.ScrollbackRequest:
+			s.scrollback(c, m)
 		}
 	}
 }

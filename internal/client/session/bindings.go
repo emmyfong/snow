@@ -25,6 +25,9 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		m.pickerKey(k)
 		return nil
 	}
+	if m.copy != nil {
+		return m.copyKey(k)
+	}
 	if m.confirm != nil {
 		m.answer(k)
 		return nil
@@ -83,6 +86,8 @@ func (m *Model) command(k tea.Key) tea.Cmd {
 		m.confirmClosePane()
 	case "&":
 		m.confirmCloseWindow()
+	case "[":
+		m.enterCopy()
 	case "z":
 		m.paneCommand(api.OpZoom)
 	case "E":

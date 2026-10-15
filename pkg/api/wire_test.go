@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"reflect"
 	"testing"
 	"time"
@@ -32,6 +33,9 @@ func TestWireFormat(t *testing.T) {
 		{&SessionList{}, `{"sessions":[]}`},
 		{&SessionList{Sessions: []SessionInfo{{Name: "api", Windows: 1, State: StateSaved, LastUsed: when}}}, `{"sessions":[{"name":"api","windows":1,"attached":0,"state":"saved","lastUsed":"2026-10-09T09:14:00Z"}]}`},
 		{&Bell{Pane: 2}, `{"pane":2}`},
+		{&ScrollbackRequest{Pane: 1, From: 40, Count: 24}, `{"pane":1,"from":40,"count":24}`},
+		{&Scrollback{Pane: 1, Total: 3}, `{"pane":1,"from":0,"total":3,"lines":[]}`},
+		{&Scrollback{Pane: 1, From: 1, Total: 3, Lines: []string{"a"}}, `{"pane":1,"from":1,"total":3,"lines":["a"]}`},
 		{&ProfileList{}, `{"profiles":[],"default":""}`},
 		{&ProfileList{Profiles: []string{"pwsh", "Ubuntu"}, Default: "pwsh"}, `{"profiles":["pwsh","Ubuntu"],"default":"pwsh"}`},
 		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
@@ -67,6 +71,32 @@ func TestInputValidate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if err := tt.in.Validate(); (err == nil) != tt.ok {
 				t.Fatalf("Validate() = %v, want ok=%v", err, tt.ok)
+			}
+		})
+	}
+}
+
+func TestScrollbackRequestValidate(t *testing.T) {
+	tests := []struct {
+		name string
+		r    ScrollbackRequest
+		ok   bool
+	}{
+		{"first page", ScrollbackRequest{Pane: 1, From: 0, Count: 24}, true},
+		{"largest page", ScrollbackRequest{Pane: 1, Count: MaxScrollbackLines}, true},
+		{"no pane", ScrollbackRequest{Count: 1}, false},
+		{"negative from", ScrollbackRequest{Pane: 1, From: -1, Count: 1}, false},
+		{"empty", ScrollbackRequest{Pane: 1}, false},
+		{"too many", ScrollbackRequest{Pane: 1, Count: MaxScrollbackLines + 1}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.r.Validate()
+			if (err == nil) != tt.ok {
+				t.Fatalf("Validate() = %v, want ok=%v", err, tt.ok)
+			}
+			if err != nil && !errors.Is(err, ErrInvalidHistory) {
+				t.Fatalf("error %v does not wrap ErrInvalidHistory", err)
 			}
 		})
 	}

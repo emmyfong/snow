@@ -24,6 +24,8 @@ const (
 	TypeBell
 	TypeError
 	TypeProfileList
+	TypeScrollbackRequest
+	TypeScrollback
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -63,6 +65,10 @@ func newMessage(t MsgType) Message {
 		return &Error{}
 	case TypeProfileList:
 		return &ProfileList{}
+	case TypeScrollbackRequest:
+		return &ScrollbackRequest{}
+	case TypeScrollback:
+		return &Scrollback{}
 	}
 	return nil
 }

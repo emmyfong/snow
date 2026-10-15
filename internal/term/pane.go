@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -191,14 +190,8 @@ func (p *Pane) Version() uint64 { return p.version.Load() }
 // Lines returns the screen as one styled string per row.
 func (p *Pane) Lines() []string {
 	p.mu.Lock()
-	rows := p.emu.Height()
-	screen := p.emu.Render()
-	p.mu.Unlock()
-	lines := strings.SplitN(screen, "\n", rows)
-	for len(lines) < rows {
-		lines = append(lines, "")
-	}
-	return lines
+	defer p.mu.Unlock()
+	return p.screenLines()
 }
 
 // Text returns the screen as plain text.
