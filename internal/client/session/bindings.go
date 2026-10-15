@@ -19,14 +19,13 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		m.renameKey(k)
 		return nil
 	case m.prefixed:
-		m.prefixed = false
+		m.endPrefix()
 		if a, ok := m.keys.Lookup(k); ok {
 			return m.run(a.Name, k)
 		}
 		return nil
 	case m.keys.IsPrefix(k):
-		m.prefixed = true
-		return nil
+		return m.startPrefix()
 	}
 	m.sendKey(k)
 	return nil

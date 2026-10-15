@@ -26,7 +26,10 @@ type Model struct {
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	cols, rows int
-	prefixed   bool        // the prefix key was pressed; the next key is a command
+	prefixed   bool // the prefix key was pressed; the next key is a command
+	prefixSeq  int  // counts prefix presses, to match a hint timer to its press
+	hint       bool // the which-key popup is showing
+	hintDelay  time.Duration
 	early      []api.Input // input typed before the first Layout named a pane
 	message    string      // why the last request was refused
 	messageAt  time.Time
@@ -60,7 +63,7 @@ type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), now: time.Now, panes: map[int]*paneState{}}
+	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now, panes: map[int]*paneState{}}
 	for _, o := range opts {
 		o(m)
 	}
@@ -91,6 +94,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		if msg.at.Equal(m.messageAt) {
 			m.message = ""
 		}
+	case hintMsg:
+		m.showHint(msg)
 	case clockMsg:
 		return tick()
 	case tea.KeyPressMsg:

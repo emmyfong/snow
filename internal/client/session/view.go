@@ -33,7 +33,8 @@ func (m *Model) View() tea.View {
 		right = p.Profile + "  "
 	}
 	right += m.now().Format("15:04")
-	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)
+	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
+	content = m.overlayHint(m.overlayPicker(content, area), area)
 	opts := ui.StatusOptions{Width: m.cols, Session: session, Tabs: tabs, Right: right, Message: m.message}
 	switch {
 	case m.confirm != nil:

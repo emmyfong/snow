@@ -22,7 +22,8 @@ internal/client/
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
   menu/          the right-click menu
-  whichkey/      the prefix hint popup
+  whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
+  keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
 ```
 
@@ -69,6 +70,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted. Nothing below 4 cells. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
+| Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
 
 ## Theme tokens
 
@@ -76,7 +78,7 @@ Defined by the home-page epic (#56), which also picks the default theme.
 `internal/client/theme` holds placeholder tokens until then: `Border`,
 `FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `PromptFG`,
 `PromptBG`, `Selection`,
-and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer). #56 replaces
+and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer, the text caret). #56 replaces
 the values and records the final list here.
 
 ## Visual review gate

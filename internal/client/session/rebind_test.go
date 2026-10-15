@@ -132,3 +132,15 @@ func TestPasteIgnoredWhileAskingOrRenaming(t *testing.T) {
 		t.Fatalf("a paste reached the pane while renaming: %v", r.sent)
 	}
 }
+
+// rebound is the table of TestRebind: split-right on | instead of %.
+func rebound(t *testing.T) *keys.Table {
+	t.Helper()
+	cfg := config.Defaults().Keys
+	cfg.Bind = map[string]string{"|": "split-right", "%": config.UnbindAction}
+	tab, err := keys.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tab
+}

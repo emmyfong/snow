@@ -67,3 +67,17 @@ func TestPopupUsesThemePointer(t *testing.T) {
 		t.Fatalf("popup %q ignores the theme's pointer", got)
 	}
 }
+
+func TestSize(t *testing.T) {
+	tests := []struct {
+		box  string
+		w, h int
+	}{
+		{"", 0, 0}, {"ab", 2, 1}, {"ab\nabcd\nc", 4, 3}, {"\x1b[1m漢字\x1b[0m\nx", 4, 2},
+	}
+	for _, tt := range tests {
+		if w, h := Size(tt.box); w != tt.w || h != tt.h {
+			t.Errorf("Size(%q) = %d,%d, want %d,%d", tt.box, w, h, tt.w, tt.h)
+		}
+	}
+}
