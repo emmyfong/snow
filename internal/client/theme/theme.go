@@ -35,6 +35,7 @@ type Glyphs struct {
 	ActiveTab                                  string // marks the shown window's tab
 	SessionLeft, SessionRight                  string // around the session name
 	Pointer                                    string // marks the selected item in a list
+	Caret                                      string // ends text being typed
 	TopLeft, TopRight, BottomLeft, BottomRight string
 }
 
@@ -56,7 +57,7 @@ func Default() Theme {
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
 			Zoomed: "Z", ActiveTab: "*",
 			SessionLeft: "[", SessionRight: "]",
-			Pointer: "> ",
+			Pointer: "> ", Caret: "_",
 			TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		},
 	}

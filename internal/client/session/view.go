@@ -35,8 +35,11 @@ func (m *Model) View() tea.View {
 	right += m.now().Format("15:04")
 	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)
 	opts := ui.StatusOptions{Width: m.cols, Session: session, Tabs: tabs, Right: right, Message: m.message}
-	if m.confirm != nil {
+	switch {
+	case m.confirm != nil:
 		opts.Prompt = m.confirm.question
+	case m.rename != nil:
+		opts.Prompt = m.renamePrompt()
 	}
 	bar := ui.StatusBar(m.theme, opts)
 	if content != "" {

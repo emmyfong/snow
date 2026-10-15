@@ -7,6 +7,7 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
@@ -40,6 +41,10 @@ func Run(opts Options) (Result, error) {
 	th, err := theme.Named(cfg.Theme.Name)
 	if err != nil {
 		return Result{}, fmt.Errorf("config: theme.name: %w", err)
+	}
+	table, err := keys.New(cfg.Keys)
+	if err != nil {
+		return Result{}, fmt.Errorf("config: %w", err)
 	}
 	raw, err := Connect(opts.Socket, opts.Start)
 	if err != nil {
@@ -79,7 +84,7 @@ func Run(opts Options) (Result, error) {
 		dir, _ = os.Getwd()
 	}
 	send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
-	a := &app{screen: session.New(send, session.WithTheme(th)), send: send}
+	a := &app{screen: session.New(send, session.WithTheme(th), session.WithKeys(table)), send: send}
 	a.screen.SetSize(cols, rows)
 
 	var popts []tea.ProgramOption

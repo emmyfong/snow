@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -19,6 +20,7 @@ type DetachMsg struct{}
 type Model struct {
 	send       func(api.Message)
 	theme      theme.Theme
+	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
 	panes      map[int]*paneState
@@ -31,6 +33,7 @@ type Model struct {
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
 	confirm    *confirmation // a question waiting for y or n
+	rename     *renaming     // the window name being typed
 	pending    api.Command   // the command the open picker completes
 }
 
@@ -57,7 +60,7 @@ type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}}
+	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), now: time.Now, panes: map[int]*paneState{}}
 	for _, o := range opts {
 		o(m)
 	}
@@ -93,7 +96,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
 	case tea.PasteMsg:
-		if m.picker == nil {
+		if !m.modal() {
 			m.input(api.Input{Paste: msg.Content})
 		}
 	}
@@ -204,3 +207,6 @@ func resize(lines []string, rows int) []string {
 	}
 	return append(lines, make([]string, rows-len(lines))...)
 }
+
+// modal reports whether a popup or a question holds the keyboard.
+func (m *Model) modal() bool { return m.picker != nil || m.confirm != nil || m.rename != nil }
