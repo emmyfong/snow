@@ -28,6 +28,9 @@ type Glyphs struct {
 	Vertical, Horizontal                       string
 	Cross, TeeLeft, TeeRight, TeeUp, TeeDown   string
 	Zoomed                                     string // marks a zoomed window's tab
+	ActiveTab                                  string // marks the shown window's tab
+	SessionLeft, SessionRight                  string // around the session name
+	Pointer                                    string // marks the selected item in a list
 	TopLeft, TopRight, BottomLeft, BottomRight string
 }
 
@@ -45,7 +48,9 @@ func Default() Theme {
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
-			Zoomed:  "Z",
+			Zoomed: "Z", ActiveTab: "*",
+			SessionLeft: "[", SessionRight: "]",
+			Pointer: "> ",
 			TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		},
 	}

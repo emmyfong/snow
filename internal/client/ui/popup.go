@@ -18,7 +18,8 @@ type PopupOptions struct {
 
 // Popup draws a framed list exactly Width cells wide: the title in the top
 // edge and one item per row, the selected one marked and highlighted. Items
-// that do not fit are cut. It draws nothing narrower than 4 cells.
+// that do not fit are cut. Items may hold styles. It draws nothing narrower
+// than 4 cells.
 func Popup(th theme.Theme, o PopupOptions) string {
 	if o.Width < 4 {
 		return ""
@@ -37,9 +38,9 @@ func Popup(th theme.Theme, o PopupOptions) string {
 	top += strings.Repeat(g.Horizontal, max(o.Width-1-ansi.StringWidth(top), 0)) + g.TopRight
 	rows := []string{frame.Render(top)}
 	for i, item := range o.Items {
-		marker := "  "
+		marker := strings.Repeat(" ", ansi.StringWidth(g.Pointer))
 		if i == o.Selected {
-			marker = "> "
+			marker = g.Pointer
 		}
 		text := ansi.Truncate(marker+item, inner, "")
 		text += strings.Repeat(" ", inner-ansi.StringWidth(text))

@@ -40,3 +40,24 @@ func TestStatusBarIsWidthSafe(t *testing.T) {
 		}
 	}
 }
+
+func TestStatusBarKeepsMessageWhenNarrow(t *testing.T) {
+	tabs := []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}, {Index: 3, Name: "build"}}
+	out := StatusBar(theme.Default(), StatusOptions{Width: 30, Session: "api", Tabs: tabs, Right: "sh 14:02", Message: "no room"})
+	got := ansi.Strip(out)
+	if !strings.Contains(got, "no room") {
+		t.Fatalf("narrow status %q dropped the message", got)
+	}
+	if w := ansi.StringWidth(out); w != 30 {
+		t.Fatalf("width %d, want 30", w)
+	}
+}
+
+func TestStatusBarUsesThemeGlyphs(t *testing.T) {
+	th := theme.Default()
+	th.Glyphs.ActiveTab, th.Glyphs.SessionLeft, th.Glyphs.SessionRight = "!", "<", ">"
+	got := ansi.Strip(StatusBar(th, StatusOptions{Width: 30, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}}}))
+	if !strings.Contains(got, "<api>") || !strings.Contains(got, "1:dev!") {
+		t.Fatalf("status %q ignores the theme's glyphs", got)
+	}
+}

@@ -58,3 +58,12 @@ func TestOverlay(t *testing.T) {
 		t.Fatalf("overlay below the base changed it: %q", got)
 	}
 }
+
+func TestPopupUsesThemePointer(t *testing.T) {
+	th := theme.Default()
+	th.Glyphs.Pointer = "→ "
+	got := ansi.Strip(Popup(th, PopupOptions{Items: []string{"a", "b"}, Selected: 1, Width: 12}))
+	if !strings.Contains(got, "→ b") || !strings.Contains(got, "  a") {
+		t.Fatalf("popup %q ignores the theme's pointer", got)
+	}
+}

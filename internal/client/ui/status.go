@@ -27,22 +27,24 @@ type StatusOptions struct {
 }
 
 // StatusBar draws one line of exactly Width cells: the session name and the
-// window tabs on the left, and Right, or Message, on the right. The left side
-// is cut when the line is too short; the right side is dropped first.
+// window tabs on the left, and Right, or Message, on the right. When the line
+// is too short, Right is dropped first, but a Message stays and the tabs are
+// cut to make room for it.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
 	}
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
 	active := bar.Foreground(th.TabActive).Bold(true)
-	parts := []string{bar.Render(" [" + o.Session + "]")}
+	g := th.Glyphs
+	parts := []string{bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight)}
 	for _, t := range o.Tabs {
 		label := strconv.Itoa(t.Index) + ":" + t.Name
 		if t.Active {
-			label += "*"
+			label += g.ActiveTab
 		}
 		if t.Zoomed {
-			label += th.Glyphs.Zoomed
+			label += g.Zoomed
 		}
 		style := bar
 		if t.Active {
@@ -57,7 +59,13 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 	}
 	right = " " + right + " "
 	lw, rw := ansi.StringWidth(left), ansi.StringWidth(right)
-	if lw+rw > o.Width {
+	switch {
+	case lw+rw <= o.Width:
+	case o.Message != "" && rw < o.Width:
+		// A refusal is the only feedback the user gets, so the tabs make
+		// room for it.
+		left = ansi.Truncate(left, o.Width-rw, "")
+	default:
 		right, rw = "", 0
 	}
 	left = ansi.Truncate(left, o.Width, "")
