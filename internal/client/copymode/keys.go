@@ -6,6 +6,11 @@ import tea "charm.land/bubbletea/v2"
 // still open. Keys follow tmux's vi table, with the arrow keys and page keys
 // as well.
 func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
+	if m.search.typing {
+		m.promptKey(k)
+		return Open, nil
+	}
+	m.notice = ""
 	if k.Code == tea.KeyEscape || (k.Text == "q" && k.Mod == 0) {
 		return Exited, nil
 	}
@@ -47,6 +52,14 @@ func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
 		m.home()
 	case k.Text == "G":
 		m.end()
+	case k.Text == "/":
+		m.startSearch(true)
+	case k.Text == "?":
+		m.startSearch(false)
+	case k.Text == "n":
+		m.repeat(false)
+	case k.Text == "N":
+		m.repeat(true)
 	}
 	m.fill()
 	return Open, nil

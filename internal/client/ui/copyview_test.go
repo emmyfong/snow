@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
@@ -51,5 +52,48 @@ func TestCopyViewIndicatorSitsInTheCorner(t *testing.T) {
 	first := ansi.Strip(strings.Split(got, "\n")[0])
 	if first != "hello          [3/9]" {
 		t.Fatalf("first row %q, want the indicator at the right end", first)
+	}
+}
+
+func TestCopyViewHighlights(t *testing.T) {
+	th := theme.Default()
+	lines := []string{"find the needle here", "\x1b[31mred needle\x1b[0m again", "漢字 needle"}
+	tests := []struct {
+		name string
+		hs   []Highlight
+		want []string // plain rows, which highlights must not change
+	}{
+		{"one match", []Highlight{{Row: 0, Col: 9, Len: 6, Kind: HighlightMatch}}, lines},
+		{"current covers a match", []Highlight{{Row: 0, Col: 9, Len: 6, Kind: HighlightMatch}, {Row: 0, Col: 9, Len: 3, Kind: HighlightCurrent}}, lines},
+		{"over styled text", []Highlight{{Row: 1, Col: 4, Len: 6, Kind: HighlightMatch}}, lines},
+		{"after wide characters", []Highlight{{Row: 2, Col: 5, Len: 6, Kind: HighlightMatch}}, lines},
+		{"cut at the edge", []Highlight{{Row: 0, Col: 15, Len: 40, Kind: HighlightMatch}}, lines},
+		{"bad rows and columns are ignored", []Highlight{{Row: -1, Col: 0, Len: 3, Kind: HighlightMatch}, {Row: 9, Col: 0, Len: 3, Kind: HighlightMatch}, {Row: 0, Col: -2, Len: 3, Kind: HighlightMatch}, {Row: 0, Col: 0, Len: 0, Kind: HighlightMatch}}, lines},
+	}
+	plain := CopyView(th, CopyViewOptions{Width: 24, Height: 3, Lines: lines})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := CopyView(th, CopyViewOptions{Width: 24, Height: 3, Lines: lines, Highlights: tt.hs})
+			if ansi.Strip(got) != ansi.Strip(plain) {
+				t.Fatalf("highlights changed the text:\n%q\nwant\n%q", ansi.Strip(got), ansi.Strip(plain))
+			}
+			for i, r := range strings.Split(got, "\n") {
+				if w := ansi.StringWidth(r); w != 24 {
+					t.Errorf("row %d is %d cells wide, want 24", i, w)
+				}
+			}
+		})
+	}
+}
+
+func TestCopyViewHighlightColors(t *testing.T) {
+	th := theme.Default()
+	got := CopyView(th, CopyViewOptions{Width: 12, Height: 1, Lines: []string{"a needle b"}, Highlights: []Highlight{
+		{Row: 0, Col: 2, Len: 6, Kind: HighlightMatch}, {Row: 0, Col: 2, Len: 2, Kind: HighlightCurrent},
+	}})
+	match := lipgloss.NewStyle().Foreground(th.MatchFG).Background(th.MatchBG).Render("edle")
+	current := lipgloss.NewStyle().Foreground(th.CurrentFG).Background(th.CurrentBG).Render("ne")
+	if !strings.Contains(got, match) || !strings.Contains(got, current) {
+		t.Fatalf("row %q: want the match %q and the current part %q", got, match, current)
 	}
 }

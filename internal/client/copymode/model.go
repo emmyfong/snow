@@ -47,6 +47,8 @@ type Model struct {
 	lines  map[int]string
 	plain  map[int]string
 	flight map[int]int // request start line → count, for pages not yet answered
+	search searching
+	notice string // a note for the status bar; cleared by the next key
 }
 
 // New opens copy mode and asks the server for the history's size. The cursor

@@ -51,8 +51,13 @@ func (m *Model) fill() {
 	flush(hi)
 }
 
-// Receive applies a server message for this pane: a page of history.
+// Receive applies a server message for this pane: a page of history, or the
+// result of a search.
 func (m *Model) Receive(msg api.Message) {
+	if res, ok := msg.(*api.SearchResult); ok {
+		m.receiveSearch(res)
+		return
+	}
 	r, ok := msg.(*api.Scrollback)
 	if !ok || r.Pane != m.o.Pane {
 		return

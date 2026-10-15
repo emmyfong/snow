@@ -82,6 +82,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		if m.copy != nil {
 			m.copy.Receive(msg)
 		}
+	case *api.SearchResult:
+		if m.copy != nil {
+			m.copy.Receive(msg)
+		}
 	case *api.Error:
 		m.message, m.messageAt = msg.Message, m.now()
 		at := m.messageAt

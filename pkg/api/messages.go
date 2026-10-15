@@ -26,6 +26,8 @@ const (
 	TypeProfileList
 	TypeScrollbackRequest
 	TypeScrollback
+	TypeSearchRequest
+	TypeSearchResult
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -69,6 +71,10 @@ func newMessage(t MsgType) Message {
 		return &ScrollbackRequest{}
 	case TypeScrollback:
 		return &Scrollback{}
+	case TypeSearchRequest:
+		return &SearchRequest{}
+	case TypeSearchResult:
+		return &SearchResult{}
 	}
 	return nil
 }

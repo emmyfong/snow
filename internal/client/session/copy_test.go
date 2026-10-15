@@ -136,3 +136,49 @@ func TestCopyModeDrawsInsideItsPane(t *testing.T) {
 		t.Fatalf("cursor %+v should sit inside pane 2", c)
 	}
 }
+
+// searchFor types a search into copy mode and answers it from history, as
+// the server would: every line that holds query is a match.
+func searchFor(open string, query string) func(*Model, *recorder, []string) {
+	return func(m *Model, _ *recorder, history []string) {
+		m.Update(press(rune(open[0]), 0, open))
+		for _, c := range query {
+			m.Update(press(c, 0, string(c)))
+		}
+		m.Update(press(tea.KeyEnter, 0, ""))
+		res := &api.SearchResult{Pane: 1, Query: query, Matches: []api.Match{}}
+		for i, l := range history {
+			if c := strings.Index(l, query); c >= 0 {
+				res.Matches = append(res.Matches, api.Match{Line: i, Col: c, Len: len(query)})
+			}
+		}
+		m.Update(res)
+	}
+}
+
+func typing(open, text string) func(*Model, *recorder, []string) {
+	return func(m *Model, _ *recorder, _ []string) {
+		m.Update(press(rune(open[0]), 0, open))
+		for _, c := range text {
+			m.Update(press(c, 0, string(c)))
+		}
+	}
+}
+
+func TestSearchGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, searchFor("/", "step 2")) }
+func TestSearchGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, searchFor("/", "step 2")) }
+
+func TestSearchPromptGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, typing("/", "step 2")) }
+func TestSearchPromptGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, typing("/", "step 2")) }
+
+func TestSearchWrappedGolden80x24(t *testing.T) {
+	goldenCopy(t, 80, 24, searchFor("?", "step 2"), func(m *Model, _ *recorder, _ []string) {
+		for range 300 {
+			m.Update(press('n', 0, "n"))
+			if strings.Contains(statusLine(m), "Search wrapped") {
+				return
+			}
+		}
+		t.Fatal("the search never wrapped")
+	})
+}

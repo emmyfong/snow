@@ -19,7 +19,7 @@ func (m *Model) View(th theme.Theme) string {
 		lines[i] = m.lines[m.top+i]
 	}
 	return ui.CopyView(th, ui.CopyViewOptions{
-		Width: m.cols, Height: m.rows, Lines: lines,
+		Width: m.cols, Height: m.rows, Lines: lines, Highlights: m.highlights(),
 		Indicator: fmt.Sprintf("[%d/%d]", m.cur.line+1, m.total),
 	})
 }

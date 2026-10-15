@@ -45,3 +45,22 @@ func (s *Server) scrollback(c *client, r *api.ScrollbackRequest) {
 	lines, total := tp.History(r.From, r.Count)
 	s.reply(c, &api.Scrollback{Pane: r.Pane, From: r.From, Total: total, Lines: lines})
 }
+
+// search answers a SearchRequest with every match in the pane's history.
+func (s *Server) search(c *client, r *api.SearchRequest) {
+	if err := r.Validate(); err != nil {
+		s.refuse(c, api.CodeBadCommand, err)
+		return
+	}
+	tp := s.findPane(c, r.Pane)
+	if tp == nil {
+		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", r.Pane))
+		return
+	}
+	found, truncated := tp.Search(r.Query)
+	res := &api.SearchResult{Pane: r.Pane, Query: r.Query, Truncated: truncated, Matches: make([]api.Match, len(found))}
+	for i, m := range found {
+		res.Matches[i] = api.Match{Line: m.Line, Col: m.Col, Len: m.Len}
+	}
+	s.reply(c, res)
+}

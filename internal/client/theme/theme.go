@@ -24,6 +24,10 @@ type Theme struct {
 	Selection   color.Color // the selected item in a list
 	IndicatorFG color.Color // copy mode's position marker
 	IndicatorBG color.Color
+	MatchFG     color.Color // a search match in copy mode
+	MatchBG     color.Color
+	CurrentFG   color.Color // the match the cursor is on
+	CurrentBG   color.Color
 	Glyphs      Glyphs
 }
 
@@ -53,6 +57,10 @@ func Default() Theme {
 		Selection:   lipgloss.Color("4"),
 		IndicatorFG: lipgloss.Color("15"),
 		IndicatorBG: lipgloss.Color("8"),
+		MatchFG:     lipgloss.Color("0"),
+		MatchBG:     lipgloss.Color("3"),
+		CurrentFG:   lipgloss.Color("0"),
+		CurrentBG:   lipgloss.Color("208"),
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",

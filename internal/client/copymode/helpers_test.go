@@ -15,6 +15,7 @@ import (
 type fakeServer struct {
 	lines    []string
 	requests []*api.ScrollbackRequest
+	searches []*api.SearchRequest
 	pending  []*api.ScrollbackRequest
 }
 
@@ -27,6 +28,9 @@ func numbered(n int) []string {
 }
 
 func (s *fakeServer) send(m api.Message) {
+	if r, ok := m.(*api.SearchRequest); ok {
+		s.searches = append(s.searches, r)
+	}
 	if r, ok := m.(*api.ScrollbackRequest); ok {
 		s.requests = append(s.requests, r)
 		s.pending = append(s.pending, r)
@@ -75,4 +79,11 @@ func rows(m *Model) []string {
 		out[i] = strings.TrimRight(ansi.Strip(out[i]), " ")
 	}
 	return out
+}
+
+// typeText types s into the open search prompt.
+func typeText(m *Model, s string) {
+	for _, r := range s {
+		key(m, press(r, 0, string(r)))
+	}
 }

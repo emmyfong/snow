@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -36,6 +37,9 @@ func TestWireFormat(t *testing.T) {
 		{&ScrollbackRequest{Pane: 1, From: 40, Count: 24}, `{"pane":1,"from":40,"count":24}`},
 		{&Scrollback{Pane: 1, Total: 3}, `{"pane":1,"from":0,"total":3,"lines":[]}`},
 		{&Scrollback{Pane: 1, From: 1, Total: 3, Lines: []string{"a"}}, `{"pane":1,"from":1,"total":3,"lines":["a"]}`},
+		{&SearchRequest{Pane: 1, Query: "error"}, `{"pane":1,"query":"error"}`},
+		{&SearchResult{Pane: 1, Query: "x"}, `{"pane":1,"query":"x","matches":[]}`},
+		{&SearchResult{Pane: 1, Query: "x", Matches: []Match{{Line: 3, Col: 4, Len: 1}}, Truncated: true}, `{"pane":1,"query":"x","matches":[{"line":3,"col":4,"len":1}],"truncated":true}`},
 		{&ProfileList{}, `{"profiles":[],"default":""}`},
 		{&ProfileList{Profiles: []string{"pwsh", "Ubuntu"}, Default: "pwsh"}, `{"profiles":["pwsh","Ubuntu"],"default":"pwsh"}`},
 		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
@@ -88,6 +92,31 @@ func TestScrollbackRequestValidate(t *testing.T) {
 		{"negative from", ScrollbackRequest{Pane: 1, From: -1, Count: 1}, false},
 		{"empty", ScrollbackRequest{Pane: 1}, false},
 		{"too many", ScrollbackRequest{Pane: 1, Count: MaxScrollbackLines + 1}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.r.Validate()
+			if (err == nil) != tt.ok {
+				t.Fatalf("Validate() = %v, want ok=%v", err, tt.ok)
+			}
+			if err != nil && !errors.Is(err, ErrInvalidHistory) {
+				t.Fatalf("error %v does not wrap ErrInvalidHistory", err)
+			}
+		})
+	}
+}
+
+func TestSearchRequestValidate(t *testing.T) {
+	tests := []struct {
+		name string
+		r    SearchRequest
+		ok   bool
+	}{
+		{"query", SearchRequest{Pane: 1, Query: "error"}, true},
+		{"longest query", SearchRequest{Pane: 1, Query: strings.Repeat("a", MaxQueryBytes)}, true},
+		{"no pane", SearchRequest{Query: "x"}, false},
+		{"empty query", SearchRequest{Pane: 1}, false},
+		{"query too long", SearchRequest{Pane: 1, Query: strings.Repeat("a", MaxQueryBytes+1)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

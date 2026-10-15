@@ -35,11 +35,19 @@ func (m *Model) View() tea.View {
 	if p := m.focused(); p != nil {
 		right = p.Profile + "  "
 	}
+	if m.copy != nil {
+		if note := m.copy.Status(); note != "" {
+			right = note + "  "
+		}
+	}
 	right += m.now().Format("15:04")
 	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)
 	opts := ui.StatusOptions{Width: m.cols, Session: session, Tabs: tabs, Right: right, Message: m.message}
 	if m.confirm != nil {
 		opts.Prompt = m.confirm.question
+	}
+	if m.copy != nil && m.copy.Prompt() != "" {
+		opts.Prompt = m.copy.Prompt()
 	}
 	bar := ui.StatusBar(m.theme, opts)
 	if content != "" {
