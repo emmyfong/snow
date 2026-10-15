@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -28,6 +29,8 @@ type Model struct {
 	message    string      // why the last request was refused
 	messageAt  time.Time
 	ticking    bool // the clock tick is running
+	picker     *picker.Model
+	pending    api.Command // the command the open picker completes
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
@@ -85,7 +88,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
 	case tea.PasteMsg:
-		m.input(api.Input{Paste: msg.Content})
+		if m.picker == nil {
+			m.input(api.Input{Paste: msg.Content})
+		}
 	}
 	return nil
 }

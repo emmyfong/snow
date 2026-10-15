@@ -28,15 +28,12 @@ func TestPrefixBindings(t *testing.T) {
 		args map[string]string
 		win  int
 	}{
-		{press('%', 0, "%"), api.OpSplit, map[string]string{api.ArgDir: api.DirRight}, 0},
-		{press('"', 0, `"`), api.OpSplit, map[string]string{api.ArgDir: api.DirDown}, 0},
 		{press('x', 0, "x"), api.OpClose, nil, 0},
 		{press('z', 0, "z"), api.OpZoom, nil, 0},
 		{press('E', 0, "E"), api.OpEven, nil, 0},
 		{press(tea.KeyLeft, 0, ""), api.OpFocus, map[string]string{api.ArgDir: api.DirLeft}, 0},
 		{press(tea.KeyUp, tea.ModCtrl, ""), api.OpResize, map[string]string{api.ArgDir: api.DirUp, api.ArgCells: "1"}, 0},
 		{press(tea.KeyRight, tea.ModAlt, ""), api.OpResize, map[string]string{api.ArgDir: api.DirRight, api.ArgCells: "5"}, 0},
-		{press('c', 0, "c"), api.OpNewWindow, nil, -1},
 		{press('n', 0, "n"), api.OpNextWindow, nil, -1},
 		{press('p', 0, "p"), api.OpPrevWindow, nil, -1},
 		{press('3', 0, "3"), api.OpSelectWindow, nil, 3},

@@ -21,6 +21,10 @@ var arrows = map[rune]string{
 // key handles one key press: the prefix, a command after the prefix, or a
 // key for the pane.
 func (m *Model) key(k tea.Key) tea.Cmd {
+	if m.picker != nil {
+		m.pickerKey(k)
+		return nil
+	}
 	if m.prefixed {
 		m.prefixed = false
 		if isPrefix(k) {
@@ -62,11 +66,11 @@ func (m *Model) command(k tea.Key) tea.Cmd {
 	}
 	switch k.Text {
 	case "%":
-		m.paneCommand(api.OpSplit, api.ArgDir, api.DirRight)
+		m.openPicker("Split right", api.Command{Op: api.OpSplit, Args: map[string]string{api.ArgDir: api.DirRight}})
 	case `"`:
-		m.paneCommand(api.OpSplit, api.ArgDir, api.DirDown)
+		m.openPicker("Split down", api.Command{Op: api.OpSplit, Args: map[string]string{api.ArgDir: api.DirDown}})
 	case "c":
-		m.send(&api.Command{Op: api.OpNewWindow})
+		m.openPicker("New window", api.Command{Op: api.OpNewWindow, Args: map[string]string{}})
 	case "n":
 		m.send(&api.Command{Op: api.OpNextWindow})
 	case "p":

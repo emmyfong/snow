@@ -33,13 +33,13 @@ func (m *Model) View() tea.View {
 		right = p.Profile + "  "
 	}
 	right += m.now().Format("15:04")
-	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
+	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)
 	bar := ui.StatusBar(m.theme, ui.StatusOptions{Width: m.cols, Session: session, Tabs: tabs, Right: right, Message: m.message})
 	if content != "" {
 		content += "\n"
 	}
 	v := tea.NewView(content + bar)
-	if p := m.focused(); p != nil {
+	if p := m.focused(); p != nil && m.picker == nil {
 		if st := m.panes[p.ID]; st != nil && st.cursor.Visible && st.cursor.X < p.Rect.W && st.cursor.Y < p.Rect.H {
 			v.Cursor = tea.NewCursor(p.Rect.X+st.cursor.X, p.Rect.Y+st.cursor.Y)
 		}
