@@ -188,3 +188,14 @@ func TestAttachSendsProfiles(t *testing.T) {
 		}
 	}
 }
+
+// TestResizeTowardWindowBorder: with no edge on that side, resize moves the
+// pane's other edge, as tmux does, so Ctrl+Left shrinks a left pane.
+func TestResizeTowardWindowBorder(t *testing.T) {
+	s := newTestServer(t)
+	c, first := attached(t, s, 81, 24)
+	c.Send(split(first, api.DirRight))
+	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	c.Send(&api.Command{Op: api.OpResize, Target: first, Args: map[string]string{api.ArgDir: api.DirLeft, api.ArgCells: "5"}})
+	nextLayout(t, c, func(l *api.Layout) bool { return shownPanes(l)[0].Rect.W == 35 })
+}

@@ -65,13 +65,16 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Component | Signature | Use |
 |---|---|---|
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
+| Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
+| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. Drops the right side first when short. |
 
 ## Theme tokens
 
-Defined by the home-page epic, which also picks the default theme. Expected
-roles: text, muted text, accent, selection, success, warning, error,
-background, surface, border, focused border, status bar, and the glyph and
-spacing sets. Record the final list here.
+Defined by the home-page epic (#56), which also picks the default theme.
+`internal/client/theme` holds placeholder tokens until then: `Border`,
+`FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `Selection`,
+and `Glyphs` (border lines, junctions, corners, the zoom marker). #56 replaces
+the values and records the final list here.
 
 ## Visual review gate
 

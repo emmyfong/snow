@@ -19,12 +19,16 @@ func PaneView(lines []string, width, height int) string {
 		if i > 0 {
 			b.WriteByte('\n')
 		}
-		var row string
-		if i < len(lines) {
-			row = ansi.Truncate(lines[i], width, "")
-		}
-		b.WriteString(row)
-		b.WriteString(strings.Repeat(" ", width-ansi.StringWidth(row)))
+		b.WriteString(paneRow(lines, i, width))
 	}
 	return b.String()
+}
+
+// paneRow returns row i of lines cut or padded to exactly width cells.
+func paneRow(lines []string, i, width int) string {
+	var row string
+	if i >= 0 && i < len(lines) {
+		row = ansi.Truncate(lines[i], width, "")
+	}
+	return row + strings.Repeat(" ", max(width-ansi.StringWidth(row), 0))
 }

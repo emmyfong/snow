@@ -13,6 +13,11 @@ var directions = map[string]layout.Direction{
 	api.DirLeft: layout.Left, api.DirRight: layout.Right, api.DirUp: layout.Up, api.DirDown: layout.Down,
 }
 
+// opposite maps each direction to the one facing it.
+var opposite = map[layout.Direction]layout.Direction{
+	layout.Left: layout.Right, layout.Right: layout.Left, layout.Up: layout.Down, layout.Down: layout.Up,
+}
+
 // command applies cmd to c's session and sends the new layout to every
 // client of the session. A command that fails changes nothing and is
 // answered with an error.
@@ -95,7 +100,12 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 	case api.OpResize:
 		err := w.tree.ResizeCells(id, dir, cmd.Cells(), cols, rows)
 		if errors.Is(err, layout.ErrNoEdge) {
-			return nil // nothing to move at the window border, as in tmux
+			// At the window border, move the other edge the same way, as
+			// tmux does: Ctrl+Left shrinks a pane on the left.
+			err = w.tree.ResizeCells(id, opposite[dir], -cmd.Cells(), cols, rows)
+		}
+		if errors.Is(err, layout.ErrNoEdge) {
+			return nil // a lone pane has no edge to move
 		}
 		return err
 	case api.OpZoom:
