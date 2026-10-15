@@ -19,7 +19,8 @@
 //     peers of any version can always detect a mismatch.
 //   - Message types never change number once released.
 //   - Arrays are never null; an empty array is [].
-//   - Pane and window IDs start at 1; 0 means none.
+//   - Pane IDs start at 1; 0 means none. Window indexes start at 0, as in
+//     tmux.
 package api
 
 // ProtocolVersion changes when a client and server of different versions can

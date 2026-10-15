@@ -21,23 +21,25 @@ func lastCommand(t *testing.T, r *recorder) *api.Command {
 	return c
 }
 
+// pane marks a binding whose target is the focused pane.
+const pane = -2
+
 func TestPrefixBindings(t *testing.T) {
 	tests := []struct {
 		key  tea.KeyPressMsg
 		op   string
 		args map[string]string
-		win  int
+		win  int // window index for window commands; pane means the focused pane
 	}{
-		{press('x', 0, "x"), api.OpClose, nil, 0},
-		{press('z', 0, "z"), api.OpZoom, nil, 0},
-		{press('E', 0, "E"), api.OpEven, nil, 0},
-		{press(tea.KeyLeft, 0, ""), api.OpFocus, map[string]string{api.ArgDir: api.DirLeft}, 0},
-		{press(tea.KeyUp, tea.ModCtrl, ""), api.OpResize, map[string]string{api.ArgDir: api.DirUp, api.ArgCells: "1"}, 0},
-		{press(tea.KeyRight, tea.ModAlt, ""), api.OpResize, map[string]string{api.ArgDir: api.DirRight, api.ArgCells: "5"}, 0},
+		{press('z', 0, "z"), api.OpZoom, nil, pane},
+		{press('E', 0, "E"), api.OpEven, nil, pane},
+		{press(tea.KeyLeft, 0, ""), api.OpFocus, map[string]string{api.ArgDir: api.DirLeft}, pane},
+		{press(tea.KeyUp, tea.ModCtrl, ""), api.OpResize, map[string]string{api.ArgDir: api.DirUp, api.ArgCells: "1"}, pane},
+		{press(tea.KeyRight, tea.ModAlt, ""), api.OpResize, map[string]string{api.ArgDir: api.DirRight, api.ArgCells: "5"}, pane},
 		{press('n', 0, "n"), api.OpNextWindow, nil, -1},
 		{press('p', 0, "p"), api.OpPrevWindow, nil, -1},
 		{press('3', 0, "3"), api.OpSelectWindow, nil, 3},
-		{press('0', 0, "0"), api.OpSelectWindow, nil, 10},
+		{press('0', 0, "0"), api.OpSelectWindow, nil, 0},
 	}
 	for _, tt := range tests {
 		m, r := newPrefixScreen(t)
@@ -49,7 +51,7 @@ func TestPrefixBindings(t *testing.T) {
 			continue
 		}
 		switch tt.win {
-		case 0:
+		case pane:
 			if c.Target != 7 {
 				t.Errorf("%v: target %d, want the focused pane 7", tt.key, c.Target)
 			}
@@ -92,5 +94,53 @@ func TestCursorIsOffsetByThePaneRect(t *testing.T) {
 	c := m.View().Cursor
 	if c == nil || c.X != panes[1].Rect.X+3 || c.Y != 1 {
 		t.Fatalf("cursor %+v, want pane 2's origin plus 3,1", c)
+	}
+}
+
+func statusLine(m *Model) string {
+	rows := strings.Split(m.View().Content, "\n")
+	return ansi.Strip(rows[len(rows)-1])
+}
+
+// TestCloseAsksFirst: closing a pane or a window always asks, because it
+// ends the programs in it.
+func TestCloseAsksFirst(t *testing.T) {
+	for _, tt := range []struct {
+		key      tea.KeyPressMsg
+		question string
+		op       string
+		target   int
+	}{
+		{press('x', 0, "x"), "close pane 7? (y/n)", api.OpClose, 7},
+		{press('&', 0, "&"), "close window 1? (y/n)", api.OpCloseWindow, 1},
+	} {
+		m, r := newPrefixScreen(t)
+		m.Update(ctrlB)
+		m.Update(tt.key)
+		if len(r.sent) != 0 {
+			t.Fatalf("%v sent %v before the answer", tt.key, r.sent)
+		}
+		if got := statusLine(m); !strings.Contains(got, tt.question) {
+			t.Fatalf("status %q, want the question %q", got, tt.question)
+		}
+		m.Update(press('y', 0, "y"))
+		c := lastCommand(t, r)
+		if c.Op != tt.op || c.Target != tt.target {
+			t.Fatalf("y sent %+v, want %s on %d", c, tt.op, tt.target)
+		}
+		if strings.Contains(statusLine(m), "(y/n)") {
+			t.Fatal("the question stayed after the answer")
+		}
+	}
+}
+
+func TestCloseCancelledByAnyOtherKey(t *testing.T) {
+	m, r := newPrefixScreen(t)
+	m.Update(ctrlB)
+	m.Update(press('x', 0, "x"))
+	m.Update(press('n', 0, "n"))
+	m.Update(press('l', 0, "l"))
+	if got := r.keys(); len(r.sent) != 1 || got[0] != "l" {
+		t.Fatalf("sent %v, want only the key l after the cancelled close", r.sent)
 	}
 }

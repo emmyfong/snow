@@ -28,7 +28,9 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpRenameWindow, Target: 1, Args: map[string]string{ArgName: "logs"}}, true},
 		{Command{Op: OpRenameWindow, Target: 1}, false},
 		{Command{Op: OpSelectWindow, Target: 2}, true},
-		{Command{Op: OpSelectWindow}, false},
+		{Command{Op: OpSelectWindow}, true}, // window 0, the first
+		{Command{Op: OpSelectWindow, Target: -1}, false},
+		{Command{Op: OpRenameWindow, Args: map[string]string{ArgName: "dev"}}, true},
 		{Command{Op: OpNextWindow}, true},
 		{Command{Op: OpPrevWindow}, true},
 		{Command{Op: OpCloseWindow, Target: 1}, true},

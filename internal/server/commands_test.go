@@ -118,12 +118,12 @@ func TestCloseLastPaneClosesWindow(t *testing.T) {
 	c, first := attached(t, s, 80, 24)
 	c.Send(&api.Command{Op: api.OpNewWindow})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
-	c.Send(&api.Command{Op: api.OpSelectWindow, Target: 1})
-	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 })
+	c.Send(&api.Command{Op: api.OpSelectWindow, Target: 0})
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 0 })
 	c.Send(&api.Command{Op: api.OpClose, Target: first})
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 1 })
-	if l.Windows[0].Index != 2 || l.Active != 2 {
-		t.Fatalf("after closing window 1's last pane: %+v, want only window 2, shown", l)
+	if l.Windows[0].Index != 1 || l.Active != 1 {
+		t.Fatalf("after closing window 0's last pane: %+v, want only window 1, shown", l)
 	}
 }
 

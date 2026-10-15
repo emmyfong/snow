@@ -7,8 +7,8 @@ import (
 )
 
 // Command operations. Pane operations take a pane ID as Target; window
-// operations take a window index. Each operation's arguments are listed with
-// it.
+// operations take a window index, which counts from 0 as in tmux. Each
+// operation's arguments are listed with it.
 const (
 	OpSplit        = "split"         // dir; optional profile, folder
 	OpClose        = "close"         // close pane Target
@@ -54,6 +54,12 @@ func (c *Command) Validate() error {
 		}
 		return nil
 	}
+	needWindow := func() error {
+		if c.Target < 0 {
+			return fmt.Errorf("%w: %s needs a window index of 0 or more", ErrInvalidCommand, c.Op)
+		}
+		return nil
+	}
 	needDir := func(optional bool) error {
 		d, ok := c.Args[ArgDir]
 		if !ok && optional {
@@ -78,13 +84,15 @@ func (c *Command) Validate() error {
 		return nil
 	case OpFocus:
 		return errors.Join(needTarget(), needDir(true))
-	case OpClose, OpZoom, OpEven, OpSelectWindow, OpCloseWindow:
+	case OpClose, OpZoom, OpEven:
 		return needTarget()
+	case OpSelectWindow, OpCloseWindow:
+		return needWindow()
 	case OpRenameWindow:
 		if c.Args[ArgName] == "" {
 			return fmt.Errorf("%w: rename-window needs a name", ErrInvalidCommand)
 		}
-		return needTarget()
+		return needWindow()
 	case OpNewWindow, OpNextWindow, OpPrevWindow:
 		return nil
 	}

@@ -66,7 +66,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 |---|---|---|
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
 | Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
-| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. |
+| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; on the right a `Prompt` (a question, bold), else `Message` (error color), else `Right`. When short, drops `Right` first; a `Prompt` or `Message` stays and the tabs are cut instead. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted. Nothing below 4 cells. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
 

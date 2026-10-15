@@ -38,9 +38,10 @@ func (sess *session) window(index int) *window {
 // shown returns the active window.
 func (sess *session) shown() *window { return sess.window(sess.active) }
 
-// freeIndex returns the lowest window index not in use, starting at 1.
+// freeIndex returns the lowest window index not in use, starting at 0 as in
+// tmux.
 func (sess *session) freeIndex() int {
-	for i := 1; ; i++ {
+	for i := 0; ; i++ {
 		if sess.window(i) == nil {
 			return i
 		}

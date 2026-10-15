@@ -24,12 +24,13 @@ type StatusOptions struct {
 	Tabs    []Tab
 	Right   string // for example the pane's profile and the time
 	Message string // shown in place of Right, in the error color
+	Prompt  string // a question for the user; shown in place of both
 }
 
 // StatusBar draws one line of exactly Width cells: the session name and the
-// window tabs on the left, and Right, or Message, on the right. When the line
-// is too short, Right is dropped first, but a Message stays and the tabs are
-// cut to make room for it.
+// window tabs on the left, and on the right a Prompt, else a Message, else
+// Right. When the line is too short, Right is dropped first, but a Prompt or
+// Message stays and the tabs are cut to make room for it.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
@@ -54,14 +55,17 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 	}
 	left := strings.Join(parts, "")
 	right, rightStyle := o.Right, bar
-	if o.Message != "" {
+	switch {
+	case o.Prompt != "":
+		right, rightStyle = o.Prompt, bar.Bold(true)
+	case o.Message != "":
 		right, rightStyle = o.Message, bar.Foreground(th.Error).Bold(true)
 	}
 	right = " " + right + " "
 	lw, rw := ansi.StringWidth(left), ansi.StringWidth(right)
 	switch {
 	case lw+rw <= o.Width:
-	case o.Message != "" && rw < o.Width:
+	case (o.Message != "" || o.Prompt != "") && rw < o.Width:
 		// A refusal is the only feedback the user gets, so the tabs make
 		// room for it.
 		left = ansi.Truncate(left, o.Width-rw, "")

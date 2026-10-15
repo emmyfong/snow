@@ -61,3 +61,10 @@ func TestStatusBarUsesThemeGlyphs(t *testing.T) {
 		t.Fatalf("status %q ignores the theme's glyphs", got)
 	}
 }
+
+func TestStatusBarPromptWins(t *testing.T) {
+	got := ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 50, Session: "a", Right: "14:02", Message: "no room", Prompt: "close pane 3? (y/n)"}))
+	if !strings.Contains(got, "close pane 3? (y/n)") || strings.Contains(got, "no room") || strings.Contains(got, "14:02") {
+		t.Fatalf("status %q, want only the prompt on the right", got)
+	}
+}

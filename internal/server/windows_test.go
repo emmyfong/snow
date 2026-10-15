@@ -10,22 +10,23 @@ import (
 func TestWindowCycle(t *testing.T) {
 	s := newTestServer(t)
 	c, _ := attached(t, s, 80, 24)
-	for n := 2; n <= 3; n++ {
+	// Windows count from 0, as in tmux.
+	for n := 1; n <= 2; n++ {
 		c.Send(&api.Command{Op: api.OpNewWindow})
-		nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == n && l.Active == n })
+		nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == n+1 && l.Active == n })
 	}
 	c.Send(&api.Command{Op: api.OpNextWindow})
-	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 }) // wraps from 3
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 0 }) // wraps from 2
 	c.Send(&api.Command{Op: api.OpPrevWindow})
-	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 3 }) // wraps from 1
-	c.Send(&api.Command{Op: api.OpSelectWindow, Target: 2})
-	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 })
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 }) // wraps from 0
+	c.Send(&api.Command{Op: api.OpSelectWindow, Target: 1})
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 })
 }
 
 func TestRenameWindow(t *testing.T) {
 	s := newTestServer(t)
 	c, _ := attached(t, s, 80, 24)
-	c.Send(&api.Command{Op: api.OpRenameWindow, Target: 1, Args: map[string]string{api.ArgName: "logs"}})
+	c.Send(&api.Command{Op: api.OpRenameWindow, Target: 0, Args: map[string]string{api.ArgName: "logs"}})
 	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].Name == "logs" })
 }
 
@@ -33,7 +34,7 @@ func TestNewWindowShowsItsScreen(t *testing.T) {
 	s := newTestServer(t)
 	c, _ := attached(t, s, 80, 24)
 	c.Send(&api.Command{Op: api.OpNewWindow})
-	l := nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 })
+	l := nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 })
 	id := shownPanes(l)[0].ID
 	eventually(t, "the new window's prompt", func() bool {
 		return screenHas(s.pane(t, "work"), strings.TrimRight(prompt(), " "))
@@ -47,9 +48,9 @@ func TestCloseWindow(t *testing.T) {
 	c, _ := attached(t, s, 80, 24)
 	c.Send(&api.Command{Op: api.OpNewWindow})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
-	c.Send(&api.Command{Op: api.OpCloseWindow, Target: 2})
+	c.Send(&api.Command{Op: api.OpCloseWindow, Target: 1})
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 1 })
-	if l.Active != 1 {
-		t.Fatalf("shown window %d after closing 2, want 1", l.Active)
+	if l.Active != 0 {
+		t.Fatalf("shown window %d after closing 1, want 0", l.Active)
 	}
 }

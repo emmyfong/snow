@@ -25,6 +25,10 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		m.pickerKey(k)
 		return nil
 	}
+	if m.confirm != nil {
+		m.answer(k)
+		return nil
+	}
 	if m.prefixed {
 		m.prefixed = false
 		if isPrefix(k) {
@@ -76,18 +80,15 @@ func (m *Model) command(k tea.Key) tea.Cmd {
 	case "p":
 		m.send(&api.Command{Op: api.OpPrevWindow})
 	case "x":
-		m.paneCommand(api.OpClose)
+		m.confirmClosePane()
+	case "&":
+		m.confirmCloseWindow()
 	case "z":
 		m.paneCommand(api.OpZoom)
 	case "E":
 		m.paneCommand(api.OpEven)
 	case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9":
-		// Windows are numbered from 1, so 0 selects the tenth, as on a
-		// keyboard's number row.
 		n, _ := strconv.Atoi(k.Text)
-		if n == 0 {
-			n = 10
-		}
 		m.send(&api.Command{Op: api.OpSelectWindow, Target: n})
 	}
 	return nil

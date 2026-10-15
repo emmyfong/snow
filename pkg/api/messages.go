@@ -133,7 +133,7 @@ type Resize struct {
 }
 
 // Command asks the server to change the session, for example to split a pane.
-// Target is a pane ID or a window index, depending on Op; 0 means none. The
+// Target is a pane ID or a window index, depending on Op. The
 // Op* constants list the operations and their Args; Validate checks one.
 type Command struct {
 	Op     string            `json:"op"`
@@ -142,7 +142,7 @@ type Command struct {
 }
 
 // Layout describes the attached session's windows and where each pane is.
-// Active is the ID of the shown window.
+// Active is the index of the shown window.
 type Layout struct {
 	Session string       `json:"session"`
 	Active  int          `json:"active"`
