@@ -46,6 +46,13 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► backend, 
 - Bubble Tea: never touch the model from another goroutine. Deliver PTY output
   and server events as messages.
 - No cgo. Never assume bash; shells differ per OS.
+- Never hold a lock while you write to a PTY, a pipe, or a socket. A program
+  that stops reading blocks the write, and every reader of that lock with it.
+- The server's state belongs to one goroutine (ADR 0007). Add closures and
+  fields, not locks. Code in that goroutine must never block.
+- On Windows, start background processes with `CREATE_NO_WINDOW`, never
+  `DETACHED_PROCESS`. A process with no console makes each console program it
+  runs open a visible window.
 
 ## Modularity
 
@@ -82,6 +89,9 @@ folder, without edits across the codebase.
   for terminal code.
 - Do not mock Snow's own packages. Fakes are allowed at the `Backend` and
   `Gate` boundaries.
+- Tests that speak the protocol use `internal/apitest`: its client rebuilds
+  the screen from updates, and it gives short socket paths. Extend it; do not
+  write another client.
 - Real-shell tests wait for the prompt before typing: shells discard input
   that arrives while they start. Match only screen text that cannot wrap;
   widen the pane or shorten the expected text.
