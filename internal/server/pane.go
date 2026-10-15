@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/internal/transport"
 )
 
 // pane is one running program in a window.
@@ -21,6 +22,9 @@ func (s *Server) startPane(id, cols, rows int, profile, dir string) (*pane, erro
 	spec, profile, err := s.launch.spec(profile, dir)
 	if err != nil {
 		return nil, err
+	}
+	if s.opts.Socket != "" {
+		spec.Env = append(spec.Env, transport.PaneEnv(s.opts.Socket, id))
 	}
 	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback})
 	if err != nil {

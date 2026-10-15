@@ -93,8 +93,28 @@ func run(args []string, stdout, stderr io.Writer) int {
 	case kindServer:
 		return serve(stderr)
 	default:
+		if err := nested(); err != nil {
+			_, _ = fmt.Fprintln(stderr, "snow:", err)
+			return 1
+		}
 		return attach(cmd.session, stdout, stderr)
 	}
+}
+
+// nested returns an error if this process runs inside a snow pane, which the
+// server marks with SNOW. A second client inside the first would send
+// commands to the wrong shell. An empty SNOW counts as unset.
+func nested() error {
+	v := os.Getenv(transport.EnvName)
+	if v == "" {
+		return nil
+	}
+	where := "already inside a snow session"
+	if _, pane, ok := transport.ParsePaneEnv(v); ok {
+		where = fmt.Sprintf("%s (pane %d)", where, pane)
+	}
+	return fmt.Errorf("%s. Detach with Ctrl+b d, then run snow again. To start one here anyway, first run: %s",
+		where, unsetHint())
 }
 
 func socketPath(stderr io.Writer) (string, bool) {
