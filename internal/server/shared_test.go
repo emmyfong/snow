@@ -10,6 +10,8 @@ import (
 )
 
 // paneSize returns the pane rectangle in the next Layout c receives.
+// Pane sizes below are one row shorter than the client: the status bar
+// takes the bottom row.
 func paneSize(t *testing.T, c *apitest.Client) (int, int) {
 	t.Helper()
 	deadline := time.Now().Add(10 * time.Second)
@@ -70,22 +72,22 @@ func TestSmallestSizeWins(t *testing.T) {
 	s := newTestServer(t)
 	big := connect(t, s, 120, 40)
 	big.Send(&api.Attach{Session: "pair", Create: true})
-	if w, h := paneSize(t, big); w != 120 || h != 40 {
-		t.Fatalf("alone: pane %dx%d, want 120x40", w, h)
+	if w, h := paneSize(t, big); w != 120 || h != 39 {
+		t.Fatalf("alone: pane %dx%d, want 120x39", w, h)
 	}
 	small := connect(t, s, 80, 24)
 	small.Send(&api.Attach{Session: "pair"})
-	if w, h := paneSize(t, big); w != 80 || h != 24 {
-		t.Fatalf("with a smaller client: pane %dx%d, want 80x24", w, h)
+	if w, h := paneSize(t, big); w != 80 || h != 23 {
+		t.Fatalf("with a smaller client: pane %dx%d, want 80x23", w, h)
 	}
-	if cols, rows := s.pane(t, "pair").Size(); cols != 80 || rows != 24 {
-		t.Fatalf("pane is %dx%d, want 80x24", cols, rows)
+	if cols, rows := s.pane(t, "pair").Size(); cols != 80 || rows != 23 {
+		t.Fatalf("pane is %dx%d, want 80x23", cols, rows)
 	}
 
 	// The smaller client leaves: the session grows back.
 	small.Close()
-	if w, h := paneSize(t, big); w != 120 || h != 40 {
-		t.Fatalf("after the small client left: pane %dx%d, want 120x40", w, h)
+	if w, h := paneSize(t, big); w != 120 || h != 39 {
+		t.Fatalf("after the small client left: pane %dx%d, want 120x39", w, h)
 	}
 }
 
@@ -95,16 +97,16 @@ func TestSwitchingSessionRefitsTheOldOne(t *testing.T) {
 	s := newTestServer(t)
 	big := connect(t, s, 120, 40)
 	big.Send(&api.Attach{Session: "a", Create: true})
-	if w, h := paneSize(t, big); w != 120 || h != 40 {
-		t.Fatalf("alone: pane %dx%d, want 120x40", w, h)
+	if w, h := paneSize(t, big); w != 120 || h != 39 {
+		t.Fatalf("alone: pane %dx%d, want 120x39", w, h)
 	}
 	small := connect(t, s, 80, 24)
 	small.Send(&api.Attach{Session: "a"})
-	if w, h := paneSize(t, big); w != 80 || h != 24 {
-		t.Fatalf("shared: pane %dx%d, want 80x24", w, h)
+	if w, h := paneSize(t, big); w != 80 || h != 23 {
+		t.Fatalf("shared: pane %dx%d, want 80x23", w, h)
 	}
 	small.Send(&api.Attach{Session: "b", Create: true})
-	if w, h := paneSize(t, big); w != 120 || h != 40 {
-		t.Fatalf("after the small client left for b: pane %dx%d, want 120x40", w, h)
+	if w, h := paneSize(t, big); w != 120 || h != 39 {
+		t.Fatalf("after the small client left for b: pane %dx%d, want 120x39", w, h)
 	}
 }

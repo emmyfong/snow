@@ -34,8 +34,8 @@ func TestAttachSendsScreen(t *testing.T) {
 	if !ok || l.Session != "work" || len(l.Windows) != 1 || len(l.Windows[0].Panes) != 1 {
 		t.Fatalf("first message %#v, want a Layout with one window and one pane", m)
 	}
-	if r := l.Windows[0].Panes[0].Rect; r.W != 80 || r.H != 24 {
-		t.Fatalf("pane rect %+v, want 80x24", r)
+	if r := l.Windows[0].Panes[0].Rect; r.W != 80 || r.H != 23 {
+		t.Fatalf("pane rect %+v, want 80x23 (one row for the status bar)", r)
 	}
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
@@ -110,11 +110,11 @@ func TestSessionEndClosesConnection(t *testing.T) {
 }
 
 // floodSpec prints x forever.
-func floodSpec(string) (spec term.Spec, profile string) {
+func floodSpec(_, _ string) (spec term.Spec, profile string, err error) {
 	if runtime.GOOS == "windows" {
-		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "for /l %i in () do @echo x"}}, "flood"
+		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "for /l %i in () do @echo x"}}, "flood", nil
 	}
-	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood"
+	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood", nil
 }
 
 func TestInputReachesShell(t *testing.T) {
@@ -180,8 +180,8 @@ func TestOversizeResizeIgnored(t *testing.T) {
 			break
 		}
 	}
-	if cols, rows := s.pane(t, "work").Size(); cols != 80 || rows != 24 {
-		t.Fatalf("pane is %dx%d after an oversize Resize, want 80x24 kept", cols, rows)
+	if cols, rows := s.pane(t, "work").Size(); cols != 80 || rows != 23 {
+		t.Fatalf("pane is %dx%d after an oversize Resize, want 80x23 kept", cols, rows)
 	}
 	if len(s.Sessions()) != 1 {
 		t.Fatal("server lost its session")

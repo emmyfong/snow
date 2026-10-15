@@ -4,26 +4,38 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
+// fixedClock keeps the status bar's time stable in goldens.
+func fixedClock() time.Time { return time.Date(2026, 10, 15, 14, 2, 0, 0, time.UTC) }
+
+// screen returns a session screen of cols by rows with a fixed clock.
+func screen(cols, rows int) *Model {
+	m := New(func(api.Message) {})
+	m.now = fixedClock
+	m.SetSize(cols, rows)
+	return m
+}
+
 // attached returns a session screen that received a layout and a full screen.
+// The pane is one row shorter than the screen: the status bar takes the last.
 func attached(t *testing.T, cols, rows int) *Model {
 	t.Helper()
-	m := New(func(api.Message) {})
-	m.SetSize(cols, rows)
+	m := screen(cols, rows)
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{
 		Index: 1, Name: "PowerShell",
-		Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: cols, H: rows}, Focused: true}},
+		Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: cols, H: rows - 1}, Profile: "PowerShell", Focused: true}},
 	}}})
 	lines := []api.LineUpdate{
 		{Row: 0, Text: "Windows PowerShell"},
 		{Row: 1, Text: "PS C:\\Users\\emmy> \x1b[33mGet-ChildItem\x1b[0m"},
 		{Row: 2, Text: "漢字 and emoji 😀 keep their width"},
 	}
-	for r := 3; r < rows; r++ {
+	for r := 3; r < rows-1; r++ {
 		lines = append(lines, api.LineUpdate{Row: r, Text: fmt.Sprintf("line %d", r)})
 	}
 	m.Update(&api.PaneUpdate{Pane: 1, Lines: lines, Cursor: &api.Cursor{X: 18, Y: 1, Visible: true}})

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -24,7 +23,7 @@ var (
 type Server struct {
 	opts   Options
 	log    *slog.Logger
-	spec   func(dir string) (term.Spec, string)
+	launch launcher
 	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)
@@ -32,6 +31,7 @@ type Server struct {
 	stopped  chan struct{}
 	done     chan struct{} // closed when the last session ends
 	once     sync.Once
+	closing  sync.WaitGroup // panes still being closed in the background
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see
@@ -46,10 +46,7 @@ func New(opts Options) *Server {
 		stopped:  make(chan struct{}),
 		done:     make(chan struct{}),
 	}
-	s.spec = opts.Spec
-	if s.spec == nil {
-		s.spec = defaultSpec(s.log)
-	}
+	s.launch = newLauncher(opts, s.log)
 	go s.loop()
 	return s
 }
@@ -107,6 +104,9 @@ func (s *Server) Done() <-chan struct{} { return s.done }
 func (s *Server) Close() {
 	s.once.Do(func() { close(s.quit) })
 	<-s.stopped
+	// Wait for panes closed in the background, so no program outlives the
+	// server.
+	s.closing.Wait()
 }
 
 // CreateSession starts a session in the user's home folder and returns its

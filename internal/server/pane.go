@@ -14,11 +14,15 @@ type pane struct {
 	term    *term.Pane
 }
 
-// startPane starts the default program in dir at cols by rows and tells the
-// model goroutine when it exits.
-func (s *Server) startPane(id, cols, rows int, dir string) (*pane, error) {
-	spec, profile := s.spec(usableDir(dir))
-	tp, err := term.Start(spec, cols, rows, term.Options{Scrollback: s.opts.Scrollback})
+// startPane starts profile's program in dir at cols by rows and tells the
+// model goroutine when it exits. An empty profile means the default. The
+// launcher decides which folders a profile can use.
+func (s *Server) startPane(id, cols, rows int, profile, dir string) (*pane, error) {
+	spec, profile, err := s.launch.spec(profile, dir)
+	if err != nil {
+		return nil, err
+	}
+	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback})
 	if err != nil {
 		return nil, err
 	}

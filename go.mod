@@ -15,6 +15,7 @@ require (
 )
 
 require (
+	charm.land/lipgloss/v2 v2.0.6 // indirect
 	github.com/aymanbagabas/go-udiff v0.4.1 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/x/conpty v0.2.0 // indirect

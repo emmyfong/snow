@@ -6,13 +6,15 @@ import (
 	"github.com/emmyfong/snow/internal/term"
 )
 
-// pane returns the term.Pane of a session's first window, for tests.
+// pane returns the term.Pane of the focused pane in a session's shown
+// window, for tests.
 func (s *Server) pane(t *testing.T, session string) *term.Pane {
 	t.Helper()
 	var p *term.Pane
 	s.call(func(st *state) {
 		if sess, ok := st.sessions[session]; ok {
-			p = sess.windows[0].pane.term
+			w := sess.shown()
+			p = w.panes[w.focused].term
 		}
 	})
 	if p == nil {

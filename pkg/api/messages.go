@@ -23,6 +23,7 @@ const (
 	TypeSessionList
 	TypeBell
 	TypeError
+	TypeProfileList
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -60,6 +61,8 @@ func newMessage(t MsgType) Message {
 		return &Bell{}
 	case TypeError:
 		return &Error{}
+	case TypeProfileList:
+		return &ProfileList{}
 	}
 	return nil
 }
@@ -130,8 +133,8 @@ type Resize struct {
 }
 
 // Command asks the server to change the session, for example to split a pane.
-// Target is a pane or window ID, depending on Op; 0 means none. Operations
-// and their arguments are defined by the server.
+// Target is a pane ID or a window index, depending on Op. The
+// Op* constants list the operations and their Args; Validate checks one.
 type Command struct {
 	Op     string            `json:"op"`
 	Target int               `json:"target,omitempty"`
@@ -139,7 +142,7 @@ type Command struct {
 }
 
 // Layout describes the attached session's windows and where each pane is.
-// Active is the ID of the shown window.
+// Active is the index of the shown window.
 type Layout struct {
 	Session string       `json:"session"`
 	Active  int          `json:"active"`
@@ -159,6 +162,7 @@ type PaneInfo struct {
 	ID      int    `json:"id"`
 	Rect    Rect   `json:"rect"`
 	Profile string `json:"profile"`
+	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it
 	Focused bool   `json:"focused,omitempty"`
 }
 
@@ -229,6 +233,10 @@ const (
 	CodeNoSession    = "no-session"    // Attach named a session that does not exist
 	CodeAttachFailed = "attach-failed" // the server could not create the session
 	CodeBadSize      = "bad-size"      // a Hello or Resize size is outside 1..MaxCols by 1..MaxRows
+	CodeBadCommand   = "bad-command"   // a Command failed Validate
+	// CodeCommandFailed means a valid Command could not be applied, for
+	// example a split that would leave a pane too small. Nothing changed.
+	CodeCommandFailed = "command-failed"
 	// CodeSessionEnded is the last message before the server closes the
 	// connection because the attached session ended. A close without it
 	// means the connection was lost.
