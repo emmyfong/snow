@@ -11,8 +11,10 @@
 //     unknown fields, and ReadFrame skips unknown message types.
 //   - Removing or retyping a field, or changing what a message means, bumps
 //     ProtocolVersion. A new message that changes what an old one, or a
-//     closed connection, means also bumps it: version 2 added the
+//     closed connection, means also bumps it. Version 2 added the
 //     session-ended Error, so a close without it now means a lost connection.
+//     Version 3 added Errors that leave the session running (bad-command,
+//     command-failed), which older clients treated as fatal.
 //   - The frame header, Hello, Welcome, and Error never change shape, so
 //     peers of any version can always detect a mismatch.
 //   - Message types never change number once released.
@@ -22,4 +24,4 @@ package api
 
 // ProtocolVersion changes when a client and server of different versions can
 // no longer understand each other.
-const ProtocolVersion = 2
+const ProtocolVersion = 3

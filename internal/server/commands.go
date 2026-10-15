@@ -30,7 +30,6 @@ func (st *state) command(c *client, cmd *api.Command) {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
 	}
-	shown := sess.active
 	if err := st.apply(sess, cmd); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
 		return
@@ -38,9 +37,10 @@ func (st *state) command(c *client, cmd *api.Command) {
 	if _, ok := st.sessions[sess.name]; !ok {
 		return // the command closed the last window
 	}
-	if sess.active != shown {
-		st.repaint(sess)
-	}
+	// Clients drop the screens of panes a layout hides (zoom, another
+	// window), so every change resends the visible screens. Commands come
+	// at human speed, so the cost is small.
+	st.repaint(sess)
 	st.changed(sess)
 }
 
@@ -124,6 +124,9 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 	case api.OpFocus:
 		target := id
 		if _, ok := cmd.Args[api.ArgDir]; ok {
+			// Leaving a zoomed pane unzooms, as tmux does, so the focused
+			// pane is always on screen.
+			w.tree.Unzoom()
 			n, err := layout.Neighbor(w.tree, id, dir, cols, rows)
 			if errors.Is(err, layout.ErrNoNeighbor) {
 				return nil
@@ -132,6 +135,9 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 				return err
 			}
 			target = n
+		}
+		if w.tree.Zoomed != 0 && w.tree.Zoomed != target {
+			w.tree.Unzoom()
 		}
 		w.focused = int(target)
 		sess.active = w.index

@@ -66,7 +66,11 @@ func TestSplitStartsPane(t *testing.T) {
 	if !panes[1].Focused || panes[0].Focused {
 		t.Fatal("the new pane should have the focus")
 	}
-	// The second shell runs: typing into it shows output in its pane only.
+	// The second shell runs: once its own prompt shows (shells drop input
+	// while they start), typing into it shows output.
+	eventually(t, "the new pane's prompt", func() bool {
+		return screenHas(s.pane(t, "work"), strings.TrimRight(prompt(), " "))
+	})
 	c.Send(&api.Input{Pane: panes[1].ID, Paste: "echo second\r"})
 	c.WaitScreen("second")
 	if cols, rows := s.pane(t, "work").Size(); cols != 40 || rows != 24 {

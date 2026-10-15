@@ -1,6 +1,7 @@
 package server
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/pkg/api"
@@ -34,6 +35,9 @@ func TestNewWindowShowsItsScreen(t *testing.T) {
 	c.Send(&api.Command{Op: api.OpNewWindow})
 	l := nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 })
 	id := shownPanes(l)[0].ID
+	eventually(t, "the new window's prompt", func() bool {
+		return screenHas(s.pane(t, "work"), strings.TrimRight(prompt(), " "))
+	})
 	c.Send(&api.Input{Pane: id, Paste: "echo inwindow2\r"})
 	c.WaitScreen("inwindow2")
 }

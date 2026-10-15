@@ -31,6 +31,7 @@ type Server struct {
 	stopped  chan struct{}
 	done     chan struct{} // closed when the last session ends
 	once     sync.Once
+	closing  sync.WaitGroup // panes still being closed in the background
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see
@@ -103,6 +104,9 @@ func (s *Server) Done() <-chan struct{} { return s.done }
 func (s *Server) Close() {
 	s.once.Do(func() { close(s.quit) })
 	<-s.stopped
+	// Wait for panes closed in the background, so no program outlives the
+	// server.
+	s.closing.Wait()
 }
 
 // CreateSession starts a session in the user's home folder and returns its

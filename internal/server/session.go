@@ -71,7 +71,7 @@ func (st *state) killSession(name string) error {
 	}
 	for _, w := range sess.windows {
 		for _, p := range w.panes {
-			_ = p.term.Close()
+			st.closePane(p)
 		}
 	}
 	st.endSession(sess)
@@ -111,6 +111,7 @@ func (st *state) paneExited(id int) {
 		st.srv.log.Info("pane exited", "session", sess.name, "pane", id, "err", p.term.Err())
 		st.removePane(sess, w, id)
 		if _, ok := st.sessions[sess.name]; ok {
+			st.repaint(sess) // closing a pane unzooms its window
 			st.changed(sess)
 		}
 		return

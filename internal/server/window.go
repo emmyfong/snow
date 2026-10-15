@@ -86,6 +86,7 @@ func (st *state) newWindow(sess *session, profile, dir string) (*window, error) 
 func (st *state) splitPane(sess *session, w *window, target int, d layout.Direction, profile, dir string) error {
 	cols, rows := sess.area()
 	id := st.nextPane
+	zoomed := w.tree.Zoomed // Split unzooms; a failed start puts it back
 	if err := w.tree.SplitWithin(layout.PaneID(target), d, layout.PaneID(id), cols, rows); err != nil {
 		return err
 	}
@@ -95,6 +96,7 @@ func (st *state) splitPane(sess *session, w *window, target int, d layout.Direct
 		// The split succeeded on a tree with more than one pane, so closing
 		// the new pane cannot fail.
 		_ = w.tree.Close(layout.PaneID(id))
+		w.tree.Zoomed = zoomed
 		return err
 	}
 	st.nextPane++
@@ -114,7 +116,7 @@ func (st *state) removePane(sess *session, w *window, id int) {
 		return
 	}
 	delete(w.panes, id)
-	_ = p.term.Close()
+	st.closePane(p)
 	if w.focused == id {
 		// Focus the pane that came before the closed one, as tmux does when
 		// the last-active pane is gone.
@@ -129,7 +131,7 @@ func (st *state) removeWindow(sess *session, w *window) {
 	i := slices.Index(sess.windows, w)
 	sess.windows = slices.Delete(sess.windows, i, i+1)
 	for _, p := range w.panes {
-		_ = p.term.Close()
+		st.closePane(p)
 	}
 	if len(sess.windows) == 0 {
 		st.endSession(sess)
@@ -138,6 +140,18 @@ func (st *state) removeWindow(sess *session, w *window) {
 	if sess.active == w.index {
 		sess.active = sess.windows[min(i, len(sess.windows)-1)].index
 	}
+}
+
+// closePane stops p's program without blocking the model goroutine (ADR
+// 0007): Close waits for the program and the pane's goroutines. The pane is
+// already gone from the state, and its exit notice then finds nothing.
+// Server.Close waits for these closes.
+func (st *state) closePane(p *pane) {
+	st.srv.closing.Add(1)
+	go func() {
+		defer st.srv.closing.Done()
+		_ = p.term.Close()
+	}()
 }
 
 // relayout resizes every visible pane of sess to its rectangle. Panes hidden
