@@ -1,6 +1,9 @@
 package copymode
 
-import "github.com/emmyfong/snow/pkg/api"
+import (
+	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/pkg/api"
+)
 
 // ahead and behind are how many screens of history around the view are
 // fetched, so ordinary scrolling never waits for the server.
@@ -24,11 +27,14 @@ func (m *Model) requested(i int) bool {
 	return false
 }
 
-// fill asks for the lines around the view that are not here yet, one request
-// per run of missing lines.
+// fill asks for the lines around the view that are not here yet.
 func (m *Model) fill() {
-	lo := max(m.top-behind*m.rows, 0)
-	hi := min(m.top+ahead*m.rows, m.total)
+	m.fetch(max(m.top-behind*m.rows, 0), min(m.top+ahead*m.rows, m.total))
+}
+
+// fetch asks for the lines from lo up to hi that are not here yet, one
+// request per run of missing lines.
+func (m *Model) fetch(lo, hi int) {
 	run := -1
 	flush := func(end int) {
 		for run >= 0 && run < end {
@@ -52,15 +58,16 @@ func (m *Model) fill() {
 }
 
 // Receive applies a server message for this pane: a page of history, or the
-// result of a search.
-func (m *Model) Receive(msg api.Message) {
+// result of a search. A page can finish a copy that was waiting for lines;
+// then it returns Exited and the command that copies.
+func (m *Model) Receive(msg api.Message) (Result, tea.Cmd) {
 	if res, ok := msg.(*api.SearchResult); ok {
 		m.receiveSearch(res)
-		return
+		return Open, nil
 	}
 	r, ok := msg.(*api.Scrollback)
 	if !ok || r.Pane != m.o.Pane {
-		return
+		return Open, nil
 	}
 	delete(m.flight, r.From)
 	for i, l := range r.Lines {
@@ -73,6 +80,10 @@ func (m *Model) Receive(msg api.Message) {
 	}
 	m.clamp()
 	m.fill()
+	if m.copying {
+		return m.copySelection()
+	}
+	return Open, nil
 }
 
 // open places the view and the cursor once the history's size is known.

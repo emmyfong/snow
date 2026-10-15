@@ -11,6 +11,10 @@ func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
 		return Open, nil
 	}
 	m.notice = ""
+	if k.Code == tea.KeyEscape && m.selecting {
+		m.selecting = false
+		return Open, nil
+	}
 	if k.Code == tea.KeyEscape || (k.Text == "q" && k.Mod == 0) {
 		return Exited, nil
 	}
@@ -52,6 +56,10 @@ func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
 		m.home()
 	case k.Text == "G":
 		m.end()
+	case k.Text == "v":
+		m.toggleSelection()
+	case k.Text == "y", k.Code == tea.KeyEnter:
+		return m.copySelection()
 	case k.Text == "/":
 		m.startSearch(true)
 	case k.Text == "?":

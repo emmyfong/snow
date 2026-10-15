@@ -7,6 +7,7 @@ package copymode
 import (
 	"strings"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -22,12 +23,13 @@ const (
 
 // Options configures New.
 type Options struct {
-	Pane       int               // the pane whose history is shown
-	Cols, Rows int               // the pane's size in cells
-	Screen     []string          // the pane's rows now, shown until the history arrives
-	CursorX    int               // the pane's cursor, where copy mode's cursor starts
-	CursorY    int               //
-	Send       func(api.Message) // sends a request to the server, in order
+	Pane       int                       // the pane whose history is shown
+	Cols, Rows int                       // the pane's size in cells
+	Screen     []string                  // the pane's rows now, shown until the history arrives
+	CursorX    int                       // the pane's cursor, where copy mode's cursor starts
+	CursorY    int                       //
+	Send       func(api.Message)         // sends a request to the server, in order
+	Copy       func(text string) tea.Cmd // puts text on the system clipboard
 }
 
 // pos is a place in the history: a line number and a cell column.
@@ -49,6 +51,11 @@ type Model struct {
 	flight map[int]int // request start line → count, for pages not yet answered
 	search searching
 	notice string // a note for the status bar; cleared by the next key
+
+	selecting bool // a selection runs from anchor to the cursor
+	anchor    pos
+	dragging  bool // the left button is down, so motion extends the selection
+	copying   bool // a copy waits for lines of the selection to arrive
 }
 
 // New opens copy mode and asks the server for the history's size. The cursor

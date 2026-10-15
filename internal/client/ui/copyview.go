@@ -15,8 +15,9 @@ type HighlightKind int
 
 // Highlight kinds.
 const (
-	HighlightMatch   HighlightKind = iota + 1 // a search match
-	HighlightCurrent                          // the match the cursor is on
+	HighlightMatch    HighlightKind = iota + 1 // a search match
+	HighlightCurrent                           // the match the cursor is on
+	HighlightSelected                          // text selected for copying
 )
 
 // Highlight marks Len cells of a row, from column Col.
@@ -105,6 +106,8 @@ func highlightStyle(th theme.Theme, k HighlightKind) lipgloss.Style {
 	switch k {
 	case HighlightCurrent:
 		fg, bg = th.CurrentFG, th.CurrentBG
+	case HighlightSelected:
+		fg, bg = th.SelectedFG, th.SelectedBG
 	default:
 		fg, bg = th.MatchFG, th.MatchBG
 	}

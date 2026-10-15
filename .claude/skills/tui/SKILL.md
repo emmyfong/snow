@@ -68,7 +68,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
 | StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted. Nothing below 4 cells. |
-| CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
+| CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`, `HighlightSelected` in `SelectedFG`/`SelectedBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
 
 ## Theme tokens
@@ -76,7 +76,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 Defined by the home-page epic (#56), which also picks the default theme.
 `internal/client/theme` holds placeholder tokens until then: `Border`,
 `FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `PromptFG`,
-`PromptBG`, `Selection`, `IndicatorFG`, `IndicatorBG`, `MatchFG`, `MatchBG`, `CurrentFG`, `CurrentBG`,
+`PromptBG`, `Selection`, `IndicatorFG`, `IndicatorBG`, `MatchFG`, `MatchBG`, `CurrentFG`, `CurrentBG`, `SelectedFG`, `SelectedBG`,
 and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer). #56 replaces
 the values and records the final list here.
 

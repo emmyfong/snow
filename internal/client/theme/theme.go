@@ -28,6 +28,8 @@ type Theme struct {
 	MatchBG     color.Color
 	CurrentFG   color.Color // the match the cursor is on
 	CurrentBG   color.Color
+	SelectedFG  color.Color // text selected for copying
+	SelectedBG  color.Color
 	Glyphs      Glyphs
 }
 
@@ -61,6 +63,8 @@ func Default() Theme {
 		MatchBG:     lipgloss.Color("3"),
 		CurrentFG:   lipgloss.Color("0"),
 		CurrentBG:   lipgloss.Color("208"),
+		SelectedFG:  lipgloss.Color("15"),
+		SelectedBG:  lipgloss.Color("4"),
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",

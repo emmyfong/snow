@@ -2,9 +2,11 @@ package session
 
 import (
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/copymode"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // enterCopy opens copy mode over the focused pane. It does nothing before a
@@ -14,7 +16,7 @@ func (m *Model) enterCopy() {
 	if p == nil || m.copy != nil {
 		return
 	}
-	o := copymode.Options{Pane: p.ID, Cols: p.Rect.W, Rows: p.Rect.H, Send: m.send}
+	o := copymode.Options{Pane: p.ID, Cols: p.Rect.W, Rows: p.Rect.H, Send: m.send, Copy: m.setClip}
 	if st := m.panes[p.ID]; st != nil {
 		o.Screen = append([]string(nil), st.lines...)
 		o.CursorX, o.CursorY = st.cursor.X, st.cursor.Y
@@ -25,10 +27,47 @@ func (m *Model) enterCopy() {
 // copyKey sends a key to copy mode and closes it when it exits.
 func (m *Model) copyKey(k tea.Key) tea.Cmd {
 	res, cmd := m.copy.Key(k)
-	if res == copymode.Exited {
-		m.copy = nil
+	return m.afterCopy(res, cmd)
+}
+
+// copyReceive gives copy mode a message from the server.
+func (m *Model) copyReceive(msg api.Message) tea.Cmd {
+	if m.copy == nil {
+		return nil
 	}
-	return cmd
+	res, cmd := m.copy.Receive(msg)
+	return m.afterCopy(res, cmd)
+}
+
+// copyMouse gives copy mode a mouse event, with the cell made relative to
+// the pane's area.
+func (m *Model) copyMouse(msg tea.MouseMsg) tea.Cmd {
+	for _, w := range m.layout.Windows {
+		for _, p := range w.Panes {
+			if p.ID == m.copy.Pane() {
+				mouse := msg.Mouse()
+				res, cmd := m.copy.Mouse(msg, mouse.X-p.Rect.X, mouse.Y-p.Rect.Y)
+				return m.afterCopy(res, cmd)
+			}
+		}
+	}
+	return nil
+}
+
+// afterCopy closes copy mode when it has exited. What copy mode last said,
+// such as how much it copied, stays in the status bar for a moment.
+func (m *Model) afterCopy(res copymode.Result, cmd tea.Cmd) tea.Cmd {
+	if res != copymode.Exited {
+		return cmd
+	}
+	note := m.copy.Status()
+	m.copy = nil
+	if note == "" {
+		return cmd
+	}
+	m.notice, m.noticeAt = note, m.now()
+	at := m.noticeAt
+	return tea.Batch(cmd, tea.Tick(messageFor, func(time.Time) tea.Msg { return clearNoticeMsg{at} }))
 }
 
 // syncCopy keeps copy mode in step with the layout: it closes when its pane

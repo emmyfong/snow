@@ -96,4 +96,12 @@ func TestCopyViewHighlightColors(t *testing.T) {
 	if !strings.Contains(got, match) || !strings.Contains(got, current) {
 		t.Fatalf("row %q: want the match %q and the current part %q", got, match, current)
 	}
+	// A selection covers a match where they overlap.
+	got = CopyView(th, CopyViewOptions{Width: 12, Height: 1, Lines: []string{"a needle b"}, Highlights: []Highlight{
+		{Row: 0, Col: 2, Len: 6, Kind: HighlightMatch}, {Row: 0, Col: 4, Len: 6, Kind: HighlightSelected},
+	}})
+	selected := lipgloss.NewStyle().Foreground(th.SelectedFG).Background(th.SelectedBG).Render("edle b")
+	if !strings.Contains(got, selected) || !strings.Contains(got, lipgloss.NewStyle().Foreground(th.MatchFG).Background(th.MatchBG).Render("ne")) {
+		t.Fatalf("row %q: want the selection %q over the end of the match", got, selected)
+	}
 }

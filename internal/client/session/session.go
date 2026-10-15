@@ -6,6 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/clipboard"
 	"github.com/emmyfong/snow/internal/client/copymode"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -29,11 +30,14 @@ type Model struct {
 	early      []api.Input // input typed before the first Layout named a pane
 	message    string      // why the last request was refused
 	messageAt  time.Time
+	notice     string // a note on what the user did, such as a copy; not a refusal
+	noticeAt   time.Time
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
-	confirm    *confirmation   // a question waiting for y or n
-	pending    api.Command     // the command the open picker completes
-	copy       *copymode.Model // copy mode over a pane, when open
+	confirm    *confirmation             // a question waiting for y or n
+	pending    api.Command               // the command the open picker completes
+	copy       *copymode.Model           // copy mode over a pane, when open
+	setClip    func(text string) tea.Cmd // puts text on the system clipboard
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
@@ -55,11 +59,13 @@ const clockEvery = 15 * time.Second
 
 type clearMessageMsg struct{ at time.Time }
 
+type clearNoticeMsg struct{ at time.Time }
+
 type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message)) *Model {
-	return &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}}
+	return &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}, setClip: clipboard.Set}
 }
 
 // SetSize sets the screen size in cells.
@@ -79,20 +85,24 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.Scrollback:
-		if m.copy != nil {
-			m.copy.Receive(msg)
-		}
+		return m.copyReceive(msg)
 	case *api.SearchResult:
-		if m.copy != nil {
-			m.copy.Receive(msg)
+		return m.copyReceive(msg)
+	case tea.MouseMsg:
+		if m.copy != nil && m.layout != nil {
+			return m.copyMouse(msg)
 		}
+	case clipboard.ErrMsg:
+		return m.refuse(msg.Error())
 	case *api.Error:
-		m.message, m.messageAt = msg.Message, m.now()
-		at := m.messageAt
-		return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
+		return m.refuse(msg.Message)
 	case clearMessageMsg:
 		if msg.at.Equal(m.messageAt) {
 			m.message = ""
+		}
+	case clearNoticeMsg:
+		if msg.at.Equal(m.noticeAt) {
+			m.notice = ""
 		}
 	case clockMsg:
 		return tick()
@@ -104,6 +114,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// refuse shows why a request failed in the status bar for a moment.
+func (m *Model) refuse(text string) tea.Cmd {
+	m.message, m.messageAt = text, m.now()
+	at := m.messageAt
+	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
 }
 
 func tick() tea.Cmd {

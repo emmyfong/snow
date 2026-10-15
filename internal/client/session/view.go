@@ -35,10 +35,12 @@ func (m *Model) View() tea.View {
 	if p := m.focused(); p != nil {
 		right = p.Profile + "  "
 	}
-	if m.copy != nil {
-		if note := m.copy.Status(); note != "" {
-			right = note + "  "
-		}
+	note := m.notice
+	if m.copy != nil && m.copy.Status() != "" {
+		note = m.copy.Status()
+	}
+	if note != "" {
+		right = note + "  "
 	}
 	right += m.now().Format("15:04")
 	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)

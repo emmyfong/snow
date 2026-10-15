@@ -182,3 +182,81 @@ func TestSearchWrappedGolden80x24(t *testing.T) {
 		t.Fatal("the search never wrapped")
 	})
 }
+
+// clipboardLog collects what the screen puts on the clipboard.
+type clipboardLog struct{ texts []string }
+
+func (c *clipboardLog) set(text string) tea.Cmd {
+	c.texts = append(c.texts, text)
+	return nil
+}
+
+func selecting(m *Model, _ *recorder, _ []string) {
+	for _, k := range []tea.KeyPressMsg{
+		press('k', 0, "k"), press('k', 0, "k"), press('0', 0, "0"), press('l', 0, "l"), press('l', 0, "l"), press('v', 0, "v"),
+		press('j', 0, "j"), press('j', 0, "j"), press('l', 0, "l"), press('l', 0, "l"), press('l', 0, "l"),
+	} {
+		m.Update(k)
+	}
+}
+
+func TestSelectionGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, selecting) }
+func TestSelectionGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, selecting) }
+
+func TestYankCopiesAndLeaves(t *testing.T) {
+	m, r, history := inCopyMode(t, 80, 24)
+	log := &clipboardLog{}
+	m.copy = nil
+	m.setClip = log.set
+	m.Update(ctrlB)
+	m.Update(press('[', 0, "["))
+	serve(m, r, history)
+	selecting(m, r, history)
+	cmd := m.Update(press('y', 0, "y"))
+	if want := "ild step 276: compiling package\nbuild step 277: compiling package\nbuild"; len(log.texts) != 1 || log.texts[0] != want {
+		t.Fatalf("copied %q", log.texts)
+	}
+	if m.copy != nil {
+		t.Fatal("y should leave copy mode")
+	}
+	if got := statusLine(m); !strings.Contains(got, "Copied 71 characters") {
+		t.Fatalf("status %q, want the copy count", got)
+	}
+	if cmd == nil {
+		t.Fatal("no timer to clear the note")
+	}
+	m.Update(cmd())
+	if got := statusLine(m); strings.Contains(got, "Copied") {
+		t.Fatalf("status %q still shows the note after its timer", got)
+	}
+	// The pane gets keys again.
+	r.sent = nil
+	m.Update(press('a', 0, "a"))
+	if got := r.keys(); len(got) != 1 || got[0] != "a" {
+		t.Fatalf("after the copy the pane got %q, want [a]", got)
+	}
+}
+
+func TestMouseDragInCopyMode(t *testing.T) {
+	m, r, history := inCopyMode(t, 80, 24)
+	log := &clipboardLog{}
+	m.setClip = log.set
+	m.copy = nil
+	m.Update(ctrlB)
+	m.Update(press('[', 0, "["))
+	serve(m, r, history)
+	m.Update(tea.MouseClickMsg{X: 6, Y: 2, Button: tea.MouseLeft})
+	m.Update(tea.MouseMotionMsg{X: 10, Y: 3, Button: tea.MouseLeft})
+	m.Update(tea.MouseReleaseMsg{X: 10, Y: 3, Button: tea.MouseLeft})
+	if m.copy != nil || len(log.texts) != 1 || log.texts[0] != "step 279: compiling package\nbuild step" {
+		t.Fatalf("copy mode open=%v, copied %q", m.copy != nil, log.texts)
+	}
+}
+
+func TestMouseIgnoredOutsideCopyMode(t *testing.T) {
+	m, r := newPrefixScreen(t)
+	m.Update(tea.MouseClickMsg{X: 1, Y: 1, Button: tea.MouseLeft})
+	if len(r.sent) != 0 {
+		t.Fatalf("a click outside copy mode sent %v", r.sent)
+	}
+}
