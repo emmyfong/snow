@@ -1,3 +1,5 @@
 # Shell scripts run inside Linux and WSL, where CR characters break them.
 *.sh text eol=lf
 internal/shell/hooks/** text eol=lf
+# Golden files are compared byte for byte; never convert their line endings.
+*.golden -text
