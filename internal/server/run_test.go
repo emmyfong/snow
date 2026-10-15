@@ -30,11 +30,11 @@ func runAsync(ctx context.Context, t *testing.T, opts Options, path string) <-ch
 }
 
 // briefSpec runs a program that exits after about a second.
-func briefSpec(string) (term.Spec, string) {
+func briefSpec(_, _ string) (term.Spec, string, error) {
 	if runtime.GOOS == "windows" {
-		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "ping -n 2 127.0.0.1 >nul"}}, "brief"
+		return term.Spec{Path: "cmd.exe", Args: []string{"/c", "ping -n 2 127.0.0.1 >nul"}}, "brief", nil
 	}
-	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "sleep 1"}}, "brief"
+	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "sleep 1"}}, "brief", nil
 }
 
 func TestRunExitsAfterLastSession(t *testing.T) {

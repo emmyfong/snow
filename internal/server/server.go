@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -24,7 +23,7 @@ var (
 type Server struct {
 	opts   Options
 	log    *slog.Logger
-	spec   func(dir string) (term.Spec, string)
+	launch launcher
 	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)
@@ -46,10 +45,7 @@ func New(opts Options) *Server {
 		stopped:  make(chan struct{}),
 		done:     make(chan struct{}),
 	}
-	s.spec = opts.Spec
-	if s.spec == nil {
-		s.spec = defaultSpec(s.log)
-	}
+	s.launch = newLauncher(opts, s.log)
 	go s.loop()
 	return s
 }

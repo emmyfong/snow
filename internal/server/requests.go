@@ -34,6 +34,7 @@ func (st *state) attach(c *client, m *api.Attach) {
 	c.seen = map[int]uint64{}
 	sess.lastUsed = time.Now()
 	st.enqueue(c, st.layout(sess))
+	st.enqueue(c, st.profileList())
 	st.fitSession(sess)
 	if old, ok := st.sessions[prev]; ok && prev != sess.name {
 		st.fitSession(old) // the session c left may grow back
@@ -84,10 +85,16 @@ func (st *state) paneOf(c *client, id int) *pane {
 	if !ok || c.dropped {
 		return nil
 	}
-	for _, w := range sess.windows {
-		if w.pane.id == id {
-			return w.pane
-		}
+	_, p := sess.findPane(id)
+	return p
+}
+
+// profileList names the profiles new panes can run.
+func (st *state) profileList() *api.ProfileList {
+	names := st.srv.launch.profiles()
+	l := &api.ProfileList{Profiles: names}
+	if len(names) > 0 {
+		l.Default = names[0]
 	}
-	return nil
+	return l
 }

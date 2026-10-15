@@ -68,6 +68,31 @@ func place(root *Node, win Rect) Geometry {
 	return g
 }
 
+// rectOf returns the rectangle that node target fills when the tree under
+// root is laid out in win, ignoring zoom.
+func rectOf(root, target *Node, win Rect) (Rect, bool) {
+	if root == target {
+		return win, true
+	}
+	if root.leaf() {
+		return Rect{}, false
+	}
+	across := root.Axis == Horizontal
+	length := win.H
+	if across {
+		length = win.W
+	}
+	sizes := divide(length, root.Ratios)
+	pos := 0
+	for i, c := range root.Children {
+		if r, ok := rectOf(c, target, win.slice(across, pos, sizes[i])); ok {
+			return r, true
+		}
+		pos += sizes[i] + 1
+	}
+	return Rect{}, false
+}
+
 // divide splits length cells, minus one border between each pair of
 // children, by ratios. Edges are rounded cumulatively, so the sizes always
 // add up to the space available.

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -8,16 +10,23 @@ import (
 	"github.com/emmyfong/snow/internal/term"
 )
 
+// ErrUnknownProfile means a split or a new window named a profile the server
+// does not have.
+var ErrUnknownProfile = errors.New("server: unknown profile")
+
 // Options configures a Server. The zero value plus a Version works.
 type Options struct {
 	Version    string
 	Scrollback int           // lines per pane; 0 means term.DefaultScrollback
 	Log        *slog.Logger  // nil discards logs
 	IdleExit   time.Duration // exit if no session starts within this; 0 means 10 s
-	// Spec returns the program for a new pane that starts in dir, and its
-	// profile name. Nil means the first detected shell profile, with its
-	// folder hook.
-	Spec func(dir string) (term.Spec, string)
+	// Spec returns the program for a new pane: the named profile, started in
+	// dir, and the profile's name. An empty profile means the default. Nil
+	// means the shell profiles detected on this machine.
+	Spec func(profile, dir string) (term.Spec, string, error)
+	// Profiles lists the names Spec accepts, the default first. Nil means
+	// the detected profiles, or only the default when Spec is set.
+	Profiles func() []string
 }
 
 func (o Options) logger() *slog.Logger {
@@ -27,9 +36,28 @@ func (o Options) logger() *slog.Logger {
 	return slog.New(slog.DiscardHandler)
 }
 
-// defaultSpec starts the first detected shell with its OSC 7 folder hook.
-// It detects profiles once: on Windows, detection runs wsl.exe.
-func defaultSpec(log *slog.Logger) func(dir string) (term.Spec, string) {
+// launcher builds the programs panes run.
+type launcher struct {
+	spec     func(profile, dir string) (term.Spec, string, error)
+	profiles func() []string
+}
+
+// newLauncher returns the launcher for opts. It detects shell profiles once:
+// on Windows, detection runs wsl.exe.
+func newLauncher(opts Options, log *slog.Logger) launcher {
+	if opts.Spec != nil {
+		l := launcher{spec: opts.Spec, profiles: opts.Profiles}
+		if l.profiles == nil {
+			_, name, err := opts.Spec("", "")
+			l.profiles = func() []string {
+				if err != nil {
+					return nil
+				}
+				return []string{name}
+			}
+		}
+		return l
+	}
 	var hooks shell.Hooks
 	if dir, err := shell.DefaultHooksDir(); err == nil {
 		if h, err := shell.WriteHooks(dir); err == nil {
@@ -38,9 +66,21 @@ func defaultSpec(log *slog.Logger) func(dir string) (term.Spec, string) {
 			log.Warn("write shell hooks", "err", err)
 		}
 	}
-	p := shell.Detect()[0]
-	return func(dir string) (term.Spec, string) {
-		l := p.Launch(hooks, dir)
-		return term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir}, p.Name
+	detected := shell.Detect()
+	names := make([]string, len(detected))
+	for i, p := range detected {
+		names[i] = p.Name
+	}
+	return launcher{
+		profiles: func() []string { return names },
+		spec: func(profile, dir string) (term.Spec, string, error) {
+			for _, p := range detected {
+				if profile == "" || p.Name == profile {
+					l := p.Launch(hooks, dir)
+					return term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir}, p.Name, nil
+				}
+			}
+			return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
+		},
 	}
 }

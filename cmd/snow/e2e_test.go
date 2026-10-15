@@ -16,11 +16,11 @@ import (
 	"github.com/emmyfong/snow/internal/term"
 )
 
-func testShell(dir string) (term.Spec, string) {
+func testShell(_, dir string) (term.Spec, string, error) {
 	if runtime.GOOS == "windows" {
-		return term.Spec{Path: "cmd.exe", Dir: dir}, "cmd"
+		return term.Spec{Path: "cmd.exe", Dir: dir}, "cmd", nil
 	}
-	return term.Spec{Path: "/bin/sh", Dir: dir}, "sh"
+	return term.Spec{Path: "/bin/sh", Dir: dir}, "sh", nil
 }
 
 func startServer(t *testing.T) string {

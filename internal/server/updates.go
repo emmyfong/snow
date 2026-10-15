@@ -1,12 +1,14 @@
 package server
 
 import (
+	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
 // fitSession sizes a session to the smallest of its attached clients, as
-// tmux does, so every client can show the whole pane. When the size changes,
-// every attached client gets the new layout.
+// tmux does, so every client can show the whole session. When the size
+// changes, the panes are laid out again and every attached client gets the
+// new layout.
 func (st *state) fitSession(sess *session) {
 	cols, rows := 0, 0
 	for c := range st.clients {
@@ -24,49 +26,73 @@ func (st *state) fitSession(sess *session) {
 		return
 	}
 	sess.cols, sess.rows = cols, rows
+	st.changed(sess)
+}
+
+// changed lays out the panes of sess again and sends the layout to every
+// client attached to it. Call it after any change to windows or panes.
+func (st *state) changed(sess *session) {
+	st.relayout(sess)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, st.layout(sess))
 		}
 	}
-	for _, w := range sess.windows {
-		if cols, rows := w.pane.term.Size(); cols != sess.cols || rows != sess.rows {
-			if err := w.pane.term.Resize(sess.cols, sess.rows); err != nil {
-				st.srv.log.Warn("resize pane", "session", sess.name, "err", err)
-			}
+}
+
+// repaint makes the next frame send every visible row to the clients of
+// sess, for example after the shown window changes.
+func (st *state) repaint(sess *session) {
+	for c := range st.clients {
+		if c.session == sess.name {
+			c.last = map[int][]string{}
+			c.seen = map[int]uint64{}
 		}
 	}
 }
 
-// layout describes sess: one window whose one pane fills the session.
+// layout describes every window of sess and where its visible panes are.
+// A zoomed window lists only its zoomed pane.
 func (st *state) layout(sess *session) *api.Layout {
-	w := sess.windows[0]
-	return &api.Layout{
-		Session: sess.name,
-		Active:  w.index,
-		Windows: []api.WindowInfo{{
-			Index: w.index,
-			Name:  w.name,
-			Panes: []api.PaneInfo{{
-				ID:      w.pane.id,
-				Rect:    api.Rect{W: sess.cols, H: sess.rows},
-				Profile: w.pane.profile,
-				Focused: true,
-			}},
-		}},
+	cols, rows := sess.area()
+	l := &api.Layout{Session: sess.name, Active: sess.active}
+	for _, w := range sess.windows {
+		info := api.WindowInfo{Index: w.index, Name: w.name, Zoomed: w.tree.Zoomed != 0}
+		g := layout.Rects(w.tree, cols, rows)
+		for _, id := range w.tree.Panes() {
+			r, ok := g.Panes[id]
+			if !ok {
+				continue
+			}
+			p := w.panes[int(id)]
+			info.Panes = append(info.Panes, api.PaneInfo{
+				ID:      int(id),
+				Rect:    api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
+				Profile: p.profile,
+				Folder:  p.term.Folder(),
+				Focused: int(id) == w.focused,
+			})
+		}
+		l.Windows = append(l.Windows, info)
 	}
+	return l
 }
 
 // flush sends each attached client the rows that changed since its last
-// update. It runs on every frame tick.
+// update, for the panes it can see. It runs on every frame tick.
 func (st *state) flush() {
 	for c := range st.clients {
 		sess, ok := st.sessions[c.session]
 		if !ok {
 			continue
 		}
-		for _, w := range sess.windows {
-			st.flushPane(c, w.pane)
+		w := sess.shown()
+		if w == nil {
+			continue
+		}
+		cols, rows := sess.area()
+		for id := range layout.Rects(w.tree, cols, rows).Panes {
+			st.flushPane(c, w.panes[int(id)])
 		}
 	}
 }

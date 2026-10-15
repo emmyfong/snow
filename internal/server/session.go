@@ -23,15 +23,10 @@ type state struct {
 
 type session struct {
 	name       string
-	windows    []*window
+	windows    []*window // ordered by index
+	active     int       // index of the shown window
 	lastUsed   time.Time
 	cols, rows int
-}
-
-type window struct {
-	index int
-	name  string
-	pane  *pane
 }
 
 func newState(s *Server) *state {
@@ -50,21 +45,14 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 	if cols <= 0 || rows <= 0 {
 		cols, rows = defaultCols, defaultRows
 	}
-	p, err := st.srv.startPane(st.nextPane, cols, rows, dir)
+	sess := &session{name: name, lastUsed: time.Now(), cols: cols, rows: rows}
+	w, err := st.newWindow(sess, "", dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
-	st.nextPane++
-	sess := &session{
-		name:     name,
-		windows:  []*window{{index: 1, name: p.profile, pane: p}},
-		lastUsed: time.Now(),
-		cols:     cols,
-		rows:     rows,
-	}
 	st.sessions[name] = sess
 	st.hadOne = true
-	st.srv.log.Info("session created", "session", name, "profile", p.profile)
+	st.srv.log.Info("session created", "session", name, "profile", w.name)
 	return sess, nil
 }
 
@@ -82,7 +70,9 @@ func (st *state) killSession(name string) error {
 		return fmt.Errorf("%w: %s", ErrNoSession, name)
 	}
 	for _, w := range sess.windows {
-		_ = w.pane.term.Close()
+		for _, p := range w.panes {
+			_ = p.term.Close()
+		}
 	}
 	st.endSession(sess)
 	return nil
@@ -108,23 +98,22 @@ func (st *state) endSession(sess *session) {
 }
 
 // paneExited removes the pane whose program exited, and its window and
-// session when they become empty.
+// session when they become empty. A pane that a command already closed is
+// gone, so its exit does nothing.
 func (st *state) paneExited(id int) {
 	for _, sess := range st.sessions {
-		for i, w := range sess.windows {
-			if w.pane.id != id {
-				continue
-			}
-			// The exit status explains a shell that exits at once, such as
-			// a broken profile.
-			st.srv.log.Info("pane exited", "session", sess.name, "pane", id, "err", w.pane.term.Err())
-			_ = w.pane.term.Close()
-			sess.windows = slices.Delete(sess.windows, i, i+1)
-			if len(sess.windows) == 0 {
-				st.endSession(sess)
-			}
-			return
+		w, p := sess.findPane(id)
+		if p == nil {
+			continue
 		}
+		// The exit status explains a shell that exits at once, such as a
+		// broken profile.
+		st.srv.log.Info("pane exited", "session", sess.name, "pane", id, "err", p.term.Err())
+		st.removePane(sess, w, id)
+		if _, ok := st.sessions[sess.name]; ok {
+			st.changed(sess)
+		}
+		return
 	}
 }
 
@@ -148,7 +137,9 @@ func (st *state) closeAll() {
 	}
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
-			_ = w.pane.term.Close()
+			for _, p := range w.panes {
+				_ = p.term.Close()
+			}
 		}
 	}
 	st.sessions = map[string]*session{}

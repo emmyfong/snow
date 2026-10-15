@@ -32,6 +32,9 @@ func TestWireFormat(t *testing.T) {
 		{&SessionList{}, `{"sessions":[]}`},
 		{&SessionList{Sessions: []SessionInfo{{Name: "api", Windows: 1, State: StateSaved, LastUsed: when}}}, `{"sessions":[{"name":"api","windows":1,"attached":0,"state":"saved","lastUsed":"2026-10-09T09:14:00Z"}]}`},
 		{&Bell{Pane: 2}, `{"pane":2}`},
+		{&ProfileList{}, `{"profiles":[],"default":""}`},
+		{&ProfileList{Profiles: []string{"pwsh", "Ubuntu"}, Default: "pwsh"}, `{"profiles":["pwsh","Ubuntu"],"default":"pwsh"}`},
+		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
 		{&Error{Code: CodeBadHandshake, Message: "expected hello"}, `{"code":"bad-handshake","message":"expected hello"}`},
 	}
 	for _, tt := range tests {

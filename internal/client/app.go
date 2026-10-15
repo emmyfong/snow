@@ -47,9 +47,13 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		}
 	case *api.Error:
-		if msg.Code == api.CodeSessionEnded {
+		switch msg.Code {
+		case api.CodeSessionEnded:
 			a.result.Ended = true
-		} else {
+		case api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize:
+			// A refused request changes nothing; the screen shows why.
+			return a, a.screen.Update(msg)
+		default:
 			a.result.Err = msg
 		}
 		return a, tea.Quit
