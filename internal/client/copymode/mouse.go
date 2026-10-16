@@ -13,6 +13,11 @@ const wheelLines = 3
 // client turns on mouse reporting, which is not copy mode's to decide.
 func (m *Model) Mouse(msg tea.MouseMsg, x, y int) (Result, tea.Cmd) {
 	if !m.ready {
+		// A drag that opened copy mode presses before the history arrives;
+		// keep that press for when it does.
+		if ev, ok := msg.(tea.MouseClickMsg); ok && ev.Button == tea.MouseLeft {
+			m.early = &[2]int{x, y}
+		}
 		return Open, nil
 	}
 	inside := x >= 0 && x < m.cols && y >= 0 && y < m.rows

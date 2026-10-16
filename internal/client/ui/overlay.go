@@ -27,3 +27,16 @@ func Overlay(base, box string, x, y int) string {
 	}
 	return strings.Join(rows, "\n")
 }
+
+// Size returns the width of the widest row of box and its number of rows,
+// so a popup can be centered or kept on screen. An empty box is 0 by 0.
+func Size(box string) (width, height int) {
+	if box == "" {
+		return 0, 0
+	}
+	rows := strings.Split(box, "\n")
+	for _, r := range rows {
+		width = max(width, ansi.StringWidth(r))
+	}
+	return width, len(rows)
+}

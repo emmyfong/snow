@@ -21,8 +21,11 @@ internal/client/
   home/          the home page (one screen)
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
-  menu/          the right-click menu
-  whichkey/      the prefix hint popup
+  confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
+  menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
+  whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
+  mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
+  keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
 ```
 
@@ -67,9 +70,11 @@ Each entry: name, exact signature, one line of use, and notable options.
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
 | Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
 | StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (index, name, active `*`, zoomed glyph) on the left; `Right` or, in the error color, `Message` on the right. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
-| Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted. Nothing below 4 cells. |
+| Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted; optional `Hints[i]` sits right-aligned and muted at the end of row i (a shortcut), and is dropped when it would touch its item. Nothing below 4 cells. |
 | CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`, `HighlightSelected` in `SelectedFG`/`SelectedBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
+| TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. None while a `Prompt` shows. |
+| Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
 
 ## Theme tokens
 
@@ -77,7 +82,7 @@ Defined by the home-page epic (#56), which also picks the default theme.
 `internal/client/theme` holds placeholder tokens until then: `Border`,
 `FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `PromptFG`,
 `PromptBG`, `Selection`, `IndicatorFG`, `IndicatorBG`, `MatchFG`, `MatchBG`, `CurrentFG`, `CurrentBG`, `SelectedFG`, `SelectedBG`,
-and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer). #56 replaces
+and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer, the text caret). #56 replaces
 the values and records the final list here.
 
 ## Visual review gate

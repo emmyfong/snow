@@ -111,8 +111,8 @@ func TestCloseAsksFirst(t *testing.T) {
 		op       string
 		target   int
 	}{
-		{press('x', 0, "x"), "close this pane (1 of 1)? y/n", api.OpClose, 7},
-		{press('&', 0, "&"), "close window 1 and its 1 pane? y/n", api.OpCloseWindow, 1},
+		{press('x', 0, "x"), "Close this pane (1 of 1)?", api.OpClose, 7},
+		{press('&', 0, "&"), "Close window 1 and its 1 pane?", api.OpCloseWindow, 1},
 	} {
 		m, r := newPrefixScreen(t)
 		m.Update(ctrlB)
@@ -120,15 +120,15 @@ func TestCloseAsksFirst(t *testing.T) {
 		if len(r.sent) != 0 {
 			t.Fatalf("%v sent %v before the answer", tt.key, r.sent)
 		}
-		if got := statusLine(m); !strings.Contains(got, tt.question) {
-			t.Fatalf("status %q, want the question %q", got, tt.question)
+		if got := content(m); !strings.Contains(got, tt.question) || !strings.Contains(got, "[ Close ]") {
+			t.Fatalf("screen %q, want the popup with %q", got, tt.question)
 		}
 		m.Update(press('y', 0, "y"))
 		c := lastCommand(t, r)
 		if c.Op != tt.op || c.Target != tt.target {
 			t.Fatalf("y sent %+v, want %s on %d", c, tt.op, tt.target)
 		}
-		if strings.Contains(statusLine(m), "y/n") {
+		if strings.Contains(content(m), "[ Cancel ]") {
 			t.Fatal("the question stayed after the answer")
 		}
 	}
@@ -152,13 +152,13 @@ func TestCloseQuestionNamesThePane(t *testing.T) {
 	m.layout.Windows[0].Name = "logs"
 	m.Update(ctrlB)
 	m.Update(press('x', 0, "x"))
-	if got := statusLine(m); !strings.Contains(got, "close this pane (Ubuntu /src, 2 of 3)? y/n") {
+	if got := content(m); !strings.Contains(got, "Close this pane (Ubuntu /src, 2 of 3)?") {
 		t.Fatalf("status %q, want the pane named by profile, folder, and place", got)
 	}
 	m.Update(press('n', 0, "n"))
 	m.Update(ctrlB)
 	m.Update(press('&', 0, "&"))
-	if got := statusLine(m); !strings.Contains(got, `close window 1 "logs" and its 3 panes? y/n`) {
+	if got := content(m); !strings.Contains(got, `Close window 1 "logs" and its 3 panes?`) {
 		t.Fatalf("status %q, want the window named with its pane count", got)
 	}
 }

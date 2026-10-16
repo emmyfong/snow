@@ -86,11 +86,21 @@ func (p Profile) Launch(h Hooks, dir string) Launch {
 			l.Args = append(l.Args, "--cd", dir)
 		}
 		l.Args = append(l.Args, "-e", "sh", wslPath(filepath.Join(h.Dir, "wsl.sh")))
+		l.Env = []string{"WSLENV=" + forwardSnow(os.Getenv("WSLENV"))}
 		l.Dir = ""
 	default:
 		l.Args = append(l.Args, "-l")
 	}
 	return l
+}
+
+// forwardSnow adds SNOW to a WSLENV value, which lists the variables wsl.exe
+// passes into the Linux side. WSLENV always separates entries with a colon.
+func forwardSnow(wslenv string) string {
+	if wslenv == "" {
+		return "SNOW"
+	}
+	return wslenv + ":SNOW"
 }
 
 func userZDOTDIR() string {

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path"
+	"slices"
 	"time"
 
 	"github.com/emmyfong/snow/internal/shell"
@@ -18,9 +19,14 @@ var ErrUnknownProfile = errors.New("server: unknown profile")
 // Options configures a Server. The zero value plus a Version works.
 type Options struct {
 	Version    string
-	Scrollback int           // lines per pane; 0 means term.DefaultScrollback
-	Log        *slog.Logger  // nil discards logs
-	IdleExit   time.Duration // exit if no session starts within this; 0 means 10 s
+	Socket     string // socket path, passed to panes in SNOW; Run sets it
+	Scrollback int    // lines per pane; 0 means term.DefaultScrollback
+	// DefaultProfile names the detected profile new panes start with and the
+	// picker preselects. Empty, or a name that is not detected, keeps the
+	// detected order. It does not apply when Spec is set.
+	DefaultProfile string
+	Log            *slog.Logger  // nil discards logs
+	IdleExit       time.Duration // exit if no session starts within this; 0 means 10 s
 	// Spec returns the program for a new pane: the named profile, started in
 	// dir, and the profile's name. An empty profile means the default. Nil
 	// means the shell profiles detected on this machine.
@@ -69,7 +75,28 @@ func newLauncher(opts Options, log *slog.Logger) launcher {
 			log.Warn("write shell hooks", "err", err)
 		}
 	}
-	return detectedLauncher(shell.Detect(), hooks)
+	detected := shell.Detect()
+	if opts.DefaultProfile != "" && !hasProfile(detected, opts.DefaultProfile) {
+		log.Warn("default profile not found; using the first detected", "profile", opts.DefaultProfile)
+	}
+	return detectedLauncher(preferProfile(detected, opts.DefaultProfile), hooks)
+}
+
+func hasProfile(profiles []shell.Profile, name string) bool {
+	return slices.ContainsFunc(profiles, func(p shell.Profile) bool { return p.Name == name })
+}
+
+// preferProfile returns profiles with the one called name first. It returns
+// them unchanged when there is no such profile.
+func preferProfile(profiles []shell.Profile, name string) []shell.Profile {
+	i := slices.IndexFunc(profiles, func(p shell.Profile) bool { return p.Name == name })
+	if i <= 0 {
+		return profiles
+	}
+	out := make([]shell.Profile, 0, len(profiles))
+	out = append(out, profiles[i])
+	out = append(out, profiles[:i]...)
+	return append(out, profiles[i+1:]...)
 }
 
 // detectedLauncher runs the given shell profiles, the first being the

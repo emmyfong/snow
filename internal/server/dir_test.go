@@ -38,3 +38,21 @@ func TestMissingFolderFallsBack(t *testing.T) {
 	c.Send(&api.Attach{Session: "lost", Create: true, Dir: filepath.Join(os.TempDir(), "snow-no-such-folder")})
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
+
+// TestPaneEnvHasSnow: a pane's shell sees SNOW with the socket path and the
+// pane ID, so a nested snow can tell it runs inside a session.
+func TestPaneEnvHasSnow(t *testing.T) {
+	opts := testOptions()
+	opts.Socket = "/snow-test/default.sock"
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 200, 24)
+	c.Send(&api.Attach{Session: "env", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	show := "echo [$SNOW]\r"
+	if runtime.GOOS == "windows" {
+		show = "echo [%SNOW%]\r"
+	}
+	c.Send(&api.Input{Pane: 1, Paste: show})
+	c.WaitScreen("[/snow-test/default.sock,1]\n")
+}

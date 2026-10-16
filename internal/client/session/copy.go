@@ -12,9 +12,20 @@ import (
 // enterCopy opens copy mode over the focused pane. It does nothing before a
 // pane is known, or when copy mode is already open.
 func (m *Model) enterCopy() {
-	p := m.focused()
-	if p == nil || m.copy != nil {
-		return
+	if p := m.focused(); p != nil {
+		m.enterCopyOn(p.ID)
+	}
+}
+
+// enterCopyOn opens copy mode over pane id of the shown window and reports
+// whether it is open there.
+func (m *Model) enterCopyOn(id int) bool {
+	if m.copy != nil {
+		return m.copy.Pane() == id
+	}
+	p := m.paneByID(id)
+	if p == nil {
+		return false
 	}
 	o := copymode.Options{Pane: p.ID, Cols: p.Rect.W, Rows: p.Rect.H, Send: m.send, Copy: m.setClip}
 	if st := m.panes[p.ID]; st != nil {
@@ -22,6 +33,7 @@ func (m *Model) enterCopy() {
 		o.CursorX, o.CursorY = st.cursor.X, st.cursor.Y
 	}
 	m.copy = copymode.New(o)
+	return true
 }
 
 // copyKey sends a key to copy mode and closes it when it exits.

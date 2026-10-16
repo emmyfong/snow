@@ -16,7 +16,7 @@ Go standard layout. No `src/`.
 cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
-                     store,
+                     store, config,
                      later: backend, skills, context, gate, editor,
                      hook, worktree
 pkg/api/             the only public package: API types for other clients
@@ -32,8 +32,9 @@ Import direction. depguard fails CI on a wrong import.
 
 ```
 cmd/snow ──► client ──► pkg/api ◄── server ──► backend, gate, skills, store
-                                       │
-                                       └──► term, layout   (leaf packages)
+               │                       │
+               │                       └──► term, layout   (leaf packages)
+               └──────────► config ◄───┘    (leaf; read by client and server)
 ```
 
 ## Code quality

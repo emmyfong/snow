@@ -8,6 +8,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/clipboard"
 	"github.com/emmyfong/snow/internal/client/copymode"
+	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/menu"
+	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -21,12 +24,17 @@ type DetachMsg struct{}
 type Model struct {
 	send       func(api.Message)
 	theme      theme.Theme
+	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	cols, rows int
-	prefixed   bool        // the prefix key was pressed; the next key is a command
+	prefixed   bool    // the prefix key was pressed; the next key is a command
+	prefixKey  tea.Key // the key that started the prefix, for send-prefix
+	prefixSeq  int     // counts prefix presses, to match a hint timer to its press
+	hint       bool    // the which-key popup is showing
+	hintDelay  time.Duration
 	early      []api.Input // input typed before the first Layout named a pane
 	message    string      // why the last request was refused
 	messageAt  time.Time
@@ -35,15 +43,21 @@ type Model struct {
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
 	confirm    *confirmation             // a question waiting for y or n
+	rename     *renaming                 // the window name being typed
+	menu       *menu.Model               // the right-click menu
+	drag       *mouse.Drag               // a border held by the pointer
+	grab       *grab                     // the pane a held button belongs to
 	pending    api.Command               // the command the open picker completes
 	copy       *copymode.Model           // copy mode over a pane, when open
 	setClip    func(text string) tea.Cmd // puts text on the system clipboard
+	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
 type paneState struct {
 	lines  []string
 	cursor api.Cursor
+	mouse  bool // the program asked for mouse events
 }
 
 // maxEarly bounds input held before the first Layout. The Layout follows
@@ -64,8 +78,13 @@ type clearNoticeMsg struct{ at time.Time }
 type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
-func New(send func(api.Message)) *Model {
-	return &Model{send: send, theme: theme.Default(), now: time.Now, panes: map[int]*paneState{}, setClip: clipboard.Set}
+func New(send func(api.Message), opts ...Option) *Model {
+	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
+		panes: map[int]*paneState{}, setClip: clipboard.Set}
+	for _, o := range opts {
+		o(m)
+	}
+	return m
 }
 
 // SetSize sets the screen size in cells.
@@ -88,10 +107,6 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.copyReceive(msg)
 	case *api.SearchResult:
 		return m.copyReceive(msg)
-	case tea.MouseMsg:
-		if m.copy != nil && m.layout != nil {
-			return m.copyMouse(msg)
-		}
 	case clipboard.ErrMsg:
 		return m.refuse(msg.Error())
 	case *api.Error:
@@ -104,12 +119,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		if msg.at.Equal(m.noticeAt) {
 			m.notice = ""
 		}
+	case hintMsg:
+		m.showHint(msg)
 	case clockMsg:
 		return tick()
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
+	case tea.MouseMsg:
+		return m.mouseMsg(msg)
 	case tea.PasteMsg:
-		if m.picker == nil && m.copy == nil {
+		if !m.modal() {
 			m.input(api.Input{Paste: msg.Content})
 		}
 	}
@@ -174,6 +193,7 @@ func (m *Model) input(in api.Input) {
 func (m *Model) applyLayout(l *api.Layout) {
 	m.layout = l
 	defer m.syncCopy()
+	defer m.syncDrag()
 	present := map[int]bool{}
 	for _, w := range l.Windows {
 		for _, p := range w.Panes {
@@ -217,6 +237,7 @@ func (m *Model) applyUpdate(u *api.PaneUpdate) {
 	if u.Cursor != nil {
 		st.cursor = *u.Cursor
 	}
+	st.mouse = u.Mouse
 }
 
 func resize(lines []string, rows int) []string {
@@ -227,4 +248,9 @@ func resize(lines []string, rows int) []string {
 		return lines[:rows]
 	}
 	return append(lines, make([]string, rows-len(lines))...)
+}
+
+// modal reports whether a popup or a question holds the keyboard.
+func (m *Model) modal() bool {
+	return m.picker != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

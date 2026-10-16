@@ -253,10 +253,13 @@ func TestMouseDragInCopyMode(t *testing.T) {
 	}
 }
 
-func TestMouseIgnoredOutsideCopyMode(t *testing.T) {
-	m, r := newPrefixScreen(t)
+// TestClickDoesNotOpenCopyMode: a click focuses a pane (#54); only a drag or
+// the wheel opens copy mode.
+func TestClickDoesNotOpenCopyMode(t *testing.T) {
+	m, _ := newPrefixScreen(t)
 	m.Update(tea.MouseClickMsg{X: 1, Y: 1, Button: tea.MouseLeft})
-	if len(r.sent) != 0 {
-		t.Fatalf("a click outside copy mode sent %v", r.sent)
+	m.Update(tea.MouseReleaseMsg{X: 1, Y: 1, Button: tea.MouseLeft})
+	if m.copy != nil {
+		t.Fatal("a click opened copy mode")
 	}
 }

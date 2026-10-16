@@ -41,7 +41,8 @@ type Model struct {
 	o      Options
 	cols   int
 	rows   int
-	ready  bool // the first Scrollback arrived, so total is known
+	ready  bool    // the first Scrollback arrived, so total is known
+	early  *[2]int // a left press that came before ready, applied on ready
 	total  int
 	top    int // the first visible line
 	cur    pos

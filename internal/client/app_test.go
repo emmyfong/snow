@@ -6,7 +6,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -98,5 +101,23 @@ func TestCommandErrorKeepsClient(t *testing.T) {
 	a := &app{screen: session.New(send), send: send}
 	if _, cmd := a.Update(&api.Error{Code: api.CodeNoSession}); cmd == nil || a.result.Err == nil {
 		t.Fatal("an attach error should end the client")
+	}
+}
+
+func TestRunRejectsUnknownTheme(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Theme.Name = "neon"
+	_, err := Run(Options{Config: &cfg})
+	if !errors.Is(err, theme.ErrUnknownTheme) {
+		t.Fatalf("Run error = %v, want ErrUnknownTheme", err)
+	}
+}
+
+func TestRunRejectsBadKeyBinding(t *testing.T) {
+	cfg := config.Defaults()
+	cfg.Keys.Bind = map[string]string{"|": "split-sideways"}
+	_, err := Run(Options{Config: &cfg})
+	if !errors.Is(err, keys.ErrUnknownAction) {
+		t.Fatalf("Run error = %v, want ErrUnknownAction", err)
 	}
 }

@@ -96,4 +96,11 @@ func (m *Model) open() {
 	}
 	m.cur = pos{line: m.total - screen + m.o.CursorY, col: m.o.CursorX}
 	m.want = m.o.CursorX
+	if e := m.early; e != nil {
+		m.early = nil
+		m.cur = m.at(e[0], e[1])
+		m.want = m.cur.col
+		m.selecting, m.dragging = false, true
+		m.anchor = m.cur
+	}
 }

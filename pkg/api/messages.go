@@ -112,7 +112,9 @@ type Input struct {
 	Paste string `json:"paste,omitempty"`
 }
 
-// Mouse is one mouse event at a cell inside a pane.
+// Mouse is one mouse event at a cell inside a pane. X and Y count from 0,
+// from the pane's top-left cell. Clients send it only for panes whose
+// PaneUpdate says Mouse; the server drops it for any other pane.
 type Mouse struct {
 	Pane   int    `json:"pane"`
 	X      int    `json:"x"`
@@ -191,6 +193,11 @@ type PaneUpdate struct {
 	Pane   int          `json:"pane"`
 	Lines  []LineUpdate `json:"lines"`
 	Cursor *Cursor      `json:"cursor,omitempty"`
+	// Mouse tells whether the program in the pane asked for mouse events.
+	// Every update carries the current answer, and a missing field means no.
+	// A client that sees true sends the pane's clicks and wheel as Mouse
+	// messages instead of acting on them.
+	Mouse bool `json:"mouse,omitempty"`
 }
 
 // LineUpdate is one screen row, styled with ANSI escape sequences. Text is
@@ -320,6 +327,31 @@ func (i *Input) Validate() error {
 	case i.Key != nil && !i.Key.Valid():
 		// The key's text is what the user typed; servers log this error.
 		return fmt.Errorf("%w: unknown key", ErrInvalidInput)
+	}
+	return nil
+}
+
+// ErrInvalidMouse is returned by Mouse.Validate.
+var ErrInvalidMouse = errors.New("api: invalid mouse event")
+
+// Validate checks that m names a pane, a cell, and a known button and action.
+// Servers call it before acting on a Mouse.
+func (m *Mouse) Validate() error {
+	switch {
+	case m.Pane <= 0:
+		return fmt.Errorf("%w: no pane", ErrInvalidMouse)
+	case m.X < 0 || m.Y < 0:
+		return fmt.Errorf("%w: cell %d,%d is outside the pane", ErrInvalidMouse, m.X, m.Y)
+	}
+	switch m.Button {
+	case ButtonNone, ButtonLeft, ButtonMiddle, ButtonRight, ButtonWheelUp, ButtonWheelDown:
+	default:
+		return fmt.Errorf("%w: unknown button %q", ErrInvalidMouse, m.Button)
+	}
+	switch m.Action {
+	case ActionPress, ActionRelease, ActionMotion:
+	default:
+		return fmt.Errorf("%w: unknown action %q", ErrInvalidMouse, m.Action)
 	}
 	return nil
 }

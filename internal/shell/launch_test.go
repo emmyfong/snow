@@ -113,6 +113,22 @@ func TestLaunchWSL(t *testing.T) {
 	}
 }
 
+// TestLaunchWSLForwardsSnow: WSLENV lists SNOW, after any entries the user
+// already has, so a Linux snow in a WSL pane sees the variable.
+func TestLaunchWSLForwardsSnow(t *testing.T) {
+	tests := []struct{ wslenv, want string }{
+		{"", "WSLENV=SNOW"},
+		{"GOPATH/l", "WSLENV=GOPATH/l:SNOW"},
+	}
+	for _, tt := range tests {
+		t.Setenv("WSLENV", tt.wslenv)
+		l := Profile{Kind: KindWSL, Path: "wsl.exe"}.Launch(Hooks{}, "")
+		if !slices.Contains(l.Env, tt.want) {
+			t.Errorf("WSLENV=%q: Env = %q, want %q", tt.wslenv, l.Env, tt.want)
+		}
+	}
+}
+
 func TestWSLPath(t *testing.T) {
 	tests := []struct{ in, want string }{
 		{`C:\Users\emmy\AppData`, "/mnt/c/Users/emmy/AppData"},
