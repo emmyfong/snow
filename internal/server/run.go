@@ -22,6 +22,7 @@ func Run(ctx context.Context, opts Options, path string) error {
 	if err != nil {
 		return fmt.Errorf("start server: %w", err)
 	}
+	opts.Socket = path
 	s := New(opts)
 	defer s.Close()
 	go s.accept(l)

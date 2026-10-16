@@ -23,6 +23,10 @@ func TestMain(m *testing.M) {
 	if os.Getenv(asSnow) == "1" {
 		os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 	}
+	// The tests may run inside a snow pane, as agents building Snow do. The
+	// nested-session guard must not see that pane; tests that need SNOW set
+	// it themselves.
+	_ = os.Unsetenv(transport.EnvName)
 	os.Exit(m.Run())
 }
 

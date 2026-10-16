@@ -18,6 +18,7 @@ var ErrUnknownProfile = errors.New("server: unknown profile")
 // Options configures a Server. The zero value plus a Version works.
 type Options struct {
 	Version    string
+	Socket     string        // socket path, passed to panes in SNOW; Run sets it
 	Scrollback int           // lines per pane; 0 means term.DefaultScrollback
 	Log        *slog.Logger  // nil discards logs
 	IdleExit   time.Duration // exit if no session starts within this; 0 means 10 s
