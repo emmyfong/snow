@@ -7,7 +7,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/confirm"
-	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -83,7 +82,7 @@ func (m *Model) confirmKey(k tea.Key) {
 // click matters.
 func (m *Model) confirmMouse(msg tea.MouseMsg) {
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
-		m.confirmResult(m.confirm.popup.Click(m.theme, m.cols, max(m.rows-1, 0), click.X, click.Y))
+		m.confirmResult(m.confirm.popup.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
 	}
 }
 
@@ -104,9 +103,5 @@ func (m *Model) overlayConfirm(content string, rows int) string {
 	if m.confirm == nil {
 		return content
 	}
-	box, x, y := m.confirm.popup.View(m.theme, m.cols, rows)
-	if box == "" {
-		return content
-	}
-	return ui.Overlay(content, box, x, y)
+	return m.overlayPopup(content, m.confirm.popup, rows)
 }

@@ -82,6 +82,12 @@ func ParseKey(s string) (string, error) {
 		if !unicode.IsPrint(r) || unicode.IsSpace(r) {
 			return "", fmt.Errorf("%w %q", ErrBadKey, s)
 		}
+		// Terminals report Ctrl+b the same with or without Shift, so an
+		// upper-case letter here would bind a key that may never arrive.
+		if (has[0] || has[1]) && unicode.IsUpper(r) {
+			return "", fmt.Errorf("%w %q: write the shift as S-, for example %q", ErrBadKey, s,
+				canonical(has[0], has[1], true, strings.ToLower(rest)))
+		}
 	} else if n, ok := aliases[strings.ToLower(rest)]; ok {
 		base = n
 	} else {
@@ -105,7 +111,7 @@ func wordLen(s string, words []string) int {
 
 // canonical joins modifiers and a base key. A single character with Shift
 // and no other modifier is the upper-case character; with Ctrl or Alt the
-// character is lower case, because terminals report it that way.
+// character is lower case and Shift stays a modifier: C-S-b.
 func canonical(ctrl, alt, shift bool, base string) string {
 	if utf8.RuneCountInString(base) == 1 {
 		if ctrl || alt {

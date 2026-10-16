@@ -181,3 +181,34 @@ func TestMenuGolden80x24(t *testing.T)      { menuGolden(t, 80, 24, 50, 3) }
 func TestMenuGolden120x40(t *testing.T)     { menuGolden(t, 120, 40, 70, 5) }
 func TestMenuEdgeGolden80x24(t *testing.T)  { menuGolden(t, 80, 24, 78, 21) }
 func TestMenuEdgeGolden120x40(t *testing.T) { menuGolden(t, 120, 40, 118, 37) }
+
+func TestMenuNewWindowCloseWindowAndDetach(t *testing.T) {
+	m, _ := pickerScreen(t, 80, 24)
+	chooseByClick(t, m, "New window")
+	if m.picker == nil || m.pending.Op != api.OpNewWindow {
+		t.Fatalf("New window: picker %v, pending %+v", m.picker != nil, m.pending)
+	}
+
+	m, r := pickerScreen(t, 80, 24)
+	chooseByClick(t, m, "Close window")
+	if m.confirm == nil || len(r.sent) != 0 {
+		t.Fatalf("Close window: popup %v, sent %v; want the question first", m.confirm != nil, r.sent)
+	}
+	m.Update(press('y', 0, "y"))
+	if c := lastCommand(t, r); c.Op != api.OpCloseWindow || c.Target != 1 {
+		t.Fatalf("sent %+v, want close-window 1", c)
+	}
+
+	m, _ = pickerScreen(t, 80, 24)
+	m.Update(rightClick(50, 3))
+	for range 8 {
+		m.Update(press(tea.KeyDown, 0, ""))
+	}
+	cmd := m.Update(enter)
+	if cmd == nil {
+		t.Fatal("Detach returned no command")
+	}
+	if _, ok := cmd().(DetachMsg); !ok {
+		t.Fatal("Detach did not ask to detach")
+	}
+}

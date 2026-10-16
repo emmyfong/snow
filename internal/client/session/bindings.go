@@ -27,7 +27,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		}
 		return nil
 	case m.keys.IsPrefix(k):
-		return m.startPrefix()
+		return m.startPrefix(k)
 	}
 	m.sendKey(k)
 	return nil

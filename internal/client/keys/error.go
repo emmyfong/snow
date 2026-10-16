@@ -11,6 +11,10 @@ var (
 	ErrBadKey = errors.New("unknown key")
 	// ErrUnknownAction means an action name that does not exist.
 	ErrUnknownAction = errors.New("unknown action")
+	// ErrDuplicateKey means two spellings of one key, such as C-b and Ctrl+b.
+	ErrDuplicateKey = errors.New("duplicate key")
+	// ErrPrefixShadows means a prefix that is also a default binding.
+	ErrPrefixShadows = errors.New("prefix hides a default key")
 )
 
 // Error reports a config value that the table cannot use. The message names

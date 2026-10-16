@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"os"
 	"strings"
 )
 
@@ -33,3 +34,21 @@ func (e *Error) Error() string {
 
 // Unwrap returns the underlying cause, so errors.Is and errors.As see it.
 func (e *Error) Unwrap() error { return e.Err }
+
+// Locate returns an *Error for a setting that a later stage rejected, for
+// example a key binding that names no action. It finds the setting's line in
+// the file at path; key is the setting's path in the file, such as
+// {"keys", "bind", "%"}. Locate never fails: if the file cannot be read, the
+// error has no line.
+func Locate(path string, key []string, msg string, cause error) *Error {
+	e := &Error{Path: path, Msg: msg, Err: cause}
+	parts := make([]string, len(key))
+	for i, k := range key {
+		parts[i] = quoteKey(k)
+	}
+	e.Key = strings.Join(parts, ".")
+	if data, err := os.ReadFile(path); err == nil {
+		e.Line = keyLine(string(data), key)
+	}
+	return e
+}

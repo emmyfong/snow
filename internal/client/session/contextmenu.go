@@ -3,14 +3,13 @@ package session
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/menu"
-	"github.com/emmyfong/snow/internal/client/ui"
 )
 
 // openMenu shows the pane menu at screen cell x, y. It does not open when
 // the screen is too small to show every item; the keys still work.
 func (m *Model) openMenu(x, y int) {
 	mm := menu.New(menu.PaneItems(m.keys), x, y)
-	if box, _, _ := mm.View(m.theme, m.cols, max(m.rows-1, 0)); box == "" {
+	if box, _, _ := mm.View(m.theme, m.cols, m.windowRows()); box == "" {
 		return
 	}
 	m.menu = mm
@@ -32,7 +31,7 @@ func (m *Model) menuMouse(msg tea.MouseMsg) tea.Cmd {
 		m.menu = nil
 		return nil
 	}
-	return m.menuResult(m.menu.Click(m.theme, m.cols, max(m.rows-1, 0), click.X, click.Y))
+	return m.menuResult(m.menu.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
 }
 
 func (m *Model) menuResult(r menu.Result) tea.Cmd {
@@ -58,9 +57,5 @@ func (m *Model) overlayMenu(content string, rows int) string {
 	if m.menu == nil {
 		return content
 	}
-	box, x, y := m.menu.View(m.theme, m.cols, rows)
-	if box == "" {
-		return content
-	}
-	return ui.Overlay(content, box, x, y)
+	return m.overlayPopup(content, m.menu, rows)
 }

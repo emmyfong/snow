@@ -6,12 +6,12 @@ pane 1 row 4                            [32m│[mpane 2 ro[32m│[m[1;44m> 
 pane 1 row 5                            [32m│[mpane 2 ro[32m│[m  Split down     [90mCtrl+b "[m [32m│[m[32m[m  
 pane 1 row 6                            [32m│[mpane 2 ro[32m│[m  Zoom           [90mCtrl+b z[m [32m│[m[32m[m  
 pane 1 row 7                            [32m│[mpane 2 ro[32m│[m  Even out       [90mCtrl+b E[m [32m│[m[32m[m  
-pane 1 row 8                            [32m│[mpane 2 ro[32m│[m  Rename window  [90mCtrl+b ,[m [32m│[m[32m[m  
-pane 1 row 9                            [32m│[mpane 2 ro[32m│[m  Close pane     [90mCtrl+b x[m [32m│[m[32m[m  
-pane 1 row 10                           [32m│[mpane 2 ro[32m└──────────────────────────┘[m[32m[m  
-pane 1 row 11                           [32m├[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m
-pane 1 row 12                           [90m│[mpane 3 row 0                           
-pane 1 row 13                           [90m│[mpane 3 row 1                           
+pane 1 row 8                            [32m│[mpane 2 ro[32m│[m  New window     [90mCtrl+b c[m [32m│[m[32m[m  
+pane 1 row 9                            [32m│[mpane 2 ro[32m│[m  Rename window  [90mCtrl+b ,[m [32m│[m[32m[m  
+pane 1 row 10                           [32m│[mpane 2 ro[32m│[m  Close pane     [90mCtrl+b x[m [32m│[m[32m[m  
+pane 1 row 11                           [32m├[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m│[m  Close window   [90mCtrl+b &[m [32m│[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m─[m[32m─[m
+pane 1 row 12                           [90m│[mpane 3 ro[32m│[m  Detach         [90mCtrl+b d[m [32m│[m[90m[m  
+pane 1 row 13                           [90m│[mpane 3 ro[32m└──────────────────────────┘[m[90m[m  
 pane 1 row 14                           [90m│[mpane 3 row 2                           
 pane 1 row 15                           [90m│[mpane 3 row 3                           
 pane 1 row 16                           [90m│[mpane 3 row 4                           

@@ -9,7 +9,8 @@ import (
 )
 
 // handler runs one action. k is the key that triggered it, or the zero key
-// when the mouse did.
+// when the mouse did. Send-prefix does not use it: it sends the prefix key,
+// which may differ from the key that ran it.
 type handler func(m *Model, k tea.Key) tea.Cmd
 
 // handlers maps each action name in internal/client/keys to what it does on
@@ -43,7 +44,7 @@ func buildHandlers() map[string]handler {
 		"zoom":          func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpZoom); return nil },
 		"even-out":      func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpEven); return nil },
 		"detach":        func(*Model, tea.Key) tea.Cmd { return func() tea.Msg { return DetachMsg{} } },
-		keys.SendPrefix: func(m *Model, k tea.Key) tea.Cmd { m.sendKey(k); return nil },
+		keys.SendPrefix: func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
 	}
 	for i := range 10 {
 		h["select-window-"+strconv.Itoa(i)] = func(m *Model, _ tea.Key) tea.Cmd {

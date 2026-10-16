@@ -9,7 +9,7 @@ import (
 // on the bottom row. A client larger than the session shows blank space
 // beyond the panes.
 func (m *Model) View() tea.View {
-	area := max(m.rows-1, 0)
+	area := m.windowRows()
 	var panes []ui.WindowPane
 	if w := m.shown(); w != nil {
 		for _, p := range w.Panes {

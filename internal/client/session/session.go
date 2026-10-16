@@ -28,9 +28,10 @@ type Model struct {
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	cols, rows int
-	prefixed   bool // the prefix key was pressed; the next key is a command
-	prefixSeq  int  // counts prefix presses, to match a hint timer to its press
-	hint       bool // the which-key popup is showing
+	prefixed   bool    // the prefix key was pressed; the next key is a command
+	prefixKey  tea.Key // the key that started the prefix, for send-prefix
+	prefixSeq  int     // counts prefix presses, to match a hint timer to its press
+	hint       bool    // the which-key popup is showing
 	hintDelay  time.Duration
 	early      []api.Input // input typed before the first Layout named a pane
 	message    string      // why the last request was refused

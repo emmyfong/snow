@@ -261,3 +261,48 @@ func TestMouseBeforeFirstLayout(t *testing.T) {
 		t.Fatal("mouse events before the first layout started a drag or grabbed a pane")
 	}
 }
+
+// A release can be lost: the pointer leaves the window, or another program
+// takes the mouse. The next press must start clean.
+func TestPressClearsADragWhoseReleaseWasLost(t *testing.T) {
+	m, r := threePaneScreen(t)
+	m.Update(click(40, 5)) // a border drag starts
+	m.Update(click(50, 3)) // the release never came; a new press
+	m.Update(motion(55, 3))
+	for _, s := range r.sent {
+		if c, ok := s.(*api.Command); ok && c.Op == api.OpResize {
+			t.Fatalf("a stale drag sent %+v", c)
+		}
+	}
+	if m.drag != nil {
+		t.Fatal("the drag survived a new press")
+	}
+}
+
+func TestPressClearsAGrabWhoseReleaseWasLost(t *testing.T) {
+	m, r := mousePane(t)
+	m.Update(click(5, 6)) // pane 1 grabs the pointer
+	m.Update(click(50, 3))
+	r.sent = nil
+	m.Update(motion(8, 8))
+	m.Update(release(8, 8))
+	if len(r.sent) != 0 {
+		t.Fatalf("a stale grab sent %v", r.sent)
+	}
+}
+
+func TestReleaseEndsEveryDragAndGrab(t *testing.T) {
+	m, _ := mousePane(t)
+	m.Update(click(5, 6))
+	m.drag = nil
+	m.Update(release(5, 6))
+	if m.grab != nil {
+		t.Fatal("release left the grab")
+	}
+	m, _ = threePaneScreen(t)
+	m.Update(click(40, 5))
+	m.Update(tea.MouseReleaseMsg{X: 40, Y: 5, Button: tea.MouseRight}) // another button's release
+	if m.drag != nil {
+		t.Fatal("a release left the drag")
+	}
+}

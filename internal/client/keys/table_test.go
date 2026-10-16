@@ -218,3 +218,33 @@ func TestEveryDefaultActionExists(t *testing.T) {
 		}
 	}
 }
+
+// Two spellings of one key are one key. The second would silently replace
+// the first, so New refuses them.
+func TestNewReportsDuplicateKeys(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Bind = map[string]string{"C-x": "zoom", "Ctrl+x": "even-out"}
+	_, err := New(cfg)
+	var ke *Error
+	if !errors.As(err, &ke) || !errors.Is(err, ErrDuplicateKey) {
+		t.Fatalf("error %v, want *Error wrapping ErrDuplicateKey", err)
+	}
+	if !strings.Contains(err.Error(), "C-x") || !strings.Contains(err.Error(), "Ctrl+x") {
+		t.Errorf("message %q names neither spelling", err)
+	}
+}
+
+// A prefix equal to a default key would hide that binding without a word.
+func TestNewReportsPrefixThatShadowsADefault(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Prefix = "c"
+	_, err := New(cfg)
+	if !errors.Is(err, ErrPrefixShadows) || !strings.Contains(err.Error(), "new-window") {
+		t.Fatalf("error %v, want ErrPrefixShadows naming new-window", err)
+	}
+	// Unbinding the default, or rebinding it, resolves the conflict.
+	cfg.Bind = map[string]string{"c": config.UnbindAction}
+	if _, err := New(cfg); err != nil {
+		t.Fatalf("unbound default still conflicts: %v", err)
+	}
+}

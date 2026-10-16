@@ -17,8 +17,9 @@ const hintDelay = 500 * time.Millisecond
 type hintMsg struct{ seq int }
 
 // startPrefix waits for the next key and starts the hint timer.
-func (m *Model) startPrefix() tea.Cmd {
+func (m *Model) startPrefix(k tea.Key) tea.Cmd {
 	m.prefixed = true
+	m.prefixKey = k
 	m.hint = false
 	m.prefixSeq++
 	seq := m.prefixSeq

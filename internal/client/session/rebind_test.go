@@ -144,3 +144,17 @@ func rebound(t *testing.T) *keys.Table {
 	}
 	return tab
 }
+
+// TestSendPrefixSendsThePrefixNotTheKeyThatRanIt: with prefix C-a and the key
+// "a" bound to send-prefix, Ctrl+a a must type Ctrl+a.
+func TestSendPrefixSendsThePrefixNotTheKeyThatRanIt(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Prefix = "C-a"
+	cfg.Bind = map[string]string{"a": "send-prefix"}
+	m, r := withConfig(t, cfg)
+	m.Update(press('a', tea.ModCtrl, ""))
+	m.Update(press('a', 0, "a"))
+	if got := r.keys(); !slices.Equal(got, []string{"ctrl+a"}) {
+		t.Fatalf("sent %q, want one ctrl+a", got)
+	}
+}

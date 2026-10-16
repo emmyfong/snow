@@ -30,8 +30,11 @@ func TestPaneMenuItems(t *testing.T) {
 		{"Split down", `Ctrl+b "`, "split-down"},
 		{"Zoom", "Ctrl+b z", "zoom"},
 		{"Even out", "Ctrl+b E", "even-out"},
+		{"New window", "Ctrl+b c", "new-window"},
 		{"Rename window", "Ctrl+b ,", "rename-window"},
 		{"Close pane", "Ctrl+b x", "close-pane"},
+		{"Close window", "Ctrl+b &", "close-window"},
+		{"Detach", "Ctrl+b d", "detach"},
 	}
 	if len(items) != len(want) {
 		t.Fatalf("%d items, want %d: %+v", len(items), len(want), items)
@@ -97,7 +100,7 @@ func TestPlacementStartsAtTheClick(t *testing.T) {
 	m = New(PaneItems(keys.Default()), 79, 22)
 	box, x, y := m.View(theme.Default(), 80, 23)
 	w := ansi.StringWidth(strings.SplitN(box, "\n", 2)[0])
-	if x != 80-w || y != 23-8 {
+	if x != 80-w || y != 23-11 {
 		t.Fatalf("clamped to %d,%d, want %d,%d", x, y, 80-w, 23-8)
 	}
 }
@@ -161,7 +164,7 @@ func TestClick(t *testing.T) {
 	}{
 		{"first item", x + 3, y + 1, Chosen, "split-right"},
 		{"third item, last column", x + w - 2, y + 3, Chosen, "zoom"},
-		{"last item", x + 1, y + h - 2, Chosen, "close-pane"},
+		{"last item", x + 1, y + h - 2, Chosen, "detach"},
 		{"top border", x + 3, y, Open, ""},
 		{"bottom border", x + 3, y + h - 1, Open, ""},
 		{"left border", x, y + 2, Open, ""},

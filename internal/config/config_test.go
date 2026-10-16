@@ -290,3 +290,30 @@ func TestDefaultsAreIndependent(t *testing.T) {
 		t.Errorf("Defaults() shares state between calls: Bind = %v", b.Keys.Bind)
 	}
 }
+
+func TestLocateNamesTheLine(t *testing.T) {
+	path := writeConfig(t, "[keys]\nprefix = \"C-a\"\n\n[keys.bind]\n\"|\" = \"split-right\"\n\".\" = \"nope\"\n")
+	cause := errors.New("unknown action \"nope\"")
+	err := Locate(path, []string{"keys", "bind", "."}, cause.Error(), cause)
+	var ce *Error
+	if !errors.As(err, &ce) {
+		t.Fatalf("Locate = %v, want a *Error", err)
+	}
+	if ce.Path != path || ce.Line != 6 || ce.Key != `keys.bind."."` {
+		t.Errorf("Path %q, Line %d, Key %q; want the file, line 6, and the key", ce.Path, ce.Line, ce.Key)
+	}
+	if !errors.Is(err, cause) {
+		t.Error("the cause is lost")
+	}
+	if msg := err.Error(); !strings.Contains(msg, "line 6") || !strings.Contains(msg, path) {
+		t.Errorf("message %q lacks the file or line", msg)
+	}
+}
+
+func TestLocateWithUnreadableFileStillNamesTheKey(t *testing.T) {
+	err := Locate(filepath.Join(t.TempDir(), "gone.toml"), []string{"keys", "prefix"}, "bad", nil)
+	var ce *Error
+	if !errors.As(err, &ce) || ce.Line != 0 || ce.Key != "keys.prefix" {
+		t.Fatalf("Locate = %+v, want line 0 and the key", err)
+	}
+}

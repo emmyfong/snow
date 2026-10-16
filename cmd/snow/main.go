@@ -14,6 +14,7 @@ import (
 	"syscall"
 
 	"github.com/emmyfong/snow/internal/client"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/server"
 	"github.com/emmyfong/snow/internal/transport"
@@ -125,11 +126,28 @@ func loadConfig(stderr io.Writer) (config.Config, bool) {
 	if err == nil {
 		var cfg config.Config
 		if cfg, err = config.Load(path); err == nil {
-			return cfg, true
+			if err = checkKeys(path, cfg); err == nil {
+				return cfg, true
+			}
 		}
 	}
 	_, _ = fmt.Fprintln(stderr, "snow:", err)
 	return config.Config{}, false
+}
+
+// checkKeys builds the key table once, so a binding it rejects stops snow
+// with the file and line, before any server starts.
+func checkKeys(path string, cfg config.Config) error {
+	_, err := keys.New(cfg.Keys)
+	var ke *keys.Error
+	if !errors.As(err, &ke) {
+		return err
+	}
+	where := []string{"keys", "prefix"}
+	if ke.Setting == "keys.bind" {
+		where = []string{"keys", "bind", ke.Key}
+	}
+	return config.Locate(path, where, ke.Err.Error(), ke)
 }
 
 func socketPath(stderr io.Writer) (string, bool) {

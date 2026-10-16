@@ -52,14 +52,19 @@ func New(cfg config.Keys) (*Table, error) {
 		userKeys = append(userKeys, k)
 	}
 	slices.Sort(userKeys)
-	explicit := map[string]bool{}
+	written := map[string]string{} // canonical key to the spelling that set it
+	user := map[string]bool{}      // keys the user bound to a real action
 	for _, raw := range userKeys {
 		key, err := ParseKey(raw)
 		if err != nil {
 			return nil, &Error{Setting: "keys.bind", Key: raw, Action: cfg.Bind[raw], Err: err}
 		}
+		if other, dup := written[key]; dup {
+			return nil, &Error{Setting: "keys.bind", Key: raw, Action: cfg.Bind[raw],
+				Err: fmt.Errorf("%w: %q and %q are both %s", ErrDuplicateKey, other, raw, key)}
+		}
+		written[key] = raw
 		name := cfg.Bind[raw]
-		explicit[key] = true
 		if name == config.UnbindAction {
 			t.unset(key)
 			continue
@@ -69,8 +74,13 @@ func New(cfg config.Keys) (*Table, error) {
 				Err: fmt.Errorf("%w %q", ErrUnknownAction, name)}
 		}
 		t.set(key, name)
+		user[key] = true
 	}
-	if !explicit[prefix] {
+	if a, bound := t.action[prefix]; bound && !user[prefix] {
+		return nil, &Error{Setting: "keys.prefix", Key: cfg.Prefix, Err: fmt.Errorf(
+			"%w: %s is also bound to %s; unbind it or bind it elsewhere under [keys.bind]", ErrPrefixShadows, prefix, a.Name)}
+	}
+	if _, bound := t.action[prefix]; !bound {
 		t.set(prefix, SendPrefix)
 	}
 	return t, nil

@@ -36,6 +36,8 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	switch msg.(type) {
 	case tea.MouseClickMsg:
 		m.endPrefix()
+		// A release can be lost, so every press starts clean.
+		m.drag, m.grab = nil, nil
 		m.mousePress(ev)
 	case tea.MouseMotionMsg:
 		m.mouseMotion(ev)
@@ -115,10 +117,7 @@ func (m *Model) mouseMotion(ev tea.Mouse) {
 }
 
 func (m *Model) mouseRelease(ev tea.Mouse) {
-	if m.drag != nil {
-		m.drag = nil
-		return
-	}
+	m.drag = nil
 	if m.grab != nil {
 		m.sendGrabbed(ev, api.ActionRelease)
 		m.grab = nil
