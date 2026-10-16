@@ -91,7 +91,14 @@ func (m *Model) repeat(reverse bool) {
 // receiveSearch applies a search result and jumps to the first match from
 // the cursor. A result for a query the user has replaced is dropped.
 func (m *Model) receiveSearch(r *api.SearchResult) {
-	if r.Pane != m.o.Pane || !m.search.waiting || r.Query != m.search.query {
+	if r.Pane != m.o.Pane {
+		return
+	}
+	if m.ready {
+		m.rebase(r.Dropped, m.total)
+		m.clamp()
+	}
+	if !m.search.waiting || r.Query != m.search.query {
 		return
 	}
 	m.search.waiting = false

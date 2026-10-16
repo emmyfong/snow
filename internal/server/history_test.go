@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"runtime"
 	"strconv"
@@ -150,5 +151,27 @@ func TestSearchRefusals(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestFitPageKeepsAReplyInsideAFrame(t *testing.T) {
+	styled := strings.Repeat("\x1b[38;2;10;20;30mx", 200) // 6 bytes per escape in JSON
+	lines := make([]string, api.MaxScrollbackLines)
+	for i := range lines {
+		lines[i] = styled
+	}
+	got := fitPage(lines, maxPageBytes)
+	if len(got) == 0 || len(got) == len(lines) {
+		t.Fatalf("fitPage kept %d of %d lines, want a shorter, non-empty page", len(got), len(lines))
+	}
+	payload, err := json.Marshal(&api.Scrollback{Pane: 1, Total: 5000, Lines: got})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(payload) > api.MaxFrameSize {
+		t.Fatalf("reply is %d bytes, over the %d-byte frame limit", len(payload), api.MaxFrameSize)
+	}
+	if one := fitPage([]string{strings.Repeat(styled, 1000)}, 10); len(one) != 1 {
+		t.Fatal("fitPage must keep at least one line, so paging moves on")
 	}
 }

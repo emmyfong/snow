@@ -17,6 +17,7 @@ type fakeServer struct {
 	requests []*api.ScrollbackRequest
 	searches []*api.SearchRequest
 	pending  []*api.ScrollbackRequest
+	dropped  int // lines dropped off the top, as a full scrollback does
 }
 
 func numbered(n int) []string {
@@ -47,8 +48,19 @@ func (s *fakeServer) answer(m *Model) {
 		if r.From < len(s.lines) {
 			page = s.lines[r.From:min(r.From+r.Count, len(s.lines))]
 		}
-		m.Receive(&api.Scrollback{Pane: r.Pane, From: r.From, Total: len(s.lines), Lines: page})
+		m.Receive(&api.Scrollback{Pane: r.Pane, From: r.From, Total: len(s.lines), Dropped: s.dropped, Lines: page})
 	}
+}
+
+// print adds n new lines at the bottom and drops as many from the top, as a
+// pane with a full scrollback does.
+func (s *fakeServer) print(n int) {
+	next := s.dropped + len(s.lines)
+	for i := range n {
+		s.lines = append(s.lines, fmt.Sprintf("line %d", next+i))
+	}
+	s.lines = s.lines[n:]
+	s.dropped += n
 }
 
 // open returns copy mode over a history of n lines, 80 by 24, opened as it

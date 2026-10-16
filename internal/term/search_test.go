@@ -54,7 +54,7 @@ func TestSearchFindsAll(t *testing.T) {
 			if p.ScrollbackLen() < 10 {
 				t.Fatalf("scrollback is %d lines: the test needs matches above the screen", p.ScrollbackLen())
 			}
-			got, truncated := p.Search(tt.query)
+			got, truncated, _ := p.Search(tt.query)
 			if truncated {
 				t.Fatal("truncated")
 			}
@@ -74,8 +74,18 @@ func TestSearchTruncates(t *testing.T) {
 	for range MaxMatches/len(lines)/80 + 2 {
 		printLines(t, p, f, append(lines, "end"))
 	}
-	got, truncated := p.Search("x")
+	got, truncated, _ := p.Search("x")
 	if len(got) != MaxMatches || !truncated {
 		t.Fatalf("got %d matches, truncated=%v; want %d and true", len(got), truncated, MaxMatches)
+	}
+	// The newest matches are kept, so ? from the bottom finds the nearest.
+	_, rows := p.Size()
+	if last := got[len(got)-1].Line; last < historyLen(p)-rows {
+		t.Fatalf("last kept match is on line %d of %d: the newest matches were dropped", last, historyLen(p))
+	}
+	for i := 1; i < len(got); i++ {
+		if got[i].Line < got[i-1].Line || (got[i].Line == got[i-1].Line && got[i].Col <= got[i-1].Col) {
+			t.Fatalf("matches %d and %d are out of order: %v, %v", i-1, i, got[i-1], got[i])
+		}
 	}
 }

@@ -38,20 +38,22 @@ type pos struct{ line, col int }
 // Model is one open copy mode. It shows the history as lines numbered from
 // 0, the oldest, as the protocol does, and keeps the pages it has fetched.
 type Model struct {
-	o      Options
-	cols   int
-	rows   int
-	ready  bool    // the first Scrollback arrived, so total is known
-	early  *[2]int // a left press that came before ready, applied on ready
-	total  int
-	top    int // the first visible line
-	cur    pos
-	want   int // the column the cursor returns to on shorter lines
-	lines  map[int]string
-	plain  map[int]string
-	flight map[int]int // request start line → count, for pages not yet answered
-	search searching
-	notice string // a note for the status bar; cleared by the next key
+	o       Options
+	cols    int
+	rows    int
+	ready   bool    // the first Scrollback arrived, so total is known
+	early   *[2]int // a left press that came before ready, applied on ready
+	based   bool    // dropped holds the server's count
+	dropped int     // lines the server has dropped off the top, as last seen
+	total   int
+	top     int // the first visible line
+	cur     pos
+	want    int // the column the cursor returns to on shorter lines
+	lines   map[int]string
+	plain   map[int]string
+	flight  map[int]int // request start line → count, for pages not yet answered
+	search  searching
+	notice  string // a note for the status bar; cleared by the next key
 
 	selecting bool // a selection runs from anchor to the cursor
 	anchor    pos
@@ -73,6 +75,10 @@ func (m *Model) Pane() int { return m.o.Pane }
 
 // Resize sets the view's size in cells and keeps the cursor on screen.
 func (m *Model) Resize(cols, rows int) {
+	if cols != m.cols || rows != m.rows {
+		// The pane redraws at its new size, so held lines are stale.
+		m.lines, m.plain, m.flight = map[int]string{}, map[int]string{}, map[int]int{}
+	}
 	m.cols, m.rows = cols, rows
 	if m.ready {
 		m.clamp()

@@ -11,7 +11,7 @@ func TestHistoryIsScrollbackThenScreen(t *testing.T) {
 	kept := p.ScrollbackLen()
 	_, rows := p.Size()
 
-	lines, total := p.History(0, historyLen(p))
+	lines, total, _ := p.History(0, historyLen(p))
 	if total != kept+rows || len(lines) != total {
 		t.Fatalf("History() = %d lines, total %d; want %d (scrollback %d + screen %d)", len(lines), total, kept+rows, kept, rows)
 	}
@@ -24,7 +24,7 @@ func TestHistoryIsScrollbackThenScreen(t *testing.T) {
 }
 
 func historyLen(p *Pane) int {
-	_, n := p.History(0, 1)
+	_, n, _ := p.History(0, 1)
 	return n
 }
 
@@ -46,7 +46,7 @@ func TestHistoryBounds(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lines, got := p.History(tt.from, tt.n)
+			lines, got, _ := p.History(tt.from, tt.n)
 			if len(lines) != tt.want || got != n {
 				t.Fatalf("History(%d, %d) = %d lines, total %d; want %d lines, total %d", tt.from, tt.n, len(lines), got, tt.want, n)
 			}
@@ -58,7 +58,7 @@ func TestHistoryKeepsStyles(t *testing.T) {
 	p, f := newTestPane(t)
 	f.shellWrites("\x1b[31mred text\x1b[0m\r\n")
 	writeLines(t, p, f, 5)
-	lines, _ := p.History(0, 5)
+	lines, _, _ := p.History(0, 5)
 	if got := strings.TrimSpace(ansiStripped(lines[0])); got != "red text" || !strings.Contains(lines[0], "\x1b[31m") {
 		t.Fatalf("line 0 = %q, want styled red text", lines[0])
 	}

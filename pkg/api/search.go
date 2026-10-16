@@ -26,13 +26,15 @@ type SearchRequest struct {
 // SearchResult answers a SearchRequest. Matches are in line order and, within
 // a line, left to right; they do not overlap. Truncated is set when more than
 // MaxMatches were found. Query repeats the request's, so a client can drop a
-// result for a search it has replaced. Lines are numbered as when the server
-// answered; see Scrollback for how they shift.
+// result for a search it has replaced. With more than MaxMatches, the newest
+// matches are kept. Lines are numbered as when the server answered, and
+// Dropped is as in Scrollback for those numbers.
 type SearchResult struct {
 	Pane      int     `json:"pane"`
 	Query     string  `json:"query"`
 	Matches   []Match `json:"matches"`
 	Truncated bool    `json:"truncated,omitempty"`
+	Dropped   int     `json:"dropped,omitempty"`
 }
 
 // Match is one place a query was found: the history line, the cell column

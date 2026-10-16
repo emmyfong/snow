@@ -44,7 +44,8 @@ type Pane struct {
 	// mouseModes holds the mouse tracking modes the program has on; guarded
 	// by mu.
 	mouseModes map[ansi.Mode]bool
-	mouseSGR   bool // the program reads the SGR encoding (1006)
+	mouseSGR   bool      // the program reads the SGR encoding (1006)
+	shift      lineShift // history lines dropped off the top; guarded by mu
 
 	closeOnce sync.Once
 	closeErr  error
@@ -101,7 +102,9 @@ func (p *Pane) feed() {
 		n, err := p.pty.Read(buf)
 		if n > 0 {
 			p.mu.Lock()
+			p.shift.before(p.emu.Scrollback())
 			_, _ = p.emu.Write(buf[:n]) // the emulator's writer never fails
+			p.shift.after(p.emu.Scrollback())
 			p.mu.Unlock()
 			p.version.Add(1)
 		}
@@ -168,7 +171,9 @@ func (p *Pane) Paste(text string) {
 // Resize changes the screen and the PTY to cols by rows cells.
 func (p *Pane) Resize(cols, rows int) error {
 	p.mu.Lock()
+	p.shift.before(p.emu.Scrollback())
 	p.emu.Resize(cols, rows)
+	p.shift.after(p.emu.Scrollback())
 	p.mu.Unlock()
 	p.version.Add(1)
 	if err := p.pty.Resize(cols, rows); err != nil {

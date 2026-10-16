@@ -1,6 +1,7 @@
 package term
 
 import (
+	"slices"
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
@@ -19,12 +20,13 @@ const MaxMatches = 5000
 // Search finds every non-overlapping occurrence of query in the history,
 // scrollback and screen, in line order and, within a line, left to right.
 // The query is plain text, not a pattern. The match ignores case unless the
-// query has an upper-case letter. Truncated is true when there were more than
-// MaxMatches. An empty query matches nothing.
-func (p *Pane) Search(query string) (matches []Match, truncated bool) {
+// query has an upper-case letter. With more than MaxMatches, it keeps the
+// newest MaxMatches, nearest the screen, and sets truncated. Dropped is as in
+// History, for the same lines. An empty query matches nothing.
+func (p *Pane) Search(query string) (matches []Match, truncated bool, dropped int) {
 	q := []rune(query)
 	if len(q) == 0 {
-		return nil, false
+		return nil, false, 0
 	}
 	fold := true
 	for _, r := range q {
@@ -32,27 +34,40 @@ func (p *Pane) Search(query string) (matches []Match, truncated bool) {
 			fold = false
 		}
 	}
+	lines, dropped := p.plainHistory()
+	// Scan from the newest line, so the cap drops the oldest matches.
+	for i := len(lines) - 1; i >= 0; i-- {
+		found := findAll([]rune(lines[i]), q, fold)
+		if len(matches)+len(found) > MaxMatches {
+			found = found[len(found)-(MaxMatches-len(matches)):]
+			truncated = true
+		}
+		for k := len(found) - 1; k >= 0; k-- {
+			found[k].Line = i
+			matches = append(matches, found[k])
+		}
+		if truncated {
+			break
+		}
+	}
+	slices.Reverse(matches)
+	return matches, truncated, dropped
+}
+
+// plainHistory copies the history's lines without styles. It holds mu only
+// for the copy, so a long search never stalls the pane's output.
+func (p *Pane) plainHistory() (lines []string, dropped int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	sb := p.emu.Scrollback()
-	kept := sb.Len()
-	lines := make([]string, 0, kept+p.emu.Height())
-	for i := range kept {
+	lines = make([]string, 0, sb.Len()+p.emu.Height())
+	for i := range sb.Len() {
 		lines = append(lines, sb.Line(i).String())
 	}
 	for _, row := range p.screenLines() {
 		lines = append(lines, ansi.Strip(row))
 	}
-	for i, line := range lines {
-		for _, m := range findAll([]rune(line), q, fold) {
-			if len(matches) == MaxMatches {
-				return matches, true
-			}
-			m.Line = i
-			matches = append(matches, m)
-		}
-	}
-	return matches, false
+	return lines, p.shift.dropped
 }
 
 // findAll returns the matches of q in line, with Line unset. With fold set,

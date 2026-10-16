@@ -69,6 +69,7 @@ func (m *Model) Receive(msg api.Message) (Result, tea.Cmd) {
 	if !ok || r.Pane != m.o.Pane {
 		return Open, nil
 	}
+	m.rebase(r.Dropped, r.Total)
 	delete(m.flight, r.From)
 	for i, l := range r.Lines {
 		m.lines[r.From+i] = l

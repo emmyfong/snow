@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/emmyfong/snow/internal/term"
@@ -42,8 +43,31 @@ func (s *Server) scrollback(c *client, r *api.ScrollbackRequest) {
 		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", r.Pane))
 		return
 	}
-	lines, total := tp.History(r.From, r.Count)
-	s.reply(c, &api.Scrollback{Pane: r.Pane, From: r.From, Total: total, Lines: lines})
+	lines, total, dropped := tp.History(r.From, r.Count)
+	lines = fitPage(lines, maxPageBytes)
+	s.reply(c, &api.Scrollback{Pane: r.Pane, From: r.From, Total: total, Dropped: dropped, Lines: lines})
+}
+
+// maxPageBytes bounds the encoded lines of one Scrollback, half a frame, so
+// the reply always fits with room for its other fields.
+const maxPageBytes = api.MaxFrameSize / 2
+
+// fitPage returns the longest start of lines whose JSON encoding stays
+// within limit bytes, and at least one line, so paging always moves on.
+// Styles make a line long: JSON writes each escape byte as six.
+func fitPage(lines []string, limit int) []string {
+	size := 0
+	for i, l := range lines {
+		enc, err := json.Marshal(l)
+		if err != nil {
+			return lines[:i]
+		}
+		size += len(enc) + 1
+		if size > limit && i > 0 {
+			return lines[:i]
+		}
+	}
+	return lines
 }
 
 // search answers a SearchRequest with every match in the pane's history.
@@ -57,8 +81,8 @@ func (s *Server) search(c *client, r *api.SearchRequest) {
 		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", r.Pane))
 		return
 	}
-	found, truncated := tp.Search(r.Query)
-	res := &api.SearchResult{Pane: r.Pane, Query: r.Query, Truncated: truncated, Matches: make([]api.Match, len(found))}
+	found, truncated, dropped := tp.Search(r.Query)
+	res := &api.SearchResult{Pane: r.Pane, Query: r.Query, Truncated: truncated, Dropped: dropped, Matches: make([]api.Match, len(found))}
 	for i, m := range found {
 		res.Matches[i] = api.Match{Line: m.Line, Col: m.Col, Len: m.Len}
 	}
