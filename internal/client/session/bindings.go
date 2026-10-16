@@ -13,7 +13,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		m.pickerKey(k)
 		return nil
 	case m.confirm != nil:
-		m.answer(k)
+		m.confirmKey(k)
 		return nil
 	case m.rename != nil:
 		m.renameKey(k)

@@ -25,6 +25,10 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.menu != nil {
 		return m.menuMouse(msg)
 	}
+	if m.confirm != nil {
+		m.confirmMouse(msg)
+		return nil
+	}
 	if m.modal() {
 		return nil
 	}
@@ -60,8 +64,11 @@ func (m *Model) mousePress(ev tea.Mouse) {
 	h := m.hit(ev.X, ev.Y)
 	switch h.Kind {
 	case mouse.Tab:
-		if ev.Button == tea.MouseLeft {
+		switch ev.Button {
+		case tea.MouseLeft:
 			m.send(&api.Command{Op: api.OpSelectWindow, Target: h.Window})
+		case tea.MouseMiddle:
+			m.confirmCloseWindowAt(h.Window)
 		}
 	case mouse.Border:
 		if ev.Button == tea.MouseLeft {
@@ -82,6 +89,9 @@ func (m *Model) mousePress(ev tea.Mouse) {
 		if ev.Button == tea.MouseRight && (!wantsMouse || ev.Mod.Contains(tea.ModCtrl)) {
 			m.openMenu(ev.X, ev.Y)
 			return
+		}
+		if ev.Button == tea.MouseLeft && !wantsMouse {
+			m.startPaneDrag(p.ID, h.X, h.Y)
 		}
 		if wantsMouse {
 			if b := apiButton(ev.Button); b != "" {

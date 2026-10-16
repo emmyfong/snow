@@ -4,7 +4,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/menu"
 	"github.com/emmyfong/snow/internal/client/ui"
-	"github.com/emmyfong/snow/pkg/api"
 )
 
 // openMenu shows the pane menu at screen cell x, y. It does not open when
@@ -48,16 +47,9 @@ func (m *Model) menuResult(r menu.Result) tea.Cmd {
 	return nil
 }
 
-// runFromMenu does an action chosen in the menu. Closing a pane skips the
-// y/n question that its key asks: choosing it in a menu is already two
-// deliberate steps, and a mouse-only user could not answer with the mouse.
+// runFromMenu does an action chosen in the menu, through the same handlers
+// as the keys. Close pane asks first, in the same popup as its key.
 func (m *Model) runFromMenu(action string) tea.Cmd {
-	if action == "close-pane" {
-		if p := m.focused(); p != nil {
-			m.send(&api.Command{Op: api.OpClose, Target: p.ID})
-		}
-		return nil
-	}
 	return m.run(action, tea.Key{})
 }
 

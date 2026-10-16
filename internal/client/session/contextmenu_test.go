@@ -77,7 +77,7 @@ func TestMenuItemsRunTheirActions(t *testing.T) {
 		t.Fatal("Split down did not open the picker")
 	}
 
-	for label, op := range map[string]string{"Zoom": api.OpZoom, "Even out": api.OpEven, "Close pane": api.OpClose} {
+	for label, op := range map[string]string{"Zoom": api.OpZoom, "Even out": api.OpEven} {
 		m, r := pickerScreen(t, 80, 24)
 		chooseByClick(t, m, label)
 		if c := lastCommand(t, r); c.Op != op || c.Target != 2 {

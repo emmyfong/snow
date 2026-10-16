@@ -21,6 +21,7 @@ internal/client/
   home/          the home page (one screen)
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
+  confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
   whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
