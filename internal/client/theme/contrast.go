@@ -20,8 +20,11 @@ var (
 // For returns t for a terminal that shows profile p's colors. Reducing
 // colors to 256 or 16 can make text vanish into its background; such text
 // turns black or white, whichever reads better. A true-color terminal gets
-// t unchanged.
+// t unchanged, and so does one that shows no colors.
 func (t Theme) For(p colorprofile.Profile) Theme {
+	if p < colorprofile.ANSI {
+		return t // no colors at all: nothing to adapt
+	}
 	fix := func(fg *color.Color, bg color.Color) {
 		if contrast(p.Convert(*fg), p.Convert(bg)) < minContrast {
 			*fg = ink(p, bg)

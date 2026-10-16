@@ -110,3 +110,13 @@ func TestNamed(t *testing.T) {
 		t.Fatalf("Named(neon) error = %v, want ErrUnknownTheme listing the themes", err)
 	}
 }
+
+// TestForTerminalsWithoutColor: with no colors to show (no terminal, or an
+// ASCII-only one), there is nothing to adapt, and For must not fail.
+func TestForTerminalsWithoutColor(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.NoTTY, colorprofile.ASCII} {
+		if got := Default().For(p); got.BarFG != Default().BarFG {
+			t.Errorf("For(%s) changed the theme", p)
+		}
+	}
+}
