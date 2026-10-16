@@ -54,16 +54,13 @@ func (m *Model) copyReceive(msg api.Message) tea.Cmd {
 // copyMouse gives copy mode a mouse event, with the cell made relative to
 // the pane's area.
 func (m *Model) copyMouse(msg tea.MouseMsg) tea.Cmd {
-	for _, w := range m.layout.Windows {
-		for _, p := range w.Panes {
-			if p.ID == m.copy.Pane() {
-				mouse := msg.Mouse()
-				res, cmd := m.copy.Mouse(msg, mouse.X-p.Rect.X, mouse.Y-p.Rect.Y)
-				return m.afterCopy(res, cmd)
-			}
-		}
+	p := m.paneByID(m.copy.Pane())
+	if p == nil {
+		return nil
 	}
-	return nil
+	mouse := msg.Mouse()
+	res, cmd := m.copy.Mouse(msg, mouse.X-p.Rect.X, mouse.Y-p.Rect.Y)
+	return m.afterCopy(res, cmd)
 }
 
 // afterCopy closes copy mode when it has exited. What copy mode last said,
@@ -82,19 +79,17 @@ func (m *Model) afterCopy(res copymode.Result, cmd tea.Cmd) tea.Cmd {
 	return tea.Batch(cmd, tea.Tick(messageFor, func(time.Time) tea.Msg { return clearNoticeMsg{at} }))
 }
 
-// syncCopy keeps copy mode in step with the layout: it closes when its pane
-// is gone and follows the pane's size.
+// syncCopy keeps copy mode in step with the layout: it follows the pane's
+// size, and closes when the pane is gone or no longer on screen, for example
+// when another client shows another window. Open over a hidden pane, it
+// would take every key.
 func (m *Model) syncCopy() {
 	if m.copy == nil {
 		return
 	}
-	for _, w := range m.layout.Windows {
-		for _, p := range w.Panes {
-			if p.ID == m.copy.Pane() {
-				m.copy.Resize(p.Rect.W, p.Rect.H)
-				return
-			}
-		}
+	if p := m.paneByID(m.copy.Pane()); p != nil {
+		m.copy.Resize(p.Rect.W, p.Rect.H)
+		return
 	}
 	m.copy = nil
 }

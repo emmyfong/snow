@@ -6,6 +6,8 @@ import tea "charm.land/bubbletea/v2"
 // still open. Keys follow tmux's vi table, with the arrow keys and page keys
 // as well.
 func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
+	// Any key cancels a copy that waits for lines: the user moved on.
+	m.copying = false
 	if m.search.typing {
 		m.promptKey(k)
 		return Open, nil

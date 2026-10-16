@@ -110,7 +110,7 @@ func (m *Model) receiveSearch(r *api.SearchResult) {
 	}
 	m.jump(m.search.backward)
 	if r.Truncated {
-		m.notice = fmt.Sprintf("First %d matches only", len(r.Matches))
+		m.notice = fmt.Sprintf("Last %d matches only", len(r.Matches))
 	}
 }
 

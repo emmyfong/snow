@@ -41,10 +41,10 @@ type Model struct {
 	o       Options
 	cols    int
 	rows    int
-	ready   bool    // the first Scrollback arrived, so total is known
-	early   *[2]int // a left press that came before ready, applied on ready
-	based   bool    // dropped holds the server's count
-	dropped int     // lines the server has dropped off the top, as last seen
+	ready   bool         // the first Scrollback arrived, so total is known
+	early   []earlyMouse // mouse events that came before ready, replayed on ready
+	based   bool         // dropped holds the server's count
+	dropped int          // lines the server has dropped off the top, as last seen
 	total   int
 	top     int // the first visible line
 	cur     pos

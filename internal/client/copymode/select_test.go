@@ -1,6 +1,7 @@
 package copymode
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -240,5 +241,54 @@ func TestMouseDragAboveThePaneScrolls(t *testing.T) {
 	srv.answer(m)
 	if m.top != top-1 || !m.selecting {
 		t.Fatalf("top %d, selecting %v: a drag above the pane should scroll one line and select", m.top, m.selecting)
+	}
+}
+
+// TestKeyCancelsAPendingCopy: y waits for missing lines; a key pressed
+// before they arrive cancels the copy, so it never copies a changed
+// selection later.
+func TestKeyCancelsAPendingCopy(t *testing.T) {
+	m, srv := open(t, 300)
+	var copied []string
+	m.o.Copy = func(text string) tea.Cmd { copied = append(copied, text); return nil }
+	key(m, press('v', 0, "v"))
+	for range 150 {
+		key(m, press('k', 0, "k"))
+	}
+	key(m, press('y', 0, "y")) // lines are missing: the copy waits
+	key(m, press('j', 0, "j"))
+	srv.answer(m)
+	if len(copied) != 0 {
+		t.Fatalf("copied %q after the user moved on", copied)
+	}
+}
+
+// TestWideCharacterIsNeverSplit: the cursor and a selection never start on
+// the second cell of a wide character, so the copy keeps it whole.
+func TestWideCharacterIsNeverSplit(t *testing.T) {
+	lines := []string{"ab漢字cd", "next"}
+	var copied []string
+	m := New(Options{Pane: 1, Cols: 20, Rows: 2, Screen: lines, Send: func(api.Message) {},
+		Copy: func(text string) tea.Cmd { copied = append(copied, text); return nil }})
+	m.Receive(&api.Scrollback{Pane: 1, From: 0, Total: 2, Lines: lines})
+	m.Mouse(tea.MouseClickMsg{X: 3, Y: 0, Button: tea.MouseLeft}, 3, 0) // the right half of 漢
+	if m.cur.col != 2 {
+		t.Fatalf("press on the right half of a wide character: column %d, want 2", m.cur.col)
+	}
+	m.Mouse(tea.MouseReleaseMsg{X: 5, Y: 0, Button: tea.MouseLeft}, 5, 0) // the right half of 字
+	if len(copied) != 1 || copied[0] != "漢字" {
+		t.Fatalf("copied %q, want both wide characters whole", copied)
+	}
+	m2 := New(Options{Pane: 1, Cols: 20, Rows: 2, Screen: lines, Send: func(api.Message) {}})
+	m2.Receive(&api.Scrollback{Pane: 1, From: 0, Total: 2, Lines: lines})
+	key(m2, press('k', 0, "k"))
+	key(m2, press('0', 0, "0"))
+	var cols []int
+	for range 5 {
+		key(m2, press('l', 0, "l"))
+		cols = append(cols, m2.cur.col)
+	}
+	if want := []int{1, 2, 4, 6, 7}; !slices.Equal(cols, want) {
+		t.Fatalf("l steps through columns %v, want %v", cols, want)
 	}
 }

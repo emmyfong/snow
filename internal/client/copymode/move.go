@@ -31,15 +31,28 @@ func (m *Model) moveLines(n int) {
 	m.settle()
 }
 
-// moveCol moves the cursor by n cells within its line.
+// moveCol moves the cursor by n cells within its line. The cursor never
+// rests on the second cell of a wide character: moving right it steps over
+// it, moving left it lands on the character's first cell.
 func (m *Model) moveCol(n int) {
-	m.cur.col = min(max(m.cur.col+n, 0), max(m.width(m.cur.line)-1, 0))
+	col := min(max(m.cur.col+n, 0), max(m.width(m.cur.line)-1, 0))
+	if start, w := m.charAt(m.cur.line, col); start != col && n > 0 && start+w < m.width(m.cur.line) {
+		col = start + w
+	}
+	m.cur.col = m.snap(m.cur.line, col)
 	m.want = m.cur.col
 }
 
 // settle puts the cursor back on its wanted column, as far as the line goes.
 func (m *Model) settle() {
-	m.cur.col = min(m.want, max(m.width(m.cur.line)-1, 0))
+	m.cur.col = m.snap(m.cur.line, min(m.want, max(m.width(m.cur.line)-1, 0)))
+}
+
+// snap returns the first cell of the character at cell col of line i, so a
+// position never splits a wide character.
+func (m *Model) snap(i, col int) int {
+	start, _ := m.charAt(i, col)
+	return start
 }
 
 // page scrolls the view by n lines and moves the cursor with it; at either

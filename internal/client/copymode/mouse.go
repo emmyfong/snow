@@ -13,11 +13,7 @@ const wheelLines = 3
 // client turns on mouse reporting, which is not copy mode's to decide.
 func (m *Model) Mouse(msg tea.MouseMsg, x, y int) (Result, tea.Cmd) {
 	if !m.ready {
-		// A drag that opened copy mode presses before the history arrives;
-		// keep that press for when it does.
-		if ev, ok := msg.(tea.MouseClickMsg); ok && ev.Button == tea.MouseLeft {
-			m.early = &[2]int{x, y}
-		}
+		m.keepEarly(msg, x, y)
 		return Open, nil
 	}
 	inside := x >= 0 && x < m.cols && y >= 0 && y < m.rows
@@ -30,6 +26,7 @@ func (m *Model) Mouse(msg tea.MouseMsg, x, y int) (Result, tea.Cmd) {
 			m.scroll(wheelLines)
 		}
 	case tea.MouseClickMsg:
+		m.copying = false
 		if ev.Button == tea.MouseLeft && inside {
 			m.cur = m.at(x, y)
 			m.want = m.cur.col
@@ -66,7 +63,7 @@ func (m *Model) at(x, y int) pos {
 	line := min(max(m.top+y, m.top-1), m.top+m.rows)
 	line = min(max(line, 0), max(m.total-1, 0))
 	col := min(max(x, 0), max(m.width(line)-1, 0))
-	return pos{line: line, col: col}
+	return pos{line: line, col: m.snap(line, col)}
 }
 
 // scroll moves the view by n lines and keeps the cursor in it.
@@ -74,4 +71,42 @@ func (m *Model) scroll(n int) {
 	m.top = min(max(m.top+n, 0), m.bottom())
 	m.cur.line = min(max(m.cur.line, m.top), min(m.top+m.rows-1, max(m.total-1, 0)))
 	m.settle()
+}
+
+// earlyMouse is a mouse event that came before the history did.
+type earlyMouse struct {
+	msg  tea.MouseMsg
+	x, y int
+}
+
+// maxEarly bounds the events kept before the history arrives.
+const maxEarly = 8
+
+// keepEarly keeps a mouse event that came before the history. A drag or a
+// wheel notch that opened copy mode arrives first, and a quick drag can end
+// before the history does; replay applies them in order once it is here.
+// Of a run of motions only the last one matters.
+func (m *Model) keepEarly(msg tea.MouseMsg, x, y int) {
+	ev := earlyMouse{msg, x, y}
+	if _, ok := msg.(tea.MouseMotionMsg); ok && len(m.early) > 0 {
+		if _, last := m.early[len(m.early)-1].msg.(tea.MouseMotionMsg); last {
+			m.early[len(m.early)-1] = ev
+			return
+		}
+	}
+	if len(m.early) < maxEarly {
+		m.early = append(m.early, ev)
+	}
+}
+
+// replay applies the mouse events kept before the history arrived.
+func (m *Model) replay() (Result, tea.Cmd) {
+	early := m.early
+	m.early = nil
+	for _, ev := range early {
+		if res, cmd := m.Mouse(ev.msg, ev.x, ev.y); res == Exited {
+			return res, cmd
+		}
+	}
+	return Open, nil
 }

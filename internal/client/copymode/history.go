@@ -78,6 +78,9 @@ func (m *Model) Receive(msg api.Message) (Result, tea.Cmd) {
 	m.total = r.Total
 	if !m.ready {
 		m.open()
+		if res, cmd := m.replay(); res == Exited {
+			return res, cmd
+		}
 	}
 	m.clamp()
 	m.fill()
@@ -97,11 +100,4 @@ func (m *Model) open() {
 	}
 	m.cur = pos{line: m.total - screen + m.o.CursorY, col: m.o.CursorX}
 	m.want = m.o.CursorX
-	if e := m.early; e != nil {
-		m.early = nil
-		m.cur = m.at(e[0], e[1])
-		m.want = m.cur.col
-		m.selecting, m.dragging = false, true
-		m.anchor = m.cur
-	}
 }

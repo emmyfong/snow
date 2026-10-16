@@ -59,3 +59,42 @@ func TestWheelOnAPlainPaneScrollsItsHistory(t *testing.T) {
 		t.Fatalf("wheel over pane 1: copy mode %v, want open over pane 1", m.copy)
 	}
 }
+
+// TestWheelFocusesThePaneItOpensCopyModeOn: keys go to copy mode, so the
+// pane it opens on must be the focused one.
+func TestWheelFocusesThePaneItOpensCopyModeOn(t *testing.T) {
+	m, r := threePaneScreen(t)
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 5, Button: tea.MouseWheelUp})
+	c := lastCommandOf(r, api.OpFocus)
+	if c == nil || c.Target != 1 {
+		t.Fatalf("sent %v, want a focus command for pane 1", r.sent)
+	}
+}
+
+// TestCopyModeClosesWhenItsWindowIsHidden: another client can show another
+// window; copy mode over a pane no longer on screen must close, or it takes
+// every key.
+func TestCopyModeClosesWhenItsWindowIsHidden(t *testing.T) {
+	m, _ := threePaneScreen(t)
+	m.Update(ctrlB)
+	m.Update(press('[', 0, "["))
+	if m.copy == nil {
+		t.Fatal("prefix [ did not enter copy mode")
+	}
+	m.Update(&api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
+		{Index: 1, Name: "dev", Panes: threePanes(80, 24)},
+		{Index: 2, Name: "logs", Panes: []api.PaneInfo{{ID: 9, Focused: true, Rect: api.Rect{W: 80, H: 23}}}},
+	}})
+	if m.copy != nil {
+		t.Fatal("copy mode stayed open over a pane in a hidden window")
+	}
+}
+
+func lastCommandOf(r *recorder, op string) *api.Command {
+	for i := len(r.sent) - 1; i >= 0; i-- {
+		if c, ok := r.sent[i].(*api.Command); ok && c.Op == op {
+			return c
+		}
+	}
+	return nil
+}

@@ -122,14 +122,20 @@ func (m *Model) selection() []ui.Highlight {
 // cellWidth returns the width of the character at cell col of line i: 2 for
 // a wide character, otherwise 1.
 func (m *Model) cellWidth(i, col int) int {
-	s := m.text(i)
+	_, w := m.charAt(i, col)
+	return w
+}
+
+// charAt returns the first cell and the width of the character that covers
+// cell col of line i. Past the text, each cell is its own blank character.
+func (m *Model) charAt(i, col int) (start, width int) {
 	c := 0
-	for _, r := range s {
+	for _, r := range m.text(i) {
 		w := ansi.StringWidth(string(r))
 		if w > 0 && c <= col && col < c+w {
-			return w
+			return c, w
 		}
 		c += w
 	}
-	return 1
+	return col, 1
 }

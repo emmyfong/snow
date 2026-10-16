@@ -51,7 +51,7 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 		m.dragFrom = nil
 		m.mouseRelease(ev)
 	case tea.MouseWheelMsg:
-		m.mouseWheel(ev)
+		return m.mouseWheel(ev)
 	}
 	return nil
 }
@@ -146,23 +146,31 @@ func (m *Model) sendGrabbed(ev tea.Mouse, action string) {
 
 // mouseWheel sends a wheel step to the pane under the pointer when its
 // program asked for the mouse.
-func (m *Model) mouseWheel(ev tea.Mouse) {
+func (m *Model) mouseWheel(ev tea.Mouse) tea.Cmd {
 	h := m.hit(ev.X, ev.Y)
 	if h.Kind != mouse.Pane {
-		return
+		return nil
 	}
 	st := m.panes[h.Pane]
 	b := apiButton(ev.Button)
 	if st == nil || (b != api.ButtonWheelUp && b != api.ButtonWheelDown) {
-		return
+		return nil
 	}
 	if st.mouse {
 		m.send(&api.Mouse{Pane: h.Pane, X: h.X, Y: h.Y, Button: b, Action: api.ActionPress})
-		return
+		return nil
 	}
 	// A pane that did not ask for the mouse scrolls its history, as in tmux:
-	// the wheel opens copy mode over it.
-	m.enterCopyOn(h.Pane)
+	// the wheel focuses it and opens copy mode over it, so keys go where
+	// the user is looking. Copy mode keeps the notch until its history
+	// arrives.
+	if p := m.paneByID(h.Pane); p != nil && !p.Focused {
+		m.send(&api.Command{Op: api.OpFocus, Target: p.ID})
+	}
+	if !m.enterCopyOn(h.Pane) {
+		return nil
+	}
+	return m.copyMouse(tea.MouseWheelMsg(ev))
 }
 
 // syncDrag keeps a border drag in step with a new layout and ends it when
