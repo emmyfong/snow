@@ -35,6 +35,7 @@ func palette(name, border, focus, barBG, barFG, tabBG, tabFG, promptBG, promptFG
 		TabActiveBG: c(tabBG), TabActive: c(tabFG), PromptBG: c(promptBG), PromptFG: c(promptFG),
 		Accent: c(accent), Muted: c(muted), Success: c(success), Error: c(errColor),
 		ErrorFG: ink(colorprofile.TrueColor, c(errColor)), Selection: c(selection),
+		SelectionFG: ink(colorprofile.TrueColor, c(selection)),
 		// Copy mode reuses pairs the palette already has: the marker looks
 		// like the status bar, matches like a question, the current match
 		// like the active tab.
@@ -42,8 +43,7 @@ func palette(name, border, focus, barBG, barFG, tabBG, tabFG, promptBG, promptFG
 		MatchFG: c(promptFG), MatchBG: c(promptBG),
 		CurrentFG: c(tabFG), CurrentBG: c(tabBG),
 		SelectedFG: ink(colorprofile.TrueColor, c(selection)), SelectedBG: c(selection),
-		Wordmark: c("#ffffff"),
-		Glyphs:   defaultGlyphs(),
+		Glyphs: defaultGlyphs(),
 	}
 }
 

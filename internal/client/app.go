@@ -36,6 +36,10 @@ type app struct {
 	theme      theme.Theme      // the theme from the config, for the home page
 	sessOpts   []session.Option // the theme and keys a session screen gets
 	profile    *tea.ColorProfileMsg
+	sessions   *api.SessionList // the last list, for a home page opened later
+	back       string           // the session the home page's Esc returns to
+	opening    bool             // the home page opened a session; its Layout has not come
+	openName   string           // the session it opened
 	cols, rows int
 }
 
@@ -63,9 +67,36 @@ func (a *app) show(s Screen) {
 // page. With back set, Esc there returns to that session.
 func (a *app) leave(back string) {
 	a.send(&api.Detach{})
+	a.back = back
+	// The list from before attaching is old; the server sends a new one
+	// for the Detach.
+	a.sessions = nil
+	a.showHome("")
+}
+
+// showHome shows a new home page with the last session list, the back
+// session, and notice, if any.
+func (a *app) showHome(notice string) {
 	h := home.New(a.version, a.theme)
-	h.SetBack(back)
+	h.SetBack(a.back)
+	h.SetNotice(notice)
 	a.show(h)
+	if a.sessions != nil {
+		h.Update(a.sessions)
+	}
+}
+
+// refusedOpen reports whether e refuses the attach the home page asked for.
+// The server answers an attach with a Layout or with one of these.
+func (a *app) refusedOpen(e *api.Error) bool {
+	if !a.opening {
+		return false
+	}
+	switch e.Code {
+	case api.CodeNoSession, api.CodeAttachFailed, api.CodeBadCommand:
+		return true
+	}
+	return false
 }
 
 func (a *app) Init() tea.Cmd { return nil }
@@ -81,9 +112,22 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.ColorProfileMsg:
 		a.profile = &msg
+	case *api.SessionList:
+		a.sessions = msg
 	case *api.Layout:
 		a.result.Session = msg.Session
+		a.opening = false
 	case *api.Error:
+		if a.refusedOpen(msg) {
+			// The session ended, or the name was refused, between the
+			// list and the click: go back to choosing.
+			if a.openName == a.back {
+				a.back = ""
+			}
+			a.opening = false
+			a.showHome(msg.Message)
+			return a, nil
+		}
 		switch msg.Code {
 		case api.CodeSessionEnded:
 			a.result.Ended = true
@@ -101,6 +145,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	case home.OpenMsg:
 		a.send(&api.Attach{Session: msg.Session, Create: msg.Create, Dir: a.dir})
+		a.opening, a.openName = true, msg.Session
 		a.result.Detached = false
 		a.show(a.newSession())
 		return a, nil

@@ -39,6 +39,9 @@ func Run(opts Options) (Result, error) {
 	if opts.Config != nil {
 		cfg = *opts.Config
 	}
+	if err := (&api.Attach{Session: opts.Session}).Validate(); err != nil {
+		return Result{}, fmt.Errorf("session name %q: %w", opts.Session, err)
+	}
 	th, err := theme.Named(cfg.Theme.Name)
 	if err != nil {
 		return Result{}, fmt.Errorf("config: theme.name: %w", err)

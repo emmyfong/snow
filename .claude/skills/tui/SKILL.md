@@ -79,7 +79,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Input | `Input(th theme.Theme, o InputOptions) string` | A one-line text field exactly `Width` wide: `Prompt` in the accent color, then `Value` (its end shows when too long) or a muted `Placeholder`; `Focused` draws a cursor. |
 | List | `List(th theme.Theme, o ListOptions) string` | Rows of `ListItem` cells with aligned columns, `Selected` marked with the pointer glyph and highlighted; `Height` shows a window scrolled to the selection. |
 | KeyHints | `KeyHints(th theme.Theme, hints []Hint, width int) string` | One row of `Hint`s (key in accent, description muted); hints that do not fit whole are dropped from the end. |
-| Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, in the `Wordmark` color; nothing when too narrow. |
+| Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, bold in the terminal's own text color (`WordmarkWidth` columns); nothing when too narrow. |
 
 ## Theme tokens
 
@@ -92,8 +92,8 @@ not be used).
 
 - Color tokens: `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
   `TabActiveBG`, `Accent`, `Muted`, `Success`, `Error` (a strip background),
-  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection`, `Wordmark` (white in
-  every built-in theme), and copy mode's
+  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection` with `SelectionFG` (black
+  or white for contrast), and copy mode's
   `IndicatorFG`/`IndicatorBG`, `MatchFG`/`MatchBG`, `CurrentFG`/`CurrentBG`,
   `SelectedFG`/`SelectedBG`. A built-in theme derives the copy mode pairs
   from its status bar, prompt, active tab, and selection colors.
@@ -101,6 +101,9 @@ not be used).
   mark, the session brackets, the list pointer, the text caret.
 - `Named(name)` reads `[theme] name` from the config: a built-in name,
   ignoring case, or `default`.
+- The terminal may be light or dark. Text on the terminal's own background
+  uses the terminal's text color or a mid-tone token; text on a token
+  background always sets its own color too.
 - Snow keeps the terminal's own background and text colors; tokens color
   only Snow's parts.
 - `Resolve()` fills tokens a theme leaves empty from Frost. `For(profile)`

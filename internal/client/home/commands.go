@@ -124,14 +124,12 @@ func (m *Model) exists(name string) bool {
 }
 
 func (m *Model) cmdNew(name string) tea.Cmd {
-	m.done()
-	if name == "" {
-		return openCmd(OpenMsg{Create: true})
+	o := OpenMsg{Session: name, Create: !m.exists(name)}
+	if cmd := m.open(o); cmd != nil {
+		m.done()
+		return cmd
 	}
-	if m.exists(name) {
-		return openCmd(OpenMsg{Session: name})
-	}
-	return openCmd(OpenMsg{Session: name, Create: true})
+	return nil
 }
 
 func (m *Model) cmdSessions(string) tea.Cmd {
@@ -160,6 +158,9 @@ func (m *Model) cmdRename(rest string) tea.Cmd {
 		return nil
 	}
 	m.done()
+	if session == m.back {
+		m.back = name
+	}
 	return sendCmd(&api.RenameSession{Session: session, Name: name})
 }
 

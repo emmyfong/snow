@@ -53,6 +53,10 @@ func New(version string, th theme.Theme) *Model {
 // page opened from a session to switch away from it.
 func (m *Model) SetBack(name string) { m.back = name }
 
+// SetNotice shows text under the input, such as why a session could not be
+// opened.
+func (m *Model) SetNotice(text string) { m.notice = text }
+
 // SetSize sets the screen size in cells.
 func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
 
@@ -62,11 +66,20 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.ColorProfileMsg:
 		m.theme = m.base.For(msg.Profile)
 	case *api.SessionList:
+		chosen := ""
+		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
+			chosen = shown[m.selected].Name
+		}
 		m.sessions = slices.Clone(msg.Sessions)
 		slices.SortFunc(m.sessions, func(a, b api.SessionInfo) int {
 			return cmp.Or(b.LastUsed.Compare(a.LastUsed), cmp.Compare(a.Name, b.Name))
 		})
-		m.selected = min(m.selected, len(m.shown())-1)
+		// The new list may be in another order: keep the highlight on the
+		// same session, or drop it when that session is gone.
+		m.selected = slices.IndexFunc(m.shown(), func(s api.SessionInfo) bool { return s.Name == chosen })
+		if m.back != "" && !m.exists(m.back) {
+			m.back = "" // killed: Esc can only quit now
+		}
 	case *api.Error:
 		// A refused rename or kill; the server says why.
 		m.notice = msg.Message
@@ -133,7 +146,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		}
 		m.input, m.selected, m.target, m.cmdSel = "", -1, "", 0
 	case k.Code == tea.KeyEnter:
-		return openCmd(m.choice())
+		return m.open(m.choice())
 	case k.Code == tea.KeyUp:
 		if m.selected > 0 {
 			m.selected--
@@ -194,3 +207,12 @@ func (m *Model) shown() []api.SessionInfo {
 }
 
 func openCmd(o OpenMsg) tea.Cmd { return func() tea.Msg { return o } }
+
+// open opens o, unless its name would be refused: then the notice says why.
+func (m *Model) open(o OpenMsg) tea.Cmd {
+	if err := (&api.Attach{Session: o.Session}).Validate(); err != nil {
+		m.notice = reason(err)
+		return nil
+	}
+	return openCmd(o)
+}

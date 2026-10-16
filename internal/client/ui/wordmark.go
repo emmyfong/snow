@@ -11,6 +11,10 @@ import (
 // WordmarkHeight is the wordmark's height in rows.
 const WordmarkHeight = 4
 
+// WordmarkWidth is how many columns the wordmark takes; Wordmark draws
+// nothing in fewer.
+const WordmarkWidth = 32
+
 // wordmarkPixels draws "snow" on a grid of square pixels: each cell holds
 // two pixels, one above the other, drawn with half blocks.
 var wordmarkPixels = [8]string{
@@ -24,14 +28,16 @@ var wordmarkPixels = [8]string{
 	"................................",
 }
 
-// Wordmark draws Snow's name, centered in width cells, in the Wordmark color.
+// Wordmark draws Snow's name, centered in width cells, bold in the terminal's
+// own text color, so it reads on a light or a dark background. It takes a
+// theme like every component, though no token colors it.
 // It draws nothing when width is too narrow for it.
-func Wordmark(th theme.Theme, width int) string {
-	w := len(wordmarkPixels[0])
+func Wordmark(_ theme.Theme, width int) string {
+	w := WordmarkWidth
 	if width < w {
 		return ""
 	}
-	style := lipgloss.NewStyle().Foreground(th.Wordmark).Bold(true)
+	style := lipgloss.NewStyle().Bold(true)
 	pad := strings.Repeat(" ", (width-w)/2)
 	rows := make([]string, 0, WordmarkHeight)
 	for r := 0; r < len(wordmarkPixels); r += 2 {

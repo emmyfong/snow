@@ -35,3 +35,22 @@ func TestSessionRequestsValidate(t *testing.T) {
 		})
 	}
 }
+
+func TestAttachValidate(t *testing.T) {
+	tests := []struct {
+		name string
+		a    Attach
+		ok   bool
+	}{
+		{"named", Attach{Session: "api"}, true},
+		{"numbered", Attach{Create: true}, true},
+		{"escape sequence", Attach{Session: "x\x1b[2J", Create: true}, false},
+		{"too long", Attach{Session: strings.Repeat("a", MaxSessionName+1), Create: true}, false},
+	}
+	for _, tt := range tests {
+		err := tt.a.Validate()
+		if (err == nil) != tt.ok || (err != nil && !errors.Is(err, ErrInvalidSessionRequest)) {
+			t.Errorf("%s: Validate() = %v, want ok=%v", tt.name, err, tt.ok)
+		}
+	}
+}

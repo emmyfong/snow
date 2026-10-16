@@ -38,6 +38,7 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 	fix(&t.MatchFG, t.MatchBG)
 	fix(&t.CurrentFG, t.CurrentBG)
 	fix(&t.SelectedFG, t.SelectedBG)
+	fix(&t.SelectionFG, t.Selection)
 	return t
 }
 

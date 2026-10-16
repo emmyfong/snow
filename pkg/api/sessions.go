@@ -12,7 +12,7 @@ import (
 const MaxSessionName = 64
 
 // ErrInvalidSessionRequest is returned by the Validate methods of the
-// session requests (KillSession and RenameSession).
+// session requests (Attach, KillSession, and RenameSession).
 var ErrInvalidSessionRequest = errors.New("api: invalid session request")
 
 // Detach leaves the attached session without closing the connection; the
@@ -34,6 +34,15 @@ type KillSession struct {
 type RenameSession struct {
 	Session string `json:"session"`
 	Name    string `json:"name"`
+}
+
+// Validate checks the session name when one is given, by the rules of
+// ValidSessionName. An empty name asks for a numbered session.
+func (a *Attach) Validate() error {
+	if a.Session == "" {
+		return nil
+	}
+	return ValidSessionName(a.Session)
 }
 
 // Validate checks that the request names a session.

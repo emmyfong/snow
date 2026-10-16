@@ -36,7 +36,7 @@ func (m *Model) layout() placement {
 	p.x = max((m.cols-p.width)/2, 0)
 	shown, selected := m.listLen(), m.listSel()
 	room := m.rows - fixedRows
-	p.header = room-headerRows >= min(max(shown, 1), 3)
+	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)
 	if p.header {
 		room -= headerRows
 	}

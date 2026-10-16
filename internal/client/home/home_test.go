@@ -165,3 +165,64 @@ func TestAgo(t *testing.T) {
 		}
 	}
 }
+
+// TestSelectionFollowsTheSession: a new list re-sorts by last use; the
+// highlight stays on the same session, not the same row.
+func TestSelectionFollowsTheSession(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	m.Update(press(tea.KeyDown)) // api, the first row
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("api", time.Hour, 0), session("web", time.Second, 1)}})
+	if got := open(t, m.Update(press(tea.KeyEnter))); got.Session != "api" {
+		t.Fatalf("Enter opened %q after the list changed order, want api", got.Session)
+	}
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("web", time.Second, 1)}})
+	if m.selected != -1 {
+		t.Fatalf("selected %d after api ended, want none", m.selected)
+	}
+}
+
+// TestClickOnANarrowScreen: below the wordmark's width the page draws no
+// wordmark, so the click map must not keep room for it.
+func TestClickOnANarrowScreen(t *testing.T) {
+	m := screen(30, 40, session("alpha", time.Minute, 0))
+	row := -1
+	for i, l := range strings.Split(ansi.Strip(m.View().Content), "\n") {
+		if strings.Contains(l, "alpha") {
+			row = i
+		}
+	}
+	if row < 0 {
+		t.Fatal("alpha is not on screen")
+	}
+	if got := open(t, m.Update(tea.MouseClickMsg{X: 10, Y: row, Button: tea.MouseLeft})); got.Session != "alpha" {
+		t.Fatalf("click opened %+v, want alpha", got)
+	}
+}
+
+// TestHomeTinyScreens: every size draws exactly rows lines of cols cells,
+// with commands, help, and the kill popup open, and a wide session name.
+func TestHomeTinyScreens(t *testing.T) {
+	states := map[string]func(*Model){
+		"list":     func(*Model) {},
+		"commands": func(m *Model) { typeText(m, "/") },
+		"help":     func(m *Model) { typeText(m, "/help"); m.Update(press(tea.KeyEnter)) },
+		"kill":     func(m *Model) { typeText(m, "/kill 漢字のセッション"); m.Update(press(tea.KeyEnter)) },
+	}
+	for name, setup := range states {
+		for cols := 1; cols <= 100; cols += 3 {
+			for rows := 1; rows <= 45; rows += 4 {
+				m := screen(cols, rows, session("漢字のセッション", time.Minute, 0), session("api", time.Hour, 1))
+				setup(m)
+				lines := strings.Split(m.View().Content, "\n")
+				if len(lines) != rows {
+					t.Fatalf("%s at %dx%d: %d lines", name, cols, rows, len(lines))
+				}
+				for i, l := range lines {
+					if w := ansi.StringWidth(l); w != cols {
+						t.Fatalf("%s at %dx%d: line %d is %d cells", name, cols, rows, i, w)
+					}
+				}
+			}
+		}
+	}
+}

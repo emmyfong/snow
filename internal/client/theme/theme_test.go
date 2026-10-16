@@ -79,6 +79,7 @@ func TestTokensDownsample(t *testing.T) {
 				"match":      {th.MatchFG, th.MatchBG},
 				"current":    {th.CurrentFG, th.CurrentBG},
 				"selected":   {th.SelectedFG, th.SelectedBG},
+				"list row":   {th.SelectionFG, th.Selection},
 			}
 			for what, pair := range pairs {
 				if r := contrast(p.Convert(pair[0]), p.Convert(pair[1])); r < minContrast {

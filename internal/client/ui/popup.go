@@ -27,7 +27,7 @@ func Popup(th theme.Theme, o PopupOptions) string {
 		return ""
 	}
 	g := th.Glyphs
-	selected := lipgloss.NewStyle().Background(th.Selection).Bold(true)
+	selected := lipgloss.NewStyle().Foreground(th.SelectionFG).Background(th.Selection).Bold(true)
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	inner := o.Width - 2
 	rows := make([]string, len(o.Items))

@@ -141,3 +141,17 @@ func TestIdleCountsClients(t *testing.T) {
 	c.Close()
 	eventually(t, "idle after the client left", s.idle)
 }
+
+// TestAttachRefusesABadName: a name with a control character would reach
+// the status bar and the terminal title as an escape sequence.
+func TestAttachRefusesABadName(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "x\x1b[2J", Create: true})
+	if e := nextError(t, c); e.Code != api.CodeBadCommand {
+		t.Fatalf("attach with a bad name: %+v, want CodeBadCommand", e)
+	}
+	if len(s.Sessions()) != 0 {
+		t.Fatalf("sessions %v, want none created", s.Sessions())
+	}
+}

@@ -192,3 +192,35 @@ func goldenTyped(t *testing.T, cols, rows int, typed string) {
 	}
 	golden.RequireEqual(t, m.View().Content)
 }
+
+// TestBadNamesAreRefused: a session name with a control character, or a
+// long one, never reaches the server from the home page.
+func TestBadNamesAreRefused(t *testing.T) {
+	for _, typed := range []string{"/new " + strings.Repeat("a", api.MaxSessionName+1), strings.Repeat("b", api.MaxSessionName+1)} {
+		m := screen(80, 24)
+		typeText(m, typed)
+		if got := enter(m); got != nil {
+			t.Errorf("Enter on %.12q… gave %#v, want a refusal", typed, got)
+		}
+		if !strings.Contains(m.notice, "longer than") {
+			t.Errorf("notice %q, want the reason", m.notice)
+		}
+	}
+}
+
+// TestBackFollowsRenameAndKill: Esc goes back to the session Ctrl+b s came
+// from, under its new name after /rename, and quits once it is gone.
+func TestBackFollowsRenameAndKill(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0))
+	m.SetBack("api")
+	typeText(m, "/rename api backend")
+	enter(m)
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("backend", time.Minute, 0)}})
+	if got := msgOf(m.Update(press(tea.KeyEscape))); got != (OpenMsg{Session: "backend"}) {
+		t.Fatalf("Esc after the rename gave %#v, want to open backend", got)
+	}
+	m.Update(&api.SessionList{}) // backend was killed
+	if _, ok := msgOf(m.Update(press(tea.KeyEscape))).(QuitMsg); !ok {
+		t.Fatal("Esc with the back session gone should quit")
+	}
+}

@@ -28,6 +28,7 @@ type Theme struct {
 	PromptFG    color.Color // a question that takes the status bar
 	PromptBG    color.Color
 	Selection   color.Color // the selected item in a list
+	SelectionFG color.Color // its text, black or white for contrast
 	IndicatorFG color.Color // copy mode's position marker
 	IndicatorBG color.Color
 	MatchFG     color.Color // a search match in copy mode
@@ -36,7 +37,6 @@ type Theme struct {
 	CurrentBG   color.Color
 	SelectedFG  color.Color // text selected for copying
 	SelectedBG  color.Color
-	Wordmark    color.Color // Snow's name on the home page
 	Glyphs      Glyphs
 }
 
@@ -91,6 +91,7 @@ func (t Theme) Resolve() Theme {
 	fill(&t.PromptFG, d.PromptFG)
 	fill(&t.PromptBG, d.PromptBG)
 	fill(&t.Selection, d.Selection)
+	fill(&t.SelectionFG, d.SelectionFG)
 	fill(&t.IndicatorFG, d.IndicatorFG)
 	fill(&t.IndicatorBG, d.IndicatorBG)
 	fill(&t.MatchFG, d.MatchFG)
@@ -99,7 +100,6 @@ func (t Theme) Resolve() Theme {
 	fill(&t.CurrentBG, d.CurrentBG)
 	fill(&t.SelectedFG, d.SelectedFG)
 	fill(&t.SelectedBG, d.SelectedBG)
-	fill(&t.Wordmark, d.Wordmark)
 	if t.Glyphs == (Glyphs{}) {
 		t.Glyphs = d.Glyphs
 	}
@@ -112,9 +112,9 @@ func (t Theme) colors() map[string]color.Color {
 		"Border": t.Border, "FocusBorder": t.FocusBorder, "BarFG": t.BarFG, "BarBG": t.BarBG,
 		"TabActive": t.TabActive, "TabActiveBG": t.TabActiveBG, "Accent": t.Accent, "Muted": t.Muted,
 		"Success": t.Success, "Error": t.Error, "ErrorFG": t.ErrorFG, "PromptFG": t.PromptFG, "PromptBG": t.PromptBG,
-		"Selection": t.Selection, "IndicatorFG": t.IndicatorFG, "IndicatorBG": t.IndicatorBG,
+		"Selection": t.Selection, "SelectionFG": t.SelectionFG, "IndicatorFG": t.IndicatorFG, "IndicatorBG": t.IndicatorBG,
 		"MatchFG": t.MatchFG, "MatchBG": t.MatchBG, "CurrentFG": t.CurrentFG, "CurrentBG": t.CurrentBG,
-		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG, "Wordmark": t.Wordmark,
+		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
 	}
 }
 

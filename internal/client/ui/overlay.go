@@ -23,7 +23,17 @@ func Overlay(base, box string, x, y int) string {
 		}
 		b = ansi.Truncate(b, width-x, "")
 		end := x + ansi.StringWidth(b)
-		rows[r] = ansi.Truncate(row, x, "") + b + ansi.TruncateLeft(row, end, "")
+		// A wide character cut by an edge of the box: Truncate drops it and
+		// TruncateLeft keeps it whole. Either way a space takes the cut
+		// cell, so the row keeps its width.
+		left := ansi.Truncate(row, x, "")
+		left += strings.Repeat(" ", x-ansi.StringWidth(left))
+		right := ansi.TruncateLeft(row, end, "")
+		if extra := ansi.StringWidth(right) - (width - end); extra > 0 {
+			right = ansi.TruncateLeft(row, end+extra, "")
+		}
+		right = strings.Repeat(" ", max(width-end-ansi.StringWidth(right), 0)) + right
+		rows[r] = left + b + right
 	}
 	return strings.Join(rows, "\n")
 }

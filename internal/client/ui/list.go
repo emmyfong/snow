@@ -46,7 +46,7 @@ func List(th theme.Theme, o ListOptions) string {
 		first = min(max(o.Selected-o.Height+1, 0), len(o.Items)-o.Height)
 		last = first + o.Height
 	}
-	selected := lipgloss.NewStyle().Background(th.Selection).Bold(true)
+	selected := lipgloss.NewStyle().Foreground(th.SelectionFG).Background(th.Selection).Bold(true)
 	blank := strings.Repeat(" ", ansi.StringWidth(g.Pointer))
 	rows := make([]string, 0, last-first)
 	for i := first; i < last; i++ {

@@ -113,3 +113,38 @@ func TestWordmark(t *testing.T) {
 		t.Fatal("Wordmark drew in a space too narrow for it")
 	}
 }
+
+// TestReadableOnAnyBackground: Snow keeps the terminal's background, which
+// may be light or dark. The wordmark uses the terminal's own text color, and
+// a selected row sets its text color along with its background.
+func TestReadableOnAnyBackground(t *testing.T) {
+	th := theme.Default()
+	if w := Wordmark(th, 80); strings.Contains(w, "38;") {
+		t.Fatalf("the wordmark sets a text color: %q", w)
+	}
+	list := List(th, ListOptions{Items: []ListItem{{Cols: []string{"api"}}}, Selected: 0, Width: 20})
+	if !strings.Contains(list, "38;") {
+		t.Fatalf("the selected row leaves its text to the terminal: %q", list)
+	}
+}
+
+func TestWordmarkWidthMatchesThePixels(t *testing.T) {
+	if len(wordmarkPixels[0]) != WordmarkWidth {
+		t.Fatalf("WordmarkWidth is %d, the pixels are %d wide", WordmarkWidth, len(wordmarkPixels[0]))
+	}
+}
+
+// TestOverlayKeepsTheWidthAcrossWideCharacters: a wide character cut by
+// the box's edge becomes a space, so the row keeps its width.
+func TestOverlayKeepsTheWidthAcrossWideCharacters(t *testing.T) {
+	base := "漢字漢字漢字漢字漢字" // 20 cells
+	for x := 0; x <= 18; x++ {
+		got := Overlay(base, "ab", x, 0) // ends at x+2: an odd x cuts a character on both sides
+		if w := ansi.StringWidth(got); w != 20 {
+			t.Fatalf("Overlay at x=%d: %q is %d cells, want 20", x, got, w)
+		}
+		if !strings.Contains(got, "ab") {
+			t.Fatalf("Overlay at x=%d lost the box: %q", x, got)
+		}
+	}
+}

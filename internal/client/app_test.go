@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -219,5 +220,41 @@ func TestHomeRequestsReachTheServer(t *testing.T) {
 	a.Update(home.SendMsg{Msg: kill})
 	if len(sent) != 1 || sent[0] != kill {
 		t.Fatalf("sent %v, want the kill request", sent)
+	}
+}
+
+// TestRefusedOpenReturnsHome: opening a session that just ended (or the
+// back session after it was killed) returns to the home page with the
+// reason, instead of quitting Snow.
+func TestRefusedOpenReturnsHome(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	a.Update(&api.SessionList{Sessions: []api.SessionInfo{{Name: "api"}}})
+	a.Update(home.OpenMsg{Session: "api"})
+	_, cmd := a.Update(&api.Error{Code: api.CodeNoSession, Message: "no session named api"})
+	if cmd != nil || a.result.Err != nil {
+		t.Fatalf("a refused open quit Snow: result %+v", a.result)
+	}
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T, want the home page", a.screen)
+	}
+	view := a.View().Content
+	if !strings.Contains(view, "no session named api") || !strings.Contains(view, "api") {
+		t.Fatal("the home page should show the reason and the last session list")
+	}
+}
+
+// TestSwitchKeepsBackWithAnOldList: the list the app saw before attaching
+// does not have the session created since; Ctrl+b s must still go back.
+func TestSwitchKeepsBackWithAnOldList(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	a.Update(&api.SessionList{}) // before "api" existed
+	openSession(t, a, "api")
+	a.Update(session.SwitchMsg{})
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, cmd)
+	if at, ok := sent[len(sent)-1].(*api.Attach); !ok || at.Session != "api" {
+		t.Fatalf("sent %#v, want Attach{api}: Esc lost the way back", sent[len(sent)-1])
 	}
 }
