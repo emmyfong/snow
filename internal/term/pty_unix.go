@@ -96,16 +96,10 @@ func (u *unixPTY) Resize(cols, rows int) error { return setWinsize(u.File, cols,
 // Wait kills the child's whole process group when ctx is canceled, so a
 // program the shell started (for example `sleep` under `sh -c`) dies too.
 func (u *unixPTY) Wait(ctx context.Context) error {
-	done := make(chan error, 1)
-	go func() { done <- u.cmd.Wait() }()
-	select {
-	case err := <-done:
-		return exitErr(err)
-	case <-ctx.Done():
-		_ = syscall.Kill(-u.cmd.Process.Pid, syscall.SIGKILL)
-		<-done
-		return ctx.Err()
-	}
+	return waitOrKill(ctx,
+		func() error { return exitErr(u.cmd.Wait()) },
+		func() { _ = syscall.Kill(-u.cmd.Process.Pid, syscall.SIGKILL) },
+		killWait)
 }
 
 // exitErr treats a program's non-zero exit status as a normal exit.
