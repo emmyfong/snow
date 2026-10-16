@@ -84,6 +84,10 @@ func (s *Server) read(c *client) {
 			s.mouse(c, m)
 		case *api.Command:
 			s.call(func(st *state) { st.command(c, m) })
+		case *api.ScrollbackRequest:
+			s.scrollback(c, m)
+		case *api.SearchRequest:
+			s.search(c, m)
 		}
 	}
 }

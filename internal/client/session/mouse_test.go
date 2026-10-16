@@ -207,11 +207,11 @@ func TestWheelGoesToPaneThatWantsTheMouse(t *testing.T) {
 		t.Fatalf("wheel %+v, want wheeldown at 10,4 of pane 1 (the pane under the pointer, not the focused one)", ev)
 	}
 	r.sent = nil
-	m.Update(tea.MouseWheelMsg{X: 50, Y: 3, Button: tea.MouseWheelUp}) // pane 2 did not ask for the mouse
 	m.Update(tea.MouseWheelMsg{X: 40, Y: 3, Button: tea.MouseWheelUp}) // a border
 	m.Update(tea.MouseWheelMsg{X: 10, Y: 4, Button: tea.MouseWheelLeft})
-	if len(r.sent) != 0 {
-		t.Fatalf("sent %v, want nothing", r.sent)
+	m.Update(tea.MouseWheelMsg{X: 50, Y: 3, Button: tea.MouseWheelUp}) // pane 2 did not ask: copy mode opens
+	if ev := mouseSent(r); ev != nil {
+		t.Fatalf("sent %+v, want no mouse event", ev)
 	}
 }
 
@@ -219,8 +219,8 @@ func TestMouseOffUpdateStopsForwarding(t *testing.T) {
 	m, r := mousePane(t)
 	m.Update(&api.PaneUpdate{Pane: 1}) // the program turned the mouse off
 	m.Update(tea.MouseWheelMsg{X: 10, Y: 4, Button: tea.MouseWheelDown})
-	if len(r.sent) != 0 {
-		t.Fatalf("sent %v after the program stopped asking", r.sent)
+	if ev := mouseSent(r); ev != nil {
+		t.Fatalf("sent %+v after the program stopped asking", ev)
 	}
 }
 
@@ -286,8 +286,8 @@ func TestPressClearsAGrabWhoseReleaseWasLost(t *testing.T) {
 	r.sent = nil
 	m.Update(motion(8, 8))
 	m.Update(release(8, 8))
-	if len(r.sent) != 0 {
-		t.Fatalf("a stale grab sent %v", r.sent)
+	if ev := mouseSent(r); ev != nil {
+		t.Fatalf("a stale grab sent %+v", ev)
 	}
 }
 
@@ -305,4 +305,14 @@ func TestReleaseEndsEveryDragAndGrab(t *testing.T) {
 	if m.drag != nil {
 		t.Fatal("a release left the drag")
 	}
+}
+
+// mouseSent returns the first mouse event r sent to a program, or nil.
+func mouseSent(r *recorder) *api.Mouse {
+	for _, s := range r.sent {
+		if ev, ok := s.(*api.Mouse); ok {
+			return ev
+		}
+	}
+	return nil
 }

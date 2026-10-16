@@ -24,6 +24,14 @@ type Theme struct {
 	PromptFG    color.Color // a question that takes the status bar
 	PromptBG    color.Color
 	Selection   color.Color // the selected item in a list
+	IndicatorFG color.Color // copy mode's position marker
+	IndicatorBG color.Color
+	MatchFG     color.Color // a search match in copy mode
+	MatchBG     color.Color
+	CurrentFG   color.Color // the match the cursor is on
+	CurrentBG   color.Color
+	SelectedFG  color.Color // text selected for copying
+	SelectedBG  color.Color
 	Glyphs      Glyphs
 }
 
@@ -52,6 +60,14 @@ func Default() Theme {
 		PromptFG:    lipgloss.Color("0"),
 		PromptBG:    lipgloss.Color("3"),
 		Selection:   lipgloss.Color("4"),
+		IndicatorFG: lipgloss.Color("15"),
+		IndicatorBG: lipgloss.Color("8"),
+		MatchFG:     lipgloss.Color("0"),
+		MatchBG:     lipgloss.Color("3"),
+		CurrentFG:   lipgloss.Color("0"),
+		CurrentBG:   lipgloss.Color("208"),
+		SelectedFG:  lipgloss.Color("15"),
+		SelectedBG:  lipgloss.Color("4"),
 		Glyphs: Glyphs{
 			Vertical: "│", Horizontal: "─",
 			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",

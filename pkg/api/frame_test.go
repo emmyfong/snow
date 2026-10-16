@@ -28,6 +28,10 @@ func everyMessage() []Message {
 		&PaneUpdate{Pane: 1, Lines: []LineUpdate{{Row: 0, Text: "\x1b[31mred\x1b[0m"}}, Cursor: &Cursor{X: 3, Y: 0, Visible: true}},
 		&SessionList{Sessions: []SessionInfo{{Name: "api", Windows: 2, Attached: 1, State: StateRunning, LastUsed: time.Date(2026, 10, 9, 9, 14, 0, 0, time.UTC)}}},
 		&Bell{Pane: 2},
+		&ScrollbackRequest{Pane: 1, From: 40, Count: 24},
+		&SearchRequest{Pane: 1, Query: "error"},
+		&SearchResult{Pane: 1, Query: "error", Matches: []Match{{Line: 3, Col: 0, Len: 5}}, Truncated: true},
+		&Scrollback{Pane: 1, From: 40, Total: 5000, Lines: []string{"\x1b[31mred\x1b[0m", ""}},
 		&Error{Code: "no-session", Message: "session api does not exist"},
 	}
 }

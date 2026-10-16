@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/clipboard"
+	"github.com/emmyfong/snow/internal/client/copymode"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/menu"
 	"github.com/emmyfong/snow/internal/client/mouse"
@@ -36,14 +38,19 @@ type Model struct {
 	early      []api.Input // input typed before the first Layout named a pane
 	message    string      // why the last request was refused
 	messageAt  time.Time
+	notice     string // a note on what the user did, such as a copy; not a refusal
+	noticeAt   time.Time
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
-	confirm    *confirmation // a question waiting for y or n
-	rename     *renaming     // the window name being typed
-	menu       *menu.Model   // the right-click menu
-	drag       *mouse.Drag   // a border held by the pointer
-	grab       *grab         // the pane a held button belongs to
-	pending    api.Command   // the command the open picker completes
+	confirm    *confirmation             // a question waiting for y or n
+	rename     *renaming                 // the window name being typed
+	menu       *menu.Model               // the right-click menu
+	drag       *mouse.Drag               // a border held by the pointer
+	grab       *grab                     // the pane a held button belongs to
+	pending    api.Command               // the command the open picker completes
+	copy       *copymode.Model           // copy mode over a pane, when open
+	setClip    func(text string) tea.Cmd // puts text on the system clipboard
+	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
@@ -66,11 +73,14 @@ const clockEvery = 15 * time.Second
 
 type clearMessageMsg struct{ at time.Time }
 
+type clearNoticeMsg struct{ at time.Time }
+
 type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now, panes: map[int]*paneState{}}
+	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
+		panes: map[int]*paneState{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
 	}
@@ -93,13 +103,21 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.applyUpdate(msg)
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.Scrollback:
+		return m.copyReceive(msg)
+	case *api.SearchResult:
+		return m.copyReceive(msg)
+	case clipboard.ErrMsg:
+		return m.refuse(msg.Error())
 	case *api.Error:
-		m.message, m.messageAt = msg.Message, m.now()
-		at := m.messageAt
-		return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
+		return m.refuse(msg.Message)
 	case clearMessageMsg:
 		if msg.at.Equal(m.messageAt) {
 			m.message = ""
+		}
+	case clearNoticeMsg:
+		if msg.at.Equal(m.noticeAt) {
+			m.notice = ""
 		}
 	case hintMsg:
 		m.showHint(msg)
@@ -115,6 +133,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// refuse shows why a request failed in the status bar for a moment.
+func (m *Model) refuse(text string) tea.Cmd {
+	m.message, m.messageAt = text, m.now()
+	at := m.messageAt
+	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
 }
 
 func tick() tea.Cmd {
@@ -167,6 +192,7 @@ func (m *Model) input(in api.Input) {
 
 func (m *Model) applyLayout(l *api.Layout) {
 	m.layout = l
+	defer m.syncCopy()
 	defer m.syncDrag()
 	present := map[int]bool{}
 	for _, w := range l.Windows {
@@ -226,5 +252,5 @@ func resize(lines []string, rows int) []string {
 
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.confirm != nil || m.rename != nil || m.menu != nil
+	return m.picker != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

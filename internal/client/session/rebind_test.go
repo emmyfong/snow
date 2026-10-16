@@ -64,13 +64,9 @@ func TestNewPrefixTwiceSendsIt(t *testing.T) {
 }
 
 // TestEveryActionHasAHandler keeps the key table and the screen in step. A
-// new action in internal/client/keys needs a handler here. copy-mode is
-// reserved for the copy mode screen (#55).
+// new action in internal/client/keys needs a handler here.
 func TestEveryActionHasAHandler(t *testing.T) {
 	for _, a := range keys.Actions() {
-		if a.Name == "copy-mode" {
-			continue
-		}
 		if handlers[a.Name] == nil {
 			t.Errorf("action %q has no handler", a.Name)
 		}

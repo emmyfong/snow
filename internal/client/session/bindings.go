@@ -12,6 +12,8 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	case m.picker != nil:
 		m.pickerKey(k)
 		return nil
+	case m.copy != nil:
+		return m.copyKey(k)
 	case m.confirm != nil:
 		m.confirmKey(k)
 		return nil

@@ -62,12 +62,7 @@ func (s *Server) input(c *client, in *api.Input) {
 		s.log.Info("ignored input", "err", err)
 		return
 	}
-	var tp *term.Pane
-	s.call(func(st *state) {
-		if p := st.paneOf(c, in.Pane); p != nil {
-			tp = p.term
-		}
-	})
+	tp := s.findPane(c, in.Pane)
 	if tp == nil {
 		return
 	}

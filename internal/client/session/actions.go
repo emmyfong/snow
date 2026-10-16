@@ -14,8 +14,7 @@ import (
 type handler func(m *Model, k tea.Key) tea.Cmd
 
 // handlers maps each action name in internal/client/keys to what it does on
-// this screen. An action with no handler does nothing: copy-mode is reserved
-// until the copy mode screen registers it (#55).
+// this screen.
 var handlers = buildHandlers()
 
 var dirArgs = map[string]string{
@@ -44,6 +43,7 @@ func buildHandlers() map[string]handler {
 		"zoom":          func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpZoom); return nil },
 		"even-out":      func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpEven); return nil },
 		"detach":        func(*Model, tea.Key) tea.Cmd { return func() tea.Msg { return DetachMsg{} } },
+		"copy-mode":     func(m *Model, _ tea.Key) tea.Cmd { m.enterCopy(); return nil },
 		keys.SendPrefix: func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
 	}
 	for i := range 10 {
