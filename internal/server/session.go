@@ -88,6 +88,7 @@ func (st *state) endSession(sess *session) {
 		}
 	}
 	st.srv.log.Info("session ended", "session", sess.name)
+	st.sessionsChanged()
 	if st.hadOne && len(st.sessions) == 0 {
 		select {
 		case <-st.srv.done:
@@ -119,17 +120,39 @@ func (st *state) paneExited(id int) {
 }
 
 func (st *state) sessionList() []api.SessionInfo {
+	attached := map[string]int{}
+	for c := range st.clients {
+		if c.session != "" {
+			attached[c.session]++
+		}
+	}
 	out := make([]api.SessionInfo, 0, len(st.sessions))
 	for _, sess := range st.sessions {
 		out = append(out, api.SessionInfo{
 			Name:     sess.name,
 			Windows:  len(sess.windows),
+			Attached: attached[sess.name],
 			State:    api.StateRunning,
 			LastUsed: sess.lastUsed,
 		})
 	}
 	slices.SortFunc(out, func(a, b api.SessionInfo) int { return cmp.Compare(a.Name, b.Name) })
 	return out
+}
+
+// sessionsChanged sends the session list to every client that has not
+// attached, such as the home page, so it always shows what runs now.
+func (st *state) sessionsChanged() {
+	var list *api.SessionList
+	for c := range st.clients {
+		if c.session != "" {
+			continue
+		}
+		if list == nil {
+			list = &api.SessionList{Sessions: st.sessionList()}
+		}
+		st.enqueue(c, list)
+	}
 }
 
 func (st *state) closeAll() {

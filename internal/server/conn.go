@@ -43,7 +43,12 @@ func (s *Server) serveConn(raw net.Conn) {
 	} else {
 		s.log.Info("ignored hello size", "err", err)
 	}
-	if !s.call(func(st *state) { st.clients[c] = struct{}{} }) {
+	if !s.call(func(st *state) {
+		st.clients[c] = struct{}{}
+		// A client that has not attached yet, such as the home page, needs
+		// the sessions to choose from.
+		st.enqueue(c, &api.SessionList{Sessions: st.sessionList()})
+	}) {
 		_ = raw.Close()
 		return
 	}
@@ -136,5 +141,6 @@ func (st *state) forget(c *client) {
 	close(c.out)
 	if sess, ok := st.sessions[c.session]; ok {
 		st.fitSession(sess) // the session may grow back
+		st.sessionsChanged()
 	}
 }

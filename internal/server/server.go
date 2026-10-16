@@ -120,6 +120,7 @@ func (s *Server) CreateSession(name string) (string, error) {
 		var sess *session
 		if sess, err = st.createSession(name, 0, 0, ""); err == nil {
 			got = sess.name
+			st.sessionsChanged()
 		}
 	}) {
 		return "", ErrClosed

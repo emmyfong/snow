@@ -55,10 +55,15 @@ func TestRealDetachedServer(t *testing.T) {
 	}
 
 	c := apitest.Dial(t, path, 80, 24)
+	if m, err := c.Next(apitest.Wait); err != nil {
+		t.Fatalf("no session list on connect: %v", err)
+	} else if _, ok := m.(*api.SessionList); !ok {
+		t.Fatalf("first message %#v, want the session list", m)
+	}
 	c.Send(&api.Attach{Session: "real", Create: true, Dir: dir})
 	m, err := c.Next(apitest.Wait)
 	if l, ok := m.(*api.Layout); !ok || l.Session != "real" {
-		t.Fatalf("first message %#v (%v), want the Layout of session real", m, err)
+		t.Fatalf("first message after Attach %#v (%v), want the Layout of session real", m, err)
 	}
 	if _, err := os.Stat(filepath.Join(filepath.Dir(path), "server.log")); err != nil {
 		t.Fatalf("server log: %v", err)

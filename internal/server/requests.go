@@ -36,6 +36,7 @@ func (st *state) attach(c *client, m *api.Attach) {
 	st.enqueue(c, st.layout(sess))
 	st.enqueue(c, st.profileList())
 	st.fitSession(sess)
+	st.sessionsChanged()
 	if old, ok := st.sessions[prev]; ok && prev != sess.name {
 		st.fitSession(old) // the session c left may grow back
 	}
