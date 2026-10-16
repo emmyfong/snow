@@ -42,7 +42,8 @@ func palette(name, border, focus, barBG, barFG, tabBG, tabFG, promptBG, promptFG
 		MatchFG: c(promptFG), MatchBG: c(promptBG),
 		CurrentFG: c(tabFG), CurrentBG: c(tabBG),
 		SelectedFG: ink(colorprofile.TrueColor, c(selection)), SelectedBG: c(selection),
-		Glyphs: defaultGlyphs(),
+		Wordmark: c("#ffffff"),
+		Glyphs:   defaultGlyphs(),
 	}
 }
 

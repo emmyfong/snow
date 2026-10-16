@@ -75,6 +75,11 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
 | TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. None while a `Prompt` shows. |
 | Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
+| Panel | `Panel(th theme.Theme, o PanelOptions) string` | A frame exactly `Width` wide around `Body` rows, `Title` in the top edge. Shares its frame with `Popup`. Nothing below 4 cells. |
+| Input | `Input(th theme.Theme, o InputOptions) string` | A one-line text field exactly `Width` wide: `Prompt` in the accent color, then `Value` (its end shows when too long) or a muted `Placeholder`; `Focused` draws a cursor. |
+| List | `List(th theme.Theme, o ListOptions) string` | Rows of `ListItem` cells with aligned columns, `Selected` marked with the pointer glyph and highlighted; `Height` shows a window scrolled to the selection. |
+| KeyHints | `KeyHints(th theme.Theme, hints []Hint, width int) string` | One row of `Hint`s (key in accent, description muted); hints that do not fit whole are dropped from the end. |
+| Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, in the `Wordmark` color; nothing when too narrow. |
 
 ## Theme tokens
 
@@ -87,7 +92,8 @@ not be used).
 
 - Color tokens: `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
   `TabActiveBG`, `Accent`, `Muted`, `Success`, `Error` (a strip background),
-  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection`, and copy mode's
+  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection`, `Wordmark` (white in
+  every built-in theme), and copy mode's
   `IndicatorFG`/`IndicatorBG`, `MatchFG`/`MatchBG`, `CurrentFG`/`CurrentBG`,
   `SelectedFG`/`SelectedBG`. A built-in theme derives the copy mode pairs
   from its status bar, prompt, active tab, and selection colors.

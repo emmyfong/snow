@@ -36,6 +36,7 @@ type Theme struct {
 	CurrentBG   color.Color
 	SelectedFG  color.Color // text selected for copying
 	SelectedBG  color.Color
+	Wordmark    color.Color // Snow's name on the home page
 	Glyphs      Glyphs
 }
 
@@ -98,6 +99,7 @@ func (t Theme) Resolve() Theme {
 	fill(&t.CurrentBG, d.CurrentBG)
 	fill(&t.SelectedFG, d.SelectedFG)
 	fill(&t.SelectedBG, d.SelectedBG)
+	fill(&t.Wordmark, d.Wordmark)
 	if t.Glyphs == (Glyphs{}) {
 		t.Glyphs = d.Glyphs
 	}
@@ -112,7 +114,7 @@ func (t Theme) colors() map[string]color.Color {
 		"Success": t.Success, "Error": t.Error, "ErrorFG": t.ErrorFG, "PromptFG": t.PromptFG, "PromptBG": t.PromptBG,
 		"Selection": t.Selection, "IndicatorFG": t.IndicatorFG, "IndicatorBG": t.IndicatorBG,
 		"MatchFG": t.MatchFG, "MatchBG": t.MatchBG, "CurrentFG": t.CurrentFG, "CurrentBG": t.CurrentBG,
-		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
+		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG, "Wordmark": t.Wordmark,
 	}
 }
 
