@@ -209,3 +209,15 @@ func TestNewScreensGetTheColorProfile(t *testing.T) {
 		t.Fatal("the app did not keep the color profile for later screens")
 	}
 }
+
+// TestHomeRequestsReachTheServer: the home page asks the app to send a kill
+// or a rename; the app sends it as is.
+func TestHomeRequestsReachTheServer(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	kill := &api.KillSession{Session: "api"}
+	a.Update(home.SendMsg{Msg: kill})
+	if len(sent) != 1 || sent[0] != kill {
+		t.Fatalf("sent %v, want the kill request", sent)
+	}
+}

@@ -34,7 +34,7 @@ const (
 func (m *Model) layout() placement {
 	p := placement{width: min(64, max(m.cols-4, 0))}
 	p.x = max((m.cols-p.width)/2, 0)
-	shown := len(m.shown())
+	shown, selected := m.listLen(), m.listSel()
 	room := m.rows - fixedRows
 	p.header = room-headerRows >= min(max(shown, 1), 3)
 	if p.header {
@@ -51,10 +51,26 @@ func (m *Model) layout() placement {
 		p.listTop += headerRows
 	}
 	p.count = min(shown, p.lines)
-	if m.selected >= p.count {
-		p.first = m.selected - p.count + 1
+	if selected >= p.count {
+		p.first = selected - p.count + 1
 	}
 	return p
+}
+
+// listLen and listSel are the list's length and selected row: the matching
+// commands while a slash command is typed, else the sessions.
+func (m *Model) listLen() int {
+	if m.commanding() {
+		return len(m.matches())
+	}
+	return len(m.shown())
+}
+
+func (m *Model) listSel() int {
+	if m.commanding() {
+		return m.cmdSel
+	}
+	return m.selected
 }
 
 // rowAt returns the index of the shown session on screen row y.
@@ -79,11 +95,46 @@ func (m *Model) View() tea.View {
 		lines = append(lines, center(muted.Render(m.version), m.cols), "")
 	}
 	field := ui.Input(th, ui.InputOptions{
-		Value: m.input, Placeholder: "session name, or Enter for a new one",
+		Value: m.input, Placeholder: "session name, Enter for a new one, / for commands",
 		Prompt: th.Glyphs.Pointer, Width: max(p.width-2, 0), Focused: true,
 	})
 	lines = append(lines, indent(strings.Split(ui.Panel(th, ui.PanelOptions{Body: field, Width: p.width}), "\n"), p.x)...)
-	lines = append(lines, "", indent([]string{muted.Render("Sessions")}, p.x)[0])
+	notice := ""
+	if m.notice != "" {
+		notice = indent([]string{lipgloss.NewStyle().Foreground(th.Error).Render(ansi.Truncate(m.notice, p.width, "…"))}, p.x)[0]
+	}
+	lines = append(lines, notice)
+	if m.commanding() {
+		lines = append(lines, m.commandList(p)...)
+	} else {
+		lines = append(lines, m.sessionList(p)...)
+	}
+	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
+	for len(lines) < m.rows {
+		lines = append(lines, "")
+	}
+	for i, l := range lines[:m.rows] {
+		lines[i] = ansi.Truncate(l, m.cols, "") + strings.Repeat(" ", max(m.cols-ansi.StringWidth(l), 0))
+	}
+	content := strings.Join(lines[:m.rows], "\n")
+	switch {
+	case m.confirm != nil:
+		box, x, y := m.confirm.View(th, m.cols, m.rows)
+		content = ui.Overlay(content, box, x, y)
+	case m.help:
+		box, x, y := m.helpPanel()
+		content = ui.Overlay(content, box, x, y)
+	}
+	v := tea.NewView(content)
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
+}
+
+// sessionList draws the label and the sessions that fit.
+func (m *Model) sessionList(p placement) []string {
+	th := m.theme
+	muted := lipgloss.NewStyle().Foreground(th.Muted)
+	lines := []string{indent([]string{muted.Render("Sessions")}, p.x)[0]}
 	if p.count == 0 {
 		lines = append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, p.x)[0])
 	} else {
@@ -95,18 +146,32 @@ func (m *Model) View() tea.View {
 		list := ui.List(th, ui.ListOptions{Items: items, Selected: m.selected - p.first, Width: p.width})
 		lines = append(lines, indent(strings.Split(list, "\n"), p.x)...)
 	}
-	lines = append(lines, "", indent([]string{ui.KeyHints(th, []ui.Hint{
-		{Key: "enter", Desc: "open or create"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: m.escHint()},
-	}, p.width)}, p.x)[0])
-	for len(lines) < m.rows {
-		lines = append(lines, "")
+	return lines
+}
+
+// commandList draws the label and the matching commands that fit.
+func (m *Model) commandList(p placement) []string {
+	th := m.theme
+	muted := lipgloss.NewStyle().Foreground(th.Muted)
+	lines := []string{indent([]string{muted.Render("Commands")}, p.x)[0]}
+	ms := m.matches()
+	if p.count == 0 {
+		return append(lines, indent([]string{muted.Render("No command matches. Type /help to see them all.")}, p.x)[0])
 	}
-	for i, l := range lines[:m.rows] {
-		lines[i] = ansi.Truncate(l, m.cols, "") + strings.Repeat(" ", max(m.cols-ansi.StringWidth(l), 0))
+	items := make([]ui.ListItem, 0, p.count)
+	for _, c := range ms[p.first : p.first+p.count] {
+		items = append(items, ui.ListItem{Cols: []string{strings.TrimSpace("/" + c.name + " " + c.args), c.desc}})
 	}
-	v := tea.NewView(strings.Join(lines[:m.rows], "\n"))
-	v.MouseMode = tea.MouseModeCellMotion
-	return v
+	list := ui.List(th, ui.ListOptions{Items: items, Selected: m.cmdSel - p.first, Width: p.width})
+	return append(lines, indent(strings.Split(list, "\n"), p.x)...)
+}
+
+// hints are the keys the page answers to now.
+func (m *Model) hints() []ui.Hint {
+	if m.commanding() {
+		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "tab", Desc: "complete"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "clear"}}
+	}
+	return []ui.Hint{{Key: "enter", Desc: "open or create"}, {Key: "/", Desc: "commands"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: m.escHint()}}
 }
 
 // state describes a session in a few words.

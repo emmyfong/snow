@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -34,6 +35,12 @@ type Model struct {
 	input      string
 	selected   int    // index into the shown sessions; -1 means none
 	back       string // the session Esc returns to; "" means Esc quits
+	target     string // the session highlighted when a slash command began
+	cmdSel     int    // index into the matching commands
+	notice     string // why the last command or request was refused
+	help       bool   // the help panel is open
+	confirm    *confirm.Model
+	killing    string // the session the open popup would end
 	cols, rows int
 }
 
@@ -60,19 +67,60 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			return cmp.Or(b.LastUsed.Compare(a.LastUsed), cmp.Compare(a.Name, b.Name))
 		})
 		m.selected = min(m.selected, len(m.shown())-1)
+	case *api.Error:
+		// A refused rename or kill; the server says why.
+		m.notice = msg.Message
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
 	case tea.MouseClickMsg:
-		if msg.Button == tea.MouseLeft {
-			if i, ok := m.layout().rowAt(msg.Y); ok {
-				return openCmd(OpenMsg{Session: m.shown()[i].Name})
-			}
-		}
+		return m.click(msg)
 	}
 	return nil
 }
 
+// click handles a left click: a popup button, a command row (completed,
+// or run when it takes no argument), or a session row (opened).
+func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
+	if msg.Button != tea.MouseLeft {
+		return nil
+	}
+	if m.confirm != nil {
+		return m.confirmResult(m.confirm.Click(m.theme, m.cols, m.rows, msg.X, msg.Y))
+	}
+	if m.help {
+		m.help = false
+		return nil
+	}
+	i, ok := m.layout().rowAt(msg.Y)
+	if !ok {
+		return nil
+	}
+	if m.commanding() {
+		c := m.matches()[i]
+		m.complete(c)
+		if c.args == "" {
+			return m.runCommand()
+		}
+		return nil
+	}
+	return openCmd(OpenMsg{Session: m.shown()[i].Name})
+}
+
 func (m *Model) key(k tea.Key) tea.Cmd {
+	if m.confirm != nil {
+		return m.confirmResult(m.confirm.Key(k))
+	}
+	if m.help {
+		// Any key closes the help; it holds nothing to act on.
+		m.help = false
+		return nil
+	}
+	m.notice = ""
+	if m.commanding() {
+		if cmd, ok := m.commandKey(k); ok {
+			return cmd
+		}
+	}
 	switch {
 	case k.Code == 'c' && k.Mod == tea.ModCtrl:
 		return func() tea.Msg { return QuitMsg{} }
@@ -83,7 +131,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		if m.input == "" {
 			return func() tea.Msg { return QuitMsg{} }
 		}
-		m.input, m.selected = "", -1
+		m.input, m.selected, m.target, m.cmdSel = "", -1, "", 0
 	case k.Code == tea.KeyEnter:
 		return openCmd(m.choice())
 	case k.Code == tea.KeyUp:
@@ -96,10 +144,18 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		}
 	case k.Code == tea.KeyBackspace:
 		if r := []rune(m.input); len(r) > 0 {
-			m.input, m.selected = string(r[:len(r)-1]), -1
+			m.input, m.selected, m.cmdSel = string(r[:len(r)-1]), -1, 0
 		}
 	case k.Text != "" && k.Mod&(tea.ModCtrl|tea.ModAlt) == 0:
-		m.input, m.selected = m.input+k.Text, -1
+		if m.input == "" && k.Text == "/" {
+			// The command acts on the session highlighted now; typing
+			// clears the highlight.
+			m.target = ""
+			if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
+				m.target = shown[m.selected].Name
+			}
+		}
+		m.input, m.selected, m.cmdSel = m.input+k.Text, -1, 0
 	}
 	return nil
 }

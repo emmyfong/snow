@@ -104,6 +104,9 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.result.Detached = false
 		a.show(a.newSession())
 		return a, nil
+	case home.SendMsg:
+		a.send(msg.Msg)
+		return a, nil
 	case home.QuitMsg:
 		return a, tea.Quit
 	case session.DetachMsg:
