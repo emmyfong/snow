@@ -45,6 +45,7 @@ func (s *Server) serveConn(raw net.Conn) {
 	}
 	if !s.call(func(st *state) {
 		st.clients[c] = struct{}{}
+		st.served = true
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
 		st.enqueue(c, &api.SessionList{Sessions: st.sessionList()})
@@ -93,6 +94,12 @@ func (s *Server) read(c *client) {
 			s.scrollback(c, m)
 		case *api.SearchRequest:
 			s.search(c, m)
+		case *api.Detach:
+			s.call(func(st *state) { st.detach(c) })
+		case *api.KillSession:
+			s.call(func(st *state) { st.killRequest(c, m) })
+		case *api.RenameSession:
+			s.call(func(st *state) { st.renameRequest(c, m) })
 		}
 	}
 }
@@ -143,4 +150,5 @@ func (st *state) forget(c *client) {
 		st.fitSession(sess) // the session may grow back
 		st.sessionsChanged()
 	}
+	st.maybeDone()
 }

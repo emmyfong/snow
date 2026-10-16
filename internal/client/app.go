@@ -32,18 +32,41 @@ type app struct {
 	send       func(api.Message)
 	result     Result
 	dir        string           // the folder a session opened from the home page starts in
+	version    string           // Snow's version, for the home page
+	theme      theme.Theme      // the theme from the config, for the home page
 	sessOpts   []session.Option // the theme and keys a session screen gets
+	profile    *tea.ColorProfileMsg
 	cols, rows int
 }
 
 // newHomeApp returns an app that starts on the home page. Opening a session
 // there attaches and switches to the session screen.
 func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
-	return &app{screen: home.New(version, th), send: send, dir: dir, sessOpts: opts}
+	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts}
 }
 
 // newSession returns a session screen with the app's theme and keys.
 func (a *app) newSession() *session.Model { return session.New(a.send, a.sessOpts...) }
+
+// show makes s the current screen, at the terminal's size and colors: the
+// terminal reports its colors once, at start, so a later screen needs them
+// passed on.
+func (a *app) show(s Screen) {
+	s.SetSize(a.cols, a.rows)
+	if a.profile != nil {
+		s.Update(*a.profile)
+	}
+	a.screen = s
+}
+
+// leave detaches from the session, which keeps running, and shows the home
+// page. With back set, Esc there returns to that session.
+func (a *app) leave(back string) {
+	a.send(&api.Detach{})
+	h := home.New(a.version, a.theme)
+	h.SetBack(back)
+	a.show(h)
+}
 
 func (a *app) Init() tea.Cmd { return nil }
 
@@ -56,11 +79,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.send(&api.Resize{Cols: cols, Rows: rows})
 		}
 		return a, nil
+	case tea.ColorProfileMsg:
+		a.profile = &msg
 	case *api.Layout:
 		a.result.Session = msg.Session
-		if a.result.Detached {
-			return a, tea.Quit
-		}
 	case *api.Error:
 		switch msg.Code {
 		case api.CodeSessionEnded:
@@ -79,20 +101,18 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 	case home.OpenMsg:
 		a.send(&api.Attach{Session: msg.Session, Create: msg.Create, Dir: a.dir})
-		s := a.newSession()
-		s.SetSize(a.cols, a.rows)
-		a.screen = s
+		a.result.Detached = false
+		a.show(a.newSession())
 		return a, nil
 	case home.QuitMsg:
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
-		// Before the first Layout the session may not have a name yet
-		// (plain snow); quit once the Layout names it.
-		if a.result.Session == "" {
-			return a, nil
-		}
-		return a, tea.Quit
+		a.leave("")
+		return a, nil
+	case session.SwitchMsg:
+		a.leave(a.result.Session)
+		return a, nil
 	}
 	return a, a.screen.Update(msg)
 }

@@ -16,8 +16,13 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// DetachMsg asks the client to detach from the session.
+// DetachMsg asks the client to detach from the session and show the home
+// page.
 type DetachMsg struct{}
+
+// SwitchMsg asks the client to show the home page to pick another session,
+// keeping a way back to this one.
+type SwitchMsg struct{}
 
 // Model is the session screen. Send queues a message for the server; it must
 // keep order.

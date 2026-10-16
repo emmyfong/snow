@@ -37,14 +37,14 @@ func Run(ctx context.Context, opts Options, path string) error {
 	for {
 		select {
 		case <-s.Done():
-			s.log.Info("last session ended; exiting")
+			s.log.Info("no session or client left; exiting")
 			return nil
 		case <-ctx.Done():
 			s.log.Info("stopping", "reason", ctx.Err())
 			return nil
 		case <-idleTimer.C:
-			if len(s.Sessions()) == 0 {
-				s.log.Info("no session started; exiting")
+			if s.idle() {
+				s.log.Info("no session or client; exiting")
 				return nil
 			}
 		}

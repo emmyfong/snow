@@ -32,7 +32,8 @@ type Model struct {
 	now        func() time.Time
 	sessions   []api.SessionInfo // most recently used first
 	input      string
-	selected   int // index into the shown sessions; -1 means none
+	selected   int    // index into the shown sessions; -1 means none
+	back       string // the session Esc returns to; "" means Esc quits
 	cols, rows int
 }
 
@@ -40,6 +41,10 @@ type Model struct {
 func New(version string, th theme.Theme) *Model {
 	return &Model{version: version, theme: th, base: th, now: time.Now, selected: -1}
 }
+
+// SetBack makes Esc return to session name instead of quitting, for a home
+// page opened from a session to switch away from it.
+func (m *Model) SetBack(name string) { m.back = name }
 
 // SetSize sets the screen size in cells.
 func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
@@ -72,6 +77,9 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	case k.Code == 'c' && k.Mod == tea.ModCtrl:
 		return func() tea.Msg { return QuitMsg{} }
 	case k.Code == tea.KeyEscape:
+		if m.input == "" && m.back != "" {
+			return openCmd(OpenMsg{Session: m.back})
+		}
 		if m.input == "" {
 			return func() tea.Msg { return QuitMsg{} }
 		}

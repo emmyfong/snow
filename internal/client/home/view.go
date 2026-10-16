@@ -96,7 +96,7 @@ func (m *Model) View() tea.View {
 		lines = append(lines, indent(strings.Split(list, "\n"), p.x)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, []ui.Hint{
-		{Key: "enter", Desc: "open or create"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "quit"},
+		{Key: "enter", Desc: "open or create"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: m.escHint()},
 	}, p.width)}, p.x)[0])
 	for len(lines) < m.rows {
 		lines = append(lines, "")
@@ -132,4 +132,13 @@ func indent(rows []string, x int) []string {
 
 func center(s string, width int) string {
 	return strings.Repeat(" ", max((width-ansi.StringWidth(s))/2, 0)) + s
+}
+
+// escHint says what Esc does: go back to the session the page was opened
+// from, or quit.
+func (m *Model) escHint() string {
+	if m.back != "" {
+		return "back to " + m.back
+	}
+	return "quit"
 }

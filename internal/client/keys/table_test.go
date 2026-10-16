@@ -29,6 +29,7 @@ func TestDefaultBindings(t *testing.T) {
 		{"C-Left", "resize-left"}, {"C-Right", "resize-right"}, {"C-Up", "resize-up"}, {"C-Down", "resize-down"},
 		{"M-Left", "resize-left-5"}, {"M-Right", "resize-right-5"}, {"M-Up", "resize-up-5"}, {"M-Down", "resize-down-5"},
 		{"d", "detach"},
+		{"s", "sessions"},
 		{"[", "copy-mode"},
 		{"C-b", "send-prefix"},
 	}

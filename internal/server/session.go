@@ -18,7 +18,7 @@ type state struct {
 	sessions map[string]*session
 	clients  map[*client]struct{}
 	nextPane int
-	hadOne   bool // a session has existed; the last one ending closes Done
+	served   bool // a session or a client has existed; once neither is left, Done closes
 }
 
 type session struct {
@@ -51,7 +51,7 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
 	st.sessions[name] = sess
-	st.hadOne = true
+	st.served = true
 	st.srv.log.Info("session created", "session", name, "profile", w.name)
 	return sess, nil
 }
@@ -89,13 +89,7 @@ func (st *state) endSession(sess *session) {
 	}
 	st.srv.log.Info("session ended", "session", sess.name)
 	st.sessionsChanged()
-	if st.hadOne && len(st.sessions) == 0 {
-		select {
-		case <-st.srv.done:
-		default:
-			close(st.srv.done)
-		}
-	}
+	st.maybeDone()
 }
 
 // paneExited removes the pane whose program exited, and its window and

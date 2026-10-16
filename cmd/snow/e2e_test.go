@@ -87,6 +87,35 @@ func waitResult(t *testing.T, done <-chan runResult) client.Result {
 
 const ctrlB = "\x02"
 
+// detach presses Ctrl+b d, which shows the home page, then Esc to quit it,
+// and returns how the client ended. Esc repeats until the client exits:
+// one sent before the home page is up goes to the pane instead.
+func detach(t *testing.T, keys io.Writer, done <-chan runResult) client.Result {
+	t.Helper()
+	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(15 * time.Second)
+	tick := time.NewTicker(200 * time.Millisecond)
+	defer tick.Stop()
+	for {
+		select {
+		case r := <-done:
+			if r.err != nil {
+				t.Fatalf("client.Run: %v", r.err)
+			}
+			return r.res
+		case <-tick.C:
+			if _, err := io.WriteString(keys, "\x1b"); err != nil {
+				t.Fatal(err)
+			}
+		case <-deadline:
+			t.Fatal("client did not return")
+			return client.Result{}
+		}
+	}
+}
+
 func shellPrompt() string {
 	if runtime.GOOS == "windows" {
 		return ">"
@@ -106,10 +135,7 @@ func TestDetachAndReattach(t *testing.T) {
 	}
 	watch.WaitScreen("\ne2emark\n")
 
-	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	res := waitResult(t, done)
+	res := detach(t, keys, done)
 	if !res.Detached || res.Session != "e2e" {
 		t.Fatalf("result %+v, want detached from e2e", res)
 	}
@@ -124,10 +150,7 @@ func TestDetachAndReattach(t *testing.T) {
 	if !strings.Contains(watch.Screen(), "\ne2emark\n") {
 		t.Fatalf("reattached screen lost earlier output:\n%s", watch.Screen())
 	}
-	if _, err := io.WriteString(keys2, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	if res := waitResult(t, done2); !res.Detached {
+	if res := detach(t, keys2, done2); !res.Detached {
 		t.Fatalf("second client result %+v, want detached", res)
 	}
 }
@@ -136,10 +159,7 @@ func TestPlainSnowCreatesNumberedSessions(t *testing.T) {
 	path := startServer(t)
 	for _, want := range []string{"0", "1"} {
 		keys, done := attachClient(path, "")
-		if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-			t.Fatal(err)
-		}
-		if res := waitResult(t, done); res.Session != want {
+		if res := detach(t, keys, done); res.Session != want {
 			t.Fatalf("new session %q, want %q", res.Session, want)
 		}
 	}
@@ -163,10 +183,7 @@ func TestSessionStartsInClientFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	watch.WaitScreen(filepath.Base(dir) + "\n")
-	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	waitResult(t, done)
+	detach(t, keys, done)
 }
 
 // TestShellExitEndsClient: when the shell exits, the client reports that the
@@ -203,10 +220,7 @@ func TestHomePageCreatesASession(t *testing.T) {
 	}
 	watch := observe(t, path, "work")
 	watch.WaitScreen(shellPrompt())
-	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	if res := waitResult(t, done); !res.Detached || res.Session != "work" {
+	if res := detach(t, keys, done); !res.Detached || res.Session != "work" {
 		t.Fatalf("result %+v, want detached from work", res)
 	}
 }

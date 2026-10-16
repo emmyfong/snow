@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
@@ -49,23 +50,6 @@ func TestUnknownSizeNotSent(t *testing.T) {
 	a.Update(tea.WindowSizeMsg{Width: 0, Height: 0})
 	if len(sent) != 0 {
 		t.Fatalf("sent %v for an unknown size, want nothing", sent)
-	}
-}
-
-// TestDetachBeforeLayoutWaitsForName: a detach right after plain snow starts
-// still reports which session it left.
-func TestDetachBeforeLayoutWaitsForName(t *testing.T) {
-	send := func(api.Message) {}
-	a := &app{screen: session.New(send), send: send}
-	if _, cmd := a.Update(session.DetachMsg{}); cmd != nil {
-		t.Fatal("quit before the session had a name")
-	}
-	_, cmd := a.Update(&api.Layout{Session: "3", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
-	if cmd == nil {
-		t.Fatal("did not quit after the Layout")
-	}
-	if !a.result.Detached || a.result.Session != "3" {
-		t.Fatalf("result %+v, want detached from 3", a.result)
 	}
 }
 
@@ -147,5 +131,81 @@ func TestHomeQuitEndsWithoutASession(t *testing.T) {
 	_, cmd := a.Update(home.QuitMsg{})
 	if cmd == nil || a.result.Session != "" || a.result.Err != nil {
 		t.Fatalf("quit from home: cmd %v, result %+v", cmd, a.result)
+	}
+}
+
+// openSession takes a home app into session name, as Enter on the home
+// page does.
+func openSession(t *testing.T, a *app, name string) {
+	t.Helper()
+	a.Update(home.OpenMsg{Session: name, Create: true})
+	a.Update(&api.Layout{Session: name, Active: 0, Windows: []api.WindowInfo{{Index: 0, Panes: []api.PaneInfo{{ID: 1, Focused: true, Rect: api.Rect{W: 80, H: 23}}}}}})
+	if _, ok := a.screen.(*session.Model); !ok {
+		t.Fatalf("screen is %T, want the session screen", a.screen)
+	}
+}
+
+// run feeds the message a command produces back into a, as Bubble Tea does.
+func run(a *app, cmd tea.Cmd) tea.Cmd {
+	if cmd == nil {
+		return nil
+	}
+	_, next := a.Update(cmd())
+	return next
+}
+
+// TestDetachShowsHome: Ctrl+b d leaves the session running and shows the
+// home page; Esc there quits.
+func TestDetachShowsHome(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	openSession(t, a, "api")
+	a.Update(session.DetachMsg{})
+	if _, ok := sent[len(sent)-1].(*api.Detach); !ok {
+		t.Fatalf("sent %#v, want Detach", sent[len(sent)-1])
+	}
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T after detach, want the home page", a.screen)
+	}
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if _, ok := cmd().(home.QuitMsg); !ok {
+		t.Fatal("Esc on the home page after detach should quit")
+	}
+	if !a.result.Detached || a.result.Session != "api" {
+		t.Fatalf("result %+v, want detached from api", a.result)
+	}
+}
+
+// TestHomeKeyKeepsSession: Ctrl+b s shows the home page without ending the
+// session, and Esc goes back to it.
+func TestHomeKeyKeepsSession(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	openSession(t, a, "api")
+	a.Update(session.SwitchMsg{})
+	if _, ok := sent[len(sent)-1].(*api.Detach); !ok {
+		t.Fatalf("sent %#v, want Detach", sent[len(sent)-1])
+	}
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T after Ctrl+b s, want the home page", a.screen)
+	}
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, cmd)
+	at, ok := sent[len(sent)-1].(*api.Attach)
+	if !ok || at.Session != "api" || at.Create {
+		t.Fatalf("sent %#v, want Attach{api} back to the session", sent[len(sent)-1])
+	}
+	if _, ok := a.screen.(*session.Model); !ok {
+		t.Fatalf("screen is %T after Esc, want the session screen", a.screen)
+	}
+}
+
+// TestNewScreensGetTheColorProfile: the terminal reports its colors once;
+// a screen opened later must still adapt to them.
+func TestNewScreensGetTheColorProfile(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
+	if a.profile == nil || a.profile.Profile != colorprofile.ANSI {
+		t.Fatal("the app did not keep the color profile for later screens")
 	}
 }

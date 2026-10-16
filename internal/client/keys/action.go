@@ -60,9 +60,8 @@ func buildActions() []Action {
 		as = append(as, Action{Name: "resize-" + d + "-5", Desc: "Resize " + d + " by 5", Group: "resize-5"})
 	}
 	return append(as,
-		// copy-mode belongs to the copy mode screen (#55); the name is
-		// reserved here so the key and the config setting already work.
 		Action{Name: "copy-mode", Desc: "Copy mode"},
+		Action{Name: "sessions", Desc: "Sessions"},
 		Action{Name: "detach", Desc: "Detach"},
 		Action{Name: "send-prefix", Desc: "Send the prefix key"},
 	)
@@ -104,5 +103,5 @@ func buildDefaults() []binding {
 		name := strings.ToUpper(d[:1]) + d[1:]
 		b = append(b, binding{name, "focus-" + d}, binding{"C-" + name, "resize-" + d}, binding{"M-" + name, "resize-" + d + "-5"})
 	}
-	return append(b, binding{"[", "copy-mode"}, binding{"d", "detach"})
+	return append(b, binding{"[", "copy-mode"}, binding{"s", "sessions"}, binding{"d", "detach"})
 }
