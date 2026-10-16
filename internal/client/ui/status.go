@@ -46,7 +46,8 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 	l := layoutStatus(th, o)
 	rightStyle := bar
 	if o.Message != "" {
-		rightStyle = bar.Foreground(th.Error).Bold(true)
+		// Its own strip, so the message reads on any status bar color.
+		rightStyle = lipgloss.NewStyle().Foreground(th.ErrorFG).Background(th.Error).Bold(true)
 	}
 	left := ansi.Truncate(l.left, l.leftMax, "")
 	gap := max(o.Width-ansi.StringWidth(left)-ansi.StringWidth(l.right), 0)
@@ -87,7 +88,7 @@ type statusLayout struct {
 
 func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
-	active := bar.Foreground(th.TabActive).Bold(true)
+	active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
 	g := th.Glyphs
 	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight)
 	parts := []string{first}

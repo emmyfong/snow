@@ -78,12 +78,30 @@ Each entry: name, exact signature, one line of use, and notable options.
 
 ## Theme tokens
 
-Defined by the home-page epic (#56), which also picks the default theme.
-`internal/client/theme` holds placeholder tokens until then: `Border`,
-`FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `PromptFG`,
-`PromptBG`, `Selection`, `IndicatorFG`, `IndicatorBG`, `MatchFG`, `MatchBG`, `CurrentFG`, `CurrentBG`, `SelectedFG`, `SelectedBG`,
-and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer, the text caret). #56 replaces
-the values and records the final list here.
+`internal/client/theme` holds the tokens. `Default()` is **Frost**, chosen by
+the user in #33. `Builtin()` lists the 12 shipped themes, and `ByName` finds
+one by name for `[theme] name` in `config.toml`: Frost, Campbell, One Half
+Dark, Dark+, Solarized Dark, Dracula, Nord, Gruvbox Dark, Tokyo Night,
+Catppuccin Mocha, OpenCode, and Clay (inspired by Claude Code; the name may
+not be used).
+
+- Color tokens: `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
+  `TabActiveBG`, `Accent`, `Muted`, `Success`, `Error` (a strip background),
+  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection`, and copy mode's
+  `IndicatorFG`/`IndicatorBG`, `MatchFG`/`MatchBG`, `CurrentFG`/`CurrentBG`,
+  `SelectedFG`/`SelectedBG`. A built-in theme derives the copy mode pairs
+  from its status bar, prompt, active tab, and selection colors.
+- `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
+  mark, the session brackets, the list pointer, the text caret.
+- `Named(name)` reads `[theme] name` from the config: a built-in name,
+  ignoring case, or `default`.
+- Snow keeps the terminal's own background and text colors; tokens color
+  only Snow's parts.
+- `Resolve()` fills tokens a theme leaves empty from Frost. `For(profile)`
+  adapts a theme to the terminal's color depth: text that would fall below a
+  3:1 contrast after colors are reduced turns black or white.
+  `TestTokensDownsample` checks every theme at true color, 256, and 16 colors.
+- A new text-on-background pair must join that test.
 
 ## Visual review gate
 

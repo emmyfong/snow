@@ -1,26 +1,30 @@
 // Package theme is the only source of Snow's colors, glyphs, and spacing.
-// Views read tokens from a Theme; they never hold a literal color or glyph.
-// The tokens here are placeholders until the home-page epic (#56) chooses
-// the default theme.
+// Views read tokens from a resolved Theme; they never hold a literal color or
+// glyph. Builtin lists the themes that ship with Snow; Frost is the default.
 package theme
 
 import (
 	"errors"
 	"fmt"
 	"image/color"
-
-	"charm.land/lipgloss/v2"
+	"strings"
 )
 
-// Theme holds the visual tokens.
+// Theme holds the visual tokens. Snow keeps the terminal's own background
+// and text colors; tokens color only Snow's parts.
 type Theme struct {
+	Name        string
 	Border      color.Color // lines between panes
 	FocusBorder color.Color // lines around the focused pane
 	BarFG       color.Color // status bar text
 	BarBG       color.Color // status bar background
-	TabActive   color.Color // the shown window's tab
+	TabActive   color.Color // the shown window's tab text
+	TabActiveBG color.Color // the shown window's tab background
+	Accent      color.Color // highlights: the prompt mark, commands, links
 	Muted       color.Color // secondary text
-	Error       color.Color // a refused request's message
+	Success     color.Color // something that worked or runs
+	Error       color.Color // a refused request's message: its background
+	ErrorFG     color.Color // a refused request's message: its text
 	PromptFG    color.Color // a question that takes the status bar
 	PromptBG    color.Color
 	Selection   color.Color // the selected item in a list
@@ -47,46 +51,86 @@ type Glyphs struct {
 	TopLeft, TopRight, BottomLeft, BottomRight string
 }
 
-// Default returns the placeholder theme.
-func Default() Theme {
-	return Theme{
-		Border:      lipgloss.Color("8"),
-		FocusBorder: lipgloss.Color("2"),
-		BarFG:       lipgloss.Color("0"),
-		BarBG:       lipgloss.Color("2"),
-		TabActive:   lipgloss.Color("15"),
-		Muted:       lipgloss.Color("8"),
-		Error:       lipgloss.Color("1"),
-		PromptFG:    lipgloss.Color("0"),
-		PromptBG:    lipgloss.Color("3"),
-		Selection:   lipgloss.Color("4"),
-		IndicatorFG: lipgloss.Color("15"),
-		IndicatorBG: lipgloss.Color("8"),
-		MatchFG:     lipgloss.Color("0"),
-		MatchBG:     lipgloss.Color("3"),
-		CurrentFG:   lipgloss.Color("0"),
-		CurrentBG:   lipgloss.Color("208"),
-		SelectedFG:  lipgloss.Color("15"),
-		SelectedBG:  lipgloss.Color("4"),
-		Glyphs: Glyphs{
-			Vertical: "│", Horizontal: "─",
-			Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
-			Zoomed: "Z", ActiveTab: "*",
-			SessionLeft: "[", SessionRight: "]",
-			Pointer: "> ", Caret: "_",
-			TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
-		},
+// Default returns the default theme, Frost.
+func Default() Theme { return frost() }
+
+// defaultGlyphs are the box-drawing characters and markers every built-in
+// theme uses.
+func defaultGlyphs() Glyphs {
+	return Glyphs{
+		Vertical: "│", Horizontal: "─",
+		Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
+		Zoomed: "Z", ActiveTab: "*",
+		SessionLeft: "[", SessionRight: "]",
+		Pointer: "> ", Caret: "_",
+		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
+	}
+}
+
+// Resolve returns t with every token it leaves empty taken from Default, so
+// a theme from the config file may set only the tokens it changes.
+func (t Theme) Resolve() Theme {
+	d := Default()
+	fill := func(c *color.Color, def color.Color) {
+		if *c == nil {
+			*c = def
+		}
+	}
+	fill(&t.Border, d.Border)
+	fill(&t.FocusBorder, d.FocusBorder)
+	fill(&t.BarFG, d.BarFG)
+	fill(&t.BarBG, d.BarBG)
+	fill(&t.TabActive, d.TabActive)
+	fill(&t.TabActiveBG, d.TabActiveBG)
+	fill(&t.Accent, d.Accent)
+	fill(&t.Muted, d.Muted)
+	fill(&t.Success, d.Success)
+	fill(&t.Error, d.Error)
+	fill(&t.ErrorFG, d.ErrorFG)
+	fill(&t.PromptFG, d.PromptFG)
+	fill(&t.PromptBG, d.PromptBG)
+	fill(&t.Selection, d.Selection)
+	fill(&t.IndicatorFG, d.IndicatorFG)
+	fill(&t.IndicatorBG, d.IndicatorBG)
+	fill(&t.MatchFG, d.MatchFG)
+	fill(&t.MatchBG, d.MatchBG)
+	fill(&t.CurrentFG, d.CurrentFG)
+	fill(&t.CurrentBG, d.CurrentBG)
+	fill(&t.SelectedFG, d.SelectedFG)
+	fill(&t.SelectedBG, d.SelectedBG)
+	if t.Glyphs == (Glyphs{}) {
+		t.Glyphs = d.Glyphs
+	}
+	return t
+}
+
+// colors returns every color token by name, for checks over all of them.
+func (t Theme) colors() map[string]color.Color {
+	return map[string]color.Color{
+		"Border": t.Border, "FocusBorder": t.FocusBorder, "BarFG": t.BarFG, "BarBG": t.BarBG,
+		"TabActive": t.TabActive, "TabActiveBG": t.TabActiveBG, "Accent": t.Accent, "Muted": t.Muted,
+		"Success": t.Success, "Error": t.Error, "ErrorFG": t.ErrorFG, "PromptFG": t.PromptFG, "PromptBG": t.PromptBG,
+		"Selection": t.Selection, "IndicatorFG": t.IndicatorFG, "IndicatorBG": t.IndicatorBG,
+		"MatchFG": t.MatchFG, "MatchBG": t.MatchBG, "CurrentFG": t.CurrentFG, "CurrentBG": t.CurrentBG,
+		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
 	}
 }
 
 // ErrUnknownTheme means a theme name that Snow does not define.
 var ErrUnknownTheme = errors.New("unknown theme")
 
-// Named returns the theme called name, as set in the config file. Only
-// "default" exists until the home-page epic (#56) adds more.
+// Named returns the theme called name, as set in the config file: a
+// built-in theme's name, ignoring case, or "default" for Frost.
 func Named(name string) (Theme, error) {
-	if name == "default" {
+	if strings.EqualFold(name, "default") {
 		return Default(), nil
 	}
-	return Theme{}, fmt.Errorf("%w %q; the available themes are: default", ErrUnknownTheme, name)
+	if t, ok := ByName(name); ok {
+		return t, nil
+	}
+	names := make([]string, 0, len(Builtin()))
+	for _, t := range Builtin() {
+		names = append(names, t.Name)
+	}
+	return Theme{}, fmt.Errorf("%w %q; the available themes are: default, %s", ErrUnknownTheme, name, strings.Join(names, ", "))
 }

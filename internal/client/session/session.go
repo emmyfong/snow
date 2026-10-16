@@ -101,6 +101,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
+	case tea.ColorProfileMsg:
+		// The terminal's color depth is known only now; text that would
+		// vanish when colors are reduced switches to black or white.
+		m.theme = theme.Default().For(msg.Profile)
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.Scrollback:
