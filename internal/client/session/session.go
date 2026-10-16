@@ -23,7 +23,8 @@ type DetachMsg struct{}
 // keep order.
 type Model struct {
 	send       func(api.Message)
-	theme      theme.Theme
+	theme      theme.Theme // base adapted to the terminal's colors
+	base       theme.Theme // the theme from the config
 	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
@@ -79,7 +80,7 @@ type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
+	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
 		panes: map[int]*paneState{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
@@ -104,7 +105,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.ColorProfileMsg:
 		// The terminal's color depth is known only now; text that would
 		// vanish when colors are reduced switches to black or white.
-		m.theme = theme.Default().For(msg.Profile)
+		m.theme = m.base.For(msg.Profile)
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.Scrollback:

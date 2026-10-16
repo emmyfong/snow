@@ -209,6 +209,7 @@ func attach(name string, stdout, stderr io.Writer) int {
 		Config:  &cfg,
 		Socket:  path,
 		Session: name,
+		Home:    name == "", // plain snow opens the home page
 		Start: func() error {
 			exe, err := os.Executable()
 			if err != nil {

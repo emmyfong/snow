@@ -4,7 +4,9 @@ import (
 	"errors"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -26,16 +28,29 @@ type connClosedMsg struct{}
 // app is the root model. It routes messages to the current screen and ends
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
-	screen Screen
-	send   func(api.Message)
-	result Result
+	screen     Screen
+	send       func(api.Message)
+	result     Result
+	dir        string           // the folder a session opened from the home page starts in
+	sessOpts   []session.Option // the theme and keys a session screen gets
+	cols, rows int
 }
+
+// newHomeApp returns an app that starts on the home page. Opening a session
+// there attaches and switches to the session screen.
+func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
+	return &app{screen: home.New(version, th), send: send, dir: dir, sessOpts: opts}
+}
+
+// newSession returns a session screen with the app's theme and keys.
+func (a *app) newSession() *session.Model { return session.New(a.send, a.sessOpts...) }
 
 func (a *app) Init() tea.Cmd { return nil }
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		a.cols, a.rows = msg.Width, msg.Height
 		a.screen.SetSize(msg.Width, msg.Height)
 		if cols, rows, ok := acceptedSize(msg.Width, msg.Height); ok {
 			a.send(&api.Resize{Cols: cols, Rows: rows})
@@ -62,6 +77,14 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.result.Err = ErrConnectionLost
 		}
 		return a, tea.Quit
+	case home.OpenMsg:
+		a.send(&api.Attach{Session: msg.Session, Create: msg.Create, Dir: a.dir})
+		s := a.newSession()
+		s.SetSize(a.cols, a.rows)
+		a.screen = s
+		return a, nil
+	case home.QuitMsg:
+		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
 		// Before the first Layout the session may not have a name yet
@@ -79,6 +102,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *app) View() tea.View {
 	v := a.screen.View()
 	v.AltScreen = true
+	v.WindowTitle = "snow"
 	if a.result.Session != "" {
 		v.WindowTitle = "snow: " + a.result.Session
 	}

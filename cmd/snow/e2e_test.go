@@ -183,3 +183,30 @@ func TestShellExitEndsClient(t *testing.T) {
 		t.Fatalf("result %+v, want session brief ended", res)
 	}
 }
+
+// TestHomePageCreatesASession: plain snow opens the home page; typing a name
+// and Enter creates that session and attaches to it.
+func TestHomePageCreatesASession(t *testing.T) {
+	path := startServer(t)
+	in, keys := io.Pipe()
+	done := make(chan runResult, 1)
+	go func() {
+		res, err := client.Run(client.Options{
+			Version: "e2e", Socket: path, Home: true,
+			Start: func() error { return nil },
+			Input: in, Output: io.Discard,
+		})
+		done <- runResult{res, err}
+	}()
+	if _, err := io.WriteString(keys, "work\r"); err != nil {
+		t.Fatal(err)
+	}
+	watch := observe(t, path, "work")
+	watch.WaitScreen(shellPrompt())
+	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
+		t.Fatal(err)
+	}
+	if res := waitResult(t, done); !res.Detached || res.Session != "work" {
+		t.Fatalf("result %+v, want detached from work", res)
+	}
+}

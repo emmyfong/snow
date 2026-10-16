@@ -20,6 +20,7 @@ type Options struct {
 	Version string
 	Socket  string
 	Session string         // the session to attach to or create; "" creates a numbered one
+	Home    bool           // open the home page instead of attaching to Session
 	Dir     string         // the folder a new session starts in; "" means the current one
 	Start   func() error   // starts a server when none answers
 	Config  *config.Config // the user's settings; nil means the defaults
@@ -83,8 +84,12 @@ func Run(opts Options) (Result, error) {
 		// here only loses that convenience.
 		dir, _ = os.Getwd()
 	}
-	send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
-	a := &app{screen: session.New(send, session.WithTheme(th), session.WithKeys(table)), send: send}
+	a := newHomeApp(send, opts.Version, dir, th, session.WithTheme(th), session.WithKeys(table))
+	if !opts.Home {
+		send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
+		a.screen = a.newSession()
+	}
+	a.cols, a.rows = cols, rows
 	a.screen.SetSize(cols, rows)
 
 	var popts []tea.ProgramOption

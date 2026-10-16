@@ -9,7 +9,7 @@ import (
 type Option func(*Model)
 
 // WithTheme sets the theme the screen draws with.
-func WithTheme(th theme.Theme) Option { return func(m *Model) { m.theme = th } }
+func WithTheme(th theme.Theme) Option { return func(m *Model) { m.theme, m.base = th, th } }
 
 // WithKeys sets the key binding table. The default is tmux's keys with the
 // prefix Ctrl+b.

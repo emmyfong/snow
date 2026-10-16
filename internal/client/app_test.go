@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -16,8 +17,8 @@ import (
 func TestWindowTitleNamesTheSession(t *testing.T) {
 	send := func(api.Message) {}
 	a := &app{screen: session.New(send), send: send}
-	if got := a.View().WindowTitle; got != "" {
-		t.Fatalf("title before attaching = %q, want none", got)
+	if got := a.View().WindowTitle; got != "snow" {
+		t.Fatalf("title before attaching = %q, want snow", got)
 	}
 	a.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
 	if got := a.View().WindowTitle; got != "snow: work" {
@@ -119,5 +120,32 @@ func TestRunRejectsBadKeyBinding(t *testing.T) {
 	_, err := Run(Options{Config: &cfg})
 	if !errors.Is(err, keys.ErrUnknownAction) {
 		t.Fatalf("Run error = %v, want ErrUnknownAction", err)
+	}
+}
+
+// TestHomeOpensASession: the home page's choice attaches, and the client
+// switches to the session screen.
+func TestHomeOpensASession(t *testing.T) {
+	var sent []api.Message
+	send := func(m api.Message) { sent = append(sent, m) }
+	a := newHomeApp(send, "v0.1.0", "/src", theme.Default())
+	if a.View().WindowTitle != "snow" {
+		t.Fatalf("home title %q, want snow", a.View().WindowTitle)
+	}
+	a.Update(home.OpenMsg{Session: "api", Create: true})
+	at, ok := sent[len(sent)-1].(*api.Attach)
+	if !ok || at.Session != "api" || !at.Create || at.Dir != "/src" {
+		t.Fatalf("sent %#v, want Attach{api, create, /src}", sent[len(sent)-1])
+	}
+	if _, ok := a.screen.(*session.Model); !ok {
+		t.Fatalf("screen is %T after opening, want the session screen", a.screen)
+	}
+}
+
+func TestHomeQuitEndsWithoutASession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	_, cmd := a.Update(home.QuitMsg{})
+	if cmd == nil || a.result.Session != "" || a.result.Err != nil {
+		t.Fatalf("quit from home: cmd %v, result %+v", cmd, a.result)
 	}
 }
