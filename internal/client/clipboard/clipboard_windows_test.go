@@ -2,6 +2,7 @@ package clipboard
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"unsafe"
 )
@@ -13,11 +14,12 @@ var (
 )
 
 // read returns the clipboard's text and whether it has any contents of
-// another kind, which a test must not overwrite.
+// another kind, which a test must not overwrite. It skips the test when
+// another program holds the clipboard, or the session has none.
 func read(t *testing.T) (text string, other bool) {
 	t.Helper()
 	if err := openClipboard(); err != nil {
-		t.Fatal(err)
+		t.Skipf("cannot open the clipboard: %v", err)
 	}
 	defer func() { _, _, _ = procClose.Call() }()
 	// Windows adds plain-text, OEM-text, and locale formats beside Unicode
@@ -68,18 +70,21 @@ func utf16Decode(u []uint16) []rune {
 }
 
 // TestSetWritesTheWindowsClipboard writes text with the command Set returns
-// and reads it back. It puts the clipboard's old text back, and skips when
-// the clipboard holds anything but text, which it could not restore.
+// and reads it back. It puts the clipboard's old text back, or empties it
+// if it was empty, and skips when the clipboard holds anything but text,
+// which it could not restore.
 func TestSetWritesTheWindowsClipboard(t *testing.T) {
 	before, other := read(t)
 	if other {
 		t.Skip("the clipboard holds more than text; not overwriting it")
 	}
 	t.Cleanup(func() {
-		if before != "" {
-			if err := write(before); err != nil {
-				t.Errorf("restore the clipboard: %v", err)
-			}
+		restore := write
+		if before == "" {
+			restore = func(string) error { return emptyClipboard() }
+		}
+		if err := restore(before); err != nil {
+			t.Errorf("restore the clipboard: %v", err)
 		}
 	})
 	tests := []struct{ name, text, want string }{
@@ -105,4 +110,16 @@ func TestErrMsgWrapsItsCause(t *testing.T) {
 	if !errors.Is(err, cause) {
 		t.Fatal("ErrMsg should unwrap to its cause")
 	}
+}
+
+// emptyClipboard leaves the clipboard empty, as a test found it.
+func emptyClipboard() error {
+	if err := openClipboard(); err != nil {
+		return err
+	}
+	defer func() { _, _, _ = procClose.Call() }()
+	if r, _, err := procEmpty.Call(); r == 0 {
+		return fmt.Errorf("empty clipboard: %w", err)
+	}
+	return nil
 }
