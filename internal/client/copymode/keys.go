@@ -60,9 +60,9 @@ func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
 		m.toggleSelection()
 	case k.Text == "y", k.Code == tea.KeyEnter:
 		return m.copySelection()
-	case k.Text == "/":
-		m.startSearch(true)
 	case k.Text == "?":
+		m.startSearch(true)
+	case k.Text == "/":
 		m.startSearch(false)
 	case k.Text == "n":
 		m.repeat(false)

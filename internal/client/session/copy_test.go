@@ -165,14 +165,14 @@ func typing(open, text string) func(*Model, *recorder, []string) {
 	}
 }
 
-func TestSearchGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, searchFor("/", "step 2")) }
-func TestSearchGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, searchFor("/", "step 2")) }
+func TestSearchGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, searchFor("?", "step 2")) }
+func TestSearchGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, searchFor("?", "step 2")) }
 
-func TestSearchPromptGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, typing("/", "step 2")) }
-func TestSearchPromptGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, typing("/", "step 2")) }
+func TestSearchPromptGolden80x24(t *testing.T)  { goldenCopy(t, 80, 24, typing("?", "step 2")) }
+func TestSearchPromptGolden120x40(t *testing.T) { goldenCopy(t, 120, 40, typing("?", "step 2")) }
 
 func TestSearchWrappedGolden80x24(t *testing.T) {
-	goldenCopy(t, 80, 24, searchFor("?", "step 2"), func(m *Model, _ *recorder, _ []string) {
+	goldenCopy(t, 80, 24, searchFor("/", "step 2"), func(m *Model, _ *recorder, _ []string) {
 		for range 300 {
 			m.Update(press('n', 0, "n"))
 			if strings.Contains(statusLine(m), "Search wrapped") {

@@ -22,8 +22,8 @@ type searching struct {
 	current  int // index in matches of the match the cursor is on, or -1
 }
 
-// startSearch opens the search prompt. Backward searches toward older
-// lines, which is up.
+// startSearch opens the search prompt: ? searches backward, toward older
+// lines (up), and / forward, as in tmux's vi keys.
 func (m *Model) startSearch(backward bool) {
 	m.search.typing, m.search.input, m.search.backward = true, "", backward
 }

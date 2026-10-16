@@ -56,7 +56,7 @@ func TestSearchWraps(t *testing.T) {
 	m, srv := open(t, 100)
 	key(m, press('g', 0, "g"))
 	srv.answer(m)
-	key(m, press('?', 0, "?")) // forward, toward newer lines
+	key(m, press('/', 0, "/")) // forward, toward newer lines
 	typeText(m, "needle")
 	key(m, press(tea.KeyEnter, 0, ""))
 	if len(srv.searches) != 1 || srv.searches[0].Query != "needle" || srv.searches[0].Pane != 7 {
@@ -88,25 +88,25 @@ func TestSearchWraps(t *testing.T) {
 	}
 }
 
-func TestSlashSearchesTowardOlderLines(t *testing.T) {
+func TestQuestionMarkSearchesTowardOlderLines(t *testing.T) {
 	m, srv := open(t, 100)
-	key(m, press('/', 0, "/"))
+	key(m, press('?', 0, "?"))
 	typeText(m, "x")
 	key(m, press(tea.KeyEnter, 0, ""))
 	m.Receive(&api.SearchResult{Pane: 7, Query: "x", Matches: matchesAt(10, 50, 99)})
 	srv.answer(m)
 	if m.cur.line != 50 {
-		t.Fatalf("/ from the last line landed on %d, want the nearest older match, 50", m.cur.line)
+		t.Fatalf("? from the last line landed on %d, want the nearest older match, 50", m.cur.line)
 	}
 	key(m, press('N', 0, "N"))
 	if m.cur.line != 99 {
-		t.Fatalf("N after / went to %d, want 99 (toward newer lines)", m.cur.line)
+		t.Fatalf("N after ? went to %d, want 99 (toward newer lines)", m.cur.line)
 	}
 }
 
 func TestSearchPrompt(t *testing.T) {
 	m, srv := open(t, 100)
-	key(m, press('/', 0, "/"))
+	key(m, press('?', 0, "?"))
 	if got := m.Prompt(); got != "Search up: " {
 		t.Fatalf("prompt %q", got)
 	}
@@ -126,7 +126,7 @@ func TestSearchPrompt(t *testing.T) {
 	if len(srv.searches) != 0 {
 		t.Fatalf("a cancelled prompt sent %v", srv.searches)
 	}
-	key(m, press('?', 0, "?"))
+	key(m, press('/', 0, "/"))
 	if got := m.Prompt(); got != "Search down: " {
 		t.Fatalf("prompt %q", got)
 	}
@@ -143,7 +143,7 @@ func TestSearchNotes(t *testing.T) {
 	if m.Status() != "No previous search" {
 		t.Fatalf("status %q", m.Status())
 	}
-	key(m, press('/', 0, "/"))
+	key(m, press('?', 0, "?"))
 	typeText(m, "zzz")
 	key(m, press(tea.KeyEnter, 0, ""))
 	m.Receive(&api.SearchResult{Pane: 7, Query: "zzz"})
@@ -152,7 +152,7 @@ func TestSearchNotes(t *testing.T) {
 		t.Fatalf("status %q", m.Status())
 	}
 	// A late answer to an old query is dropped.
-	key(m, press('/', 0, "/"))
+	key(m, press('?', 0, "?"))
 	typeText(m, "new")
 	key(m, press(tea.KeyEnter, 0, ""))
 	m.Receive(&api.SearchResult{Pane: 7, Query: "zzz", Matches: matchesAt(5)})
@@ -163,7 +163,7 @@ func TestSearchNotes(t *testing.T) {
 
 func TestSearchHighlightsVisibleMatches(t *testing.T) {
 	m, srv := open(t, 100)
-	key(m, press('/', 0, "/"))
+	key(m, press('?', 0, "?"))
 	typeText(m, "ine")
 	key(m, press(tea.KeyEnter, 0, ""))
 	m.Receive(&api.SearchResult{Pane: 7, Query: "ine", Matches: []api.Match{{Line: 2, Col: 1, Len: 3}, {Line: 80, Col: 1, Len: 3}, {Line: 90, Col: 1, Len: 3}}})
