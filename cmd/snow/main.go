@@ -14,6 +14,8 @@ import (
 	"syscall"
 
 	"github.com/emmyfong/snow/internal/client"
+	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/server"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
@@ -117,6 +119,37 @@ func nested() error {
 		where, unsetHint())
 }
 
+// loadConfig reads ~/.snow/config.toml. A missing file gives the defaults;
+// a bad one is reported with its line and key.
+func loadConfig(stderr io.Writer) (config.Config, bool) {
+	path, err := config.DefaultPath()
+	if err == nil {
+		var cfg config.Config
+		if cfg, err = config.Load(path); err == nil {
+			if err = checkKeys(path, cfg); err == nil {
+				return cfg, true
+			}
+		}
+	}
+	_, _ = fmt.Fprintln(stderr, "snow:", err)
+	return config.Config{}, false
+}
+
+// checkKeys builds the key table once, so a binding it rejects stops snow
+// with the file and line, before any server starts.
+func checkKeys(path string, cfg config.Config) error {
+	_, err := keys.New(cfg.Keys)
+	var ke *keys.Error
+	if !errors.As(err, &ke) {
+		return err
+	}
+	where := []string{"keys", "prefix"}
+	if ke.Setting == "keys.bind" {
+		where = []string{"keys", "bind", ke.Key}
+	}
+	return config.Locate(path, where, ke.Err.Error(), ke)
+}
+
 func socketPath(stderr io.Writer) (string, bool) {
 	path, err := transport.DefaultPath()
 	if err != nil {
@@ -130,6 +163,10 @@ func socketPath(stderr io.Writer) (string, bool) {
 // the socket, because a detached process has no terminal.
 func serve(stderr io.Writer) int {
 	path, ok := socketPath(stderr)
+	if !ok {
+		return 1
+	}
+	cfg, ok := loadConfig(stderr)
 	if !ok {
 		return 1
 	}
@@ -147,7 +184,10 @@ func serve(stderr io.Writer) int {
 	// removes the socket and ends the shells.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := server.Run(ctx, server.Options{Version: version, Log: log}, path); err != nil {
+	if err := server.Run(ctx, server.Options{
+		Version: version, Log: log,
+		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default,
+	}, path); err != nil {
 		log.Error("server stopped", "err", err)
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
@@ -160,8 +200,13 @@ func attach(name string, stdout, stderr io.Writer) int {
 	if !ok {
 		return 1
 	}
+	cfg, ok := loadConfig(stderr)
+	if !ok {
+		return 1
+	}
 	res, err := client.Run(client.Options{
 		Version: version,
+		Config:  &cfg,
 		Socket:  path,
 		Session: name,
 		Start: func() error {

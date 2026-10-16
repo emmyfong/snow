@@ -42,6 +42,10 @@ type Pane struct {
 	exitErr error
 	folder  string // last OSC 7 report; guarded by mu
 	hidden  bool   // the program hid the cursor (DECTCEM); guarded by mu
+	// mouseModes holds the mouse tracking modes the program has on; guarded
+	// by mu.
+	mouseModes map[ansi.Mode]bool
+	mouseSGR   bool // the program reads the SGR encoding (1006)
 
 	closeOnce sync.Once
 	closeErr  error
@@ -70,7 +74,11 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 		return true
 	})
 	// Called from inside emu.Write too, with mu held.
-	emu.SetCallbacks(vt.Callbacks{CursorVisibility: func(visible bool) { p.hidden = !visible }})
+	emu.SetCallbacks(vt.Callbacks{
+		CursorVisibility: func(visible bool) { p.hidden = !visible },
+		EnableMode:       func(mode ansi.Mode) { p.trackMouse(mode, true) },
+		DisableMode:      func(mode ansi.Mode) { p.trackMouse(mode, false) },
+	})
 
 	// The copies end with an error when Close shuts their source; that end is
 	// expected, so the errors are dropped.

@@ -1,0 +1,24 @@
+pane 1 row 0                            [32m│[mpane 2 row 0                           
+pane 1 row 1                            [32m│[mpane 2 row 1                           
+pane 1 row 2         [32m[m[32m┌─ Ctrl+b ──────────────────────────┐[m[32m[m                      
+pane 1 row 3         [32m[m[32m│[m  [1m%[m            Split right         [32m│[m[32m[m                      
+pane 1 row 4         [32m[m[32m│[m  [1m"[m            Split down          [32m│[m[32m[m                      
+pane 1 row 5         [32m[m[32m│[m  [1mc[m            New window          [32m│[m[32m[m                      
+pane 1 row 6         [32m[m[32m│[m  [1mn[m            Next window         [32m│[m[32m[m                      
+pane 1 row 7         [32m[m[32m│[m  [1mp[m            Previous window     [32m│[m[32m[m                      
+pane 1 row 8         [32m[m[32m│[m  [1m0-9[m          Select window       [32m│[m[32m[m                      
+pane 1 row 9         [32m[m[32m│[m  [1m,[m            Rename window       [32m│[m[32m[m                      
+pane 1 row 10        [32m[m[32m│[m  [1mx[m            Close pane          [32m│[m[32m[m                      
+pane 1 row 11        [32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m│[m  [1m&[m            Close window        [32m│[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m[32m─[m
+pane 1 row 12        [90m[m[32m│[m  [1mz[m            Zoom                [32m│[m[90m[m                      
+pane 1 row 13        [90m[m[32m│[m  [1mE[m            Even out            [32m│[m[90m[m                      
+pane 1 row 14        [90m[m[32m│[m  [1mArrows[m       Focus pane          [32m│[m[90m[m                      
+pane 1 row 15        [90m[m[32m│[m  [1mCtrl+Arrows[m  Resize pane by 1    [32m│[m[90m[m                      
+pane 1 row 16        [90m[m[32m│[m  [1mAlt+Arrows[m   Resize pane by 5    [32m│[m[90m[m                      
+pane 1 row 17        [90m[m[32m│[m  [1m[[m            Copy mode           [32m│[m[90m[m                      
+pane 1 row 18        [90m[m[32m│[m  [1md[m            Detach              [32m│[m[90m[m                      
+pane 1 row 19        [90m[m[32m│[m  [1mCtrl+b[m       Send the prefix key [32m│[m[90m[m                      
+pane 1 row 20        [90m[m[32m└───────────────────────────────────┘[m[90m[m                      
+pane 1 row 21                           [90m│[mpane 3 row 9                           
+pane 1 row 22                           [90m│[mpane 3 row 10                          
+[30;42m [api][m[30;42m [m[1;97;42m1:dev*[m[30;42m                                                    [m[30;42m Ubuntu  14:02 [m

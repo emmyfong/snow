@@ -7,7 +7,10 @@ import (
 	"os"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
 	"golang.org/x/term"
 )
@@ -16,11 +19,12 @@ import (
 type Options struct {
 	Version string
 	Socket  string
-	Session string       // the session to attach to or create; "" creates a numbered one
-	Dir     string       // the folder a new session starts in; "" means the current one
-	Start   func() error // starts a server when none answers
-	Input   io.Reader    // nil means standard input
-	Output  io.Writer    // nil means standard output
+	Session string         // the session to attach to or create; "" creates a numbered one
+	Dir     string         // the folder a new session starts in; "" means the current one
+	Start   func() error   // starts a server when none answers
+	Config  *config.Config // the user's settings; nil means the defaults
+	Input   io.Reader      // nil means standard input
+	Output  io.Writer      // nil means standard output
 }
 
 // outboxSize bounds queued messages to the server. Keys from fast typing fit
@@ -30,6 +34,18 @@ const outboxSize = 1024
 // Run connects to the server, attaches, and shows the session until the user
 // detaches or the connection closes.
 func Run(opts Options) (Result, error) {
+	cfg := config.Defaults()
+	if opts.Config != nil {
+		cfg = *opts.Config
+	}
+	th, err := theme.Named(cfg.Theme.Name)
+	if err != nil {
+		return Result{}, fmt.Errorf("config: theme.name: %w", err)
+	}
+	table, err := keys.New(cfg.Keys)
+	if err != nil {
+		return Result{}, fmt.Errorf("config: %w", err)
+	}
 	raw, err := Connect(opts.Socket, opts.Start)
 	if err != nil {
 		return Result{}, err
@@ -68,7 +84,7 @@ func Run(opts Options) (Result, error) {
 		dir, _ = os.Getwd()
 	}
 	send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
-	a := &app{screen: session.New(send), send: send}
+	a := &app{screen: session.New(send, session.WithTheme(th), session.WithKeys(table)), send: send}
 	a.screen.SetSize(cols, rows)
 
 	var popts []tea.ProgramOption

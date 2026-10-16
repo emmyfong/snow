@@ -9,10 +9,8 @@ import (
 // on the bottom row. A client larger than the session shows blank space
 // beyond the panes.
 func (m *Model) View() tea.View {
-	area := max(m.rows-1, 0)
+	area := m.windowRows()
 	var panes []ui.WindowPane
-	var tabs []ui.Tab
-	session, right := "", ""
 	if w := m.shown(); w != nil {
 		for _, p := range w.Panes {
 			st := m.panes[p.ID]
@@ -23,30 +21,39 @@ func (m *Model) View() tea.View {
 			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused})
 		}
 	}
-	if m.layout != nil {
-		session = m.layout.Session
-		for _, w := range m.layout.Windows {
-			tabs = append(tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed})
-		}
-	}
-	if p := m.focused(); p != nil {
-		right = p.Profile + "  "
-	}
-	right += m.now().Format("15:04")
-	content := m.overlayPicker(ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes}), area)
-	opts := ui.StatusOptions{Width: m.cols, Session: session, Tabs: tabs, Right: right, Message: m.message}
-	if m.confirm != nil {
-		opts.Prompt = m.confirm.question
-	}
-	bar := ui.StatusBar(m.theme, opts)
+	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
+	content = m.overlayConfirm(m.overlayMenu(m.overlayHint(m.overlayPicker(content, area), area), area), area)
+	bar := ui.StatusBar(m.theme, m.statusOptions())
 	if content != "" {
 		content += "\n"
 	}
 	v := tea.NewView(content + bar)
+	v.MouseMode = tea.MouseModeCellMotion
 	if p := m.focused(); p != nil && m.picker == nil {
 		if st := m.panes[p.ID]; st != nil && st.cursor.Visible && st.cursor.X < p.Rect.W && st.cursor.Y < p.Rect.H {
 			v.Cursor = tea.NewCursor(p.Rect.X+st.cursor.X, p.Rect.Y+st.cursor.Y)
 		}
 	}
 	return v
+}
+
+// statusOptions describes the status bar. The view draws it, and a click on
+// a tab is matched against it.
+func (m *Model) statusOptions() ui.StatusOptions {
+	opts := ui.StatusOptions{Width: m.cols, Message: m.message}
+	if m.layout != nil {
+		opts.Session = m.layout.Session
+		for _, w := range m.layout.Windows {
+			opts.Tabs = append(opts.Tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed})
+		}
+	}
+	if p := m.focused(); p != nil {
+		opts.Right = p.Profile + "  "
+	}
+	opts.Right += m.now().Format("15:04")
+	switch {
+	case m.rename != nil:
+		opts.Prompt = m.renamePrompt()
+	}
+	return opts
 }

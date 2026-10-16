@@ -67,3 +67,50 @@ func TestPopupUsesThemePointer(t *testing.T) {
 		t.Fatalf("popup %q ignores the theme's pointer", got)
 	}
 }
+
+func TestSize(t *testing.T) {
+	tests := []struct {
+		box  string
+		w, h int
+	}{
+		{"", 0, 0}, {"ab", 2, 1}, {"ab\nabcd\nc", 4, 3}, {"\x1b[1m漢字\x1b[0m\nx", 4, 2},
+	}
+	for _, tt := range tests {
+		if w, h := Size(tt.box); w != tt.w || h != tt.h {
+			t.Errorf("Size(%q) = %d,%d, want %d,%d", tt.box, w, h, tt.w, tt.h)
+		}
+	}
+}
+
+func TestPopupHints(t *testing.T) {
+	o := PopupOptions{Items: []string{"Split right", "Zoom", "Close"}, Hints: []string{"Ctrl+b %", "Ctrl+b z", ""}, Selected: 1, Width: 30}
+	out := Popup(theme.Default(), o)
+	rows := strings.Split(ansi.Strip(out), "\n")
+	if !strings.HasSuffix(rows[1], "Ctrl+b % │") || !strings.HasSuffix(rows[2], "Ctrl+b z │") {
+		t.Fatalf("hints are not right-aligned before the frame:\n%s", strings.Join(rows, "\n"))
+	}
+	if strings.Contains(rows[3], "Ctrl") || !strings.HasPrefix(rows[2], "│> Zoom") {
+		t.Fatalf("row without a hint, or selection marker, wrong:\n%s", strings.Join(rows, "\n"))
+	}
+	for _, r := range strings.Split(out, "\n") {
+		if w := ansi.StringWidth(r); w != 30 {
+			t.Fatalf("row width %d, want 30: %q", w, r)
+		}
+	}
+}
+
+// A hint that does not fit beside its item is dropped, never cut or wrapped.
+func TestPopupHintsDroppedWhenNarrow(t *testing.T) {
+	for w := 4; w <= 28; w++ {
+		out := Popup(theme.Default(), PopupOptions{Items: []string{"Split right"}, Hints: []string{"Ctrl+b %"}, Selected: -1, Width: w})
+		for _, r := range strings.Split(out, "\n") {
+			if got := ansi.StringWidth(r); got != w {
+				t.Fatalf("width %d: row %q is %d wide", w, r, got)
+			}
+		}
+		text := ansi.Strip(out)
+		if strings.Contains(text, "Ctrl") && !strings.Contains(text, "Ctrl+b %") {
+			t.Fatalf("width %d: hint cut:\n%s", w, text)
+		}
+	}
+}

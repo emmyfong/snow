@@ -80,6 +80,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:
 			s.input(c, m)
+		case *api.Mouse:
+			s.mouse(c, m)
 		case *api.Command:
 			s.call(func(st *state) { st.command(c, m) })
 		}

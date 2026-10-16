@@ -78,6 +78,35 @@ func (s *Server) input(c *client, in *api.Input) {
 	tp.Paste(in.Paste)
 }
 
+var mouseButtons = map[string]term.Button{
+	api.ButtonNone: term.ButtonNone, api.ButtonLeft: term.ButtonLeft, api.ButtonMiddle: term.ButtonMiddle,
+	api.ButtonRight: term.ButtonRight, api.ButtonWheelUp: term.ButtonWheelUp, api.ButtonWheelDown: term.ButtonWheelDown,
+}
+
+var mouseActions = map[string]term.Action{
+	api.ActionPress: term.ActionPress, api.ActionRelease: term.ActionRelease, api.ActionMotion: term.ActionMotion,
+}
+
+// mouse sends a mouse event to a pane of c's session. Like input, it only
+// finds the pane on the model goroutine. The pane itself drops the event
+// when its program did not ask for the mouse.
+func (s *Server) mouse(c *client, m *api.Mouse) {
+	if err := m.Validate(); err != nil {
+		s.log.Info("ignored mouse event", "err", err)
+		return
+	}
+	var tp *term.Pane
+	s.call(func(st *state) {
+		if p := st.paneOf(c, m.Pane); p != nil {
+			tp = p.term
+		}
+	})
+	if tp == nil {
+		return
+	}
+	tp.SendMouse(term.Mouse{X: m.X, Y: m.Y, Button: mouseButtons[m.Button], Action: mouseActions[m.Action]})
+}
+
 // paneOf returns the pane with id in c's attached session, or nil. A client
 // never reaches panes of other sessions.
 func (st *state) paneOf(c *client, id int) *pane {
