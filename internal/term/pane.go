@@ -45,6 +45,7 @@ type Pane struct {
 	// mouseModes holds the mouse tracking modes the program has on; guarded
 	// by mu.
 	mouseModes map[ansi.Mode]bool
+	mouseSGR   bool // the program reads the SGR encoding (1006)
 
 	closeOnce sync.Once
 	closeErr  error
