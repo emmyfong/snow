@@ -11,7 +11,8 @@ import (
 )
 
 // TestOldServerIsNamed: a new snow that meets a server on an older protocol
-// says so, instead of attaching and misreading its messages.
+// says so and asks before restarting it, instead of attaching and
+// misreading its messages. Declining keeps the old server.
 func TestOldServerIsNamed(t *testing.T) {
 	dir, err := os.MkdirTemp("", "snow")
 	if err != nil {
@@ -39,11 +40,13 @@ func TestOldServerIsNamed(t *testing.T) {
 		_, _ = api.ServerHandshake(api.NewConn(raw), old)
 	}()
 
+	stdin = strings.NewReader("n\n")
+	t.Cleanup(func() { stdin = os.Stdin })
 	var out, errOut bytes.Buffer
 	if code := run([]string{"work"}, &out, &errOut); code != 1 {
 		t.Fatalf("exit code %d, want 1; stderr %q", code, errOut.String())
 	}
-	if !strings.Contains(errOut.String(), "server is version old") {
-		t.Fatalf("stderr %q, want it to name the old server's version", errOut.String())
+	if !strings.Contains(out.String(), "server is version old") || !strings.Contains(out.String(), "Keeping the running server") {
+		t.Fatalf("stdout %q, want the old version named and the server kept", out.String())
 	}
 }

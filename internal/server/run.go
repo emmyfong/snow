@@ -37,7 +37,7 @@ func Run(ctx context.Context, opts Options, path string) error {
 	for {
 		select {
 		case <-s.Done():
-			s.log.Info("no session or client left; exiting")
+			s.log.Info("done; exiting")
 			return nil
 		case <-ctx.Done():
 			s.log.Info("stopping", "reason", ctx.Err())

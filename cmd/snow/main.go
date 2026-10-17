@@ -35,6 +35,10 @@ The names version, help, and server are commands, not sessions.
 Inside a session, press Ctrl+b then d to detach.
 `
 
+// stdin answers questions asked before the screen starts, such as whether
+// to restart an older server. Tests replace it.
+var stdin io.Reader = os.Stdin
+
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
@@ -212,27 +216,37 @@ func attach(name string, stdout, stderr io.Writer) int {
 	}
 	// loadConfig has already found the path; an error here cannot happen.
 	cfgPath, _ := config.DefaultPath()
-	res, err := client.Run(client.Options{
-		Version:    version,
-		Config:     &cfg,
-		ConfigPath: cfgPath,
-		Socket:     path,
-		Session:    name,
-		Home:       name == "", // plain snow opens the home page
-		Start: func() error {
-			exe, err := os.Executable()
-			if err != nil {
-				return err
-			}
-			return client.StartServer(exe, "server")
-		},
-	})
+	run := func() (client.Result, error) {
+		return client.Run(client.Options{
+			Version:    version,
+			Config:     &cfg,
+			ConfigPath: cfgPath,
+			Socket:     path,
+			Session:    name,
+			Home:       name == "", // plain snow opens the home page
+			Start: func() error {
+				exe, err := os.Executable()
+				if err != nil {
+					return err
+				}
+				return client.StartServer(exe, "server")
+			},
+		})
+	}
+	res, err := run()
 	var mismatch *api.VersionMismatchError
+	if errors.As(err, &mismatch) {
+		if !client.AskRestart(stdin, stdout, mismatch) {
+			_, _ = fmt.Fprintln(stdout, "Keeping the running server.")
+			return 1
+		}
+		if rerr := client.RestartServer(path, version); rerr != nil {
+			_, _ = fmt.Fprintf(stderr, "snow: %v. It is older than restarts; stop it with: %s\n", rerr, stopHint)
+			return 1
+		}
+		res, err = run()
+	}
 	switch {
-	case errors.As(err, &mismatch):
-		_, _ = fmt.Fprintf(stderr, "snow: the running server is version %s; this is %s. Exit its sessions to restart it.\n",
-			mismatch.ServerVersion, mismatch.ClientVersion)
-		return 1
 	case err != nil:
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1

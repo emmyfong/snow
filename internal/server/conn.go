@@ -30,6 +30,11 @@ type client struct {
 func (s *Server) serveConn(raw net.Conn) {
 	conn := api.NewConn(raw)
 	hello, err := api.ServerHandshake(conn, api.Welcome{ServerVersion: s.opts.Version, Protocol: api.ProtocolVersion})
+	if errors.Is(err, api.ErrVersionMismatch) {
+		s.log.Info("client on another protocol", "err", err)
+		s.awaitShutdown(conn, raw)
+		return
+	}
 	if err != nil {
 		s.log.Info("handshake failed", "err", err)
 		_ = raw.Close()
@@ -105,6 +110,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.killRequest(c, m) })
 		case *api.RenameSession:
 			s.call(func(st *state) { st.renameRequest(c, m) })
+		case *api.Shutdown:
+			s.shutdown()
 		}
 	}
 }

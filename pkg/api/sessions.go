@@ -91,3 +91,13 @@ func (*KillSession) message()      {}
 // Type implements Message.
 func (*RenameSession) Type() MsgType { return TypeRenameSession }
 func (*RenameSession) message()      {}
+
+// Shutdown asks the server to save every session and exit, so a newer
+// client can start its own version. The server accepts it right after the
+// handshake even when the protocols differ; its type number never changes,
+// so every later server understands it.
+type Shutdown struct{}
+
+// Type implements Message.
+func (*Shutdown) Type() MsgType { return TypeShutdown }
+func (*Shutdown) message()      {}

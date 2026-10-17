@@ -32,6 +32,7 @@ func everyMessage() []Message {
 		&SearchRequest{Pane: 1, Query: "error"},
 		&SearchResult{Pane: 1, Query: "error", Matches: []Match{{Line: 3, Col: 0, Len: 5}}, Truncated: true},
 		&Detach{},
+		&Shutdown{},
 		&KillSession{Session: "api"},
 		&RenameSession{Session: "api", Name: "web"},
 		&Scrollback{Pane: 1, From: 40, Total: 5000, Lines: []string{"\x1b[31mred\x1b[0m", ""}},

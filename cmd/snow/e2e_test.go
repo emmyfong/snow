@@ -235,3 +235,39 @@ func TestHomePageCreatesASession(t *testing.T) {
 		t.Fatalf("result %+v, want detached from work", res)
 	}
 }
+
+// TestRestartServerSavesAndStops: the restart reaches a real server over
+// its socket; the server saves its sessions and exits, and a new server
+// lists them as saved.
+func TestRestartServerSavesAndStops(t *testing.T) {
+	path := apitest.SocketPath(t)
+	dir := t.TempDir()
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Run(context.Background(), server.Options{Version: "old", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+	}()
+	o := apitest.Dial(t, path, 80, 24)
+	o.Send(&api.Attach{Session: "work", Create: true})
+	o.Attach("work") // waits until the session exists
+	if err := client.RestartServer(path, "new"); err != nil {
+		t.Fatalf("RestartServer: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("server: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the server kept running")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		_ = server.Run(ctx, server.Options{Version: "new", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+	}()
+	c := apitest.Dial(t, path, 80, 24)
+	m, _ := c.Next(5 * time.Second)
+	if l, ok := m.(*api.SessionList); !ok || len(l.Sessions) != 1 || l.Sessions[0].State != api.StateSaved {
+		t.Fatalf("new server lists %#v, want work as saved", m)
+	}
+}
