@@ -26,13 +26,14 @@ import (
 var version = "dev"
 
 const usage = `usage:
-  snow           start a new session
+  snow           open the home page: your sessions, running and saved
   snow <name>    attach to session <name>, or create it
   snow version   print the version (also -v, --version)
   snow help      show this help (also -h, --help)
 
 The names version, help, and server are commands, not sessions.
-Inside a session, press Ctrl+b then d to detach.
+Inside a session, press Ctrl+b then d to go back to the home page, and
+Ctrl+b alone, then wait, to see every key.
 `
 
 // stdin answers questions asked before the screen starts, such as whether
