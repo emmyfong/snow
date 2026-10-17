@@ -207,6 +207,10 @@ func TestHomeTinyScreens(t *testing.T) {
 		"commands": func(m *Model) { typeText(m, "/") },
 		"help":     func(m *Model) { typeText(m, "/help"); m.Update(press(tea.KeyEnter)) },
 		"kill":     func(m *Model) { typeText(m, "/kill 漢字のセッション"); m.Update(press(tea.KeyEnter)) },
+		"broken": func(m *Model) {
+			note := "/home/u/.snow/sessions/漢字.json cannot be read; moved to /home/u/.snow/sessions/broken/漢字-20261008T091400.json"
+			m.Update(&api.SessionList{Sessions: m.sessions, Notes: []string{note, note, note, note, note}})
+		},
 	}
 	for name, setup := range states {
 		for cols := 1; cols <= 100; cols += 3 {
@@ -224,5 +228,40 @@ func TestHomeTinyScreens(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestBrokenSnapshotsShow: each file the server moved aside gets a line on
+// the home page with its path.
+func TestBrokenSnapshotsShow(t *testing.T) {
+	m := screen(120, 40, session("api", time.Minute, 0))
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("api", time.Minute, 0)},
+		Notes: []string{"/home/u/.snow/sessions/bad.json moved to /home/u/.snow/sessions/broken/bad-20261008T091400.json"}})
+	if !strings.Contains(ansi.Strip(m.View().Content), "broken/bad-20261008T091400.json") {
+		t.Fatal("the broken file is not on the home page")
+	}
+}
+
+// TestHomeSavedSessions: sessions restored from disk on open are marked
+// saved beside the running ones.
+func TestHomeSavedSessions80x24(t *testing.T)  { goldenSaved(t, 80, 24) }
+func TestHomeSavedSessions120x40(t *testing.T) { goldenSaved(t, 120, 40) }
+
+func goldenSaved(t *testing.T, cols, rows int) {
+	saved := session("dotfiles", 26*time.Hour, 0)
+	saved.State = api.StateSaved
+	m := screen(cols, rows, session("api", time.Minute, 1), saved, session("snow", time.Hour, 0))
+	golden.RequireEqual(t, m.View().Content)
+}
+
+// TestEnterOnASavedSessionOpensIt: a saved session opens by its name; the
+// server restores it, so the page does not ask to create it.
+func TestEnterOnASavedSessionOpensIt(t *testing.T) {
+	saved := session("dotfiles", 26*time.Hour, 0)
+	saved.State = api.StateSaved
+	m := screen(80, 24, saved)
+	m.Update(press(tea.KeyDown))
+	if got := open(t, m.Update(press(tea.KeyEnter))); got != (OpenMsg{Session: "dotfiles"}) {
+		t.Fatalf("Enter gave %+v, want to open dotfiles", got)
 	}
 }

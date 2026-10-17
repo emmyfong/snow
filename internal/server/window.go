@@ -63,7 +63,7 @@ func (sess *session) findPane(id int) (*window, *pane) {
 func (st *state) newWindow(sess *session, profile, dir string) (*window, error) {
 	cols, rows := sess.area()
 	id := st.nextPane
-	p, err := st.srv.startPane(id, cols, rows, profile, dir)
+	p, err := st.srv.startPane(id, cols, rows, profile, dir, "")
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (st *state) splitPane(sess *session, w *window, target int, d layout.Direct
 		return err
 	}
 	r := layout.Rects(w.tree, cols, rows).Panes[layout.PaneID(id)]
-	p, err := st.srv.startPane(id, r.W, r.H, profile, dir)
+	p, err := st.srv.startPane(id, r.W, r.H, profile, dir, "")
 	if err != nil {
 		// The split succeeded on a tree with more than one pane, so closing
 		// the new pane cannot fail.
@@ -148,6 +148,7 @@ func (st *state) removeWindow(sess *session, w *window) {
 // already gone from the state, and its exit notice then finds nothing.
 // Server.Close waits for these closes.
 func (st *state) closePane(p *pane) {
+	p.closed.Store(true)
 	st.srv.closing.Add(1)
 	go func() {
 		defer st.srv.closing.Done()

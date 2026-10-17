@@ -1,19 +1,43 @@
 package server
 
 import (
+	"github.com/emmyfong/snow/internal/store"
 	"time"
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// attach shows a session to c, creating it if asked.
-func (st *state) attach(c *client, m *api.Attach) {
+// attach shows a session to c: a running one, a saved one restored from
+// snap, or a new one when asked.
+func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 	if err := m.Validate(); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
 	}
 	sess, ok := st.sessions[m.Session]
+	// The snapshot was read outside this goroutine; a kill or rename since
+	// then makes it stale.
+	if _, saved := st.saved[m.Session]; !saved {
+		snap = nil
+	}
+	if !ok && snap != nil {
+		cols, rows := c.cols, c.rows
+		if cols <= 0 || rows <= 0 {
+			cols, rows = defaultCols, defaultRows
+		}
+		var err error
+		if sess, err = st.restore(snap, cols, rows); err != nil {
+			st.srv.log.Warn("restore failed", "session", m.Session, "err", err)
+			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
+			return
+		}
+		st.sessions[sess.name] = sess
+		st.served = true
+		st.save(sess)
+		st.srv.log.Info("session restored", "session", sess.name)
+		ok = true
+	}
 	if !ok && !m.Create {
 		msg := "no session named " + m.Session
 		if m.Session == "" {
@@ -67,7 +91,15 @@ func (s *Server) input(c *client, in *api.Input) {
 		s.log.Info("ignored input", "err", err)
 		return
 	}
-	tp := s.findPane(c, in.Pane)
+	var tp *term.Pane
+	s.call(func(st *state) {
+		if st.endedKey(c, in.Pane, in.Key) {
+			return
+		}
+		if p := st.paneOf(c, in.Pane); p != nil {
+			tp = p.term
+		}
+	})
 	if tp == nil {
 		return
 	}

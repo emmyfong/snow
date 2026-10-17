@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"github.com/emmyfong/snow/internal/store"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -37,20 +38,28 @@ func (st *state) renameRequest(c *client, m *api.RenameSession) {
 		return
 	}
 	sess, ok := st.sessions[m.Session]
-	if !ok {
+	info, saved := st.saved[m.Session]
+	if !ok && !saved {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: fmt.Sprintf("%v: %s", ErrNoSession, m.Session)})
 		return
 	}
 	if m.Name == m.Session {
 		return
 	}
-	if _, taken := st.sessions[m.Name]; taken {
+	_, taken := st.sessions[m.Name]
+	if _, takenSaved := st.saved[m.Name]; taken || takenSaved {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: "a session named " + m.Name + " already exists"})
 		return
 	}
+	if !ok {
+		st.renameSaved(c, info, m.Name)
+		return
+	}
 	delete(st.sessions, sess.name)
+	st.unsave(sess.name)
 	sess.name = m.Name
 	st.sessions[sess.name] = sess
+	st.save(sess)
 	for other := range st.clients {
 		if other.session == m.Session {
 			other.session = sess.name
@@ -72,4 +81,30 @@ func (st *state) maybeDone() {
 	default:
 		close(st.srv.done)
 	}
+}
+
+// renameSaved renames a saved session that is not running. The list shows
+// the new name at once; the saver moves the file after the work queued
+// before it, and a move that fails puts the old name back and tells c why.
+func (st *state) renameSaved(c *client, info store.Info, name string) {
+	old := info.Name
+	delete(st.saved, old)
+	info.Name = name
+	st.saved[name] = info
+	st.sessionsChanged()
+	srv := st.srv
+	srv.saver.Move(old, name, func(err error) {
+		if err == nil {
+			return
+		}
+		srv.post(func(st *state) {
+			if _, ok := st.saved[name]; ok {
+				delete(st.saved, name)
+				info.Name = old
+				st.saved[old] = info
+			}
+			st.sessionsChanged()
+			st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: "rename " + old + ": " + err.Error()})
+		})
+	})
 }

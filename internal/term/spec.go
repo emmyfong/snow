@@ -18,6 +18,10 @@ const DefaultScrollback = 2000
 // Options tunes a pane. The zero value uses the defaults.
 type Options struct {
 	Scrollback int // lines kept above the screen; 0 means DefaultScrollback
+	// Preamble is shown in the pane before the program's first output, as
+	// if the program had printed it: for example the lines of a restored
+	// session. It may hold ANSI styles.
+	Preamble string
 }
 
 func (o Options) scrollback() int {

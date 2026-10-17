@@ -17,6 +17,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/server"
+	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -33,6 +34,10 @@ const usage = `usage:
 The names version, help, and server are commands, not sessions.
 Inside a session, press Ctrl+b then d to detach.
 `
+
+// stdin answers questions asked before the screen starts, such as whether
+// to restart an older server. Tests replace it.
+var stdin io.Reader = os.Stdin
 
 func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
@@ -184,8 +189,19 @@ func serve(stderr io.Writer) int {
 	// removes the socket and ends the shells.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Without a home folder sessions still run; they are only not saved.
+	var sessions string
+	if cfg.Sessions.Save {
+		if sessions, err = store.DefaultDir(); err != nil {
+			log.Warn("sessions will not be saved", "err", err)
+		}
+	}
+	savedLines := cfg.Sessions.Lines
+	if savedLines == 0 {
+		savedLines = -1 // the config's 0 is "no lines", the server's is "default"
+	}
 	if err := server.Run(ctx, server.Options{
-		Version: version, Log: log,
+		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default,
 	}, path); err != nil {
 		log.Error("server stopped", "err", err)
@@ -206,27 +222,41 @@ func attach(name string, stdout, stderr io.Writer) int {
 	}
 	// loadConfig has already found the path; an error here cannot happen.
 	cfgPath, _ := config.DefaultPath()
-	res, err := client.Run(client.Options{
-		Version:    version,
-		Config:     &cfg,
-		ConfigPath: cfgPath,
-		Socket:     path,
-		Session:    name,
-		Home:       name == "", // plain snow opens the home page
-		Start: func() error {
-			exe, err := os.Executable()
-			if err != nil {
-				return err
-			}
-			return client.StartServer(exe, "server")
-		},
-	})
+	run := func() (client.Result, error) {
+		return client.Run(client.Options{
+			Version:    version,
+			Config:     &cfg,
+			ConfigPath: cfgPath,
+			Socket:     path,
+			Session:    name,
+			Home:       name == "", // plain snow opens the home page
+			Start: func() error {
+				exe, err := os.Executable()
+				if err != nil {
+					return err
+				}
+				return client.StartServer(exe, "server")
+			},
+		})
+	}
+	res, err := run()
 	var mismatch *api.VersionMismatchError
+	if errors.As(err, &mismatch) {
+		if !client.AskRestart(stdin, stdout, mismatch) {
+			_, _ = fmt.Fprintln(stdout, "Keeping the running server.")
+			return 1
+		}
+		switch rerr := client.RestartServer(path, version); {
+		case errors.Is(rerr, client.ErrServerKeptRunning):
+			_, _ = fmt.Fprintf(stderr, "snow: the server is older than restarts and kept running. Stop it with:\n  %s\n", stopHint)
+			return 1
+		case rerr != nil:
+			_, _ = fmt.Fprintln(stderr, "snow:", rerr)
+			return 1
+		}
+		res, err = run()
+	}
 	switch {
-	case errors.As(err, &mismatch):
-		_, _ = fmt.Fprintf(stderr, "snow: the running server is version %s; this is %s. Exit its sessions to restart it.\n",
-			mismatch.ServerVersion, mismatch.ClientVersion)
-		return 1
 	case err != nil:
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1

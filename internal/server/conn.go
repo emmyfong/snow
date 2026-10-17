@@ -30,6 +30,11 @@ type client struct {
 func (s *Server) serveConn(raw net.Conn) {
 	conn := api.NewConn(raw)
 	hello, err := api.ServerHandshake(conn, api.Welcome{ServerVersion: s.opts.Version, Protocol: api.ProtocolVersion})
+	if errors.Is(err, api.ErrVersionMismatch) {
+		s.log.Info("client on another protocol", "err", err)
+		s.awaitShutdown(conn, raw)
+		return
+	}
 	if err != nil {
 		s.log.Info("handshake failed", "err", err)
 		_ = raw.Close()
@@ -48,7 +53,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		st.served = true
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
-		st.enqueue(c, &api.SessionList{Sessions: st.sessionList()})
+		st.enqueue(c, &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()})
 	}) {
 		_ = raw.Close()
 		return
@@ -81,7 +86,12 @@ func (s *Server) read(c *client) {
 		}
 		switch m := m.(type) {
 		case *api.Attach:
-			s.call(func(st *state) { st.attach(c, m) })
+			snap, err := s.loadSaved(m.Session)
+			if err != nil {
+				s.reply(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
+				continue
+			}
+			s.call(func(st *state) { st.attach(c, m, snap) })
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:
@@ -100,6 +110,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.killRequest(c, m) })
 		case *api.RenameSession:
 			s.call(func(st *state) { st.renameRequest(c, m) })
+		case *api.Shutdown:
+			s.shutdown()
 		}
 	}
 }

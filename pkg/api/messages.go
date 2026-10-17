@@ -31,6 +31,7 @@ const (
 	TypeDetach
 	TypeKillSession
 	TypeRenameSession
+	TypeShutdown
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -84,6 +85,8 @@ func newMessage(t MsgType) Message {
 		return &KillSession{}
 	case TypeRenameSession:
 		return &RenameSession{}
+	case TypeShutdown:
+		return &Shutdown{}
 	}
 	return nil
 }
@@ -229,9 +232,12 @@ const (
 	StateSaved   = "saved"
 )
 
-// SessionList lists the server's sessions.
+// SessionList lists the server's sessions. Notes holds problems with saved
+// sessions the user should know about: a file the server could not read
+// and moved aside, with both paths, or saving that fails.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
+	Notes    []string      `json:"notes,omitempty"`
 }
 
 // SessionInfo summarizes one session.

@@ -34,12 +34,13 @@ type Model struct {
 	now        func() time.Time
 	sessions   []api.SessionInfo // most recently used first
 	input      string
-	selected   int    // index into the shown sessions; -1 means none
-	back       string // the session Esc returns to; "" means Esc quits
-	target     string // the session highlighted when a slash command began
-	cmdSel     int    // index into the matching commands
-	notice     string // why the last command or request was refused
-	help       bool   // the help panel is open
+	selected   int      // index into the shown sessions; -1 means none
+	back       string   // the session Esc returns to; "" means Esc quits
+	target     string   // the session highlighted when a slash command began
+	notes      []string // problems with saved sessions, from the server
+	cmdSel     int      // index into the matching commands
+	notice     string   // why the last command or request was refused
+	help       bool     // the help panel is open
 	confirm    *confirm.Model
 	killing    string // the session the open popup would end
 	picking    bool   // the theme list is open
@@ -72,6 +73,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.profile = &msg.Profile
 		m.theme = m.base.For(msg.Profile)
 	case *api.SessionList:
+		m.notes = msg.Notes
 		chosen := ""
 		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
 			chosen = shown[m.selected].Name

@@ -21,7 +21,7 @@ jobs:
       - run: go vet ./...
       - uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: v2.15.0
       - name: hook tests
         run: bash .claude/hooks/tests/run.sh
 

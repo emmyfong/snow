@@ -3,9 +3,12 @@ package server
 import (
 	"cmp"
 	"fmt"
+	"github.com/emmyfong/snow/internal/store"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -14,11 +17,16 @@ const defaultCols, defaultRows = 80, 24
 
 // state is everything the model goroutine owns.
 type state struct {
-	srv      *Server
-	sessions map[string]*session
-	clients  map[*client]struct{}
-	nextPane int
-	served   bool // a session or a client has existed; once neither is left, Done closes
+	srv         *Server
+	sessions    map[string]*session
+	clients     map[*client]struct{}
+	nextPane    int
+	served      bool                   // a session or a client has existed; once neither is left, Done closes
+	savedAt     map[string]uint64      // session → contentVersion at its last save
+	saved       map[string]store.Info  // sessions with a saved file, running or not
+	notes       []string               // notes on saved files that could not be read
+	saveProblem string                 // why saving fails, or "" while it works
+	endTimers   map[string]*time.Timer // sessions that ended, waiting to be deleted
 }
 
 type session struct {
@@ -30,7 +38,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}}
 }
 
 // createSession starts a session with one window and one pane in dir. An
@@ -52,6 +60,7 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 	}
 	st.sessions[name] = sess
 	st.served = true
+	st.save(sess)
 	st.srv.log.Info("session created", "session", name, "profile", w.name)
 	return sess, nil
 }
@@ -66,6 +75,11 @@ func (st *state) freeNumber() string {
 
 func (st *state) killSession(name string) error {
 	sess, ok := st.sessions[name]
+	if _, saved := st.saved[name]; !ok && saved {
+		st.unsave(name)
+		st.sessionsChanged()
+		return nil
+	}
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNoSession, name)
 	}
@@ -75,12 +89,14 @@ func (st *state) killSession(name string) error {
 		}
 	}
 	st.endSession(sess)
+	st.unsave(name) // killed on purpose: no wait
 	return nil
 }
 
 // endSession forgets sess and closes Done when no session is left.
 func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
+	st.unsaveLater(sess.name)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, &api.Error{Code: api.CodeSessionEnded, Message: "session " + sess.name + " ended"})
@@ -93,13 +109,18 @@ func (st *state) endSession(sess *session) {
 }
 
 // paneExited removes the pane whose program exited, and its window and
-// session when they become empty. A pane that a command already closed is
-// gone, so its exit does nothing.
-func (st *state) paneExited(id int) {
+// session when they become empty. A pane that ended because WSL stopped
+// stays, waiting for r. A pane that a command already closed is gone, so its
+// exit does nothing.
+func (st *state) paneExited(id int, ended bool) {
 	for _, sess := range st.sessions {
 		w, p := sess.findPane(id)
 		if p == nil {
 			continue
+		}
+		if ended {
+			st.endPane(sess, p)
+			return
 		}
 		// The exit status explains a shell that exits at once, such as a
 		// broken profile.
@@ -120,7 +141,7 @@ func (st *state) sessionList() []api.SessionInfo {
 			attached[c.session]++
 		}
 	}
-	out := make([]api.SessionInfo, 0, len(st.sessions))
+	out := st.savedList()
 	for _, sess := range st.sessions {
 		out = append(out, api.SessionInfo{
 			Name:     sess.name,
@@ -143,7 +164,7 @@ func (st *state) sessionsChanged() {
 			continue
 		}
 		if list == nil {
-			list = &api.SessionList{Sessions: st.sessionList()}
+			list = &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()}
 		}
 		st.enqueue(c, list)
 	}
@@ -161,4 +182,23 @@ func (st *state) closeAll() {
 		}
 	}
 	st.sessions = map[string]*session{}
+}
+
+// listNotes is what the home page shows under the sessions.
+func (st *state) listNotes() []string {
+	notes := slices.Clone(st.notes)
+	if st.saveProblem != "" {
+		notes = append(notes, st.saveProblem)
+	}
+	// A note holds file paths and errors; a control character in one would
+	// reach the client's terminal as an escape sequence.
+	for i, n := range notes {
+		notes[i] = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return '?'
+			}
+			return r
+		}, n)
+	}
+	return notes
 }

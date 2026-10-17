@@ -40,6 +40,8 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► backend, 
 ## Code quality
 
 - `gofmt`, `go vet`, and `golangci-lint` must be clean. CI enforces them.
+  CI pins the golangci-lint version in `.github/workflows/`. Run that same
+  version locally before you push; another version reports other issues.
 - Accept interfaces, return structs. Wrap `charmbracelet/x` packages behind
   Snow's own interfaces in `internal/term`; they are experimental.
 - Wrap errors with `%w`. Never discard an error. Return typed errors at package

@@ -36,13 +36,14 @@ func (m *Model) layout() placement {
 	p := placement{width: min(64, max(m.cols-4, 0))}
 	p.x = max((m.cols-p.width)/2, 0)
 	shown, selected := m.listLen(), m.listSel()
-	room := m.rows - fixedRows
+	notes := len(m.noteLines())
+	room := m.rows - fixedRows - notes
 	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)
 	if p.header {
 		room -= headerRows
 	}
 	p.lines = min(max(shown, 1), max(room, 1))
-	total := fixedRows + p.lines
+	total := fixedRows + p.lines + notes
 	if p.header {
 		total += headerRows
 	}
@@ -118,6 +119,7 @@ func (m *Model) View() tea.View {
 		lines = append(lines, m.commandList(p)...)
 	default:
 		lines = append(lines, m.sessionList(p)...)
+		lines = append(lines, indent(m.noteLines(), p.x)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
 	for len(lines) < m.rows {
@@ -219,4 +221,34 @@ func (m *Model) escHint() string {
 		return "back to " + m.back
 	}
 	return "quit"
+}
+
+// maxNotes bounds the note lines on the page; the rest are counted.
+const maxNotes = 3
+
+// noteLines are the server's notes on saved sessions, shown under the
+// sessions: files it could not read, or saving that fails. A long path keeps its end, where the file name
+// is.
+func (m *Model) noteLines() []string {
+	if m.picking || m.commanding() || len(m.notes) == 0 {
+		return nil
+	}
+	style := lipgloss.NewStyle().Foreground(m.theme.Error)
+	width := min(64, max(m.cols-4, 0))
+	var out []string
+	for i, note := range m.notes {
+		if i == maxNotes-1 && len(m.notes) > maxNotes {
+			note = strconv.Itoa(len(m.notes)-i) + " more notes about saved sessions; see the log"
+		} else if i >= maxNotes {
+			break
+		}
+		if ansi.StringWidth(note) > width {
+			note = "…" + ansi.TruncateLeft(note, ansi.StringWidth(note)-width+1, "")
+		}
+		out = append(out, style.Render(note))
+		if len(out) == maxNotes {
+			break
+		}
+	}
+	return out
 }

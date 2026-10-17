@@ -22,6 +22,23 @@ type Config struct {
 	Scrollback Scrollback `toml:"scrollback"`
 	Profile    Profile    `toml:"profile"`
 	Theme      Theme      `toml:"theme"`
+	Sessions   Sessions   `toml:"sessions"`
+}
+
+// MaxSessionLines is the most lines of each pane a saved session keeps. It
+// matches internal/store's limit.
+const MaxSessionLines = 2000
+
+// Sessions sets what Snow saves so sessions survive a reboot. Saved files
+// hold each pane's last lines of output, which can include anything a
+// program printed.
+type Sessions struct {
+	// Save turns saving on. Off, nothing is written and nothing comes back
+	// after a reboot.
+	Save bool `toml:"save"`
+	// Lines is how many lines of each pane's output are saved, from 0 (only
+	// the layout and folders) to MaxSessionLines.
+	Lines int `toml:"lines"`
 }
 
 // Keys holds the prefix key and the user's key bindings. Values stay strings
@@ -64,6 +81,7 @@ func Defaults() Config {
 		// Matches internal/term's default; see ADR 0006.
 		Scrollback: Scrollback{Lines: 2000},
 		Theme:      Theme{Name: "default"},
+		Sessions:   Sessions{Save: true, Lines: MaxSessionLines},
 	}
 }
 
@@ -139,6 +157,8 @@ func (c Config) validate() *Error {
 		return &Error{Key: "scrollback.lines", Msg: fmt.Sprintf("must be at least 1, got %d", c.Scrollback.Lines)}
 	case c.Theme.Name == "":
 		return &Error{Key: "theme.name", Msg: "must not be empty"}
+	case c.Sessions.Lines < 0 || c.Sessions.Lines > MaxSessionLines:
+		return &Error{Key: "sessions.lines", Msg: fmt.Sprintf("must be from 0 to %d, got %d", MaxSessionLines, c.Sessions.Lines)}
 	}
 	return nil
 }

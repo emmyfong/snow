@@ -13,6 +13,7 @@ import (
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/client"
 	"github.com/emmyfong/snow/internal/server"
+	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -95,26 +96,28 @@ const ctrlB = "\x02"
 // pane.
 func detach(t *testing.T, path, session string, others int, keys io.Writer, done <-chan runResult) client.Result {
 	t.Helper()
-	waitAttached(t, path, session, others+1)
+	// One watcher for the whole wait. Dialing a probe per check would let
+	// the server, with no session yet, exit as each probe leaves (ADR 0008).
+	w := apitest.Dial(t, path, 80, 24)
+	defer w.Close()
+	waitAttached(t, w, session, others+1)
 	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
 		t.Fatal(err)
 	}
-	waitAttached(t, path, session, others)
+	waitAttached(t, w, session, others)
 	// The pipe blocks until the client reads; a client that has already
 	// quit never does, so the write must not hold up the test.
 	go func() { _, _ = io.WriteString(keys, "\x1b") }()
 	return waitResult(t, done)
 }
 
-// waitAttached waits until session has n clients attached. Each check
-// dials a new client, which has not attached and so gets the session list.
-func waitAttached(t *testing.T, path, session string, n int) {
+// waitAttached reads the session lists w gets, as a client that has not
+// attached, until session has n clients attached.
+func waitAttached(t *testing.T, w *apitest.Client, session string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		c := apitest.Dial(t, path, 80, 24)
-		m, _ := c.Next(5 * time.Second)
-		c.Close()
+		m, _ := w.Next(time.Second)
 		if l, ok := m.(*api.SessionList); ok {
 			for _, s := range l.Sessions {
 				if s.Name == session && s.Attached == n {
@@ -122,7 +125,6 @@ func waitAttached(t *testing.T, path, session string, n int) {
 				}
 			}
 		}
-		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("session %s never had %d clients attached", session, n)
 }
@@ -233,5 +235,56 @@ func TestHomePageCreatesASession(t *testing.T) {
 	watch.WaitScreen(shellPrompt())
 	if res := detach(t, path, "work", 1, keys, done); !res.Detached || res.Session != "work" {
 		t.Fatalf("result %+v, want detached from work", res)
+	}
+}
+
+// TestRestartServerSavesAndStops: the restart reaches a real server over
+// its socket; the server saves its sessions and exits, and a new server
+// lists them as saved.
+func TestRestartServerSavesAndStops(t *testing.T) {
+	path := apitest.SocketPath(t)
+	dir := t.TempDir()
+	oldCtx, stopOld := context.WithCancel(context.Background())
+	t.Cleanup(stopOld) // if the restart fails, the old server must still stop
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Run(oldCtx, server.Options{Version: "old", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+	}()
+	o := apitest.Dial(t, path, 80, 24)
+	o.Send(&api.Attach{Session: "work", Create: true})
+	o.Attach("work") // waits until the session exists
+	if err := client.RestartServer(path, "new"); err != nil {
+		t.Fatalf("RestartServer: %v", err)
+	}
+	// The socket goes only after the old server saved, so the new server
+	// finds the session the moment the restart returns.
+	if st, err := store.Open(dir); err != nil {
+		t.Fatal(err)
+	} else if infos, _ := st.List(); len(infos) != 1 {
+		t.Fatalf("saved %v when RestartServer returned, want work", infos)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("server: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("the server kept running")
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	doneNew := make(chan error, 1)
+	go func() {
+		doneNew <- server.Run(ctx, server.Options{Version: "new", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-doneNew; err != nil {
+			t.Errorf("new server: %v", err)
+		}
+	})
+	c := apitest.Dial(t, path, 80, 24)
+	m, _ := c.Next(5 * time.Second)
+	if l, ok := m.(*api.SessionList); !ok || len(l.Sessions) != 1 || l.Sessions[0].State != api.StateSaved {
+		t.Fatalf("new server lists %#v, want work as saved", m)
 	}
 }

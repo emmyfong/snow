@@ -41,6 +41,7 @@ func TestWireFormat(t *testing.T) {
 		{&SearchRequest{Pane: 1, Query: "error"}, `{"pane":1,"query":"error"}`},
 		{&SearchResult{Pane: 1, Query: "x"}, `{"pane":1,"query":"x","matches":[]}`},
 		{&Detach{}, `{}`},
+		{&Shutdown{}, `{}`},
 		{&KillSession{Session: "api"}, `{"session":"api"}`},
 		{&RenameSession{Session: "api", Name: "web"}, `{"session":"api","name":"web"}`},
 		{&SearchResult{Pane: 1, Query: "x", Matches: []Match{{Line: 3, Col: 4, Len: 1}}, Truncated: true}, `{"pane":1,"query":"x","matches":[{"line":3,"col":4,"len":1}],"truncated":true}`},
