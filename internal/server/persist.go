@@ -14,15 +14,22 @@ import (
 // Save timing. A session is saved saveDelay after its last change to
 // windows, panes, or layout. Output is not a change, or a busy pane would
 // never save; instead, every busyEvery, sessions whose panes printed since
-// their last save are saved too.
+// their last save are saved too. A session that ends because its last pane
+// exited has its file deleted endDelay later, not at once: at an OS
+// shutdown the shells can die before the server's signal arrives, and the
+// session must not be deleted then.
 const (
 	defaultSaveDelay = 2 * time.Second
 	defaultBusyEvery = 30 * time.Second
+	defaultEndDelay  = 5 * time.Second
 )
 
+// notSaving starts the note shown on the home page while saving fails.
+const notSaving = "Sessions are not being saved: "
+
 // openSaver returns the saver for opts.SessionsDir, or nil when the server
-// does not save sessions. A folder it cannot open turns saving off, with a
-// warning: sessions still run, they are only not kept.
+// does not save sessions. A folder it cannot open turns saving off: sessions
+// still run, and the home page says they are not kept.
 func (s *Server) openSaver() *store.Saver {
 	if s.opts.SessionsDir == "" {
 		return nil
@@ -30,21 +37,22 @@ func (s *Server) openSaver() *store.Saver {
 	st, err := store.Open(s.opts.SessionsDir)
 	if err != nil {
 		s.log.Warn("sessions will not be saved", "err", err)
+		s.startNotes = append(s.startNotes, notSaving+err.Error())
 		return nil
 	}
 	s.store = st
 	infos, errs := st.List()
 	s.startSaved = infos
 	for _, err := range errs {
-		s.startBroken = append(s.startBroken, s.setAside(err))
+		s.startNotes = append(s.startNotes, s.setAside(err))
 	}
-	delay := cmpDuration(s.opts.saveDelay, defaultSaveDelay)
+	delay := orDefault(s.opts.saveDelay, defaultSaveDelay)
 	return store.NewSaver(st, delay, func(session string, err error) {
-		s.log.Warn("save failed", "session", session, "err", err)
+		s.post(func(st *state) { st.saveResult(session, err) })
 	})
 }
 
-func cmpDuration(d, def time.Duration) time.Duration {
+func orDefault(d, def time.Duration) time.Duration {
 	if d > 0 {
 		return d
 	}
@@ -57,29 +65,67 @@ func (st *state) save(sess *session) {
 	if st.srv.saver == nil {
 		return
 	}
+	st.stopEndTimer(sess.name)
 	st.savedAt[sess.name] = contentVersion(sess)
 	snap := st.snapshot(sess)
 	st.saved[sess.name] = store.Info{Name: sess.name, Saved: time.Now(), Windows: len(snap.Windows)}
 	st.srv.saver.Changed(snap)
 }
 
-// unsave removes the saved file of session, for a session that was killed
-// or renamed. The delete runs off the model goroutine: it waits for disk.
-// A save the saver has pending for the name is dropped first, and a later
-// save of the same name waits at least the save delay, so it lands after.
+// saveResult records how a save or delete went. A failure shows on the home
+// page and marks the session unsaved, so the next periodic save tries again;
+// a success clears the note.
+func (st *state) saveResult(session string, err error) {
+	before := st.saveProblem
+	if err != nil {
+		st.srv.log.Warn("save failed", "session", session, "err", err)
+		st.saveProblem = notSaving + err.Error()
+		delete(st.savedAt, session)
+	} else {
+		st.saveProblem = ""
+	}
+	if st.saveProblem != before {
+		st.sessionsChanged()
+	}
+}
+
+// unsave removes the saved file of session now, for a session that was
+// killed or renamed. The saver drops any save pending for it and deletes
+// the file on its own goroutine, after the saves asked for earlier.
 func (st *state) unsave(session string) {
+	st.stopEndTimer(session)
 	delete(st.savedAt, session)
 	delete(st.saved, session)
-	saver := st.srv.saver
-	if saver == nil {
+	if st.srv.saver != nil {
+		st.srv.saver.Delete(session)
+	}
+}
+
+// unsaveLater removes the saved file of a session that ended on its own,
+// endDelay from now, unless a session of that name runs again by then or
+// the server stops by signal first.
+func (st *state) unsaveLater(session string) {
+	if st.srv.saver == nil {
 		return
 	}
-	log := st.srv.log
-	go func() {
-		if err := saver.Delete(session); err != nil {
-			log.Warn("delete saved session failed", "session", session, "err", err)
-		}
-	}()
+	st.stopEndTimer(session)
+	srv := st.srv
+	var t *time.Timer
+	t = time.AfterFunc(orDefault(srv.opts.endDelay, defaultEndDelay), func() {
+		srv.post(func(st *state) {
+			if st.endTimers[session] == t {
+				st.unsave(session)
+			}
+		})
+	})
+	st.endTimers[session] = t
+}
+
+func (st *state) stopEndTimer(session string) {
+	if t := st.endTimers[session]; t != nil {
+		t.Stop()
+		delete(st.endTimers, session)
+	}
 }
 
 // saveBusy saves the sessions whose panes printed since their last save.
@@ -91,18 +137,37 @@ func (st *state) saveBusy() {
 	}
 }
 
-// saveAll writes every session now, for a clean exit such as a restart.
-func (st *state) saveAll() {
-	if st.srv.saver == nil {
+// stopSaving finishes saving as the server stops. A normal stop, such as a
+// restart or the last session ending, writes every session and runs the
+// deletes still waiting. A stop by signal, as at an OS shutdown, leaves the
+// disk as it is: the shells may already have died and taken panes and
+// sessions with them, and the last saves hold the state to restore.
+func (st *state) stopSaving() {
+	saver := st.srv.saver
+	if saver == nil {
 		return
 	}
-	for _, sess := range st.sessions {
-		st.srv.saver.Changed(st.snapshot(sess))
+	if st.srv.keepDisk.Load() {
+		for name := range st.endTimers {
+			st.stopEndTimer(name)
+		}
+		saver.Abandon()
+		return
 	}
-	if err := st.srv.saver.Flush(); err != nil {
+	for name := range st.endTimers {
+		st.unsave(name)
+	}
+	for _, sess := range st.sessions {
+		saver.Changed(st.snapshot(sess))
+	}
+	if err := saver.Close(); err != nil {
 		st.srv.log.Warn("save on exit failed", "err", err)
 	}
 }
+
+// keepDiskOnClose makes the next Close leave saved sessions as they are on
+// disk, for a stop by signal.
+func (s *Server) keepDiskOnClose() { s.keepDisk.Store(true) }
 
 // contentVersion changes whenever a pane of sess prints, so saveBusy can
 // tell a session that has new output from one that does not.

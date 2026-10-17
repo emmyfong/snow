@@ -15,14 +15,16 @@ const defaultCols, defaultRows = 80, 24
 
 // state is everything the model goroutine owns.
 type state struct {
-	srv      *Server
-	sessions map[string]*session
-	clients  map[*client]struct{}
-	nextPane int
-	served   bool                  // a session or a client has existed; once neither is left, Done closes
-	savedAt  map[string]uint64     // session → contentVersion at its last save
-	saved    map[string]store.Info // sessions with a saved file, running or not
-	broken   []string              // notes on saved files that could not be read
+	srv         *Server
+	sessions    map[string]*session
+	clients     map[*client]struct{}
+	nextPane    int
+	served      bool                   // a session or a client has existed; once neither is left, Done closes
+	savedAt     map[string]uint64      // session → contentVersion at its last save
+	saved       map[string]store.Info  // sessions with a saved file, running or not
+	notes       []string               // notes on saved files that could not be read
+	saveProblem string                 // why saving fails, or "" while it works
+	endTimers   map[string]*time.Timer // sessions that ended, waiting to be deleted
 }
 
 type session struct {
@@ -34,7 +36,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), broken: s.startBroken}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}}
 }
 
 // createSession starts a session with one window and one pane in dir. An
@@ -85,13 +87,14 @@ func (st *state) killSession(name string) error {
 		}
 	}
 	st.endSession(sess)
+	st.unsave(name) // killed on purpose: no wait
 	return nil
 }
 
 // endSession forgets sess and closes Done when no session is left.
 func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
-	st.unsave(sess.name)
+	st.unsaveLater(sess.name)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, &api.Error{Code: api.CodeSessionEnded, Message: "session " + sess.name + " ended"})
@@ -159,7 +162,7 @@ func (st *state) sessionsChanged() {
 			continue
 		}
 		if list == nil {
-			list = &api.SessionList{Sessions: st.sessionList(), Broken: st.broken}
+			list = &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()}
 		}
 		st.enqueue(c, list)
 	}
@@ -177,4 +180,12 @@ func (st *state) closeAll() {
 		}
 	}
 	st.sessions = map[string]*session{}
+}
+
+// listNotes is what the home page shows under the sessions.
+func (st *state) listNotes() []string {
+	if st.saveProblem == "" {
+		return st.notes
+	}
+	return append(slices.Clip(st.notes), st.saveProblem)
 }

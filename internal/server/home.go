@@ -84,8 +84,8 @@ func (st *state) maybeDone() {
 }
 
 // renameSaved renames a saved session that is not running. The list shows
-// the new name at once; the file moves off the model goroutine, and a move
-// that fails puts the old name back and tells c why.
+// the new name at once; the saver moves the file after the work queued
+// before it, and a move that fails puts the old name back and tells c why.
 func (st *state) renameSaved(c *client, info store.Info, name string) {
 	old := info.Name
 	delete(st.saved, old)
@@ -93,30 +93,18 @@ func (st *state) renameSaved(c *client, info store.Info, name string) {
 	st.saved[name] = info
 	st.sessionsChanged()
 	srv := st.srv
-	go func() {
-		err := srv.moveSaved(old, name)
+	srv.saver.Move(old, name, func(err error) {
 		if err == nil {
 			return
 		}
 		srv.post(func(st *state) {
-			delete(st.saved, name)
-			info.Name = old
-			st.saved[old] = info
+			if _, ok := st.saved[name]; ok {
+				delete(st.saved, name)
+				info.Name = old
+				st.saved[old] = info
+			}
 			st.sessionsChanged()
 			st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: "rename " + old + ": " + err.Error()})
 		})
-	}()
-}
-
-// moveSaved writes the saved session old under name and deletes old.
-func (s *Server) moveSaved(old, name string) error {
-	snap, err := s.store.Load(old)
-	if err != nil {
-		return err
-	}
-	snap.Name = name
-	if err := s.store.Save(snap); err != nil {
-		return err
-	}
-	return s.store.Delete(old)
+	})
 }

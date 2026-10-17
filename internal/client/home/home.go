@@ -37,7 +37,7 @@ type Model struct {
 	selected   int      // index into the shown sessions; -1 means none
 	back       string   // the session Esc returns to; "" means Esc quits
 	target     string   // the session highlighted when a slash command began
-	broken     []string // notes on saved files the server could not read
+	notes      []string // problems with saved sessions, from the server
 	cmdSel     int      // index into the matching commands
 	notice     string   // why the last command or request was refused
 	help       bool     // the help panel is open
@@ -73,7 +73,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.profile = &msg.Profile
 		m.theme = m.base.For(msg.Profile)
 	case *api.SessionList:
-		m.broken = msg.Broken
+		m.notes = msg.Notes
 		chosen := ""
 		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
 			chosen = shown[m.selected].Name

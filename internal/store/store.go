@@ -94,3 +94,17 @@ func (s *Store) Delete(session string) error {
 	}
 	return errors.Join(errs...)
 }
+
+// Move renames the saved session from to to: it writes the snapshot under
+// to, then deletes from, so a failure part way leaves at least one copy.
+func (s *Store) Move(from, to string) error {
+	snap, err := s.Load(from)
+	if err != nil {
+		return err
+	}
+	snap.Name = to
+	if err := s.Save(snap); err != nil {
+		return err
+	}
+	return s.Delete(from)
+}

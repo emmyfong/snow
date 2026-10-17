@@ -36,7 +36,7 @@ func (s *Server) loadSaved(session string) (*store.Snapshot, error) {
 		note := s.setAside(err)
 		s.call(func(st *state) {
 			delete(st.saved, session)
-			st.broken = append(st.broken, note)
+			st.notes = append(st.notes, note)
 			st.sessionsChanged()
 		})
 		return nil, errors.New(note)

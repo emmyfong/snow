@@ -13,6 +13,7 @@ import (
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/client"
 	"github.com/emmyfong/snow/internal/server"
+	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -252,6 +253,13 @@ func TestRestartServerSavesAndStops(t *testing.T) {
 	o.Attach("work") // waits until the session exists
 	if err := client.RestartServer(path, "new"); err != nil {
 		t.Fatalf("RestartServer: %v", err)
+	}
+	// The socket goes only after the old server saved, so the new server
+	// finds the session the moment the restart returns.
+	if st, err := store.Open(dir); err != nil {
+		t.Fatal(err)
+	} else if infos, _ := st.List(); len(infos) != 1 {
+		t.Fatalf("saved %v when RestartServer returned, want work", infos)
 	}
 	select {
 	case err := <-done:

@@ -232,11 +232,12 @@ const (
 	StateSaved   = "saved"
 )
 
-// SessionList lists the server's sessions. Broken holds one note per saved
-// session file the server could not read and moved aside, with both paths.
+// SessionList lists the server's sessions. Notes holds problems with saved
+// sessions the user should know about: a file the server could not read
+// and moved aside, with both paths, or saving that fails.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
-	Broken   []string      `json:"broken,omitempty"`
+	Notes    []string      `json:"notes,omitempty"`
 }
 
 // SessionInfo summarizes one session.

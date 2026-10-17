@@ -8,6 +8,7 @@ import (
 	"github.com/emmyfong/snow/internal/store"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/emmyfong/snow/pkg/api"
@@ -37,8 +38,9 @@ type Server struct {
 	store    *store.Store   // where saver writes; nil with it
 	// startSaved lists the sessions saved when the server started; the
 	// model goroutine takes it over.
-	startSaved  []store.Info
-	startBroken []string // notes on files that could not be read at start
+	startSaved []store.Info
+	startNotes []string    // notes on saving found at start, for the home page
+	keepDisk   atomic.Bool // Close leaves saved sessions as they are (stop by signal)
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see
@@ -68,7 +70,7 @@ func (s *Server) loop() {
 	defer close(s.stopped)
 	tick := time.NewTicker(frameInterval)
 	defer tick.Stop()
-	busy := time.NewTicker(cmpDuration(s.opts.busyEvery, defaultBusyEvery))
+	busy := time.NewTicker(orDefault(s.opts.busyEvery, defaultBusyEvery))
 	defer busy.Stop()
 	for {
 		select {
@@ -79,7 +81,7 @@ func (s *Server) loop() {
 		case <-busy.C:
 			st.saveBusy()
 		case <-s.quit:
-			st.saveAll()
+			st.stopSaving()
 			st.closeAll()
 			return
 		}

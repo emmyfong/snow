@@ -119,3 +119,62 @@ func TestSavedFolderWithoutShellReports(t *testing.T) {
 		t.Fatalf("saved folder %q, want %q, where the pane started", got, here)
 	}
 }
+
+// endTestServer is a persisting server whose sessions save at once, with a
+// long wait before an ended session's file is deleted.
+func endTestServer(t *testing.T) (*Server, *store.Store) {
+	t.Helper()
+	opts := testOptions()
+	opts.SessionsDir = t.TempDir()
+	opts.saveDelay = 10 * time.Millisecond
+	opts.busyEvery = time.Hour
+	opts.endDelay = time.Hour
+	s := New(opts)
+	t.Cleanup(s.Close)
+	st, err := store.Open(opts.SessionsDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s, st
+}
+
+// endLastPane makes session work's only pane exit, which ends the session.
+func endLastPane(t *testing.T, s *Server, st *store.Store) {
+	t.Helper()
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	saved(t, st, "work", func(store.Snapshot) bool { return true })
+	c.Send(&api.Input{Pane: 1, Paste: "exit\r"})
+	// Sessions also lists saved ones, and the ended session's file is still
+	// there; count the running ones.
+	eventually(t, "session ended", func() bool {
+		running := 0
+		s.call(func(st *state) { running = len(st.sessions) })
+		return running == 0
+	})
+}
+
+// TestSignalKeepsEndedSessions: at an OS shutdown the shells can die before
+// the server's signal arrives; the session then looks ended. A stop by
+// signal keeps the files as they are, so the reboot restores them.
+func TestSignalKeepsEndedSessions(t *testing.T) {
+	s, st := endTestServer(t)
+	endLastPane(t, s, st)
+	s.keepDiskOnClose()
+	s.Close()
+	if _, err := st.Load("work"); err != nil {
+		t.Fatalf("a stop by signal deleted the ended session: %v", err)
+	}
+}
+
+// TestNormalStopDeletesEndedSessions: exit in the last pane ends the
+// session for good; a normal stop deletes its file at once.
+func TestNormalStopDeletesEndedSessions(t *testing.T) {
+	s, st := endTestServer(t)
+	endLastPane(t, s, st)
+	s.Close()
+	if _, err := st.Load("work"); !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("an ended session's file survived a normal stop: %v", err)
+	}
+}

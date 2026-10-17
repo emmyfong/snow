@@ -4,6 +4,7 @@ import (
 	"errors"
 	"io/fs"
 	"os"
+	"slices"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -32,10 +33,14 @@ func (c *countingStore) count() int {
 	return c.saves
 }
 
-func newSaver(t *testing.T, st *countingStore) *Saver {
+// newSaver returns a Saver over st that fails the test on any error. Close
+// it inside the synctest bubble: the bubble waits for its goroutine.
+func newSaver(t *testing.T, st Writer) *Saver {
 	t.Helper()
 	return NewSaver(st, delay, func(name string, err error) {
-		t.Errorf("save %q failed: %v", name, err)
+		if err != nil {
+			t.Errorf("save %q failed: %v", name, err)
+		}
 	})
 }
 
@@ -80,6 +85,7 @@ func TestDebounce(t *testing.T) {
 		if got.Active != 9 {
 			t.Fatalf("saved change %d, want the last change, 9", got.Active)
 		}
+		_ = s.Close()
 	})
 }
 
@@ -88,9 +94,7 @@ func TestSaverDeleteCancelsPending(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		s := newSaver(t, st)
 		s.Changed(sample("api"))
-		if err := s.Delete("api"); err != nil {
-			t.Fatal(err)
-		}
+		s.Delete("api")
 		time.Sleep(2 * delay)
 		synctest.Wait()
 		if n := st.count(); n != 0 {
@@ -99,6 +103,7 @@ func TestSaverDeleteCancelsPending(t *testing.T) {
 		if exists(t, st.Store, "api") {
 			t.Fatal("snapshot exists after Delete")
 		}
+		_ = s.Close()
 	})
 }
 
@@ -112,12 +117,14 @@ func TestSaverDeleteRemovesSaved(t *testing.T) {
 		if !exists(t, st.Store, "api") {
 			t.Fatal("snapshot missing after the delay")
 		}
-		if err := s.Delete("api"); err != nil {
+		s.Delete("api")
+		if err := s.Flush(); err != nil {
 			t.Fatal(err)
 		}
 		if exists(t, st.Store, "api") {
 			t.Fatal("snapshot exists after Delete")
 		}
+		_ = s.Close()
 	})
 }
 
@@ -138,6 +145,7 @@ func TestSaverFlush(t *testing.T) {
 		if n := st.count(); n != 2 {
 			t.Fatalf("%d writes after Flush and the delay, want still 2", n)
 		}
+		_ = s.Close()
 	})
 }
 
@@ -152,18 +160,91 @@ func TestSaverReportsErrors(t *testing.T) {
 		s := NewSaver(st, delay, func(name string, err error) {
 			mu.Lock()
 			defer mu.Unlock()
-			if err == nil {
-				t.Error("error callback got a nil error")
+			if err != nil {
+				failed = append(failed, name)
 			}
-			failed = append(failed, name)
 		})
 		s.Changed(sample("api"))
 		time.Sleep(2 * delay)
 		synctest.Wait()
 		mu.Lock()
-		defer mu.Unlock()
-		if len(failed) != 1 || failed[0] != "api" {
-			t.Fatalf("error callback got %q, want one call for \"api\"", failed)
+		got := slices.Clone(failed)
+		mu.Unlock()
+		if len(got) != 1 || got[0] != "api" {
+			t.Fatalf("report got failures %q, want one for \"api\"", got)
 		}
+		_ = s.Close()
+	})
+}
+
+// TestSaverKeepsCallOrder: a session killed and made again under the same
+// name keeps the new file; the old delete runs first.
+func TestSaverKeepsCallOrder(t *testing.T) {
+	st := &countingStore{Store: openStore(t)}
+	synctest.Test(t, func(t *testing.T) {
+		s := newSaver(t, st)
+		s.Changed(sample("api"))
+		time.Sleep(2 * delay)
+		synctest.Wait()
+		s.Delete("api")
+		s.Changed(sample("api"))
+		time.Sleep(2 * delay)
+		synctest.Wait()
+		if !exists(t, st.Store, "api") {
+			t.Fatal("the new session's save was undone by the old delete")
+		}
+		_ = s.Close()
+	})
+}
+
+// slowWriter blocks every Save until release is closed.
+type slowWriter struct {
+	*Store
+	release chan struct{}
+}
+
+func (w *slowWriter) Save(s Snapshot) error { <-w.release; return w.Store.Save(s) }
+
+// TestSaverCallsNeverWaitForDisk: while a slow write runs, Changed, Delete,
+// and Move return at once; the server calls them from a goroutine that must
+// never block.
+func TestSaverCallsNeverWaitForDisk(t *testing.T) {
+	w := &slowWriter{Store: openStore(t), release: make(chan struct{})}
+	s := NewSaver(w, time.Millisecond, func(string, error) {})
+	s.Changed(sample("a"))
+	time.Sleep(50 * time.Millisecond) // the save of a is now on disk, blocked
+	returned := make(chan struct{})
+	go func() {
+		s.Delete("b")
+		s.Changed(sample("c"))
+		s.Move("d", "e", nil)
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(time.Second):
+		t.Fatal("a call waited for the slow write")
+	}
+	close(w.release)
+	_ = s.Close()
+}
+
+func TestSaverMove(t *testing.T) {
+	st := openStore(t)
+	synctest.Test(t, func(t *testing.T) {
+		s := newSaver(t, st)
+		s.Changed(sample("api"))
+		if err := s.Flush(); err != nil {
+			t.Fatal(err)
+		}
+		moved := make(chan error, 1)
+		s.Move("api", "web", func(err error) { moved <- err })
+		if err := <-moved; err != nil {
+			t.Fatal(err)
+		}
+		if exists(t, st, "api") || !exists(t, st, "web") {
+			t.Fatal("Move left the old name or lost the new one")
+		}
+		_ = s.Close()
 	})
 }

@@ -38,7 +38,7 @@ type Options struct {
 	// Empty saves nothing.
 	SessionsDir string
 
-	saveDelay, busyEvery time.Duration // tests shorten them; 0 means the defaults
+	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 
 	// Tests replace these WSL checks; nil means the launcher's profiles and
 	// shell.RunningDistros.

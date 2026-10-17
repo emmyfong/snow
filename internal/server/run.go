@@ -24,9 +24,15 @@ func Run(ctx context.Context, opts Options, path string) error {
 	}
 	opts.Socket = path
 	s := New(opts)
-	defer s.Close()
+	// Close the server, which saves every session, before the listener:
+	// the socket goes when the listener does, and a client restarting the
+	// server starts the new one then. It must not read the sessions folder
+	// before this server has written it.
+	defer func() {
+		s.Close()
+		_ = l.Close()
+	}()
 	go s.accept(l)
-	defer func() { _ = l.Close() }()
 
 	idle := opts.IdleExit
 	if idle <= 0 {
@@ -40,7 +46,9 @@ func Run(ctx context.Context, opts Options, path string) error {
 			s.log.Info("done; exiting")
 			return nil
 		case <-ctx.Done():
-			s.log.Info("stopping", "reason", ctx.Err())
+			// A signal: at an OS shutdown the shells may already be dying.
+			s.log.Info("stopping; saved sessions stay as they are", "reason", ctx.Err())
+			s.keepDiskOnClose()
 			return nil
 		case <-idleTimer.C:
 			if s.idle() {

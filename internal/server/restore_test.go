@@ -210,8 +210,8 @@ func TestServerStartsWithBrokenFile(t *testing.T) {
 	if !ok || len(l.Sessions) != 1 || l.Sessions[0].Name != "api" {
 		t.Fatalf("first message %#v, want api listed", m)
 	}
-	if len(l.Broken) != 1 || !strings.Contains(l.Broken[0], "bad.json") || !strings.Contains(l.Broken[0], filepath.Join(dir, "broken")) {
-		t.Fatalf("broken notes %q, want one naming bad.json and where it moved", l.Broken)
+	if len(l.Notes) != 1 || !strings.Contains(l.Notes[0], "bad.json") || !strings.Contains(l.Notes[0], filepath.Join(dir, "broken")) {
+		t.Fatalf("broken notes %q, want one naming bad.json and where it moved", l.Notes)
 	}
 }
 
