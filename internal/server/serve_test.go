@@ -17,7 +17,7 @@ import (
 // connect runs the handshake over an in-memory connection served by s and
 // reads the session list the server sends every new client, so a test's
 // next message is the answer to its own request.
-func connect(t *testing.T, s *Server, cols, rows int) *apitest.Client {
+func connect(t testing.TB, s *Server, cols, rows int) *apitest.Client {
 	t.Helper()
 	a, b := net.Pipe()
 	go s.serveConn(b)

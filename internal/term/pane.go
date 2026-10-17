@@ -96,33 +96,6 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 	return p
 }
 
-// feed parses program output into the emulator until the PTY closes.
-func (p *Pane) feed() {
-	// feed writes the preamble, not newPane: a write can make the emulator
-	// reply, and replies wait for drain, which runs by now.
-	if p.preamble != "" {
-		p.mu.Lock()
-		_, _ = p.emu.Write([]byte(p.preamble)) // the emulator's writer never fails
-		p.mu.Unlock()
-		p.version.Add(1)
-	}
-	buf := make([]byte, 32*1024)
-	for {
-		n, err := p.pty.Read(buf)
-		if n > 0 {
-			p.mu.Lock()
-			p.shift.before(p.emu.Scrollback())
-			_, _ = p.emu.Write(buf[:n]) // the emulator's writer never fails
-			p.shift.after(p.emu.Scrollback())
-			p.mu.Unlock()
-			p.version.Add(1)
-		}
-		if err != nil {
-			return
-		}
-	}
-}
-
 // inputQueue bounds chunks of input waiting for the program to read them.
 // A program that stops reading fills it; further input is dropped and
 // counted instead of blocking the pane.

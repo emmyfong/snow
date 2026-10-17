@@ -22,7 +22,7 @@ func attached(t *testing.T, s *Server, cols, rows int) (*apitest.Client, int) {
 }
 
 // nextLayout reads until a Layout that satisfies ok arrives.
-func nextLayout(t *testing.T, c *apitest.Client, ok func(*api.Layout) bool) *api.Layout {
+func nextLayout(t testing.TB, c *apitest.Client, ok func(*api.Layout) bool) *api.Layout {
 	t.Helper()
 	deadline := time.Now().Add(apitest.Wait)
 	for time.Now().Before(deadline) {

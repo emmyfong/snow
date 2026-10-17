@@ -2,6 +2,7 @@ package server
 
 import (
 	"github.com/emmyfong/snow/internal/layout"
+	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -80,7 +81,12 @@ func (st *state) layout(sess *session) *api.Layout {
 }
 
 // flush sends each attached client the rows that changed since its last
-// update, for the panes it can see. It runs on every frame tick.
+// update, for the panes it can see. It runs on every frame tick and never
+// waits: a pane whose output is being written at that moment is busy, and
+// a short goroutine reads it instead, handing the frame back when it has
+// it (fetchFrame). So the model goroutine never blocks on a pane (ADR 0007),
+// a pane that only echoed a key goes out at once, and panes that print
+// without pause still update about once a frame.
 func (st *state) flush() {
 	for c := range st.clients {
 		sess, ok := st.sessions[c.session]
@@ -99,17 +105,66 @@ func (st *state) flush() {
 }
 
 // flushPane sends c the rows of p that changed since the last update c was
-// sent. A client with a half-full outbox is skipped; c.last stays as it was,
-// so the next update it gets carries every row changed in between.
+// sent, if p is free; a busy pane is read off the model goroutine. A client
+// with a half-full outbox is skipped; c.last stays as it was, so the next
+// update it gets carries every row changed in between.
 func (st *state) flushPane(c *client, p *pane) {
-	if len(c.out) >= cap(c.out)/2 {
+	if c.dropped || len(c.out) >= cap(c.out)/2 {
 		return
 	}
 	v := p.term.Version()
 	if prev, ok := c.seen[p.id]; ok && prev == v {
 		return
 	}
-	rows := p.term.Lines()
+	f, ok := p.term.TryFrame()
+	if !ok {
+		st.fetchFrame(p)
+		return
+	}
+	st.sendFrame(c, p, v, f)
+}
+
+// fetchFrame reads busy pane p on its own goroutine, which waits for the
+// pane's lock, and hands the frame to the model goroutine for every client
+// that shows p. One read at a time per pane: a pane already being read is
+// left alone.
+func (st *state) fetchFrame(p *pane) {
+	if p.fetching {
+		return
+	}
+	p.fetching = true
+	srv := st.srv
+	go func() {
+		v := p.term.Version()
+		f := p.term.Frame()
+		srv.post(func(st *state) {
+			p.fetching = false
+			st.frameReady(p, v, f)
+		})
+	}()
+}
+
+// frameReady sends frame f of p, read at version v or later, to every
+// client still showing p that has not seen v.
+func (st *state) frameReady(p *pane, v uint64, f term.Frame) {
+	for c := range st.clients {
+		sess, ok := st.sessions[c.session]
+		if !ok || c.dropped || len(c.out) >= cap(c.out)/2 {
+			continue
+		}
+		if w := sess.shown(); w == nil || w.panes[p.id] != p {
+			continue
+		}
+		if prev, ok := c.seen[p.id]; ok && prev >= v {
+			continue
+		}
+		st.sendFrame(c, p, v, f)
+	}
+}
+
+// sendFrame sends c the rows of frame f of p that differ from what c has.
+func (st *state) sendFrame(c *client, p *pane, v uint64, f term.Frame) {
+	rows := f.Lines
 	last := c.last[p.id]
 	var changed []api.LineUpdate
 	for i, row := range rows {
@@ -119,6 +174,5 @@ func (st *state) flushPane(c *client, p *pane) {
 	}
 	c.last[p.id] = rows
 	c.seen[p.id] = v
-	x, y, visible := p.term.Cursor()
-	st.enqueue(c, &api.PaneUpdate{Pane: p.id, Lines: changed, Cursor: &api.Cursor{X: x, Y: y, Visible: visible}, Mouse: p.term.MouseMode()})
+	st.enqueue(c, &api.PaneUpdate{Pane: p.id, Lines: changed, Cursor: &api.Cursor{X: f.X, Y: f.Y, Visible: f.Visible}, Mouse: f.Mouse})
 }

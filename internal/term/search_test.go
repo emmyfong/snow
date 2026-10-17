@@ -71,8 +71,10 @@ func TestSearchTruncates(t *testing.T) {
 	for i := range lines {
 		lines[i] = strings.Repeat("x", 80)
 	}
-	for range MaxMatches/len(lines)/80 + 2 {
-		printLines(t, p, f, append(lines, "end"))
+	// Each batch ends with its own line: printLines waits for it, and a
+	// line every batch shares would be on screen before the batch is.
+	for i := range MaxMatches/len(lines)/80 + 2 {
+		printLines(t, p, f, append(lines, fmt.Sprintf("end of batch %d", i)))
 	}
 	got, truncated, _ := p.Search("x")
 	if len(got) != MaxMatches || !truncated {
