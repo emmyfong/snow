@@ -46,6 +46,7 @@ type Pane struct {
 	mouseModes map[ansi.Mode]bool
 	mouseSGR   bool      // the program reads the SGR encoding (1006)
 	shift      lineShift // history lines dropped off the top; guarded by mu
+	preamble   string    // written by feed before the program's output
 
 	closeOnce sync.Once
 	closeErr  error
@@ -64,7 +65,7 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 	emu := vt.NewEmulator(cols, rows)
 	emu.SetScrollbackSize(opts.scrollback())
 	ctx, stop := context.WithCancel(context.Background())
-	p := &Pane{pty: pty, emu: emu, stop: stop, done: make(chan struct{})}
+	p := &Pane{pty: pty, emu: emu, stop: stop, done: make(chan struct{}), preamble: opts.Preamble}
 	// vt calls OSC handlers from inside emu.Write, which feed runs with mu
 	// held, so the handler must not lock mu again.
 	emu.RegisterOscHandler(oscFolder, func(data []byte) bool {
@@ -97,6 +98,14 @@ func newPane(pty PTY, cols, rows int, opts Options) *Pane {
 
 // feed parses program output into the emulator until the PTY closes.
 func (p *Pane) feed() {
+	// feed writes the preamble, not newPane: a write can make the emulator
+	// reply, and replies wait for drain, which runs by now.
+	if p.preamble != "" {
+		p.mu.Lock()
+		_, _ = p.emu.Write([]byte(p.preamble)) // the emulator's writer never fails
+		p.mu.Unlock()
+		p.version.Add(1)
+	}
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := p.pty.Read(buf)

@@ -1,19 +1,38 @@
 package server
 
 import (
+	"github.com/emmyfong/snow/internal/store"
 	"time"
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// attach shows a session to c, creating it if asked.
-func (st *state) attach(c *client, m *api.Attach) {
+// attach shows a session to c: a running one, a saved one restored from
+// snap, or a new one when asked.
+func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 	if err := m.Validate(); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
 	}
 	sess, ok := st.sessions[m.Session]
+	if !ok && snap != nil {
+		cols, rows := c.cols, c.rows
+		if cols <= 0 || rows <= 0 {
+			cols, rows = defaultCols, defaultRows
+		}
+		var err error
+		if sess, err = st.restore(snap, cols, rows); err != nil {
+			st.srv.log.Warn("restore failed", "session", m.Session, "err", err)
+			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
+			return
+		}
+		st.sessions[sess.name] = sess
+		st.served = true
+		st.save(sess)
+		st.srv.log.Info("session restored", "session", sess.name)
+		ok = true
+	}
 	if !ok && !m.Create {
 		msg := "no session named " + m.Session
 		if m.Session == "" {

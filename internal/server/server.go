@@ -35,6 +35,9 @@ type Server struct {
 	closing  sync.WaitGroup // panes still being closed in the background
 	saver    *store.Saver   // nil when sessions are not saved
 	store    *store.Store   // where saver writes; nil with it
+	// startSaved lists the sessions saved when the server started; the
+	// model goroutine takes it over.
+	startSaved []store.Info
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see

@@ -31,6 +31,11 @@ func (s *Server) openSaver() *store.Saver {
 		return nil
 	}
 	s.store = st
+	infos, errs := st.List()
+	s.startSaved = infos
+	for _, err := range errs {
+		s.log.Warn("saved session unreadable", "err", err)
+	}
 	delay := cmpDuration(s.opts.saveDelay, defaultSaveDelay)
 	return store.NewSaver(st, delay, func(session string, err error) {
 		s.log.Warn("save failed", "session", session, "err", err)
@@ -51,7 +56,9 @@ func (st *state) save(sess *session) {
 		return
 	}
 	st.savedAt[sess.name] = contentVersion(sess)
-	st.srv.saver.Changed(st.snapshot(sess))
+	snap := st.snapshot(sess)
+	st.saved[sess.name] = store.Info{Name: sess.name, Saved: time.Now(), Windows: len(snap.Windows)}
+	st.srv.saver.Changed(snap)
 }
 
 // unsave removes the saved file of session, for a session that was killed
@@ -60,6 +67,7 @@ func (st *state) save(sess *session) {
 // save of the same name waits at least the save delay, so it lands after.
 func (st *state) unsave(session string) {
 	delete(st.savedAt, session)
+	delete(st.saved, session)
 	saver := st.srv.saver
 	if saver == nil {
 		return
@@ -141,4 +149,13 @@ func lastLines(p *pane) []string {
 		end--
 	}
 	return lines[:end]
+}
+
+// savedInfos returns the sessions saved when the server started, by name.
+func (s *Server) savedInfos() map[string]store.Info {
+	out := make(map[string]store.Info, len(s.startSaved))
+	for _, info := range s.startSaved {
+		out[info.Name] = info
+	}
+	return out
 }

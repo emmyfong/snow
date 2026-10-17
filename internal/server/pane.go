@@ -15,10 +15,10 @@ type pane struct {
 	term    *term.Pane
 }
 
-// startPane starts profile's program in dir at cols by rows and tells the
-// model goroutine when it exits. An empty profile means the default. The
+// startPane starts profile's program in dir at cols by rows, below
+// preamble, and tells the model goroutine when it exits. An empty profile means the default. The
 // launcher decides which folders a profile can use.
-func (s *Server) startPane(id, cols, rows int, profile, dir string) (*pane, error) {
+func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*pane, error) {
 	spec, profile, err := s.launch.spec(profile, dir)
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func (s *Server) startPane(id, cols, rows int, profile, dir string) (*pane, erro
 	if s.opts.Socket != "" {
 		spec.Env = append(spec.Env, transport.PaneEnv(s.opts.Socket, id))
 	}
-	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback})
+	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback, Preamble: preamble})
 	if err != nil {
 		return nil, err
 	}

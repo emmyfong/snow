@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"fmt"
+	"github.com/emmyfong/snow/internal/store"
 	"slices"
 	"strconv"
 	"time"
@@ -18,8 +19,9 @@ type state struct {
 	sessions map[string]*session
 	clients  map[*client]struct{}
 	nextPane int
-	served   bool              // a session or a client has existed; once neither is left, Done closes
-	savedAt  map[string]uint64 // session → contentVersion at its last save
+	served   bool                  // a session or a client has existed; once neither is left, Done closes
+	savedAt  map[string]uint64     // session → contentVersion at its last save
+	saved    map[string]store.Info // sessions with a saved file, running or not
 }
 
 type session struct {
@@ -31,7 +33,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos()}
 }
 
 // createSession starts a session with one window and one pane in dir. An
@@ -68,6 +70,11 @@ func (st *state) freeNumber() string {
 
 func (st *state) killSession(name string) error {
 	sess, ok := st.sessions[name]
+	if _, saved := st.saved[name]; !ok && saved {
+		st.unsave(name)
+		st.sessionsChanged()
+		return nil
+	}
 	if !ok {
 		return fmt.Errorf("%w: %s", ErrNoSession, name)
 	}
@@ -123,7 +130,7 @@ func (st *state) sessionList() []api.SessionInfo {
 			attached[c.session]++
 		}
 	}
-	out := make([]api.SessionInfo, 0, len(st.sessions))
+	out := st.savedList()
 	for _, sess := range st.sessions {
 		out = append(out, api.SessionInfo{
 			Name:     sess.name,
