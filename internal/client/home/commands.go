@@ -27,6 +27,7 @@ var commands = []command{
 	{"sessions", "", "Show the sessions", (*Model).cmdSessions},
 	{"rename", "[session] <name>", "Rename a session", (*Model).cmdRename},
 	{"kill", "[session]", "End a session and its programs", (*Model).cmdKill},
+	{"theme", "[name]", "Pick the colors", (*Model).cmdTheme},
 	{"help", "", "Show commands and keys", (*Model).cmdHelp},
 	{"quit", "", "Leave Snow; sessions keep running", (*Model).cmdQuit},
 }

@@ -24,8 +24,10 @@ type Options struct {
 	Dir     string         // the folder a new session starts in; "" means the current one
 	Start   func() error   // starts a server when none answers
 	Config  *config.Config // the user's settings; nil means the defaults
-	Input   io.Reader      // nil means standard input
-	Output  io.Writer      // nil means standard output
+	// ConfigPath is the config file /theme saves to; "" saves nothing.
+	ConfigPath string
+	Input      io.Reader // nil means standard input
+	Output     io.Writer // nil means standard output
 }
 
 // outboxSize bounds queued messages to the server. Keys from fast typing fit
@@ -87,7 +89,10 @@ func Run(opts Options) (Result, error) {
 		// here only loses that convenience.
 		dir, _ = os.Getwd()
 	}
-	a := newHomeApp(send, opts.Version, dir, th, session.WithTheme(th), session.WithKeys(table))
+	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table))
+	if opts.ConfigPath != "" {
+		a.saveTheme = func(name string) error { return config.SetTheme(opts.ConfigPath, name) }
+	}
 	if !opts.Home {
 		send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
 		a.screen = a.newSession()

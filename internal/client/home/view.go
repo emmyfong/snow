@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -60,6 +61,9 @@ func (m *Model) layout() placement {
 // listLen and listSel are the list's length and selected row: the matching
 // commands while a slash command is typed, else the sessions.
 func (m *Model) listLen() int {
+	if m.picking {
+		return len(theme.Builtin())
+	}
 	if m.commanding() {
 		return len(m.matches())
 	}
@@ -67,6 +71,9 @@ func (m *Model) listLen() int {
 }
 
 func (m *Model) listSel() int {
+	if m.picking {
+		return m.themeSel
+	}
 	if m.commanding() {
 		return m.cmdSel
 	}
@@ -104,9 +111,12 @@ func (m *Model) View() tea.View {
 		notice = indent([]string{lipgloss.NewStyle().Foreground(th.Error).Render(ansi.Truncate(m.notice, p.width, "…"))}, p.x)[0]
 	}
 	lines = append(lines, notice)
-	if m.commanding() {
+	switch {
+	case m.picking:
+		lines = append(lines, m.themeList(p)...)
+	case m.commanding():
 		lines = append(lines, m.commandList(p)...)
-	} else {
+	default:
 		lines = append(lines, m.sessionList(p)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
@@ -168,6 +178,9 @@ func (m *Model) commandList(p placement) []string {
 
 // hints are the keys the page answers to now.
 func (m *Model) hints() []ui.Hint {
+	if m.picking {
+		return []ui.Hint{{Key: "enter", Desc: "keep"}, {Key: "↑↓", Desc: "preview"}, {Key: "esc", Desc: "cancel"}}
+	}
 	if m.commanding() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "tab", Desc: "complete"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "clear"}}
 	}

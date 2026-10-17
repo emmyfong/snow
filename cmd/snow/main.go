@@ -204,12 +204,15 @@ func attach(name string, stdout, stderr io.Writer) int {
 	if !ok {
 		return 1
 	}
+	// loadConfig has already found the path; an error here cannot happen.
+	cfgPath, _ := config.DefaultPath()
 	res, err := client.Run(client.Options{
-		Version: version,
-		Config:  &cfg,
-		Socket:  path,
-		Session: name,
-		Home:    name == "", // plain snow opens the home page
+		Version:    version,
+		Config:     &cfg,
+		ConfigPath: cfgPath,
+		Socket:     path,
+		Session:    name,
+		Home:       name == "", // plain snow opens the home page
 		Start: func() error {
 			exe, err := os.Executable()
 			if err != nil {

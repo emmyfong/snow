@@ -15,10 +15,10 @@
           /sessions                  Show the sessions                          
           /rename [session] <name>   Rename a session                           
           /kill [session]            End a session and its programs             
+          /theme [name]              Pick the colors                            
           /help                      Show commands and keys                     
           /quit                      Leave Snow; sessions keep running          
                                                                                 
         [38;2;127;184;230menter[m [38;2;107;124;140mrun[m   [38;2;127;184;230mtab[m [38;2;107;124;140mcomplete[m   [38;2;127;184;230m↑↓[m [38;2;107;124;140mselect[m   [38;2;127;184;230mesc[m [38;2;107;124;140mclear[m                        
-                                                                                
                                                                                 
                                                                                 

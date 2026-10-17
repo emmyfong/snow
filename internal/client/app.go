@@ -34,7 +34,8 @@ type app struct {
 	dir        string           // the folder a session opened from the home page starts in
 	version    string           // Snow's version, for the home page
 	theme      theme.Theme      // the theme from the config, for the home page
-	sessOpts   []session.Option // the theme and keys a session screen gets
+	sessOpts   []session.Option // what a session screen gets besides the theme, such as keys
+	saveTheme  func(name string) error
 	profile    *tea.ColorProfileMsg
 	sessions   *api.SessionList // the last list, for a home page opened later
 	back       string           // the session the home page's Esc returns to
@@ -49,8 +50,34 @@ func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opt
 	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts}
 }
 
-// newSession returns a session screen with the app's theme and keys.
-func (a *app) newSession() *session.Model { return session.New(a.send, a.sessOpts...) }
+// newSession returns a session screen with the app's theme and options.
+func (a *app) newSession() *session.Model {
+	return session.New(a.send, append([]session.Option{session.WithTheme(a.theme)}, a.sessOpts...)...)
+}
+
+// themeSaveFailedMsg reports that a theme was applied but not saved.
+type themeSaveFailedMsg struct{ err error }
+
+// useTheme makes the theme called name the app's, for screens opened from
+// now on, and saves it in the background: writing a file must not hold up
+// the screen.
+func (a *app) useTheme(name string) tea.Cmd {
+	th, err := theme.Named(name)
+	if err != nil {
+		return nil
+	}
+	a.theme = th
+	save := a.saveTheme
+	if save == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := save(th.Name); err != nil {
+			return themeSaveFailedMsg{err}
+		}
+		return nil
+	}
+}
 
 // show makes s the current screen, at the terminal's size and colors: the
 // terminal reports its colors once, at start, so a later screen needs them
@@ -151,6 +178,13 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)
+		return a, nil
+	case home.ThemeMsg:
+		return a, a.useTheme(msg.Name)
+	case themeSaveFailedMsg:
+		if h, ok := a.screen.(*home.Model); ok {
+			h.SetNotice("The theme is in use but was not saved: " + msg.err.Error())
+		}
 		return a, nil
 	case home.QuitMsg:
 		return a, tea.Quit

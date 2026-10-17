@@ -5,6 +5,7 @@ package home
 
 import (
 	"cmp"
+	"github.com/charmbracelet/colorprofile"
 	"slices"
 	"strings"
 	"time"
@@ -41,6 +42,10 @@ type Model struct {
 	help       bool   // the help panel is open
 	confirm    *confirm.Model
 	killing    string // the session the open popup would end
+	picking    bool   // the theme list is open
+	themeSel   int    // index into theme.Builtin
+	before     theme.Theme
+	profile    *colorprofile.Profile // the terminal's colors, once known
 	cols, rows int
 }
 
@@ -64,6 +69,7 @@ func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.ColorProfileMsg:
+		m.profile = &msg.Profile
 		m.theme = m.base.For(msg.Profile)
 	case *api.SessionList:
 		chosen := ""
@@ -108,6 +114,10 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
+	if m.picking {
+		m.pickTheme(i)
+		return m.keepTheme()
+	}
 	if m.commanding() {
 		c := m.matches()[i]
 		m.complete(c)
@@ -122,6 +132,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 func (m *Model) key(k tea.Key) tea.Cmd {
 	if m.confirm != nil {
 		return m.confirmResult(m.confirm.Key(k))
+	}
+	if m.picking {
+		return m.pickerKey(k)
 	}
 	if m.help {
 		// Any key closes the help; it holds nothing to act on.

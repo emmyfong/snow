@@ -258,3 +258,23 @@ func TestSwitchKeepsBackWithAnOldList(t *testing.T) {
 		t.Fatalf("sent %#v, want Attach{api}: Esc lost the way back", sent[len(sent)-1])
 	}
 }
+
+// TestThemeIsAppliedAndSaved: a theme picked on the home page is used by
+// screens opened after it and saved; a failed save says so on the page.
+func TestThemeIsAppliedAndSaved(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	var saved []string
+	a.saveTheme = func(name string) error { saved = append(saved, name); return nil }
+	_, cmd := a.Update(home.ThemeMsg{Name: "Nord"})
+	run(a, cmd)
+	if a.theme.Name != "Nord" || len(saved) != 1 || saved[0] != "Nord" {
+		t.Fatalf("theme %q, saved %v; want Nord used and saved", a.theme.Name, saved)
+	}
+	a.saveTheme = func(string) error { return errors.New("disk full") }
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd = a.Update(home.ThemeMsg{Name: "Dracula"})
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "disk full") {
+		t.Fatal("a failed save is not on the home page")
+	}
+}
