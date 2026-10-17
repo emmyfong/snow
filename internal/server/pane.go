@@ -13,7 +13,8 @@ type pane struct {
 	id      int
 	profile string
 	term    *term.Pane
-	ended   bool // its WSL distribution stopped; it waits for r to restart
+	ended   bool   // its WSL distribution stopped; it waits for r to restart
+	dir     string // the folder it was asked to start in, for a shell that never reports one
 }
 
 // startPane starts profile's program in dir at cols by rows, below
@@ -36,7 +37,7 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 		ended := s.wslStopped(profile)
 		s.post(func(st *state) { st.paneExited(id, ended) })
 	}()
-	return &pane{id: id, profile: profile, term: tp}, nil
+	return &pane{id: id, profile: profile, term: tp, dir: dir}, nil
 }
 
 // usableDir returns dir if it is an existing absolute folder, or else the
@@ -53,4 +54,13 @@ func usableDir(dir string) string {
 		return ""
 	}
 	return home
+}
+
+// folder returns the pane's folder: the one its shell last reported, or the
+// one it started in.
+func (p *pane) folder() string {
+	if f := p.term.Folder(); f != "" {
+		return f
+	}
+	return p.dir
 }

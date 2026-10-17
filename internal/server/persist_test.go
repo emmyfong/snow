@@ -106,3 +106,16 @@ func TestCloseSavesEverySession(t *testing.T) {
 		}
 	}
 }
+
+// TestSavedFolderWithoutShellReports: a shell that never reports its folder
+// (no OSC 7) is saved in the folder it started in.
+func TestSavedFolderWithoutShellReports(t *testing.T) {
+	s, st := persistServer(t)
+	here := t.TempDir()
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "work", Create: true, Dir: here})
+	snap := saved(t, st, "work", func(snap store.Snapshot) bool { return len(snap.Windows) == 1 })
+	if got := snap.Windows[0].Panes[0].Folder; got != here {
+		t.Fatalf("saved folder %q, want %q, where the pane started", got, here)
+	}
+}

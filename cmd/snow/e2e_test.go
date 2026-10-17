@@ -95,26 +95,28 @@ const ctrlB = "\x02"
 // pane.
 func detach(t *testing.T, path, session string, others int, keys io.Writer, done <-chan runResult) client.Result {
 	t.Helper()
-	waitAttached(t, path, session, others+1)
+	// One watcher for the whole wait. Dialing a probe per check would let
+	// the server, with no session yet, exit as each probe leaves (ADR 0008).
+	w := apitest.Dial(t, path, 80, 24)
+	defer w.Close()
+	waitAttached(t, w, session, others+1)
 	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
 		t.Fatal(err)
 	}
-	waitAttached(t, path, session, others)
+	waitAttached(t, w, session, others)
 	// The pipe blocks until the client reads; a client that has already
 	// quit never does, so the write must not hold up the test.
 	go func() { _, _ = io.WriteString(keys, "\x1b") }()
 	return waitResult(t, done)
 }
 
-// waitAttached waits until session has n clients attached. Each check
-// dials a new client, which has not attached and so gets the session list.
-func waitAttached(t *testing.T, path, session string, n int) {
+// waitAttached reads the session lists w gets, as a client that has not
+// attached, until session has n clients attached.
+func waitAttached(t *testing.T, w *apitest.Client, session string, n int) {
 	t.Helper()
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		c := apitest.Dial(t, path, 80, 24)
-		m, _ := c.Next(5 * time.Second)
-		c.Close()
+		m, _ := w.Next(time.Second)
 		if l, ok := m.(*api.SessionList); ok {
 			for _, s := range l.Sessions {
 				if s.Name == session && s.Attached == n {
@@ -122,7 +124,6 @@ func waitAttached(t *testing.T, path, session string, n int) {
 				}
 			}
 		}
-		time.Sleep(20 * time.Millisecond)
 	}
 	t.Fatalf("session %s never had %d clients attached", session, n)
 }

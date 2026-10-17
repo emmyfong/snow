@@ -133,7 +133,7 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				continue
 			}
 			sw.Panes = append(sw.Panes, store.Pane{
-				ID: p.id, Profile: p.profile, Folder: p.term.Folder(), Scrollback: lastLines(p),
+				ID: p.id, Profile: p.profile, Folder: p.folder(), Scrollback: lastLines(p),
 			})
 		}
 		snap.Windows = append(snap.Windows, sw)

@@ -67,7 +67,7 @@ func (st *state) endedKey(c *client, id int, key *api.Key) bool {
 func (st *state) restartPane(sess *session, w *window, old *pane) {
 	cols, rows := sess.area()
 	r := layout.Rects(w.tree, cols, rows).Panes[layout.PaneID(old.id)]
-	p, err := st.srv.startPane(old.id, r.W, r.H, old.profile, old.term.Folder(), preamble(lastLines(old), restoredDivider(time.Now())))
+	p, err := st.srv.startPane(old.id, r.W, r.H, old.profile, old.folder(), preamble(lastLines(old), restoredDivider(time.Now())))
 	if err != nil {
 		st.srv.log.Warn("restart pane failed", "pane", old.id, "err", err)
 		old.term.Print("\r\n\x1b[2mrestart failed: " + err.Error() + "\x1b[0m")

@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/charmbracelet/x/ansi"
 	"net"
 	"os"
 	"path/filepath"
@@ -144,11 +145,16 @@ func TestRestoredDivider(t *testing.T) {
 	c := connect(t, s, 160, 24)
 	c.Send(&api.Attach{Session: "api"})
 	nextLayout(t, c, func(*api.Layout) bool { return true })
-	c.WaitScreen("restored")
-	screen := c.Screen()
-	before, divider := strings.Index(screen, "line from before"), strings.Index(screen, "restored")
+	// History, not the screen: on Windows the shell's first clear moves the
+	// restored lines into scrollback.
+	var text string
+	eventually(t, "divider in the history", func() bool {
+		text = paneHistory(s, "api")
+		return strings.Contains(text, "restored")
+	})
+	before, divider := strings.Index(text, "line from before"), strings.Index(text, "restored")
 	if before < 0 || divider < before {
-		t.Fatalf("screen:\n%s\nwant the saved line above the divider", screen)
+		t.Fatalf("history:\n%s\nwant the saved line above the divider", text)
 	}
 }
 
@@ -207,4 +213,22 @@ func TestServerStartsWithBrokenFile(t *testing.T) {
 	if len(l.Broken) != 1 || !strings.Contains(l.Broken[0], "bad.json") || !strings.Contains(l.Broken[0], filepath.Join(dir, "broken")) {
 		t.Fatalf("broken notes %q, want one naming bad.json and where it moved", l.Broken)
 	}
+}
+
+// paneHistory returns the focused pane's whole history in session as plain
+// text: its scrollback, then its screen.
+func paneHistory(s *Server, session string) string {
+	var text string
+	s.call(func(st *state) {
+		sess, ok := st.sessions[session]
+		if !ok {
+			return
+		}
+		w := sess.shown()
+		p := w.panes[w.focused]
+		_, total, _ := p.term.History(0, 0)
+		lines, _, _ := p.term.History(0, total)
+		text = ansi.Strip(strings.Join(lines, "\n"))
+	})
+	return text
 }
