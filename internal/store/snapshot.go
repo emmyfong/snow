@@ -29,7 +29,8 @@ type Snapshot struct {
 
 // Window is one window of a session.
 type Window struct {
-	Name string `json:"name"`
+	Index int    `json:"index"` // the window's number, as the status bar shows it
+	Name  string `json:"name"`
 	// Layout is the window's layout tree, encoded by internal/layout. The
 	// store does not read it.
 	Layout  json.RawMessage `json:"layout,omitempty"`
@@ -42,8 +43,8 @@ type Pane struct {
 	ID      int    `json:"id"`
 	Profile string `json:"profile"` // the shell profile's name
 	Folder  string `json:"folder,omitempty"`
-	// Scrollback holds the pane's lines, oldest first, with styles as ANSI
-	// escape sequences, as term.Pane.ScrollbackLines returns them.
+	// Scrollback holds the pane's last lines, oldest first, with styles as
+	// ANSI escape sequences: its history, the scrollback then the screen.
 	Scrollback []string `json:"scrollback,omitempty"`
 }
 

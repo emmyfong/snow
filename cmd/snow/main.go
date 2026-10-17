@@ -17,6 +17,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/server"
+	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -184,8 +185,13 @@ func serve(stderr io.Writer) int {
 	// removes the socket and ends the shells.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	// Without a home folder sessions still run; they are only not saved.
+	sessions, err := store.DefaultDir()
+	if err != nil {
+		log.Warn("sessions will not be saved", "err", err)
+	}
 	if err := server.Run(ctx, server.Options{
-		Version: version, Log: log,
+		Version: version, Log: log, SessionsDir: sessions,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default,
 	}, path); err != nil {
 		log.Error("server stopped", "err", err)

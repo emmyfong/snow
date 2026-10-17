@@ -5,6 +5,7 @@ package server
 
 import (
 	"errors"
+	"github.com/emmyfong/snow/internal/store"
 	"log/slog"
 	"sync"
 	"time"
@@ -32,6 +33,8 @@ type Server struct {
 	done     chan struct{} // closed when the last session ends
 	once     sync.Once
 	closing  sync.WaitGroup // panes still being closed in the background
+	saver    *store.Saver   // nil when sessions are not saved
+	store    *store.Store   // where saver writes; nil with it
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see
@@ -47,6 +50,7 @@ func New(opts Options) *Server {
 		done:     make(chan struct{}),
 	}
 	s.launch = newLauncher(opts, s.log)
+	s.saver = s.openSaver()
 	go s.loop()
 	return s
 }
@@ -60,13 +64,18 @@ func (s *Server) loop() {
 	defer close(s.stopped)
 	tick := time.NewTicker(frameInterval)
 	defer tick.Stop()
+	busy := time.NewTicker(cmpDuration(s.opts.busyEvery, defaultBusyEvery))
+	defer busy.Stop()
 	for {
 		select {
 		case f := <-s.requests:
 			f(st)
 		case <-tick.C:
 			st.flush()
+		case <-busy.C:
+			st.saveBusy()
 		case <-s.quit:
+			st.saveAll()
 			st.closeAll()
 			return
 		}

@@ -18,7 +18,8 @@ type state struct {
 	sessions map[string]*session
 	clients  map[*client]struct{}
 	nextPane int
-	served   bool // a session or a client has existed; once neither is left, Done closes
+	served   bool              // a session or a client has existed; once neither is left, Done closes
+	savedAt  map[string]uint64 // session → contentVersion at its last save
 }
 
 type session struct {
@@ -30,7 +31,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}}
 }
 
 // createSession starts a session with one window and one pane in dir. An
@@ -52,6 +53,7 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 	}
 	st.sessions[name] = sess
 	st.served = true
+	st.save(sess)
 	st.srv.log.Info("session created", "session", name, "profile", w.name)
 	return sess, nil
 }
@@ -81,6 +83,7 @@ func (st *state) killSession(name string) error {
 // endSession forgets sess and closes Done when no session is left.
 func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
+	st.unsave(sess.name)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, &api.Error{Code: api.CodeSessionEnded, Message: "session " + sess.name + " ended"})

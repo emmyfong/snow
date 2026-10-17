@@ -33,6 +33,7 @@ func (st *state) fitSession(sess *session) {
 // client attached to it. Call it after any change to windows or panes.
 func (st *state) changed(sess *session) {
 	st.relayout(sess)
+	st.save(sess)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, st.layout(sess))

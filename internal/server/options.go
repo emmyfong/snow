@@ -34,6 +34,11 @@ type Options struct {
 	// Profiles lists the names Spec accepts, the default first. Nil means
 	// the detected profiles, or only the default when Spec is set.
 	Profiles func() []string
+	// SessionsDir is where sessions are saved, so they survive a reboot.
+	// Empty saves nothing.
+	SessionsDir string
+
+	saveDelay, busyEvery time.Duration // tests shorten them; 0 means the defaults
 }
 
 func (o Options) logger() *slog.Logger {

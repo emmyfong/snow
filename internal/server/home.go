@@ -49,8 +49,10 @@ func (st *state) renameRequest(c *client, m *api.RenameSession) {
 		return
 	}
 	delete(st.sessions, sess.name)
+	st.unsave(sess.name)
 	sess.name = m.Name
 	st.sessions[sess.name] = sess
+	st.save(sess)
 	for other := range st.clients {
 		if other.session == m.Session {
 			other.session = sess.name
