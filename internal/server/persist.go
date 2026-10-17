@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -34,7 +36,7 @@ func (s *Server) openSaver() *store.Saver {
 	infos, errs := st.List()
 	s.startSaved = infos
 	for _, err := range errs {
-		s.log.Warn("saved session unreadable", "err", err)
+		s.startBroken = append(s.startBroken, s.setAside(err))
 	}
 	delay := cmpDuration(s.opts.saveDelay, defaultSaveDelay)
 	return store.NewSaver(st, delay, func(session string, err error) {
@@ -158,4 +160,20 @@ func (s *Server) savedInfos() map[string]store.Info {
 		out[info.Name] = info
 	}
 	return out
+}
+
+// setAside reports a saved session that cannot be read: a broken file moves
+// to the broken folder. It returns a note for the home page.
+func (s *Server) setAside(err error) string {
+	s.log.Warn("saved session unreadable", "err", err)
+	de, ok := errors.AsType[*store.DecodeError](err)
+	if !ok {
+		return err.Error()
+	}
+	moved, merr := s.store.MoveBroken(de.Path, time.Now())
+	if merr != nil {
+		s.log.Warn("could not move broken snapshot", "err", merr)
+		return fmt.Sprintf("%s cannot be read (%v) or moved (%v)", de.Path, de.Err, merr)
+	}
+	return fmt.Sprintf("%s cannot be read (%v); moved to %s", de.Path, de.Err, moved)
 }

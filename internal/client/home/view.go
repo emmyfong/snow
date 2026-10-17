@@ -36,13 +36,14 @@ func (m *Model) layout() placement {
 	p := placement{width: min(64, max(m.cols-4, 0))}
 	p.x = max((m.cols-p.width)/2, 0)
 	shown, selected := m.listLen(), m.listSel()
-	room := m.rows - fixedRows
+	notes := len(m.brokenNotes())
+	room := m.rows - fixedRows - notes
 	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)
 	if p.header {
 		room -= headerRows
 	}
 	p.lines = min(max(shown, 1), max(room, 1))
-	total := fixedRows + p.lines
+	total := fixedRows + p.lines + notes
 	if p.header {
 		total += headerRows
 	}
@@ -118,6 +119,7 @@ func (m *Model) View() tea.View {
 		lines = append(lines, m.commandList(p)...)
 	default:
 		lines = append(lines, m.sessionList(p)...)
+		lines = append(lines, indent(m.brokenNotes(), p.x)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
 	for len(lines) < m.rows {
@@ -219,4 +221,34 @@ func (m *Model) escHint() string {
 		return "back to " + m.back
 	}
 	return "quit"
+}
+
+// maxNotes bounds the broken-file lines on the page; the rest are counted.
+const maxNotes = 3
+
+// brokenNotes are the lines about saved files the server could not read,
+// shown under the sessions. A long path keeps its end, where the file name
+// is.
+func (m *Model) brokenNotes() []string {
+	if m.picking || m.commanding() || len(m.broken) == 0 {
+		return nil
+	}
+	style := lipgloss.NewStyle().Foreground(m.theme.Error)
+	width := min(64, max(m.cols-4, 0))
+	var out []string
+	for i, note := range m.broken {
+		if i == maxNotes-1 && len(m.broken) > maxNotes {
+			note = strconv.Itoa(len(m.broken)-i) + " more saved sessions could not be read; see the log"
+		} else if i >= maxNotes {
+			break
+		}
+		if ansi.StringWidth(note) > width {
+			note = "…" + ansi.TruncateLeft(note, ansi.StringWidth(note)-width+1, "")
+		}
+		out = append(out, style.Render(note))
+		if len(out) == maxNotes {
+			break
+		}
+	}
+	return out
 }

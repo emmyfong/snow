@@ -31,6 +31,16 @@ func (s *Server) loadSaved(session string) (*store.Snapshot, error) {
 		return nil, nil
 	}
 	snap, err := s.store.Load(session)
+	if _, broken := errors.AsType[*store.DecodeError](err); broken {
+		// The file broke after start-up: set it aside, as at start-up.
+		note := s.setAside(err)
+		s.call(func(st *state) {
+			delete(st.saved, session)
+			st.broken = append(st.broken, note)
+			st.sessionsChanged()
+		})
+		return nil, errors.New(note)
+	}
 	if err != nil {
 		return nil, err
 	}

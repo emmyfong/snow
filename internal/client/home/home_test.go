@@ -207,6 +207,10 @@ func TestHomeTinyScreens(t *testing.T) {
 		"commands": func(m *Model) { typeText(m, "/") },
 		"help":     func(m *Model) { typeText(m, "/help"); m.Update(press(tea.KeyEnter)) },
 		"kill":     func(m *Model) { typeText(m, "/kill 漢字のセッション"); m.Update(press(tea.KeyEnter)) },
+		"broken": func(m *Model) {
+			note := "/home/u/.snow/sessions/漢字.json cannot be read; moved to /home/u/.snow/sessions/broken/漢字-20261008T091400.json"
+			m.Update(&api.SessionList{Sessions: m.sessions, Broken: []string{note, note, note, note, note}})
+		},
 	}
 	for name, setup := range states {
 		for cols := 1; cols <= 100; cols += 3 {
@@ -224,5 +228,16 @@ func TestHomeTinyScreens(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestBrokenSnapshotsShow: each file the server moved aside gets a line on
+// the home page with its path.
+func TestBrokenSnapshotsShow(t *testing.T) {
+	m := screen(120, 40, session("api", time.Minute, 0))
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("api", time.Minute, 0)},
+		Broken: []string{"/home/u/.snow/sessions/bad.json moved to /home/u/.snow/sessions/broken/bad-20261008T091400.json"}})
+	if !strings.Contains(ansi.Strip(m.View().Content), "broken/bad-20261008T091400.json") {
+		t.Fatal("the broken file is not on the home page")
 	}
 }

@@ -187,3 +187,24 @@ func TestRenameSavedSession(t *testing.T) {
 		t.Fatalf("layout %+v, want backend restored with both panes", l)
 	}
 }
+
+// TestServerStartsWithBrokenFile: a broken snapshot does not stop the
+// server or hide the good ones; it moves aside and the session list says
+// where it went.
+func TestServerStartsWithBrokenFile(t *testing.T) {
+	dir := t.TempDir()
+	writeSnapshot(t, dir, twoPanes(t, ""))
+	if err := os.WriteFile(filepath.Join(dir, "bad.json"), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := restoreServer(t, dir)
+	c := apitest.New(t, dialPipe(s), 80, 24)
+	m, _ := c.Next(5 * time.Second)
+	l, ok := m.(*api.SessionList)
+	if !ok || len(l.Sessions) != 1 || l.Sessions[0].Name != "api" {
+		t.Fatalf("first message %#v, want api listed", m)
+	}
+	if len(l.Broken) != 1 || !strings.Contains(l.Broken[0], "bad.json") || !strings.Contains(l.Broken[0], filepath.Join(dir, "broken")) {
+		t.Fatalf("broken notes %q, want one naming bad.json and where it moved", l.Broken)
+	}
+}

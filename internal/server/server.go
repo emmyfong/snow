@@ -37,7 +37,8 @@ type Server struct {
 	store    *store.Store   // where saver writes; nil with it
 	// startSaved lists the sessions saved when the server started; the
 	// model goroutine takes it over.
-	startSaved []store.Info
+	startSaved  []store.Info
+	startBroken []string // notes on files that could not be read at start
 }
 
 // New starts a server's model goroutine. It does not listen on a socket; see

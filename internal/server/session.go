@@ -22,6 +22,7 @@ type state struct {
 	served   bool                  // a session or a client has existed; once neither is left, Done closes
 	savedAt  map[string]uint64     // session → contentVersion at its last save
 	saved    map[string]store.Info // sessions with a saved file, running or not
+	broken   []string              // notes on saved files that could not be read
 }
 
 type session struct {
@@ -33,7 +34,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos()}
+	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), broken: s.startBroken}
 }
 
 // createSession starts a session with one window and one pane in dir. An
@@ -153,7 +154,7 @@ func (st *state) sessionsChanged() {
 			continue
 		}
 		if list == nil {
-			list = &api.SessionList{Sessions: st.sessionList()}
+			list = &api.SessionList{Sessions: st.sessionList(), Broken: st.broken}
 		}
 		st.enqueue(c, list)
 	}

@@ -55,3 +55,19 @@ func (s *Store) List() ([]Info, []error) {
 	slices.SortFunc(infos, func(a, b Info) int { return strings.Compare(a.Name, b.Name) })
 	return infos, errs
 }
+
+// MoveBroken moves a snapshot file that cannot be read back to the broken
+// folder beside the snapshots, named after it and stamped with at, and
+// returns its new path. The file is kept for the user, never repaired.
+func (s *Store) MoveBroken(path string, at time.Time) (string, error) {
+	dir := filepath.Join(s.dir, "broken")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return "", fmt.Errorf("move broken snapshot: %w", err)
+	}
+	base := strings.TrimSuffix(filepath.Base(path), ".json")
+	moved := filepath.Join(dir, base+"-"+at.UTC().Format("20060102T150405")+".json")
+	if err := os.Rename(path, moved); err != nil {
+		return "", fmt.Errorf("move broken snapshot: %w", err)
+	}
+	return moved, nil
+}
