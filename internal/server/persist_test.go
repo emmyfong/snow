@@ -178,3 +178,25 @@ func TestNormalStopDeletesEndedSessions(t *testing.T) {
 		t.Fatalf("an ended session's file survived a normal stop: %v", err)
 	}
 }
+
+// TestSavedLinesNone: with no lines to keep, a snapshot holds the layout
+// and folders but none of the panes' output.
+func TestSavedLinesNone(t *testing.T) {
+	opts := testOptions()
+	opts.SessionsDir = t.TempDir()
+	opts.SavedLines = -1
+	opts.saveDelay = 10 * time.Millisecond
+	s := New(opts)
+	t.Cleanup(s.Close)
+	st, _ := store.Open(opts.SessionsDir)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Input{Pane: 1, Paste: "echo secret-value\r"})
+	c.WaitScreen("secret-value\n")
+	c.Send(&api.Command{Op: api.OpRenameWindow, Target: 0, Args: map[string]string{api.ArgName: "x"}})
+	snap := saved(t, st, "work", func(snap store.Snapshot) bool { return snap.Windows[0].Name == "x" })
+	if lines := snap.Windows[0].Panes[0].Scrollback; len(lines) != 0 || len(snap.Windows[0].Layout) == 0 {
+		t.Fatalf("saved lines %q, layout %d bytes; want no lines and a layout", lines, len(snap.Windows[0].Layout))
+	}
+}

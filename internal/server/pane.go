@@ -3,6 +3,7 @@ package server
 import (
 	"os"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
@@ -13,8 +14,9 @@ type pane struct {
 	id      int
 	profile string
 	term    *term.Pane
-	ended   bool   // its WSL distribution stopped; it waits for r to restart
-	dir     string // the folder it was asked to start in, for a shell that never reports one
+	ended   bool        // its WSL distribution stopped; it waits for r to restart
+	dir     string      // the folder it was asked to start in, for a shell that never reports one
+	closed  atomic.Bool // Snow closed it; set before its program is ended
 }
 
 // startPane starts profile's program in dir at cols by rows, below
@@ -32,12 +34,14 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 	if err != nil {
 		return nil, err
 	}
+	p := &pane{id: id, profile: profile, term: tp, dir: dir}
 	go func() {
 		<-tp.Done()
-		ended := s.wslStopped(profile)
+		// A pane Snow closed did not end with WSL; skip asking.
+		ended := !p.closed.Load() && s.wslStopped(profile)
 		s.post(func(st *state) { st.paneExited(id, ended) })
 	}()
-	return &pane{id: id, profile: profile, term: tp, dir: dir}, nil
+	return p, nil
 }
 
 // usableDir returns dir if it is an existing absolute folder, or else the

@@ -2,7 +2,9 @@ package server
 
 import (
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/pkg/api"
@@ -75,4 +77,22 @@ func TestExitClosesPaneWhileDistroRuns(t *testing.T) {
 	c, first, _ := splitTwo(t, s)
 	c.Send(&api.Input{Pane: first, Paste: "exit\r"})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == 1 })
+}
+
+// TestClosedPaneSkipsWSLCheck: a pane Snow closes did not end with WSL, so
+// its exit starts no wsl.exe query.
+func TestClosedPaneSkipsWSLCheck(t *testing.T) {
+	opts := testOptions()
+	opts.paneDistro = func(string) (string, bool) { return "Ubuntu", true }
+	var asked atomic.Int32
+	opts.distroRunning = func(string) bool { asked.Add(1); return true }
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c, first, _ := splitTwo(t, s)
+	c.Send(&api.Command{Op: api.OpClose, Target: first})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == 1 })
+	time.Sleep(200 * time.Millisecond) // the exit goroutine runs after the close
+	if n := asked.Load(); n != 0 {
+		t.Fatalf("closing a pane asked WSL %d times, want 0", n)
+	}
 }

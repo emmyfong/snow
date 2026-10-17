@@ -244,9 +244,11 @@ func TestHomePageCreatesASession(t *testing.T) {
 func TestRestartServerSavesAndStops(t *testing.T) {
 	path := apitest.SocketPath(t)
 	dir := t.TempDir()
+	oldCtx, stopOld := context.WithCancel(context.Background())
+	t.Cleanup(stopOld) // if the restart fails, the old server must still stop
 	done := make(chan error, 1)
 	go func() {
-		done <- server.Run(context.Background(), server.Options{Version: "old", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+		done <- server.Run(oldCtx, server.Options{Version: "old", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
 	}()
 	o := apitest.Dial(t, path, 80, 24)
 	o.Send(&api.Attach{Session: "work", Create: true})
@@ -270,10 +272,16 @@ func TestRestartServerSavesAndStops(t *testing.T) {
 		t.Fatal("the server kept running")
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	doneNew := make(chan error, 1)
 	go func() {
-		_ = server.Run(ctx, server.Options{Version: "new", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
+		doneNew <- server.Run(ctx, server.Options{Version: "new", Spec: testShell, SessionsDir: dir, IdleExit: time.Minute}, path)
 	}()
+	t.Cleanup(func() {
+		cancel()
+		if err := <-doneNew; err != nil {
+			t.Errorf("new server: %v", err)
+		}
+	})
 	c := apitest.Dial(t, path, 80, 24)
 	m, _ := c.Next(5 * time.Second)
 	if l, ok := m.(*api.SessionList); !ok || len(l.Sessions) != 1 || l.Sessions[0].State != api.StateSaved {

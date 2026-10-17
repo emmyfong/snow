@@ -198,7 +198,7 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				continue
 			}
 			sw.Panes = append(sw.Panes, store.Pane{
-				ID: p.id, Profile: p.profile, Folder: p.folder(), Scrollback: lastLines(p),
+				ID: p.id, Profile: p.profile, Folder: p.folder(), Scrollback: lastLines(p, st.srv.savedLines()),
 			})
 		}
 		snap.Windows = append(snap.Windows, sw)
@@ -206,11 +206,26 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 	return snap
 }
 
-// lastLines returns the last store.MaxScrollback lines of p's history,
-// without the empty rows below the screen's last text.
-func lastLines(p *pane) []string {
+// savedLines is how many lines of each pane a snapshot keeps.
+func (s *Server) savedLines() int {
+	switch n := s.opts.SavedLines; {
+	case n < 0:
+		return 0
+	case n == 0 || n > store.MaxScrollback:
+		return store.MaxScrollback
+	default:
+		return n
+	}
+}
+
+// lastLines returns the last n lines of p's history, without the empty rows
+// below the screen's last text.
+func lastLines(p *pane, n int) []string {
+	if n <= 0 {
+		return nil
+	}
 	_, total, _ := p.term.History(0, 0)
-	lines, _, _ := p.term.History(max(total-store.MaxScrollback, 0), store.MaxScrollback)
+	lines, _, _ := p.term.History(max(total-n, 0), n)
 	end := len(lines)
 	for end > 0 && strings.TrimSpace(ansi.Strip(lines[end-1])) == "" {
 		end--

@@ -47,6 +47,9 @@ func TestDefaults(t *testing.T) {
 	if d.Theme.Name != "default" {
 		t.Errorf("Theme.Name = %q, want %q", d.Theme.Name, "default")
 	}
+	if !d.Sessions.Save || d.Sessions.Lines != 2000 {
+		t.Errorf("Sessions = %+v, want saving on with 2000 lines", d.Sessions)
+	}
 	if err := d.validate(); err != nil {
 		t.Errorf("Defaults().validate() = %v, want nil", err)
 	}
@@ -102,6 +105,16 @@ name = "light"
 				c.Profile.Default = "Ubuntu"
 				c.Theme.Name = "light"
 			},
+		},
+		{
+			name: "saving off",
+			body: "[sessions]\nsave = false\n",
+			want: func(c *Config) { c.Sessions.Save = false },
+		},
+		{
+			name: "layout and folders only",
+			body: "[sessions]\nlines = 0\n",
+			want: func(c *Config) { c.Sessions.Lines = 0 },
 		},
 		{
 			name: "several keys for one action",
@@ -315,5 +328,18 @@ func TestLocateWithUnreadableFileStillNamesTheKey(t *testing.T) {
 	var ce *Error
 	if !errors.As(err, &ce) || ce.Line != 0 || ce.Key != "keys.prefix" {
 		t.Fatalf("Locate = %+v, want line 0 and the key", err)
+	}
+}
+
+func TestSessionLinesBounds(t *testing.T) {
+	for body, ok := range map[string]bool{
+		"[sessions]\nlines = 2000\n": true,
+		"[sessions]\nlines = 2001\n": false,
+		"[sessions]\nlines = -1\n":   false,
+	} {
+		_, err := Load(writeConfig(t, body))
+		if (err == nil) != ok {
+			t.Errorf("%q: Load error = %v, want ok=%v", body, err, ok)
+		}
 	}
 }

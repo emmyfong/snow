@@ -148,6 +148,7 @@ func (st *state) removeWindow(sess *session, w *window) {
 // already gone from the state, and its exit notice then finds nothing.
 // Server.Close waits for these closes.
 func (st *state) closePane(p *pane) {
+	p.closed.Store(true)
 	st.srv.closing.Add(1)
 	go func() {
 		defer st.srv.closing.Done()

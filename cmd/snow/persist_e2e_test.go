@@ -23,12 +23,17 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	sessions, path := t.TempDir(), apitest.SocketPath(t)
 	left, right := t.TempDir(), t.TempDir()
 
-	// Server A.
-	ctxA, stopA := context.WithCancel(context.Background())
+	// Server A. stopA runs once, early on success or at cleanup on failure,
+	// so a failed test leaves no shells holding the folders open.
+	ctxA, cancelA := context.WithCancel(context.Background())
 	doneA := make(chan error, 1)
 	go func() {
 		doneA <- server.Run(ctxA, server.Options{Version: "a", Spec: testShell, SessionsDir: sessions, IdleExit: time.Minute}, path)
 	}()
+	var stopOnce sync.Once
+	var errA error
+	stopA := func() { stopOnce.Do(func() { cancelA(); errA = <-doneA }) }
+	t.Cleanup(stopA)
 	c := apitest.Dial(t, path, 160, 40)
 	c.Send(&api.Attach{Session: "rt", Create: true, Dir: left})
 	first := waitPanes(t, c, 1)[0].ID
@@ -37,6 +42,8 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	c.Send(&api.Command{Op: api.OpSplit, Target: second, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgFolder: right}})
 	panes := waitPanes(t, c, 3)
 	for i, p := range panes {
+		// Shells drop input that arrives while they start.
+		history(t, c, p.ID, strings.TrimSpace(shellPrompt()))
 		c.Send(&api.Input{Pane: p.ID, Paste: "echo rt-mark-" + string(rune('a'+i)) + "\r"})
 	}
 	st, err := store.Open(sessions)
@@ -58,8 +65,8 @@ func TestPersistenceRoundTrip(t *testing.T) {
 	}
 	c.Close()
 	stopA()
-	if err := <-doneA; err != nil {
-		t.Fatalf("server A: %v", err)
+	if errA != nil {
+		t.Fatalf("server A: %v", errA)
 	}
 
 	// Server B, recording where it starts each pane.

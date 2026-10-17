@@ -37,6 +37,10 @@ type Options struct {
 	// SessionsDir is where sessions are saved, so they survive a reboot.
 	// Empty saves nothing.
 	SessionsDir string
+	// SavedLines is how many lines of each pane a saved session keeps: 0
+	// means store.MaxScrollback, and less than 0 none, only the layout and
+	// folders.
+	SavedLines int
 
 	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 

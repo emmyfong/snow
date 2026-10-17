@@ -190,12 +190,18 @@ func serve(stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// Without a home folder sessions still run; they are only not saved.
-	sessions, err := store.DefaultDir()
-	if err != nil {
-		log.Warn("sessions will not be saved", "err", err)
+	var sessions string
+	if cfg.Sessions.Save {
+		if sessions, err = store.DefaultDir(); err != nil {
+			log.Warn("sessions will not be saved", "err", err)
+		}
+	}
+	savedLines := cfg.Sessions.Lines
+	if savedLines == 0 {
+		savedLines = -1 // the config's 0 is "no lines", the server's is "default"
 	}
 	if err := server.Run(ctx, server.Options{
-		Version: version, Log: log, SessionsDir: sessions,
+		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default,
 	}, path); err != nil {
 		log.Error("server stopped", "err", err)

@@ -3,11 +3,15 @@
 package shell
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 	"unicode/utf16"
 )
 
@@ -121,12 +125,24 @@ func parseWSLList(b []byte) []string {
 	return out
 }
 
-// RunningDistros lists the WSL distributions running now, or nil when WSL
-// is missing or none runs. It starts wsl.exe, so it waits for a process.
-func RunningDistros() []string {
-	out, err := exec.Command("wsl.exe", "-l", "-q", "--running").Output()
-	if err != nil {
-		return nil
+// wslTimeout bounds a wsl.exe query: while WSL shuts down it can hang.
+const wslTimeout = 3 * time.Second
+
+// RunningDistros lists the WSL distributions running now. wsl.exe exits
+// non-zero when none runs, which is still an answer: an empty list. An
+// error means there is no answer, because wsl.exe is missing, could not
+// start, or hung.
+func RunningDistros() ([]string, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), wslTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wsl.exe", "-l", "-q", "--running")
+	hideWindow(cmd)
+	out, err := cmd.Output()
+	if _, exited := errors.AsType[*exec.ExitError](err); exited && ctx.Err() == nil {
+		return parseWSLList(out), nil
 	}
-	return parseWSLList(out)
+	if err != nil {
+		return nil, fmt.Errorf("list running WSL distributions: %w", err)
+	}
+	return parseWSLList(out), nil
 }
