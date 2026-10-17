@@ -23,8 +23,10 @@ const stopTimeout = 10 * time.Second
 // and reads the answer from in. Only y or yes restarts.
 func AskRestart(in io.Reader, out io.Writer, m *api.VersionMismatchError) bool {
 	_, _ = fmt.Fprintf(out, "The running server is version %s; this is %s.\n"+
-		"Restart it now? Sessions are saved and come back as saved sessions. [y/N] ",
+		"Restart it now? Programs running in its panes stop; a server that saves\n"+
+		"sessions keeps them, and they come back as saved sessions. [y/N] ",
 		m.ServerVersion, m.ClientVersion)
+	// A read error, such as end of input, leaves line empty: the answer no.
 	line, _ := bufio.NewReader(in).ReadString('\n')
 	switch strings.ToLower(strings.TrimSpace(line)) {
 	case "y", "yes":
@@ -61,11 +63,13 @@ func RestartServer(path, version string) error {
 	// can make the server's next write fail and drop the connection before
 	// it reads the Shutdown.
 	deadline := time.Now().Add(stopTimeout)
-	if err := raw.SetReadDeadline(deadline); err == nil {
-		for {
-			if _, err := conn.Receive(); err != nil {
-				break
-			}
+	if err := raw.SetReadDeadline(deadline); err != nil {
+		_ = raw.Close()
+		return fmt.Errorf("restart server: %w", err)
+	}
+	for {
+		if _, err := conn.Receive(); err != nil {
+			break
 		}
 	}
 	_ = raw.Close()

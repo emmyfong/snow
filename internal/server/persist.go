@@ -246,6 +246,9 @@ func (s *Server) savedInfos() map[string]store.Info {
 // to the broken folder. It returns a note for the home page.
 func (s *Server) setAside(err error) string {
 	s.log.Warn("saved session unreadable", "err", err)
+	if errors.Is(err, store.ErrNewerVersion) {
+		return err.Error() + "; it stays in place for that version"
+	}
 	de, ok := errors.AsType[*store.DecodeError](err)
 	if !ok {
 		return err.Error()

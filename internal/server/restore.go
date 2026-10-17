@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"slices"
 	"strings"
 	"time"
@@ -40,6 +41,14 @@ func (s *Server) loadSaved(session string) (*store.Snapshot, error) {
 			st.sessionsChanged()
 		})
 		return nil, errors.New(note)
+	}
+	if errors.Is(err, fs.ErrNotExist) {
+		// Deleted outside Snow: forget it, and the attach finds no session.
+		s.call(func(st *state) {
+			delete(st.saved, session)
+			st.sessionsChanged()
+		})
+		return nil, nil
 	}
 	if err != nil {
 		return nil, err
@@ -84,7 +93,7 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string) (
 	}
 	tree := &layout.Tree{}
 	if err := json.Unmarshal(sw.Layout, tree); err != nil || tree.Root == nil {
-		// No usable layout: the first saved pane alone.
+		st.srv.log.Warn("saved layout unusable; restoring its first pane alone", "session", sess.name, "window", sw.Index, "err", err)
 		first := 0
 		if len(sw.Panes) > 0 {
 			first = sw.Panes[0].ID

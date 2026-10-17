@@ -3,6 +3,8 @@ package store
 import (
 	"errors"
 	"fmt"
+	"github.com/emmyfong/snow/internal/private"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
@@ -34,20 +36,9 @@ func (s *Store) List() ([]Info, []error) {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
 			continue
 		}
-		path := filepath.Join(s.dir, e.Name())
-		b, err := os.ReadFile(path)
+		snap, err := read(filepath.Join(s.dir, e.Name()))
 		if err != nil {
 			errs = append(errs, fmt.Errorf("list sessions: %w", err))
-			continue
-		}
-		snap, err := decode(b)
-		if de, ok := errors.AsType[*DecodeError](err); ok {
-			de.Path = path
-			errs = append(errs, de)
-			continue
-		}
-		if err != nil {
-			errs = append(errs, fmt.Errorf("list sessions: %s: %w", path, err))
 			continue
 		}
 		infos = append(infos, Info{Name: snap.Name, Saved: snap.Saved, Windows: len(snap.Windows)})
@@ -61,12 +52,20 @@ func (s *Store) List() ([]Info, []error) {
 // returns its new path. The file is kept for the user, never repaired.
 func (s *Store) MoveBroken(path string, at time.Time) (string, error) {
 	dir := filepath.Join(s.dir, "broken")
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	if err := private.Dir(dir); err != nil {
 		return "", fmt.Errorf("move broken snapshot: %w", err)
 	}
-	base := strings.TrimSuffix(filepath.Base(path), ".json")
-	moved := filepath.Join(dir, base+"-"+at.UTC().Format("20060102T150405")+".json")
-	if err := os.Rename(path, moved); err != nil {
+	stem := strings.TrimSuffix(filepath.Base(path), ".json") + "-" + at.UTC().Format("20060102T150405")
+	moved := filepath.Join(dir, stem+".json")
+	// rename replaces a file of the same name; two broken files from one
+	// second must both stay.
+	for n := 2; ; n++ {
+		if _, err := os.Lstat(moved); errors.Is(err, fs.ErrNotExist) {
+			break
+		}
+		moved = filepath.Join(dir, fmt.Sprintf("%s-%d.json", stem, n))
+	}
+	if err := rename(path, moved); err != nil {
 		return "", fmt.Errorf("move broken snapshot: %w", err)
 	}
 	return moved, nil

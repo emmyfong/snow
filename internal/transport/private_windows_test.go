@@ -29,10 +29,11 @@ func acl(t *testing.T, path string) (flags, aces string) {
 // prints as LA, not its SID.
 func sddlEntry(t *testing.T, rights string) string {
 	t.Helper()
-	sid, err := currentUserSID()
+	user, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		t.Fatal(err)
 	}
+	sid := user.User.Sid.String()
 	sd, err := windows.SecurityDescriptorFromString("D:(A;" + rights + ";;;" + sid + ")")
 	if err != nil {
 		t.Fatal(err)

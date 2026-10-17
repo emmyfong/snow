@@ -7,7 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
+	"unicode"
 )
 
 // Version is the snapshot format version that Save writes. Load rejects
@@ -89,6 +91,19 @@ func encode(s Snapshot) ([]byte, error) {
 	return b, nil
 }
 
+// ErrNewerVersion means a snapshot was saved by a newer Snow, in a format
+// this one cannot read. The file is not broken: it stays for that version.
+var ErrNewerVersion = errors.New("saved by a newer snow")
+
+// Limits on a snapshot read back, so a damaged or hand-made file cannot
+// start thousands of shells or exhaust memory. Real sessions stay far
+// below them.
+const (
+	maxFileSize = 64 << 20
+	maxWindows  = 64
+	maxPanes    = 64 // per window
+)
+
 func decode(b []byte) (Snapshot, error) {
 	var s Snapshot
 	if err := json.Unmarshal(b, &s); err != nil {
@@ -98,9 +113,22 @@ func decode(b []byte) (Snapshot, error) {
 	case s.Version == 0:
 		return Snapshot{}, &DecodeError{Err: errors.New("no format version")}
 	case s.Version > Version:
-		return Snapshot{}, &DecodeError{Err: fmt.Errorf("format version %d is newer than %d", s.Version, Version)}
-	case s.Name == "":
-		return Snapshot{}, &DecodeError{Err: errors.New("no session name")}
+		return Snapshot{}, fmt.Errorf("%w: format %d, this one reads up to %d", ErrNewerVersion, s.Version, Version)
+	case s.Name == "" || strings.IndexFunc(s.Name, unicode.IsControl) >= 0:
+		return Snapshot{}, &DecodeError{Err: errors.New("no usable session name")}
+	case len(s.Windows) > maxWindows:
+		return Snapshot{}, &DecodeError{Err: fmt.Errorf("%d windows, more than %d", len(s.Windows), maxWindows)}
+	}
+	for i := range s.Windows {
+		w := &s.Windows[i]
+		if len(w.Panes) > maxPanes {
+			return Snapshot{}, &DecodeError{Err: fmt.Errorf("%d panes in a window, more than %d", len(w.Panes), maxPanes)}
+		}
+		for j := range w.Panes {
+			if lines := w.Panes[j].Scrollback; len(lines) > MaxScrollback {
+				w.Panes[j].Scrollback = lines[len(lines)-MaxScrollback:]
+			}
+		}
 	}
 	return s, nil
 }

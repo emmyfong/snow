@@ -21,7 +21,7 @@ func writeAtomic(path string, write func(io.Writer) error) (err error) {
 	tmp := tempPath(path)
 	// Remove a stale temp file so O_EXCL creates a fresh one with mode 0600;
 	// opening an existing file keeps its old mode.
-	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove stale temp file: %w", err)
 	}
 	f, err := os.OpenFile(tmp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
@@ -54,7 +54,7 @@ func writeAtomic(path string, write func(io.Writer) error) (err error) {
 }
 
 func removeTemp(tmp string) error {
-	if err := os.Remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	if err := remove(tmp); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("remove temp file: %w", err)
 	}
 	return nil

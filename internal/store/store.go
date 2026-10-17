@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"fmt"
+	"github.com/emmyfong/snow/internal/private"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -27,7 +28,8 @@ type Store struct {
 // Open returns a Store for dir and creates the folder, private to the
 // current user, if it is missing.
 func Open(dir string) (*Store, error) {
-	if err := os.MkdirAll(dir, 0o700); err != nil {
+	// Snapshots hold terminal output: the folder is the user's alone.
+	if err := private.Dir(dir); err != nil {
 		return nil, fmt.Errorf("create sessions folder: %w", err)
 	}
 	return &Store{dir: dir}, nil
@@ -67,16 +69,11 @@ func (s *Store) Load(session string) (Snapshot, error) {
 	if err != nil {
 		return Snapshot{}, err
 	}
-	b, err := os.ReadFile(path)
+	snap, err := read(path)
 	if err != nil {
 		return Snapshot{}, fmt.Errorf("load session %q: %w", session, err)
 	}
-	snap, err := decode(b)
-	if de, ok := errors.AsType[*DecodeError](err); ok {
-		de.Path = path
-		return Snapshot{}, de
-	}
-	return snap, err
+	return snap, nil
 }
 
 // Delete removes the snapshot for session and any temp file a crash left.
@@ -88,7 +85,7 @@ func (s *Store) Delete(session string) error {
 	}
 	var errs []error
 	for _, p := range []string{path, tempPath(path)} {
-		if err := os.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		if err := remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, fmt.Errorf("delete session %q: %w", session, err))
 		}
 	}
@@ -107,4 +104,36 @@ func (s *Store) Move(from, to string) error {
 		return err
 	}
 	return s.Delete(from)
+}
+
+// read reads the snapshot at path. A file that is not a regular file, is
+// too big, cannot be decoded, or holds another session than its name says
+// gives a *DecodeError with the path; a newer format gives ErrNewerVersion.
+func read(path string) (Snapshot, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	switch {
+	case !fi.Mode().IsRegular():
+		return Snapshot{}, &DecodeError{Path: path, Err: errors.New("not a regular file")}
+	case fi.Size() > maxFileSize:
+		return Snapshot{}, &DecodeError{Path: path, Err: fmt.Errorf("%d bytes, more than %d", fi.Size(), maxFileSize)}
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snap, err := decode(b)
+	if de, ok := errors.AsType[*DecodeError](err); ok {
+		de.Path = path
+		return Snapshot{}, de
+	}
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if name, nerr := fileName(snap.Name); nerr != nil || name != filepath.Base(path) {
+		return Snapshot{}, &DecodeError{Path: path, Err: fmt.Errorf("holds session %q, not the one its file name says", snap.Name)}
+	}
+	return snap, nil
 }

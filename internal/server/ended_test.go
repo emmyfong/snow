@@ -39,22 +39,17 @@ func splitTwo(t *testing.T, s *Server) (*apitest.Client, int, int) {
 func TestRestoreEndedPane(t *testing.T) {
 	s := wslServer(t, false)
 	c, first, second := splitTwo(t, s)
-	c.Send(&api.Input{Pane: first, Paste: "echo before" + "stop\r"})
-	c.WaitScreen("beforestop")
+	// Two copies: the typed command and its output.
+	c.Send(&api.Input{Pane: first, Paste: "echo marker-before-stop\r"})
+	eventually(t, "the marker", func() bool { return strings.Count(paneText(s, "work", first), "marker-before-stop") >= 2 })
 	c.Send(&api.Input{Pane: first, Paste: "exit\r"})
-	c.WaitScreen("press r to restore")
+	eventually(t, "the ended note", func() bool { return strings.Contains(paneText(s, "work", first), "press r to restore") })
 	c.Send(&api.Input{Pane: first, Key: &api.Key{Code: "r", Text: "r"}})
 	// History, not the screen: on Windows the new shell's first clear moves
 	// the restored lines into scrollback.
 	eventually(t, "restarted pane's divider", func() bool {
-		var text string
-		s.call(func(st *state) {
-			_, p := st.sessions["work"].findPane(first)
-			_, total, _ := p.term.History(0, 0)
-			lines, _, _ := p.term.History(0, total)
-			text = strings.Join(lines, "\n")
-		})
-		return strings.Contains(text, "restored") && strings.Contains(text, "beforestop")
+		text := paneText(s, "work", first)
+		return strings.Contains(text, "restored") && strings.Contains(text, "marker-before-stop")
 	})
 	var ended []bool
 	s.call(func(st *state) {

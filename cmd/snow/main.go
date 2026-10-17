@@ -246,8 +246,12 @@ func attach(name string, stdout, stderr io.Writer) int {
 			_, _ = fmt.Fprintln(stdout, "Keeping the running server.")
 			return 1
 		}
-		if rerr := client.RestartServer(path, version); rerr != nil {
-			_, _ = fmt.Fprintf(stderr, "snow: %v. It is older than restarts; stop it with: %s\n", rerr, stopHint)
+		switch rerr := client.RestartServer(path, version); {
+		case errors.Is(rerr, client.ErrServerKeptRunning):
+			_, _ = fmt.Fprintf(stderr, "snow: the server is older than restarts and kept running. Stop it with:\n  %s\n", stopHint)
+			return 1
+		case rerr != nil:
+			_, _ = fmt.Fprintln(stderr, "snow:", rerr)
 			return 1
 		}
 		res, err = run()

@@ -16,6 +16,11 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 		return
 	}
 	sess, ok := st.sessions[m.Session]
+	// The snapshot was read outside this goroutine; a kill or rename since
+	// then makes it stale.
+	if _, saved := st.saved[m.Session]; !saved {
+		snap = nil
+	}
 	if !ok && snap != nil {
 		cols, rows := c.cols, c.rows
 		if cols <= 0 || rows <= 0 {

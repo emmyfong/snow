@@ -28,6 +28,20 @@ func rename(from, to string) error {
 	return err
 }
 
+// remove deletes path, retrying while another process holds it open, as
+// rename does.
+func remove(path string) error {
+	var err error
+	for i := range renameTries {
+		err = os.Remove(path)
+		if err == nil || !errors.Is(err, windows.ERROR_ACCESS_DENIED) && !errors.Is(err, windows.ERROR_SHARING_VIOLATION) {
+			return err
+		}
+		time.Sleep(time.Duration(i+1) * 10 * time.Millisecond)
+	}
+	return err
+}
+
 // syncDir does nothing: Windows cannot flush a folder handle, and NTFS
 // journals the rename itself.
 func syncDir(string) error { return nil }

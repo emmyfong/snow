@@ -15,8 +15,9 @@
 //     session-ended Error, so a close without it now means a lost connection.
 //     Version 3 added Errors that leave the session running (bad-command,
 //     command-failed), which older clients treated as fatal.
-//   - The frame header, Hello, Welcome, and Error never change shape, so
-//     peers of any version can always detect a mismatch.
+//   - The frame header, Hello, Welcome, Error, and Shutdown never change
+//     shape, so peers of any version can always detect a mismatch, and a
+//     newer client can always ask an older server to stop.
 //   - Message types never change number once released.
 //   - Arrays are never null; an empty array is [].
 //   - Pane IDs start at 1; 0 means none. Window indexes start at 0, as in

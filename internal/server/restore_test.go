@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"net"
 	"os"
@@ -217,7 +218,13 @@ func TestServerStartsWithBrokenFile(t *testing.T) {
 
 // paneHistory returns the focused pane's whole history in session as plain
 // text: its scrollback, then its screen.
-func paneHistory(s *Server, session string) string {
+func paneHistory(s *Server, session string) string { return paneText(s, session, 0) }
+
+// paneText returns pane id's whole history in session as plain text, or
+// the focused pane's when id is 0. Tests read history, not the client's
+// screen: the test client keeps one set of rows for every pane, and on
+// Windows a shell's first clear moves earlier lines into scrollback.
+func paneText(s *Server, session string, id int) string {
 	var text string
 	s.call(func(st *state) {
 		sess, ok := st.sessions[session]
@@ -225,7 +232,13 @@ func paneHistory(s *Server, session string) string {
 			return
 		}
 		w := sess.shown()
-		p := w.panes[w.focused]
+		if id == 0 {
+			id = w.focused
+		}
+		_, p := sess.findPane(id)
+		if p == nil {
+			return
+		}
 		_, total, _ := p.term.History(0, 0)
 		lines, _, _ := p.term.History(0, total)
 		text = ansi.Strip(strings.Join(lines, "\n"))
@@ -274,5 +287,67 @@ func TestRestoreZoomedWindow(t *testing.T) {
 	})
 	if cols < 10 || rows < 5 || !strings.Contains(text, "a saved line in the hidden pane") {
 		t.Fatalf("hidden pane is %dx%d with history %q, want its real size and its line whole", cols, rows, text)
+	}
+}
+
+// TestNewerSnapshotStaysInPlace: a file from a newer Snow is not moved to
+// broken/; the home page says it waits for that version.
+func TestNewerSnapshotStaysInPlace(t *testing.T) {
+	dir := t.TempDir()
+	newer := `{"version":99,"name":"api","windows":[]}`
+	if err := os.WriteFile(filepath.Join(dir, "api.json"), []byte(newer), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := restoreServer(t, dir)
+	c := apitest.New(t, dialPipe(s), 80, 24)
+	m, _ := c.Next(5 * time.Second)
+	l, ok := m.(*api.SessionList)
+	if !ok || len(l.Notes) != 1 || !strings.Contains(l.Notes[0], "newer") {
+		t.Fatalf("first message %#v, want a note about a newer snapshot", m)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "api.json")); err != nil {
+		t.Fatalf("the newer file moved: %v", err)
+	}
+}
+
+// TestAttachAfterSavedFileVanished: a saved file deleted outside Snow is
+// dropped from the list, and attaching to it is an ordinary "no session".
+func TestAttachAfterSavedFileVanished(t *testing.T) {
+	dir := t.TempDir()
+	writeSnapshot(t, dir, twoPanes(t, ""))
+	s, _ := restoreServer(t, dir)
+	if err := os.Remove(filepath.Join(dir, "api.json")); err != nil {
+		t.Fatal(err)
+	}
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "api"})
+	if e := nextError(t, c); e.Code != api.CodeNoSession {
+		t.Fatalf("attach to a vanished saved session: %+v, want CodeNoSession", e)
+	}
+}
+
+// TestRestoreUnknownProfile: a saved pane whose profile no longer exists
+// runs the default profile.
+func TestRestoreUnknownProfile(t *testing.T) {
+	dir := t.TempDir()
+	writeSnapshot(t, dir, twoPanes(t, ""))
+	opts := testOptions()
+	opts.SessionsDir = dir
+	spec := opts.Spec
+	var started []string
+	opts.Spec = func(profile, d string) (term.Spec, string, error) {
+		if profile != "" && profile != "sh" && profile != "cmd" {
+			return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
+		}
+		started = append(started, profile)
+		return spec(profile, d)
+	}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "api"})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	if len(l.Windows[0].Panes) != 2 {
+		t.Fatalf("layout %+v, want both panes; the unknown profile's pane should run the default", l)
 	}
 }

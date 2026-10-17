@@ -6,6 +6,7 @@ package transport
 import (
 	"errors"
 	"fmt"
+	"github.com/emmyfong/snow/internal/private"
 	"io/fs"
 	"net"
 	"os"
@@ -38,7 +39,7 @@ func Listen(path string) (net.Listener, error) {
 	if len(path) > maxPathLen {
 		return nil, fmt.Errorf("%w: %d bytes: %s", ErrPathTooLong, len(path), path)
 	}
-	if err := makePrivateDir(filepath.Dir(path)); err != nil {
+	if err := private.Dir(filepath.Dir(path)); err != nil {
 		return nil, err
 	}
 	lock, err := os.OpenFile(path+".lock", os.O_RDWR|os.O_CREATE, 0o600)

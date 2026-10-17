@@ -6,7 +6,9 @@ import (
 	"github.com/emmyfong/snow/internal/store"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -184,8 +186,19 @@ func (st *state) closeAll() {
 
 // listNotes is what the home page shows under the sessions.
 func (st *state) listNotes() []string {
-	if st.saveProblem == "" {
-		return st.notes
+	notes := slices.Clone(st.notes)
+	if st.saveProblem != "" {
+		notes = append(notes, st.saveProblem)
 	}
-	return append(slices.Clip(st.notes), st.saveProblem)
+	// A note holds file paths and errors; a control character in one would
+	// reach the client's terminal as an escape sequence.
+	for i, n := range notes {
+		notes[i] = strings.Map(func(r rune) rune {
+			if unicode.IsControl(r) {
+				return '?'
+			}
+			return r
+		}, n)
+	}
+	return notes
 }

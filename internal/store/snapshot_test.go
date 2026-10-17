@@ -76,7 +76,6 @@ func TestDecodeErrors(t *testing.T) {
 		{"not json", `{"version":1,`},
 		{"wrong type", `{"version":"one"}`},
 		{"no version", `{"name":"api"}`},
-		{"newer version", `{"version":99,"name":"api"}`},
 		{"no name", `{"version":1}`},
 	}
 	for _, tt := range tests {

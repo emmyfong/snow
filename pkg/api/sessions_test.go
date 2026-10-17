@@ -54,3 +54,11 @@ func TestAttachValidate(t *testing.T) {
 		}
 	}
 }
+
+// TestShutdownTypeNeverChanges: servers of every later version accept
+// Shutdown by this number after a mismatched handshake; it must not move.
+func TestShutdownTypeNeverChanges(t *testing.T) {
+	if TypeShutdown != 21 {
+		t.Fatalf("TypeShutdown = %d, want 21 forever", TypeShutdown)
+	}
+}
