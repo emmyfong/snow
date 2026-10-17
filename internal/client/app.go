@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/home"
@@ -36,6 +37,8 @@ type app struct {
 	theme      theme.Theme      // the theme from the config, for the home page
 	sessOpts   []session.Option // what a session screen gets besides the theme, such as keys
 	saveTheme  func(name string) error
+	configPath string    // the config file to watch for a new theme; "" watches nothing
+	configMod  time.Time // when the config file last changed, as last seen
 	profile    *tea.ColorProfileMsg
 	sessions   *api.SessionList // the last list, for a home page opened later
 	back       string           // the session the home page's Esc returns to
@@ -126,7 +129,12 @@ func (a *app) refusedOpen(e *api.Error) bool {
 	return false
 }
 
-func (a *app) Init() tea.Cmd { return nil }
+func (a *app) Init() tea.Cmd {
+	if a.configPath == "" {
+		return nil
+	}
+	return watchTheme(a.configPath, a.configMod)
+}
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -181,6 +189,15 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case home.ThemeMsg:
 		return a, a.useTheme(msg.Name)
+	case configCheckedMsg:
+		a.configMod = msg.mod
+		if msg.th != nil && msg.th.Name != a.theme.Name {
+			a.applyTheme(*msg.th)
+		}
+		if a.configPath == "" {
+			return a, nil
+		}
+		return a, watchTheme(a.configPath, a.configMod)
 	case themeSaveFailedMsg:
 		if h, ok := a.screen.(*home.Model); ok {
 			h.SetNotice("The theme is in use but was not saved: " + msg.err.Error())

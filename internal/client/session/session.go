@@ -3,6 +3,7 @@
 package session
 
 import (
+	"github.com/charmbracelet/colorprofile"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -28,8 +29,9 @@ type SwitchMsg struct{}
 // keep order.
 type Model struct {
 	send       func(api.Message)
-	theme      theme.Theme // base adapted to the terminal's colors
-	base       theme.Theme // the theme from the config
+	theme      theme.Theme           // base adapted to the terminal's colors
+	base       theme.Theme           // the theme from the config
+	profile    *colorprofile.Profile // the terminal's colors, once known
 	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
@@ -110,6 +112,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.ColorProfileMsg:
 		// The terminal's color depth is known only now; text that would
 		// vanish when colors are reduced switches to black or white.
+		m.profile = &msg.Profile
 		m.theme = m.base.For(msg.Profile)
 	case *api.ProfileList:
 		m.profiles = *msg

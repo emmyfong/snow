@@ -92,6 +92,12 @@ func Run(opts Options) (Result, error) {
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table))
 	if opts.ConfigPath != "" {
 		a.saveTheme = func(name string) error { return config.SetTheme(opts.ConfigPath, name) }
+		a.configPath = opts.ConfigPath
+		// The theme in the file now is the one in use; watch for later
+		// changes only.
+		if fi, err := os.Stat(opts.ConfigPath); err == nil {
+			a.configMod = fi.ModTime()
+		}
 	}
 	if !opts.Home {
 		send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})

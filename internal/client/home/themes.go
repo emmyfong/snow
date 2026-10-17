@@ -23,6 +23,20 @@ func (m *Model) setBase(th theme.Theme) {
 	}
 }
 
+// SetTheme changes the page's theme, for example when another Snow window
+// picked a new one. While the theme list is open, it becomes the theme Esc
+// returns to, and the one being previewed stays on screen.
+func (m *Model) SetTheme(th theme.Theme) {
+	if m.picking {
+		m.before = th
+		return
+	}
+	m.setBase(th)
+}
+
+// Theme returns the theme the page draws with.
+func (m *Model) Theme() theme.Theme { return m.theme }
+
 // cmdTheme sets the named theme, or opens the theme list when no name is
 // given.
 func (m *Model) cmdTheme(name string) tea.Cmd {

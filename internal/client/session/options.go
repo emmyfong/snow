@@ -14,3 +14,13 @@ func WithTheme(th theme.Theme) Option { return func(m *Model) { m.theme, m.base 
 // WithKeys sets the key binding table. The default is tmux's keys with the
 // prefix Ctrl+b.
 func WithKeys(t *keys.Table) Option { return func(m *Model) { m.keys = t } }
+
+// SetTheme changes the theme of an open screen, for example when another
+// Snow window picked a new one. It is adapted to the terminal's colors once
+// they are known.
+func (m *Model) SetTheme(th theme.Theme) {
+	m.base, m.theme = th, th
+	if m.profile != nil {
+		m.theme = th.For(*m.profile)
+	}
+}

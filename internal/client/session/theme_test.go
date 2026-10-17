@@ -20,3 +20,15 @@ func TestColorProfileKeepsTheConfiguredTheme(t *testing.T) {
 		t.Fatalf("theme %q after the color profile, want Nord", m.theme.Name)
 	}
 }
+
+// TestSetThemeRedraws: a theme changed elsewhere reaches an open session
+// screen, still adapted to the terminal's colors.
+func TestSetThemeRedraws(t *testing.T) {
+	m := New(func(api.Message) {})
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
+	dracula, _ := theme.ByName("Dracula")
+	m.SetTheme(dracula)
+	if m.theme.Name != "Dracula" || m.theme != dracula.For(colorprofile.ANSI) {
+		t.Fatal("SetTheme did not apply Dracula for the terminal's colors")
+	}
+}

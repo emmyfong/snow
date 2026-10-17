@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/theme"
 )
 
 // TestThemePickerPreviews: /theme lists the themes; moving previews each
@@ -57,3 +58,23 @@ func TestThemeByName(t *testing.T) {
 
 func TestThemePickerGolden80x24(t *testing.T)  { goldenTyped(t, 80, 24, "/theme\r") }
 func TestThemePickerGolden120x40(t *testing.T) { goldenTyped(t, 120, 40, "/theme\r") }
+
+// TestSetThemeWhilePicking: a theme changed elsewhere while the list is
+// open becomes the one Esc returns to, not the one shown.
+func TestSetThemeWhilePicking(t *testing.T) {
+	m := screen(80, 24)
+	nord, _ := theme.ByName("Nord")
+	m.SetTheme(nord)
+	if m.theme.Name != "Nord" {
+		t.Fatalf("theme %q, want Nord", m.theme.Name)
+	}
+	typeText(m, "/theme")
+	enter(m)
+	m.Update(press(tea.KeyDown))
+	dracula, _ := theme.ByName("Dracula")
+	m.SetTheme(dracula)
+	m.Update(press(tea.KeyEscape))
+	if m.theme.Name != "Dracula" {
+		t.Fatalf("Esc returned to %q, want Dracula", m.theme.Name)
+	}
+}
