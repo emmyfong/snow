@@ -20,11 +20,14 @@ type Options struct {
 	Version string
 	Socket  string
 	Session string         // the session to attach to or create; "" creates a numbered one
+	Home    bool           // open the home page instead of attaching to Session
 	Dir     string         // the folder a new session starts in; "" means the current one
 	Start   func() error   // starts a server when none answers
 	Config  *config.Config // the user's settings; nil means the defaults
-	Input   io.Reader      // nil means standard input
-	Output  io.Writer      // nil means standard output
+	// ConfigPath is the config file /theme saves to; "" saves nothing.
+	ConfigPath string
+	Input      io.Reader // nil means standard input
+	Output     io.Writer // nil means standard output
 }
 
 // outboxSize bounds queued messages to the server. Keys from fast typing fit
@@ -37,6 +40,9 @@ func Run(opts Options) (Result, error) {
 	cfg := config.Defaults()
 	if opts.Config != nil {
 		cfg = *opts.Config
+	}
+	if err := (&api.Attach{Session: opts.Session}).Validate(); err != nil {
+		return Result{}, fmt.Errorf("session name %q: %w", opts.Session, err)
 	}
 	th, err := theme.Named(cfg.Theme.Name)
 	if err != nil {
@@ -83,8 +89,21 @@ func Run(opts Options) (Result, error) {
 		// here only loses that convenience.
 		dir, _ = os.Getwd()
 	}
-	send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
-	a := &app{screen: session.New(send, session.WithTheme(th), session.WithKeys(table)), send: send}
+	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table))
+	if opts.ConfigPath != "" {
+		a.saveTheme = func(name string) error { return config.SetTheme(opts.ConfigPath, name) }
+		a.configPath = opts.ConfigPath
+		// The theme in the file now is the one in use; watch for later
+		// changes only.
+		if fi, err := os.Stat(opts.ConfigPath); err == nil {
+			a.configMod = fi.ModTime()
+		}
+	}
+	if !opts.Home {
+		send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
+		a.screen = a.newSession()
+	}
+	a.cols, a.rows = cols, rows
 	a.screen.SetSize(cols, rows)
 
 	var popts []tea.ProgramOption

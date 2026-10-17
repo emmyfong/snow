@@ -23,7 +23,10 @@ func waitOrKill(ctx context.Context, wait func() error, kill func(), limit time.
 	}
 	kill()
 	select {
-	case <-done:
+	case err := <-done:
+		// The killed program's exit error only says it was killed; the
+		// cancellation is why it stopped.
+		_ = err
 		return ctx.Err()
 	case <-time.After(limit):
 		return ErrNoExit

@@ -6,6 +6,10 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
+	"github.com/emmyfong/snow/internal/client/theme"
+
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -72,5 +76,15 @@ func TestUpdatesForOtherPanesIgnored(t *testing.T) {
 	m.Update(&api.PaneUpdate{Pane: 99, Lines: []api.LineUpdate{{Row: 0, Text: "not mine"}}})
 	if m.View().Content != before {
 		t.Fatal("an update for another pane changed the screen")
+	}
+}
+
+// TestColorProfileAdaptsTheTheme: a 16-color terminal gets a theme whose text
+// stays readable after its colors are reduced.
+func TestColorProfileAdaptsTheTheme(t *testing.T) {
+	m := screen(80, 24)
+	m.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
+	if want := theme.Default().For(colorprofile.ANSI); m.theme.TabActive != want.TabActive || m.theme.PromptFG != want.PromptFG {
+		t.Fatal("the session screen ignored the terminal's color profile")
 	}
 }

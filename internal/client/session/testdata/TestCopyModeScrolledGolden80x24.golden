@@ -1,4 +1,4 @@
-build step 208: compiling package                                      [m[97;100m[210/300][m
+build step 208: compiling package                                      [m[38;2;201;215;227;48;2;30;42;54m[210/300][m
 build step 209: compiling package                                               
 build step 210: compiling package                                               
 build step 211: compiling package                                               
@@ -21,4 +21,4 @@ build step 227: compiling package
 build step 228: compiling package                                               
 build step 229: compiling package                                               
 build step 230: compiling package                                               
-[30;42m [work][m[30;42m [m[1;97;42m1:PowerShell*[m[30;42m                                        [m[30;42m PowerShell  14:02 [m
+[38;2;201;215;227;48;2;30;42;54m [work][m[38;2;201;215;227;48;2;30;42;54m [m[1;38;2;14;22;32;48;2;127;184;230m1:PowerShell*[m[38;2;201;215;227;48;2;30;42;54m                                        [m[38;2;201;215;227;48;2;30;42;54m PowerShell  14:02 [m

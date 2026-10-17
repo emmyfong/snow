@@ -9,6 +9,10 @@ import (
 
 // attach shows a session to c, creating it if asked.
 func (st *state) attach(c *client, m *api.Attach) {
+	if err := m.Validate(); err != nil {
+		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
+		return
+	}
 	sess, ok := st.sessions[m.Session]
 	if !ok && !m.Create {
 		msg := "no session named " + m.Session
@@ -36,6 +40,7 @@ func (st *state) attach(c *client, m *api.Attach) {
 	st.enqueue(c, st.layout(sess))
 	st.enqueue(c, st.profileList())
 	st.fitSession(sess)
+	st.sessionsChanged()
 	if old, ok := st.sessions[prev]; ok && prev != sess.name {
 		st.fitSession(old) // the session c left may grow back
 	}

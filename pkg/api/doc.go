@@ -25,4 +25,4 @@ package api
 
 // ProtocolVersion changes when a client and server of different versions can
 // no longer understand each other.
-const ProtocolVersion = 3
+const ProtocolVersion = 4

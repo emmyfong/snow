@@ -27,19 +27,10 @@ func Popup(th theme.Theme, o PopupOptions) string {
 		return ""
 	}
 	g := th.Glyphs
-	frame := lipgloss.NewStyle().Foreground(th.FocusBorder)
-	selected := lipgloss.NewStyle().Background(th.Selection).Bold(true)
+	selected := lipgloss.NewStyle().Foreground(th.SelectionFG).Background(th.Selection).Bold(true)
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	inner := o.Width - 2
-
-	title := ansi.Truncate(o.Title, max(inner-2, 0), "")
-	top := g.TopLeft + g.Horizontal
-	if title != "" {
-		top += " " + title + " "
-	}
-	top = ansi.Truncate(top, o.Width-1, "")
-	top += strings.Repeat(g.Horizontal, max(o.Width-1-ansi.StringWidth(top), 0)) + g.TopRight
-	rows := []string{frame.Render(top)}
+	rows := make([]string, len(o.Items))
 	for i, item := range o.Items {
 		marker := strings.Repeat(" ", ansi.StringWidth(g.Pointer))
 		if i == o.Selected {
@@ -64,8 +55,7 @@ func Popup(th theme.Theme, o PopupOptions) string {
 		if i == o.Selected {
 			text = selected.Render(text)
 		}
-		rows = append(rows, frame.Render(g.Vertical)+text+frame.Render(g.Vertical))
+		rows[i] = text
 	}
-	rows = append(rows, frame.Render(g.BottomLeft+strings.Repeat(g.Horizontal, inner)+g.BottomRight))
-	return strings.Join(rows, "\n")
+	return frame(th, o.Title, rows, o.Width)
 }

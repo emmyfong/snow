@@ -14,12 +14,19 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// connect runs the handshake over an in-memory connection served by s.
+// connect runs the handshake over an in-memory connection served by s and
+// reads the session list the server sends every new client, so a test's
+// next message is the answer to its own request.
 func connect(t *testing.T, s *Server, cols, rows int) *apitest.Client {
 	t.Helper()
 	a, b := net.Pipe()
 	go s.serveConn(b)
-	return apitest.New(t, a, cols, rows)
+	c := apitest.New(t, a, cols, rows)
+	m, err := c.Next(5 * time.Second)
+	if _, ok := m.(*api.SessionList); !ok {
+		t.Fatalf("first message %#v (%v), want the session list", m, err)
+	}
+	return c
 }
 
 func TestAttachSendsScreen(t *testing.T) {

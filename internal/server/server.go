@@ -97,7 +97,8 @@ func (s *Server) post(f func(*state)) {
 	}()
 }
 
-// Done is closed when the last session ends, so the process can exit.
+// Done is closed when no session runs and no client is connected, once
+// either has existed, so the process can exit.
 func (s *Server) Done() <-chan struct{} { return s.done }
 
 // Close stops the model goroutine and ends every pane.
@@ -120,6 +121,7 @@ func (s *Server) CreateSession(name string) (string, error) {
 		var sess *session
 		if sess, err = st.createSession(name, 0, 0, ""); err == nil {
 			got = sess.name
+			st.sessionsChanged()
 		}
 	}) {
 		return "", ErrClosed
@@ -141,4 +143,11 @@ func (s *Server) Sessions() []api.SessionInfo {
 	var out []api.SessionInfo
 	s.call(func(st *state) { out = st.sessionList() })
 	return out
+}
+
+// idle reports whether nothing runs: no session and no connected client.
+func (s *Server) idle() bool {
+	idle := true
+	s.call(func(st *state) { idle = len(st.sessions) == 0 && len(st.clients) == 0 })
+	return idle
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/emmyfong/snow/internal/client"
 	"github.com/emmyfong/snow/internal/server"
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 func testShell(_, dir string) (term.Spec, string, error) {
@@ -87,6 +88,45 @@ func waitResult(t *testing.T, done <-chan runResult) client.Result {
 
 const ctrlB = "\x02"
 
+// detach presses Ctrl+b d, which leaves session and shows the home page,
+// then Esc to quit it, and returns how the client ended. others is how many
+// other clients watch session. Esc goes only once the server counts the
+// client gone: by then the home page is up, so the Esc cannot reach the
+// pane.
+func detach(t *testing.T, path, session string, others int, keys io.Writer, done <-chan runResult) client.Result {
+	t.Helper()
+	waitAttached(t, path, session, others+1)
+	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
+		t.Fatal(err)
+	}
+	waitAttached(t, path, session, others)
+	// The pipe blocks until the client reads; a client that has already
+	// quit never does, so the write must not hold up the test.
+	go func() { _, _ = io.WriteString(keys, "\x1b") }()
+	return waitResult(t, done)
+}
+
+// waitAttached waits until session has n clients attached. Each check
+// dials a new client, which has not attached and so gets the session list.
+func waitAttached(t *testing.T, path, session string, n int) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		c := apitest.Dial(t, path, 80, 24)
+		m, _ := c.Next(5 * time.Second)
+		c.Close()
+		if l, ok := m.(*api.SessionList); ok {
+			for _, s := range l.Sessions {
+				if s.Name == session && s.Attached == n {
+					return
+				}
+			}
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatalf("session %s never had %d clients attached", session, n)
+}
+
 func shellPrompt() string {
 	if runtime.GOOS == "windows" {
 		return ">"
@@ -106,10 +146,7 @@ func TestDetachAndReattach(t *testing.T) {
 	}
 	watch.WaitScreen("\ne2emark\n")
 
-	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	res := waitResult(t, done)
+	res := detach(t, path, "e2e", 1, keys, done)
 	if !res.Detached || res.Session != "e2e" {
 		t.Fatalf("result %+v, want detached from e2e", res)
 	}
@@ -124,10 +161,7 @@ func TestDetachAndReattach(t *testing.T) {
 	if !strings.Contains(watch.Screen(), "\ne2emark\n") {
 		t.Fatalf("reattached screen lost earlier output:\n%s", watch.Screen())
 	}
-	if _, err := io.WriteString(keys2, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	if res := waitResult(t, done2); !res.Detached {
+	if res := detach(t, path, "e2e", 1, keys2, done2); !res.Detached {
 		t.Fatalf("second client result %+v, want detached", res)
 	}
 }
@@ -136,10 +170,7 @@ func TestPlainSnowCreatesNumberedSessions(t *testing.T) {
 	path := startServer(t)
 	for _, want := range []string{"0", "1"} {
 		keys, done := attachClient(path, "")
-		if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-			t.Fatal(err)
-		}
-		if res := waitResult(t, done); res.Session != want {
+		if res := detach(t, path, want, 0, keys, done); res.Session != want {
 			t.Fatalf("new session %q, want %q", res.Session, want)
 		}
 	}
@@ -163,10 +194,7 @@ func TestSessionStartsInClientFolder(t *testing.T) {
 		t.Fatal(err)
 	}
 	watch.WaitScreen(filepath.Base(dir) + "\n")
-	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
-		t.Fatal(err)
-	}
-	waitResult(t, done)
+	detach(t, path, "here", 1, keys, done)
 }
 
 // TestShellExitEndsClient: when the shell exits, the client reports that the
@@ -181,5 +209,29 @@ func TestShellExitEndsClient(t *testing.T) {
 	}
 	if res := waitResult(t, done); !res.Ended || res.Session != "brief" {
 		t.Fatalf("result %+v, want session brief ended", res)
+	}
+}
+
+// TestHomePageCreatesASession: plain snow opens the home page; typing a name
+// and Enter creates that session and attaches to it.
+func TestHomePageCreatesASession(t *testing.T) {
+	path := startServer(t)
+	in, keys := io.Pipe()
+	done := make(chan runResult, 1)
+	go func() {
+		res, err := client.Run(client.Options{
+			Version: "e2e", Socket: path, Home: true,
+			Start: func() error { return nil },
+			Input: in, Output: io.Discard,
+		})
+		done <- runResult{res, err}
+	}()
+	if _, err := io.WriteString(keys, "work\r"); err != nil {
+		t.Fatal(err)
+	}
+	watch := observe(t, path, "work")
+	watch.WaitScreen(shellPrompt())
+	if res := detach(t, path, "work", 1, keys, done); !res.Detached || res.Session != "work" {
+		t.Fatalf("result %+v, want detached from work", res)
 	}
 }

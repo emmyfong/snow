@@ -75,15 +75,42 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
 | TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. None while a `Prompt` shows. |
 | Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
+| Panel | `Panel(th theme.Theme, o PanelOptions) string` | A frame exactly `Width` wide around `Body` rows, `Title` in the top edge. Shares its frame with `Popup`. Nothing below 4 cells. |
+| Input | `Input(th theme.Theme, o InputOptions) string` | A one-line text field exactly `Width` wide: `Prompt` in the accent color, then `Value` (its end shows when too long) or a muted `Placeholder`; `Focused` draws a cursor. |
+| List | `List(th theme.Theme, o ListOptions) string` | Rows of `ListItem` cells with aligned columns, `Selected` marked with the pointer glyph and highlighted; `Height` shows a window scrolled to the selection. |
+| KeyHints | `KeyHints(th theme.Theme, hints []Hint, width int) string` | One row of `Hint`s (key in accent, description muted); hints that do not fit whole are dropped from the end. |
+| Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, bold in the terminal's own text color (`WordmarkWidth` columns); nothing when too narrow. |
 
 ## Theme tokens
 
-Defined by the home-page epic (#56), which also picks the default theme.
-`internal/client/theme` holds placeholder tokens until then: `Border`,
-`FocusBorder`, `BarFG`, `BarBG`, `TabActive`, `Muted`, `Error`, `PromptFG`,
-`PromptBG`, `Selection`, `IndicatorFG`, `IndicatorBG`, `MatchFG`, `MatchBG`, `CurrentFG`, `CurrentBG`, `SelectedFG`, `SelectedBG`,
-and `Glyphs` (border lines, junctions, corners, the zoom marker, the active-tab mark, the session brackets, the list pointer, the text caret). #56 replaces
-the values and records the final list here.
+`internal/client/theme` holds the tokens. `Default()` is **Frost**, chosen by
+the user in #33. `Builtin()` lists the 12 shipped themes, and `ByName` finds
+one by name for `[theme] name` in `config.toml`: Frost, Campbell, One Half
+Dark, Dark+, Solarized Dark, Dracula, Nord, Gruvbox Dark, Tokyo Night,
+Catppuccin Mocha, OpenCode, and Clay (inspired by Claude Code; the name may
+not be used).
+
+- Color tokens: `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
+  `TabActiveBG`, `Accent`, `Muted`, `Success`, `Error` (a strip background),
+  `ErrorFG`, `PromptFG`, `PromptBG`, `Selection` with `SelectionFG` (black
+  or white for contrast), and copy mode's
+  `IndicatorFG`/`IndicatorBG`, `MatchFG`/`MatchBG`, `CurrentFG`/`CurrentBG`,
+  `SelectedFG`/`SelectedBG`. A built-in theme derives the copy mode pairs
+  from its status bar, prompt, active tab, and selection colors.
+- `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
+  mark, the session brackets, the list pointer, the text caret.
+- `Named(name)` reads `[theme] name` from the config: a built-in name,
+  ignoring case, or `default`.
+- The terminal may be light or dark. Text on the terminal's own background
+  uses the terminal's text color or a mid-tone token; text on a token
+  background always sets its own color too.
+- Snow keeps the terminal's own background and text colors; tokens color
+  only Snow's parts.
+- `Resolve()` fills tokens a theme leaves empty from Frost. `For(profile)`
+  adapts a theme to the terminal's color depth: text that would fall below a
+  3:1 contrast after colors are reduced turns black or white.
+  `TestTokensDownsample` checks every theme at true color, 256, and 16 colors.
+- A new text-on-background pair must join that test.
 
 ## Visual review gate
 

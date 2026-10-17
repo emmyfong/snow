@@ -80,7 +80,7 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 	}
 	lines := strings.Split(ansi.Wrap(m.question, textW, ""), "\n")
 	lines = lines[:min(len(lines), rows-4)]
-	focused := lipgloss.NewStyle().Background(th.Selection).Bold(true)
+	focused := lipgloss.NewStyle().Foreground(th.SelectionFG).Background(th.Selection).Bold(true)
 	styled := func(s string, on bool) string {
 		if on {
 			return focused.Render(s)

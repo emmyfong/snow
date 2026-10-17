@@ -3,6 +3,7 @@
 package session
 
 import (
+	"github.com/charmbracelet/colorprofile"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -16,14 +17,21 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// DetachMsg asks the client to detach from the session.
+// DetachMsg asks the client to detach from the session and show the home
+// page.
 type DetachMsg struct{}
+
+// SwitchMsg asks the client to show the home page to pick another session,
+// keeping a way back to this one.
+type SwitchMsg struct{}
 
 // Model is the session screen. Send queues a message for the server; it must
 // keep order.
 type Model struct {
 	send       func(api.Message)
-	theme      theme.Theme
+	theme      theme.Theme           // base adapted to the terminal's colors
+	base       theme.Theme           // the theme from the config
+	profile    *colorprofile.Profile // the terminal's colors, once known
 	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
@@ -79,7 +87,7 @@ type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
+	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
 		panes: map[int]*paneState{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
@@ -101,6 +109,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
+	case tea.ColorProfileMsg:
+		// The terminal's color depth is known only now; text that would
+		// vanish when colors are reduced switches to black or white.
+		m.profile = &msg.Profile
+		m.theme = m.base.For(msg.Profile)
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.Scrollback:

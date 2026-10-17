@@ -73,7 +73,10 @@ func TestRunIdleExit(t *testing.T) {
 	opts.IdleExit = 200 * time.Millisecond
 	done := runAsync(context.Background(), t, opts, apitest.SocketPath(t))
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run waited forever with no session")
 	}
@@ -84,7 +87,10 @@ func TestRunStopsOnCancel(t *testing.T) {
 	done := runAsync(ctx, t, testOptions(), apitest.SocketPath(t))
 	cancel()
 	select {
-	case <-done:
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run: %v", err)
+		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Run ignored cancellation")
 	}

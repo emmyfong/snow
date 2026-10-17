@@ -28,6 +28,9 @@ const (
 	TypeScrollback
 	TypeSearchRequest
 	TypeSearchResult
+	TypeDetach
+	TypeKillSession
+	TypeRenameSession
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -75,6 +78,12 @@ func newMessage(t MsgType) Message {
 		return &SearchRequest{}
 	case TypeSearchResult:
 		return &SearchResult{}
+	case TypeDetach:
+		return &Detach{}
+	case TypeKillSession:
+		return &KillSession{}
+	case TypeRenameSession:
+		return &RenameSession{}
 	}
 	return nil
 }
