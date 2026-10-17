@@ -1,0 +1,67 @@
+package server
+
+import (
+	"strings"
+	"testing"
+
+	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/pkg/api"
+)
+
+// wslServer is a test server whose panes count as WSL panes; running says
+// whether their distribution still runs when a pane exits.
+func wslServer(t *testing.T, running bool) *Server {
+	t.Helper()
+	opts := testOptions()
+	opts.paneDistro = func(string) (string, bool) { return "Ubuntu", true }
+	opts.distroRunning = func(string) bool { return running }
+	s := New(opts)
+	t.Cleanup(s.Close)
+	return s
+}
+
+// splitTwo attaches c to a session and splits it into two panes, returning
+// the first pane's ID and the second's.
+func splitTwo(t *testing.T, s *Server) (*apitest.Client, int, int) {
+	t.Helper()
+	c, first := attached(t, s, 120, 25)
+	c.Send(split(first, api.DirRight))
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == 2 })
+	second := l.Windows[0].Panes[1].ID
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	return c, first, second
+}
+
+// TestRestoreEndedPane: a WSL pane that ended because WSL stopped stays on
+// screen and says so; r restarts that pane alone.
+func TestRestoreEndedPane(t *testing.T) {
+	s := wslServer(t, false)
+	c, first, second := splitTwo(t, s)
+	c.Send(&api.Input{Pane: first, Paste: "echo before" + "stop\r"})
+	c.WaitScreen("beforestop")
+	c.Send(&api.Input{Pane: first, Paste: "exit\r"})
+	c.WaitScreen("press r to restore")
+	c.Send(&api.Input{Pane: first, Key: &api.Key{Code: "r", Text: "r"}})
+	c.WaitScreen("restored")
+	var ended []bool
+	s.call(func(st *state) {
+		w := st.sessions["work"].shown()
+		for _, id := range []int{first, second} {
+			if p := w.panes[id]; p != nil {
+				ended = append(ended, p.ended)
+			}
+		}
+	})
+	if len(ended) != 2 || ended[0] || ended[1] {
+		t.Fatalf("panes %d and %d: ended %v, want both there and running", first, second, ended)
+	}
+}
+
+// TestExitClosesPaneWhileDistroRuns: typing exit in a WSL pane whose
+// distribution still runs closes the pane, as for any shell.
+func TestExitClosesPaneWhileDistroRuns(t *testing.T) {
+	s := wslServer(t, true)
+	c, first, _ := splitTwo(t, s)
+	c.Send(&api.Input{Pane: first, Paste: "exit\r"})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == 1 })
+}

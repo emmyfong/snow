@@ -104,13 +104,18 @@ func (st *state) endSession(sess *session) {
 }
 
 // paneExited removes the pane whose program exited, and its window and
-// session when they become empty. A pane that a command already closed is
-// gone, so its exit does nothing.
-func (st *state) paneExited(id int) {
+// session when they become empty. A pane that ended because WSL stopped
+// stays, waiting for r. A pane that a command already closed is gone, so its
+// exit does nothing.
+func (st *state) paneExited(id int, ended bool) {
 	for _, sess := range st.sessions {
 		w, p := sess.findPane(id)
 		if p == nil {
 			continue
+		}
+		if ended {
+			st.endPane(sess, p)
+			return
 		}
 		// The exit status explains a shell that exits at once, such as a
 		// broken profile.

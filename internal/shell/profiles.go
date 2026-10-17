@@ -120,3 +120,13 @@ func parseWSLList(b []byte) []string {
 	}
 	return out
 }
+
+// RunningDistros lists the WSL distributions running now, or nil when WSL
+// is missing or none runs. It starts wsl.exe, so it waits for a process.
+func RunningDistros() []string {
+	out, err := exec.Command("wsl.exe", "-l", "-q", "--running").Output()
+	if err != nil {
+		return nil
+	}
+	return parseWSLList(out)
+}

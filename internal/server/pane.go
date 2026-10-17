@@ -13,6 +13,7 @@ type pane struct {
 	id      int
 	profile string
 	term    *term.Pane
+	ended   bool // its WSL distribution stopped; it waits for r to restart
 }
 
 // startPane starts profile's program in dir at cols by rows, below
@@ -32,7 +33,8 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 	}
 	go func() {
 		<-tp.Done()
-		s.post(func(st *state) { st.paneExited(id) })
+		ended := s.wslStopped(profile)
+		s.post(func(st *state) { st.paneExited(id, ended) })
 	}()
 	return &pane{id: id, profile: profile, term: tp}, nil
 }

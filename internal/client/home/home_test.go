@@ -241,3 +241,27 @@ func TestBrokenSnapshotsShow(t *testing.T) {
 		t.Fatal("the broken file is not on the home page")
 	}
 }
+
+// TestHomeSavedSessions: sessions restored from disk on open are marked
+// saved beside the running ones.
+func TestHomeSavedSessions80x24(t *testing.T)  { goldenSaved(t, 80, 24) }
+func TestHomeSavedSessions120x40(t *testing.T) { goldenSaved(t, 120, 40) }
+
+func goldenSaved(t *testing.T, cols, rows int) {
+	saved := session("dotfiles", 26*time.Hour, 0)
+	saved.State = api.StateSaved
+	m := screen(cols, rows, session("api", time.Minute, 1), saved, session("snow", time.Hour, 0))
+	golden.RequireEqual(t, m.View().Content)
+}
+
+// TestEnterOnASavedSessionOpensIt: a saved session opens by its name; the
+// server restores it, so the page does not ask to create it.
+func TestEnterOnASavedSessionOpensIt(t *testing.T) {
+	saved := session("dotfiles", 26*time.Hour, 0)
+	saved.State = api.StateSaved
+	m := screen(80, 24, saved)
+	m.Update(press(tea.KeyDown))
+	if got := open(t, m.Update(press(tea.KeyEnter))); got != (OpenMsg{Session: "dotfiles"}) {
+		t.Fatalf("Enter gave %+v, want to open dotfiles", got)
+	}
+}

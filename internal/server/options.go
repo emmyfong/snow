@@ -39,6 +39,11 @@ type Options struct {
 	SessionsDir string
 
 	saveDelay, busyEvery time.Duration // tests shorten them; 0 means the defaults
+
+	// Tests replace these WSL checks; nil means the launcher's profiles and
+	// shell.RunningDistros.
+	paneDistro    func(profile string) (string, bool)
+	distroRunning func(distro string) bool
 }
 
 func (o Options) logger() *slog.Logger {
@@ -52,6 +57,8 @@ func (o Options) logger() *slog.Logger {
 type launcher struct {
 	spec     func(profile, dir string) (term.Spec, string, error)
 	profiles func() []string
+	// distro returns the WSL distribution profile runs, for WSL profiles.
+	distro func(profile string) (string, bool)
 }
 
 // newLauncher returns the launcher for opts. It detects shell profiles once:
@@ -113,6 +120,14 @@ func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
 	}
 	return launcher{
 		profiles: func() []string { return names },
+		distro: func(profile string) (string, bool) {
+			for _, p := range detected {
+				if p.Name == profile && p.Kind == shell.KindWSL {
+					return p.Distro, true
+				}
+			}
+			return "", false
+		},
 		spec: func(profile, dir string) (term.Spec, string, error) {
 			for _, p := range detected {
 				if profile == "" || p.Name == profile {

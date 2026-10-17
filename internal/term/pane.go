@@ -291,3 +291,12 @@ func (p *Pane) closeReplyPipe() error {
 	}
 	return w.CloseWithError(io.EOF)
 }
+
+// Print shows s in the pane as if its program had printed it, for example a
+// note under the output of a program that ended. It may hold ANSI styles.
+func (p *Pane) Print(s string) {
+	p.mu.Lock()
+	_, _ = p.emu.Write([]byte(s)) // the emulator's writer never fails
+	p.mu.Unlock()
+	p.version.Add(1)
+}
