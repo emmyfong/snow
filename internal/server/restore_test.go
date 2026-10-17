@@ -232,3 +232,47 @@ func paneHistory(s *Server, session string) string {
 	})
 	return text
 }
+
+// TestRestoreZoomedWindow: a window saved while a pane was zoomed comes
+// back zoomed, and the hidden pane starts at its real size, so its saved
+// lines are whole, not wrapped to one cell.
+func TestRestoreZoomedWindow(t *testing.T) {
+	dir := t.TempDir()
+	snap := twoPanes(t, "", "a saved line in the hidden pane")
+	tree := layout.New(7)
+	if err := tree.Split(7, layout.Right, 9); err != nil {
+		t.Fatal(err)
+	}
+	if err := tree.Zoom(9); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snap.Windows[0].Layout = raw
+	writeSnapshot(t, dir, snap)
+	s, _ := restoreServer(t, dir)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "api"})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	if !l.Windows[0].Zoomed {
+		t.Fatal("the window is no longer zoomed")
+	}
+	var cols, rows int
+	var text string
+	s.call(func(st *state) {
+		w := st.sessions["api"].shown()
+		for id, p := range w.panes {
+			if layout.PaneID(id) != w.tree.Zoomed {
+				cols, rows = p.term.Size()
+				_, total, _ := p.term.History(0, 0)
+				lines, _, _ := p.term.History(0, total)
+				text = ansi.Strip(strings.Join(lines, "\n"))
+			}
+		}
+	})
+	if cols < 10 || rows < 5 || !strings.Contains(text, "a saved line in the hidden pane") {
+		t.Fatalf("hidden pane is %dx%d with history %q, want its real size and its line whole", cols, rows, text)
+	}
+}

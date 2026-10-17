@@ -105,7 +105,7 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string) (
 		w.index = sess.freeIndex()
 	}
 	cols, rows := sess.area()
-	rects := layout.Rects(tree, cols, rows).Panes
+	rects := unzoomedRects(tree, cols, rows)
 	// Start panes in layout order, so a failure part way is reproducible.
 	for _, id := range tree.Panes() {
 		sp := saved[int(olds[id])]
@@ -184,4 +184,12 @@ func (st *state) savedList() []api.SessionInfo {
 		out = append(out, api.SessionInfo{Name: name, Windows: info.Windows, State: api.StateSaved, LastUsed: info.Saved})
 	}
 	return out
+}
+
+// unzoomedRects lays out every pane of tree as if no pane were zoomed. A
+// zoomed window shows one pane, but the hidden ones still start at their
+// real size: a pane started at 1x1 would wrap its restored lines to one
+// cell each, and a resize does not join them again.
+func unzoomedRects(tree *layout.Tree, cols, rows int) map[layout.PaneID]layout.Rect {
+	return layout.Rects(&layout.Tree{Root: tree.Root}, cols, rows).Panes
 }
