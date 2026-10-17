@@ -20,6 +20,7 @@ func TestFuzzyMatch(t *testing.T) {
 		{"re", "rename"},
 		{"k", "kill"},
 		{"q", "quit"},
+		{"ex", "exit"},
 		{"nw", "new"},
 		{"", "new"}, // no query keeps the table order
 	}
@@ -92,6 +93,7 @@ func TestSlashCommands(t *testing.T) {
 		{"new with an existing name attaches", false, "/new web", OpenMsg{Session: "web"}, ""},
 		{"partial command runs the best match", false, "/ne", OpenMsg{Create: true}, ""},
 		{"quit", false, "/quit", QuitMsg{}, ""},
+		{"exit", false, "/exit", QuitMsg{}, ""},
 		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, ""},
 		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, ""},
 		{"rename with nothing highlighted", false, "/rename backend", nil, "Select a session"},

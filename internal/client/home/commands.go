@@ -30,6 +30,7 @@ var commands = []command{
 	{"theme", "[name]", "Pick the colors", (*Model).cmdTheme},
 	{"help", "", "Show commands and keys", (*Model).cmdHelp},
 	{"quit", "", "Leave Snow; sessions keep running", (*Model).cmdQuit},
+	{"exit", "", "Same as /quit", (*Model).cmdQuit},
 }
 
 // matchCommands returns the commands whose names fuzzy-match query, best
