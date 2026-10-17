@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Snow on Linux, WSL, or macOS:
+# Install Snow on Linux or WSL:
 #
 #   curl -fsSL https://raw.githubusercontent.com/emmyfong/snow/main/install.sh | sh
 #
@@ -27,7 +27,7 @@ need uname
 case "$(uname -s)" in
 Linux) os=linux ;;
 Darwin) os=darwin ;;
-*) fail "this script installs on Linux, WSL, and macOS; on Windows use Scoop or the zip" ;;
+*) fail "this script installs on Linux and WSL; on Windows use Scoop or the zip" ;;
 esac
 
 case "$(uname -m)" in
@@ -46,12 +46,21 @@ fi
 dest=${SNOW_INSTALL_DIR:-$HOME/.local/bin}
 archive=snow_${os}_${arch}.tar.gz
 
-tmp=$(mktemp -d)
+# The temp folder sits beside the destination, so the final move is a
+# rename in one folder: an interrupted install never leaves half a binary.
+mkdir -p "$dest"
+tmp=$(mktemp -d "$dest/.snow-install.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
+# HTTPS only, so a redirect cannot downgrade the download; file:// is for
+# tests and local mirrors.
+fetch() {
+	curl -fsSL --proto '=https,file' --proto-redir '=https' --tlsv1.2 "$1" -o "$2"
+}
+
 echo "Downloading $archive"
-curl -fsSL "$base/$archive" -o "$tmp/$archive" || fail "could not download $base/$archive"
-curl -fsSL "$base/checksums.txt" -o "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
+fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
+fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
 
 want=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
 [ -n "$want" ] || fail "checksums.txt has no entry for $archive"
@@ -65,9 +74,8 @@ fi
 [ "$got" = "$want" ] || fail "checksum mismatch for $archive: the download is damaged or was changed; nothing was installed"
 
 tar -xzf "$tmp/$archive" -C "$tmp" snow || fail "the archive has no snow binary"
-mkdir -p "$dest"
+chmod 755 "$tmp/snow"
 mv "$tmp/snow" "$dest/snow"
-chmod 755 "$dest/snow"
 
 echo "Installed $("$dest/snow" version) to $dest/snow"
 case ":$PATH:" in

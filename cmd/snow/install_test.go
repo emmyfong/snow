@@ -56,7 +56,7 @@ func fakeRelease(t *testing.T, good bool) string {
 func runInstall(t *testing.T, release string) (string, string, error) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("install.sh is for Linux, WSL, and macOS")
+		t.Skip("install.sh is for Linux and WSL")
 	}
 	for _, tool := range []string{"sh", "curl", "tar"} {
 		if _, err := exec.LookPath(tool); err != nil {

@@ -29,9 +29,9 @@ curl -fsSL https://raw.githubusercontent.com/emmyfong/snow/main/install.sh | sh
 ```
 
 The script downloads the latest release for your machine, checks it against
-the release's checksums, and installs `snow` to `~/.local/bin`. Set
-`SNOW_VERSION=v0.1.0` for a given version, or `SNOW_INSTALL_DIR` for another
-folder. On Debian and Ubuntu you can also install the `.deb` from the
+the release's checksums, and installs `snow` to `~/.local/bin`. For a given
+version or another folder, set the variables for `sh`, after the pipe:
+`curl -fsSL .../install.sh | SNOW_VERSION=v0.1.0 SNOW_INSTALL_DIR=~/bin sh`. On Debian and Ubuntu you can also install the `.deb` from the
 release: `sudo apt install ./snow_amd64.deb`.
 
 ### From source
@@ -122,21 +122,23 @@ open the menu over it.
 ## Configuration
 
 Snow reads `~/.snow/config.toml` (`%USERPROFILE%\.snow\config.toml` on
-Windows). Every setting is optional; these are the defaults:
+Windows). Every setting is optional. This file shows each one with its
+default; the lines starting with `#` are examples to copy:
 
 ```toml
 [keys]
 prefix = "C-b"        # the prefix key, in tmux notation: C- Ctrl, M- Alt, S- Shift
 
-[keys.bind]           # your changes to the keys after the prefix
-"|" = "split-right"   # key = action; "none" removes a key
-"-" = "split-down"
+[keys.bind]           # your changes to the keys after the prefix; none by default
+# "|" = "split-right" # key = action
+# "%" = "none"        # "none" removes a key
 
 [scrollback]
 lines = 2000          # lines each pane keeps above its screen
 
 [profile]
-default = "Ubuntu"    # the shell new panes start with; empty means the first found
+default = ""          # the shell new panes start with; empty means the first found
+# default = "Ubuntu"
 
 [theme]
 name = "default"      # or Frost, Campbell, One Half Dark, Dark+, Solarized Dark,
