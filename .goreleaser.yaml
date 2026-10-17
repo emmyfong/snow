@@ -30,6 +30,45 @@ archives:
 checksum:
   name_template: checksums.txt
 
+# Linux: a .deb beside the tar.gz. install.sh (in the repository root)
+# installs the tar.gz for any distribution.
+nfpms:
+  - id: snow
+    package_name: snow
+    file_name_template: "{{ .ProjectName }}_{{ .Arch }}"
+    formats: [deb]
+    homepage: https://github.com/emmyfong/snow
+    maintainer: Emmy Fong <emmyfong@users.noreply.github.com>
+    description: A terminal for directing AI coding agents, with sessions that survive a reboot.
+    license: MIT
+    bindir: /usr/bin
+
+# Windows: the Scoop and winget manifests are written to dist/ and attached
+# to the release, never pushed by CI. Commit dist/scoop/snow.json as
+# bucket/snow.json, and submit the winget manifests to microsoft/winget-pkgs.
+scoops:
+  - name: snow
+    skip_upload: true
+    homepage: https://github.com/emmyfong/snow
+    description: A terminal for directing AI coding agents, with sessions that survive a reboot.
+    license: MIT
+    repository:
+      owner: emmyfong
+      name: snow
+
+winget:
+  - name: snow
+    publisher: Emmy Fong
+    publisher_url: https://github.com/emmyfong
+    short_description: A terminal for directing AI coding agents.
+    description: Snow runs shells in panes and windows, like tmux, with sessions that survive a reboot. It runs natively on Windows and in WSL.
+    license: MIT
+    homepage: https://github.com/emmyfong/snow
+    skip_upload: true
+    repository:
+      owner: emmyfong
+      name: winget-pkgs
+
 changelog:
   sort: asc
   filters:

@@ -26,3 +26,11 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # GoReleaser writes the Scoop and winget manifests but pushes them
+      # nowhere (packaging/README.md); attach them to the release instead.
+      - name: Attach package manifests
+        run: |
+          gh release upload "$GITHUB_REF_NAME" dist/scoop/snow.json --clobber
+          find dist/winget -name '*.yaml' -print0 | xargs -0 gh release upload "$GITHUB_REF_NAME" --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
