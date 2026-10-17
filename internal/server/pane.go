@@ -17,6 +17,9 @@ type pane struct {
 	ended   bool        // its WSL distribution stopped; it waits for r to restart
 	dir     string      // the folder it was asked to start in, for a shell that never reports one
 	closed  atomic.Bool // Snow closed it; set before its program is ended
+	// fetching is set while a goroutine reads the busy pane's frame for the
+	// frame loop; owned by the model goroutine.
+	fetching bool
 }
 
 // startPane starts profile's program in dir at cols by rows, below

@@ -81,13 +81,13 @@ func (st *state) layout(sess *session) *api.Layout {
 }
 
 // flush sends each attached client the rows that changed since its last
-// update, for the panes it can see. It runs on every frame tick. A pane
-// whose output is being written at that moment is busy: flush draws every
-// free pane first, then waits for the busy ones, each for at most one feed
-// piece. So a pane that only echoed a key never waits behind panes that
-// print without pause, and those still update on every frame.
+// update, for the panes it can see. It runs on every frame tick and never
+// waits: a pane whose output is being written at that moment is busy, and
+// a short goroutine reads it instead, handing the frame back when it has
+// it (fetchFrame). So the model goroutine never blocks on a pane (ADR 0007),
+// a pane that only echoed a key goes out at once, and panes that print
+// without pause still update about once a frame.
 func (st *state) flush() {
-	var busy []func()
 	for c := range st.clients {
 		sess, ok := st.sessions[c.session]
 		if !ok {
@@ -99,38 +99,71 @@ func (st *state) flush() {
 		}
 		cols, rows := sess.area()
 		for id := range layout.Rects(w.tree, cols, rows).Panes {
-			if p := w.panes[int(id)]; !st.flushPane(c, p, false) {
-				busy = append(busy, func() { st.flushPane(c, p, true) })
-			}
+			st.flushPane(c, w.panes[int(id)])
 		}
-	}
-	for _, f := range busy {
-		f()
 	}
 }
 
 // flushPane sends c the rows of p that changed since the last update c was
-// sent. A client with a half-full outbox is skipped; c.last stays as it was,
-// so the next update it gets carries every row changed in between. Without
-// wait it reads the pane only if it is free, and reports false for a busy
-// pane, to be drawn again with wait.
-func (st *state) flushPane(c *client, p *pane, wait bool) bool {
-	if len(c.out) >= cap(c.out)/2 {
-		return true
+// sent, if p is free; a busy pane is read off the model goroutine. A client
+// with a half-full outbox is skipped; c.last stays as it was, so the next
+// update it gets carries every row changed in between.
+func (st *state) flushPane(c *client, p *pane) {
+	if c.dropped || len(c.out) >= cap(c.out)/2 {
+		return
 	}
 	v := p.term.Version()
 	if prev, ok := c.seen[p.id]; ok && prev == v {
-		return true
+		return
 	}
-	var f term.Frame
-	if wait {
-		f = p.term.Frame()
-	} else {
-		var ok bool
-		if f, ok = p.term.TryFrame(); !ok {
-			return false
+	f, ok := p.term.TryFrame()
+	if !ok {
+		st.fetchFrame(p)
+		return
+	}
+	st.sendFrame(c, p, v, f)
+}
+
+// fetchFrame reads busy pane p on its own goroutine, which waits for the
+// pane's lock, and hands the frame to the model goroutine for every client
+// that shows p. One read at a time per pane: a pane already being read is
+// left alone.
+func (st *state) fetchFrame(p *pane) {
+	if p.fetching {
+		return
+	}
+	p.fetching = true
+	srv := st.srv
+	go func() {
+		v := p.term.Version()
+		f := p.term.Frame()
+		srv.post(func(st *state) {
+			p.fetching = false
+			st.frameReady(p, v, f)
+		})
+	}()
+}
+
+// frameReady sends frame f of p, read at version v or later, to every
+// client still showing p that has not seen v.
+func (st *state) frameReady(p *pane, v uint64, f term.Frame) {
+	for c := range st.clients {
+		sess, ok := st.sessions[c.session]
+		if !ok || c.dropped || len(c.out) >= cap(c.out)/2 {
+			continue
 		}
+		if w := sess.shown(); w == nil || w.panes[p.id] != p {
+			continue
+		}
+		if prev, ok := c.seen[p.id]; ok && prev >= v {
+			continue
+		}
+		st.sendFrame(c, p, v, f)
 	}
+}
+
+// sendFrame sends c the rows of frame f of p that differ from what c has.
+func (st *state) sendFrame(c *client, p *pane, v uint64, f term.Frame) {
 	rows := f.Lines
 	last := c.last[p.id]
 	var changed []api.LineUpdate
@@ -142,5 +175,4 @@ func (st *state) flushPane(c *client, p *pane, wait bool) bool {
 	c.last[p.id] = rows
 	c.seen[p.id] = v
 	st.enqueue(c, &api.PaneUpdate{Pane: p.id, Lines: changed, Cursor: &api.Cursor{X: f.X, Y: f.Y, Visible: f.Visible}, Mouse: f.Mouse})
-	return true
 }

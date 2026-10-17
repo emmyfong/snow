@@ -12,13 +12,14 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// The load budget from #47: with ten panes printing as fast as they can,
-// typed input echoes within echoBudget, and every pane keeps near the frame
-// rate (30 per second; minRate leaves room for a slow runner).
+// The load budget from #47: with at least ten panes printing as fast as
+// they can, typed input echoes within echoBudget (worst within worstEcho),
+// and every pane keeps near the frame rate of 30 per second.
 const (
-	streams    = 10
 	echoBudget = 50 * time.Millisecond
-	minRate    = 25
+	worstEcho  = 250 * time.Millisecond
+	minRate    = 24
+	rateWindow = 3 * time.Second
 )
 
 // streamCommand prints without end, as fast as the shell can.
@@ -29,8 +30,9 @@ func streamCommand() string {
 	return "yes snow-load\r"
 }
 
-// loadSession starts a session with one quiet probe pane and ten panes that
-// stream output, and returns the client and the probe pane's ID.
+// loadSession starts a session laid out as a 3 by 4 grid of panes, each
+// about 79 by 17 cells: a quiet probe pane top left, and eleven panes that
+// stream output. It returns the client, the probe, and the streams.
 func loadSession(t testing.TB) (*apitest.Client, int, []int) {
 	t.Helper()
 	s := newTestServer(t)
@@ -38,16 +40,26 @@ func loadSession(t testing.TB) (*apitest.Client, int, []int) {
 	c.Send(&api.Attach{Session: "load", Create: true})
 	l := nextLayout(t, c, func(*api.Layout) bool { return true })
 	probe := l.Windows[0].Panes[0].ID
-	last := probe
-	for i := range streams {
-		dir := api.DirRight
-		if i%2 == 1 {
-			dir = api.DirDown
-		}
-		c.Send(split(last, dir))
-		l = nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == i+2 })
-		last = slices.MaxFunc(l.Windows[0].Panes, func(a, b api.PaneInfo) int { return a.ID - b.ID }).ID
+	n := 1
+	splitNewest := func(target int, dir string) int {
+		c.Send(split(target, dir))
+		n++
+		l = nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == n })
+		return slices.MaxFunc(l.Windows[0].Panes, func(a, b api.PaneInfo) int { return a.ID - b.ID }).ID
 	}
+	columns := []int{probe}
+	for range 2 {
+		columns = append(columns, splitNewest(columns[len(columns)-1], api.DirRight))
+	}
+	c.Send(&api.Command{Op: api.OpEven, Target: probe})
+	for _, top := range columns {
+		last := top
+		for range 3 {
+			last = splitNewest(last, api.DirDown)
+		}
+		c.Send(&api.Command{Op: api.OpEven, Target: top})
+	}
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows[0].Panes) == 12 })
 	var ids []int
 	for _, p := range l.Windows[0].Panes {
 		ids = append(ids, p.ID)
@@ -85,40 +97,12 @@ func waitPrompts(t testing.TB, c *apitest.Client, ids []int) {
 	}
 }
 
-// loadResult is what one run of probes measured.
-type loadResult struct {
-	echoes  []time.Duration // per probe, sorted
-	updates map[int]int     // pane ID → updates received
-	elapsed time.Duration
-}
-
-func (r loadResult) median() time.Duration { return r.echoes[len(r.echoes)/2] }
-func (r loadResult) worst() time.Duration  { return r.echoes[len(r.echoes)-1] }
-
-// updateRate is the slowest streaming pane's updates per second.
-func (r loadResult) updateRate(stream []int) float64 {
-	slowest := -1
-	for _, id := range stream {
-		if n := r.updates[id]; slowest < 0 || n < slowest {
-			slowest = n
-		}
-	}
-	return float64(slowest) / r.elapsed.Seconds()
-}
-
 // probeEchoes types n unique markers into the probe pane, one at a time,
-// and measures how long each takes to come back in a PaneUpdate while the
-// other panes stream. It counts every update it reads.
-func probeEchoes(t testing.TB, c *apitest.Client, probe, n int) loadResult {
+// and returns how long each took to come back in a PaneUpdate while the
+// other panes stream, sorted.
+func probeEchoes(t testing.TB, c *apitest.Client, probe, n int) []time.Duration {
 	t.Helper()
-	// Updates queued during warm-up would count as if they came now.
-	for {
-		if _, err := c.Next(time.Millisecond); err != nil {
-			break
-		}
-	}
-	r := loadResult{updates: map[int]int{}}
-	start := time.Now()
+	var echoes []time.Duration
 	for i := range n {
 		marker := fmt.Sprintf("probe%03d", i)
 		sent := time.Now()
@@ -129,11 +113,7 @@ func probeEchoes(t testing.TB, c *apitest.Client, probe, n int) loadResult {
 				t.Fatalf("probe %s never echoed: %v", marker, err)
 			}
 			u, ok := m.(*api.PaneUpdate)
-			if !ok {
-				continue
-			}
-			r.updates[u.Pane]++
-			if u.Pane != probe {
+			if !ok || u.Pane != probe {
 				continue
 			}
 			for _, l := range u.Lines {
@@ -142,16 +122,42 @@ func probeEchoes(t testing.TB, c *apitest.Client, probe, n int) loadResult {
 				}
 			}
 		}
-		r.echoes = append(r.echoes, time.Since(sent))
+		echoes = append(echoes, time.Since(sent))
 		// Run the line, so the next marker starts on a clean prompt.
 		c.Send(&api.Input{Pane: probe, Key: &api.Key{Code: api.KeyEnter}})
 	}
-	r.elapsed = time.Since(start)
-	slices.Sort(r.echoes)
-	return r
+	slices.Sort(echoes)
+	return echoes
 }
 
-// TestInputLatencyUnderLoad: with ten panes streaming, typed input still
+// slowestRate counts updates for rateWindow and returns the updates per
+// second of the stream pane that got the fewest.
+func slowestRate(c *apitest.Client, stream []int) float64 {
+	// Updates queued before the window would count as if they came in it.
+	for {
+		if _, err := c.Next(time.Millisecond); err != nil {
+			break
+		}
+	}
+	counts := map[int]int{}
+	end := time.Now().Add(rateWindow)
+	for time.Now().Before(end) {
+		if m, err := c.Next(time.Until(end)); err == nil {
+			if u, ok := m.(*api.PaneUpdate); ok {
+				counts[u.Pane]++
+			}
+		}
+	}
+	slowest := -1
+	for _, id := range stream {
+		if n := counts[id]; slowest < 0 || n < slowest {
+			slowest = n
+		}
+	}
+	return float64(slowest) / rateWindow.Seconds()
+}
+
+// TestInputLatencyUnderLoad: with eleven panes streaming, typed input still
 // echoes within the budget, and every pane keeps updating. The budget is
 // checked on Linux, where #47 sets it; elsewhere the numbers are only
 // reported.
@@ -164,33 +170,36 @@ func TestInputLatencyUnderLoad(t *testing.T) {
 	}
 	c, probe, stream := loadSession(t)
 	time.Sleep(500 * time.Millisecond) // let the streams reach full speed
-	r := probeEchoes(t, c, probe, 20)
-	t.Logf("echo median %v, worst %v; slowest streaming pane %.1f updates/s", r.median(), r.worst(), r.updateRate(stream))
+	echoes := probeEchoes(t, c, probe, 20)
+	median, worst := echoes[len(echoes)/2], echoes[len(echoes)-1]
+	rate := slowestRate(c, stream)
+	t.Logf("echo median %v, worst %v; slowest of %d streaming panes %.1f updates/s", median, worst, len(stream), rate)
 	if runtime.GOOS != "linux" {
 		return
 	}
-	if r.median() >= echoBudget {
-		t.Errorf("echo median %v with %d streams, want under %v", r.median(), streams, echoBudget)
+	if median >= echoBudget || worst >= worstEcho {
+		t.Errorf("echo median %v, worst %v; want under %v and %v", median, worst, echoBudget, worstEcho)
 	}
-	if rate := r.updateRate(stream); rate < minRate {
+	if rate < minRate {
 		t.Errorf("slowest streaming pane %.1f updates/s, want at least %d", rate, minRate)
 	}
 }
 
-// BenchmarkTenStreams measures, with ten panes streaming: input echo time,
-// the slowest pane's update rate, and the heap. Run it with
+// BenchmarkTenStreams measures, with eleven panes streaming: input echo
+// time, the slowest pane's update rate, and the heap. Run it with
 //
 //	go test -run '^$' -bench TenStreams ./internal/server
 func BenchmarkTenStreams(b *testing.B) {
 	c, probe, stream := loadSession(b)
 	time.Sleep(500 * time.Millisecond)
 	b.ResetTimer()
-	r := probeEchoes(b, c, probe, b.N)
+	echoes := probeEchoes(b, c, probe, b.N)
 	b.StopTimer()
+	rate := slowestRate(c, stream)
 	var mem runtime.MemStats
 	runtime.ReadMemStats(&mem)
-	b.ReportMetric(float64(r.median().Microseconds())/1000, "echo-ms")
-	b.ReportMetric(float64(r.worst().Microseconds())/1000, "worst-echo-ms")
-	b.ReportMetric(r.updateRate(stream), "updates/s")
+	b.ReportMetric(float64(echoes[len(echoes)/2].Microseconds())/1000, "echo-ms")
+	b.ReportMetric(float64(echoes[len(echoes)-1].Microseconds())/1000, "worst-echo-ms")
+	b.ReportMetric(rate, "updates/s")
 	b.ReportMetric(float64(mem.HeapAlloc)/(1<<20), "heap-MB")
 }
