@@ -22,7 +22,7 @@ func testOptions() Options {
 	}
 }
 
-func newTestServer(t *testing.T) *Server {
+func newTestServer(t testing.TB) *Server {
 	t.Helper()
 	s := New(testOptions())
 	t.Cleanup(s.Close)

@@ -40,6 +40,11 @@ jobs:
       - name: test with race detector
         if: runner.os != 'Windows'
         run: go test -race ./...
+      # The race detector makes timing budgets meaningless, so the load test
+      # skips under it and runs here on its own (#47).
+      - name: load test
+        if: runner.os == 'Linux'
+        run: go test -run TestInputLatencyUnderLoad -v ./internal/server
       - name: test
         if: runner.os == 'Windows'
         run: go test ./...

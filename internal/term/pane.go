@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"runtime"
 	"sync"
 	"sync/atomic"
 
@@ -109,18 +110,66 @@ func (p *Pane) feed() {
 	buf := make([]byte, 32*1024)
 	for {
 		n, err := p.pty.Read(buf)
-		if n > 0 {
+		// Feed the emulator a piece at a time, releasing mu between pieces:
+		// scrolling a full scrollback costs the emulator time for every
+		// line, and a reader of the screen must never wait for a whole read.
+		// PTY reads already split sequences anywhere, so the emulator keeps
+		// its parse state across writes.
+		for chunk := buf[:n]; len(chunk) > 0; {
+			piece := chunk[:min(len(chunk), feedPiece)]
+			chunk = chunk[len(piece):]
 			p.mu.Lock()
 			p.shift.before(p.emu.Scrollback())
-			_, _ = p.emu.Write(buf[:n]) // the emulator's writer never fails
+			_, _ = p.emu.Write(piece) // the emulator's writer never fails
 			p.shift.after(p.emu.Scrollback())
 			p.mu.Unlock()
 			p.version.Add(1)
+			// A pane printing without pause would keep its goroutine busy
+			// for a whole scheduler slice; yielding lets a pane that only
+			// echoed a key, and the server's frame loop, run at once.
+			runtime.Gosched()
 		}
 		if err != nil {
 			return
 		}
 	}
+}
+
+// feedPiece bounds how much output feed writes to the emulator under one
+// hold of mu.
+const feedPiece = 1024
+
+// Frame is what a client needs to draw a pane: its rows, styled, its
+// cursor, and whether its program asked for the mouse.
+type Frame struct {
+	Lines   []string
+	X, Y    int
+	Visible bool // the cursor is shown
+	Mouse   bool
+}
+
+// Frame returns the pane's frame, read under one lock.
+func (p *Pane) Frame() Frame {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.frame()
+}
+
+// TryFrame returns the pane's frame if no one holds the pane, and false at
+// once if output is being written to it. A caller that must never wait,
+// such as the server's frame loop, draws a busy pane on a later frame.
+func (p *Pane) TryFrame() (Frame, bool) {
+	if !p.mu.TryLock() {
+		return Frame{}, false
+	}
+	defer p.mu.Unlock()
+	return p.frame(), true
+}
+
+// frame reads the frame; the caller holds mu.
+func (p *Pane) frame() Frame {
+	pos := p.emu.CursorPosition()
+	return Frame{Lines: p.screenLines(), X: pos.X, Y: pos.Y, Visible: !p.hidden, Mouse: len(p.mouseModes) > 0}
 }
 
 // inputQueue bounds chunks of input waiting for the program to read them.
