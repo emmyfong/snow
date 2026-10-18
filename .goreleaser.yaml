@@ -43,19 +43,9 @@ nfpms:
     license: MIT
     bindir: /usr/bin
 
-# Windows: the Scoop and winget manifests are written to dist/ and attached
-# to the release, never pushed by CI. Commit dist/scoop/snow.json as
-# bucket/snow.json, and submit the winget manifests to microsoft/winget-pkgs.
-scoops:
-  - name: snow
-    skip_upload: true
-    homepage: https://github.com/emmyfong/snow
-    description: A terminal for directing AI coding agents, with sessions that survive a reboot.
-    license: MIT
-    repository:
-      owner: emmyfong
-      name: snow
-
+# Windows: the winget manifests are written to dist/ and attached to the
+# release, never pushed by CI. They are not submitted to
+# microsoft/winget-pkgs yet; Windows users run install.ps1.
 winget:
   - name: snow
     publisher: Emmy Fong

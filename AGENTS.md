@@ -20,7 +20,6 @@ internal/<pillar>/   product code, one package per concern:
                      later: backend, skills, context, gate, editor,
                      hook, worktree
 pkg/api/             the only public package: API types for other clients
-bucket/              the Scoop bucket: Scoop reads manifests from this folder
 ```
 
 - One folder is one package. Tests sit beside the code (`x_test.go`).
