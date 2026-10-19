@@ -46,6 +46,11 @@ completes an epic and its sub-issues. Read the acceptance criteria of every
 one. Read the ADRs in `docs/decisions/` that the change
 touches.
 
+For a branch, run the local gate in `references/local-gate.md` now: lint
+for three OSes, and the touched packages' tests on Linux, with `-race`,
+and on Windows. Fix failures before the reviewers start. Reviewers read a
+branch that passes.
+
 Name the report `<branch-with-dashes>-<sha7>.md` for a branch and
 `pr-<n>-<sha7>.md` for a PR. If a report exists for this branch or PR in
 `.context/reviews/`, this is a re-review.
@@ -105,7 +110,8 @@ old checklist at the top of the agent part.
 
 For a branch: show the user the report and ask, with AskUserQuestion, which
 findings to fix. The `issue-handler` session fixes them, each with a test
-where behavior changes, then opens the PR. After the PR exists, offer to post
+where behavior changes, runs the local gate again, then opens the PR. Do not
+open the PR or say it is ready while a gate check fails. After the PR exists, offer to post
 the report as its first comment.
 
 For a PR, or once the branch's PR exists: post only after the user approves,
