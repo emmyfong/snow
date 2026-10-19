@@ -54,22 +54,71 @@ func TestUnknownSizeNotSent(t *testing.T) {
 	}
 }
 
-func TestEndAndLostConnectionDiffer(t *testing.T) {
-	newApp := func() *app {
-		send := func(api.Message) {}
-		return &app{screen: session.New(send), send: send}
+// TestSessionEndShowsHome: when the attached session ends, as when its last
+// pane exits, the client shows the home page with a note instead of quitting.
+func TestSessionEndShowsHome(t *testing.T) {
+	send := func(api.Message) {}
+	a := &app{screen: session.New(send), send: send, back: "work"}
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	a.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
+	_, cmd := a.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
+	if cmd != nil || a.result.Err != nil {
+		t.Fatalf("the session end quit Snow: result %+v", a.result)
 	}
-	ended := newApp()
-	ended.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
-	ended.Update(connClosedMsg{})
-	if !ended.result.Ended || ended.result.Err != nil {
-		t.Fatalf("after session-ended: %+v, want Ended and no error", ended.result)
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T, want the home page", a.screen)
+	}
+	if !strings.Contains(a.View().Content, "session work ended") {
+		t.Fatal("the home page should say the session ended")
+	}
+	if a.back != "" || a.result.Session != "" || a.View().WindowTitle != "snow" {
+		t.Fatalf("back %q, session %q, title %q: the ended session should be forgotten", a.back, a.result.Session, a.View().WindowTitle)
+	}
+}
+
+// TestSessionEndKeepsOtherBack: Esc on the home page still returns to a
+// running session left with Ctrl+b s, when a session opened since ends.
+func TestSessionEndKeepsOtherBack(t *testing.T) {
+	send := func(api.Message) {}
+	a := &app{screen: session.New(send), send: send, back: "api"}
+	a.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
+	a.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
+	if a.back != "api" {
+		t.Fatalf("back = %q, want api, which still runs", a.back)
+	}
+}
+
+// TestLateSessionEndIgnored: an end that arrives after the user left the
+// session, for the home page or another session, leaves that screen alone.
+func TestLateSessionEndIgnored(t *testing.T) {
+	ended := &api.Error{Code: api.CodeSessionEnded, Message: "session work ended"}
+	layout := &api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}}
+
+	home1 := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	home1.Update(layout)
+	home1.Update(session.DetachMsg{})
+	before := home1.screen
+	home1.Update(ended)
+	if home1.screen != before || !home1.result.Detached {
+		t.Fatal("a late end replaced the home page the user detached to")
 	}
 
-	lost := newApp()
-	lost.Update(connClosedMsg{})
-	if lost.result.Ended || !errors.Is(lost.result.Err, ErrConnectionLost) {
-		t.Fatalf("after a bare close: %+v, want ErrConnectionLost", lost.result)
+	opening := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	opening.Update(layout)
+	opening.Update(session.SwitchMsg{})
+	opening.Update(home.OpenMsg{Session: "api"})
+	before = opening.screen
+	opening.Update(ended)
+	if opening.screen != before || !opening.opening {
+		t.Fatal("a late end replaced the session the user is opening")
+	}
+}
+
+func TestLostConnectionQuits(t *testing.T) {
+	send := func(api.Message) {}
+	lost := &app{screen: session.New(send), send: send}
+	if _, cmd := lost.Update(connClosedMsg{}); cmd == nil || !errors.Is(lost.result.Err, ErrConnectionLost) {
+		t.Fatalf("after a bare close: %+v, want ErrConnectionLost and a quit", lost.result)
 	}
 }
 

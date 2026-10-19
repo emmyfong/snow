@@ -266,8 +266,6 @@ func attach(name string, stdout, stderr io.Writer) int {
 		return 1
 	case res.Detached:
 		_, _ = fmt.Fprintf(stdout, "[detached from %s]\n", res.Session)
-	case res.Ended:
-		_, _ = fmt.Fprintf(stdout, "[%s ended]\n", res.Session)
 	}
 	return 0
 }

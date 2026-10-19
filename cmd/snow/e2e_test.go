@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -199,19 +200,58 @@ func TestSessionStartsInClientFolder(t *testing.T) {
 	detach(t, path, "here", 1, keys, done)
 }
 
-// TestShellExitEndsClient: when the shell exits, the client reports that the
-// session ended, not a lost connection.
-func TestShellExitEndsClient(t *testing.T) {
+// TestShellExitShowsHome: when the last shell exits, the client shows the
+// home page instead of quitting; Esc there quits, with no error.
+func TestShellExitShowsHome(t *testing.T) {
 	path := startServer(t)
 	keys, done := attachClient(path, "brief")
+	w := apitest.Dial(t, path, 80, 24)
+	defer w.Close()
+	waitAttached(t, w, "brief", 1)
 	watch := observe(t, path, "brief")
 	watch.WaitScreen(shellPrompt())
 	if _, err := io.WriteString(keys, "exit\r"); err != nil {
 		t.Fatal(err)
 	}
-	if res := waitResult(t, done); !res.Ended || res.Session != "brief" {
-		t.Fatalf("result %+v, want session brief ended", res)
+	waitGone(t, w, "brief")
+	select {
+	case r := <-done:
+		t.Fatalf("the client quit when the session ended: %+v", r)
+	case <-time.After(500 * time.Millisecond):
 	}
+	// The server's list does not say the client has drawn the home page,
+	// and an Esc that reaches the session screen first is dropped: press it
+	// until the client quits. A quit proves the home page was up, since Esc
+	// on a session screen goes to the pane.
+	stop := make(chan struct{})
+	defer close(stop)
+	go func() {
+		for {
+			_, _ = io.WriteString(keys, "\x1b")
+			select {
+			case <-stop:
+				return
+			case <-time.After(200 * time.Millisecond):
+			}
+		}
+	}()
+	if res := waitResult(t, done); res.Err != nil || res.Detached {
+		t.Fatalf("result %+v, want a plain quit from the home page", res)
+	}
+	_ = keys.Close() // unblocks a write the quit client never reads
+}
+
+// waitGone reads the session lists w gets until session is not in one.
+func waitGone(t *testing.T, w *apitest.Client, session string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		m, _ := w.Next(time.Second)
+		if l, ok := m.(*api.SessionList); ok && !slices.ContainsFunc(l.Sessions, func(s api.SessionInfo) bool { return s.Name == session }) {
+			return
+		}
+	}
+	t.Fatalf("session %s never ended", session)
 }
 
 // TestHomePageCreatesASession: plain snow opens the home page; typing a name

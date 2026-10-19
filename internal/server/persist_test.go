@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"io/fs"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -176,6 +177,30 @@ func TestNormalStopDeletesEndedSessions(t *testing.T) {
 	s.Close()
 	if _, err := st.Load("work"); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("an ended session's file survived a normal stop: %v", err)
+	}
+}
+
+// TestEndedSessionNotOffered: an ended session's file waits endDelay before
+// it goes, but the home page its client lands on must not offer it as
+// saved, and a new session of that name starts fresh, not restored.
+func TestEndedSessionNotOffered(t *testing.T) {
+	s, st := endTestServer(t)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	c.Send(&api.Command{Op: api.OpRenameWindow, Target: 0, Args: map[string]string{api.ArgName: "old"}})
+	saved(t, st, "work", func(snap store.Snapshot) bool { return snap.Windows[0].Name == "old" })
+	c.Send(&api.Input{Pane: 1, Paste: "exit\r"})
+	if e := nextError(t, c); e.Code != api.CodeSessionEnded {
+		t.Fatalf("got %+v, want CodeSessionEnded", e)
+	}
+	l := nextList(t, c, func(*api.SessionList) bool { return true })
+	if slices.ContainsFunc(l.Sessions, func(i api.SessionInfo) bool { return i.Name == "work" }) {
+		t.Fatalf("the home page offers the ended session: %+v", l.Sessions)
+	}
+	c.Send(&api.Attach{Session: "work", Create: true})
+	if got := nextLayout(t, c, func(*api.Layout) bool { return true }); got.Windows[0].Name == "old" {
+		t.Fatal("a new session named work restored the ended one")
 	}
 }
 

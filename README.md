@@ -98,7 +98,8 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
-Typing `exit` in a shell closes its pane, as in tmux.
+Typing `exit` in a shell closes its pane, as in tmux. In the last pane it
+ends the session and shows the home page; Esc there quits Snow.
 
 ### Copy mode
 

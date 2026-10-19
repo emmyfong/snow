@@ -55,6 +55,21 @@ func TestRunExitsAfterLastSession(t *testing.T) {
 	if err := c.Send(&api.Attach{Session: "only", Create: true}); err != nil {
 		t.Fatal(err)
 	}
+	// The client stays connected when its session ends (ADR 0008 keeps the
+	// server up for it); Run ends once it leaves too.
+	if err := raw.SetReadDeadline(time.Now().Add(20 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		m, err := c.Receive()
+		if err != nil {
+			t.Fatalf("connection closed before the session ended: %v", err)
+		}
+		if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
+			break
+		}
+	}
+	_ = raw.Close()
 	select {
 	case err := <-done:
 		if err != nil {

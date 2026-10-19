@@ -109,6 +109,10 @@ func (st *state) unsaveLater(session string) {
 		return
 	}
 	st.stopEndTimer(session)
+	// Only the file waits, for a reboot that finds the shells already
+	// dead. The session is not offered as saved meanwhile, and a new
+	// session of its name starts fresh.
+	delete(st.saved, session)
 	srv := st.srv
 	var t *time.Timer
 	t = time.AfterFunc(orDefault(srv.opts.endDelay, defaultEndDelay), func() {

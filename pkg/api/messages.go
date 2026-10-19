@@ -271,9 +271,10 @@ const (
 	// CodeCommandFailed means a valid Command could not be applied, for
 	// example a split that would leave a pane too small. Nothing changed.
 	CodeCommandFailed = "command-failed"
-	// CodeSessionEnded is the last message before the server closes the
-	// connection because the attached session ended. A close without it
-	// means the connection was lost.
+	// CodeSessionEnded tells a client that its attached session ended. The
+	// connection stays open: the client is detached, as after Detach, and a
+	// SessionList follows. A close without a reason means the connection
+	// was lost.
 	CodeSessionEnded = "session-ended"
 )
 
