@@ -53,12 +53,13 @@ function Install-Snow {
             if ($fields.Count -ge 2 -and $fields[1] -eq $archive) { $want = $fields[0] }
         }
         if (-not $want) { throw "snow install: checksums.txt has no entry for $archive" }
-        $got = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $tmp $archive)).Hash
+        $got = Get-SnowSha256 (Join-Path $tmp $archive)
         if ($got -ne $want) {
             throw "snow install: checksum mismatch for ${archive}: the download is damaged or was changed; nothing was installed"
         }
 
-        Expand-Archive -LiteralPath (Join-Path $tmp $archive) -DestinationPath (Join-Path $tmp 'unpacked')
+        Add-Type -AssemblyName System.IO.Compression.FileSystem
+        [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $tmp $archive), (Join-Path $tmp 'unpacked'))
         $exe = Join-Path $tmp 'unpacked\snow.exe'
         if (-not (Test-Path -LiteralPath $exe)) { throw 'snow install: the archive has no snow.exe' }
         Replace-SnowExe $exe $target
@@ -69,6 +70,21 @@ function Install-Snow {
     $version = & $target version
     Write-Host "Installed $version to $target"
     if ($env:SNOW_NO_PATH -ne '1') { Add-SnowPath $dest }
+}
+
+# Get-SnowSha256 hashes a file with .NET, not Get-FileHash. Windows
+# PowerShell started from PowerShell 7 inherits its PSModulePath, loads the
+# wrong Microsoft.PowerShell.Utility, and has no Get-FileHash; Expand-Archive
+# fails the same way, so the archive is unpacked with .NET too.
+function Get-SnowSha256($path) {
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($path)
+    try {
+        return [BitConverter]::ToString($sha.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $sha.Dispose()
+    }
 }
 
 # Get-SnowArch returns amd64 or arm64 for the machine, not for this
@@ -158,7 +174,13 @@ function Get-SnowFile($from, $to) {
 
 try {
     Install-Snow
+} catch {
+    # Rethrown as a new error: run with -File, some failures, such as a
+    # missing command, would otherwise stop the script with exit code 0.
+    $message = $_.Exception.Message
+    if ($message -notlike 'snow install:*') { $message = "snow install: $message" }
+    throw $message
 } finally {
     # irm | iex defines these in the user's session; leave nothing behind.
-    Remove-Item -ErrorAction SilentlyContinue -Path Function:\Install-Snow, Function:\Get-SnowArch, Function:\Replace-SnowExe, Function:\Add-SnowPath, Function:\Get-SnowFile
+    Remove-Item -ErrorAction SilentlyContinue -Path Function:\Install-Snow, Function:\Get-SnowSha256, Function:\Get-SnowArch, Function:\Replace-SnowExe, Function:\Add-SnowPath, Function:\Get-SnowFile
 }

@@ -139,6 +139,26 @@ func TestInstallScriptWindows(t *testing.T) {
 	}
 }
 
+// TestInstallScriptWindowsFromPwsh: Windows PowerShell started from
+// PowerShell 7 inherits its PSModulePath and cannot load Get-FileHash or
+// Expand-Archive; the install must still work, and fail with a nonzero exit
+// code when it does not.
+func TestInstallScriptWindowsFromPwsh(t *testing.T) {
+	if _, err := exec.LookPath("pwsh.exe"); err != nil {
+		t.Skip("no PowerShell 7")
+	}
+	modulePath, err := exec.Command("pwsh.exe", "-NoProfile", "-Command", "$env:PSModulePath").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	dest := filepath.Join(t.TempDir(), "snow")
+	out, err := runInstallPS(t, "powershell.exe", fakeWindowsRelease(t, true), dest, false,
+		"PSModulePath="+strings.TrimSpace(string(modulePath)))
+	if err != nil || !strings.Contains(out, "Installed snow") {
+		t.Fatalf("install.ps1 = %v\n%s\nwant snow installed", err, out)
+	}
+}
+
 // TestInstallScriptWindowsRefusesBadChecksum: a download that does not
 // match the release's checksum is never installed.
 func TestInstallScriptWindowsRefusesBadChecksum(t *testing.T) {
