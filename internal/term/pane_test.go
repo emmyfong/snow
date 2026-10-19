@@ -1,6 +1,8 @@
 package term
 
 import (
+	"errors"
+	"io"
 	"runtime"
 	"strings"
 	"testing"
@@ -97,5 +99,37 @@ func TestPaneCloseStopsGoroutines(t *testing.T) {
 	eventually(t, "goroutines to stop", func() bool { return runtime.NumGoroutine() <= before })
 	if err := p.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
+	}
+}
+
+// stuckReadPTY is a PTY whose Read never returns, even after Close, as a
+// ConPTY read can when the console host does not exit.
+type stuckReadPTY struct {
+	*fakePTY
+	block chan struct{}
+}
+
+func (s *stuckReadPTY) Read([]byte) (int, error) {
+	<-s.block
+	return 0, io.EOF
+}
+
+// TestCloseGivesUpOnStuckRead: a read that never returns must not hang
+// Close, and so the server's shutdown.
+func TestCloseGivesUpOnStuckRead(t *testing.T) {
+	defer func(d time.Duration) { closeWait = d }(closeWait)
+	closeWait = 100 * time.Millisecond
+	pty := &stuckReadPTY{fakePTY: newFakePTY(), block: make(chan struct{})}
+	defer close(pty.block)
+	p := newPane(pty, 80, 24, Options{})
+	done := make(chan error, 1)
+	go func() { done <- p.Close() }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrCloseTimeout) {
+			t.Fatalf("Close = %v, want ErrCloseTimeout", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung on a read that never returns")
 	}
 }

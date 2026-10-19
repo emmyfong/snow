@@ -150,9 +150,12 @@ func (st *state) removeWindow(sess *session, w *window) {
 func (st *state) closePane(p *pane) {
 	p.closed.Store(true)
 	st.srv.closing.Add(1)
+	log := st.srv.log
 	go func() {
 		defer st.srv.closing.Done()
-		_ = p.term.Close()
+		if err := p.term.Close(); err != nil {
+			log.Warn("pane close", "pane", p.id, "err", err)
+		}
 	}()
 }
 

@@ -178,7 +178,9 @@ func (st *state) closeAll() {
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
 			for _, p := range w.panes {
-				_ = p.term.Close()
+				if err := p.term.Close(); err != nil {
+					st.srv.log.Warn("pane close", "pane", p.id, "err", err)
+				}
 			}
 		}
 	}

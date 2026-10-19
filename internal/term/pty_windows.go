@@ -6,6 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/charmbracelet/x/xpty"
+	"golang.org/x/sys/windows"
 )
 
 // windowsPTY runs a program under ConPTY through xpty.
@@ -25,6 +26,26 @@ func startPTY(spec Spec, cols, rows int) (PTY, error) {
 		return nil, fmt.Errorf("start %s: %w", spec.Path, err)
 	}
 	return &windowsPTY{ConPty: p, cmd: cmd}, nil
+}
+
+// Close kills the program, wakes a read blocked on the output pipe, then
+// closes the pseudo console. Closing a pipe handle does not wake a
+// synchronous ReadFile on it: that read returns only when the console host
+// exits, which can lag behind the kill, or never come.
+func (w *windowsPTY) Close() error {
+	if w.cmd.Process != nil {
+		_ = w.cmd.Process.Kill() // fails only when it already exited
+	}
+	cancelRead(w.OutPipeReadFd())
+	if err := w.ConPty.Close(); err != nil {
+		return fmt.Errorf("close conpty: %w", err)
+	}
+	return nil
+}
+
+// cancelRead cancels any read pending on the handle h, from any thread.
+func cancelRead(h uintptr) {
+	_ = windows.CancelIoEx(windows.Handle(h), nil) // fails when no read is pending
 }
 
 func (w *windowsPTY) Resize(cols, rows int) error {
