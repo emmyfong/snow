@@ -237,7 +237,15 @@ func TestInstallScriptWindowsKeepsPathEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if kind != registry.EXPAND_SZ || got != before+";"+dest {
-		t.Fatalf("Path = %q (kind %d), want %q as an expandable string", got, kind, before+";"+dest)
+	// The added entry may spell dest differently: a temp folder can be an
+	// 8.3 short name (RUNNER~1) that the script writes out in full.
+	added, ok := strings.CutPrefix(got, before+";")
+	if kind != registry.EXPAND_SZ || !ok || strings.Contains(added, ";") {
+		t.Fatalf("Path = %q (kind %d), want %q plus one entry, as an expandable string", got, kind, before)
+	}
+	a, errA := os.Stat(added)
+	d, errD := os.Stat(dest)
+	if errA != nil || errD != nil || !os.SameFile(a, d) {
+		t.Fatalf("added PATH entry %q is not %q (%v, %v)", added, dest, errA, errD)
 	}
 }
