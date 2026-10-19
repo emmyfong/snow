@@ -27,7 +27,7 @@ need uname
 case "$(uname -s)" in
 Linux) os=linux ;;
 Darwin) os=darwin ;;
-*) fail "this script installs on Linux and WSL; on Windows use Scoop or the zip" ;;
+*) fail "this script installs on Linux and WSL; on Windows, run this in PowerShell: irm https://raw.githubusercontent.com/emmyfong/snow/main/install.ps1 | iex" ;;
 esac
 
 case "$(uname -m)" in

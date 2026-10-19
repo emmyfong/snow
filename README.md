@@ -10,12 +10,17 @@ Linux, as one program.
 
 ### Windows
 
-With [Scoop](https://scoop.sh):
+In PowerShell:
 
 ```powershell
-scoop bucket add snow https://github.com/emmyfong/snow
-scoop install snow
+irm https://raw.githubusercontent.com/emmyfong/snow/main/install.ps1 | iex
 ```
+
+The script downloads the latest release for your machine, checks it against
+the release's checksums, installs `snow.exe` to
+`%LOCALAPPDATA%\Programs\snow`, and adds that folder to your user PATH.
+Open a new terminal afterwards. For a given version, set
+`$env:SNOW_VERSION = "v0.1.0"` before running it.
 
 Or download `snow_windows_amd64.zip` from the
 [latest release](https://github.com/emmyfong/snow/releases/latest), unzip
