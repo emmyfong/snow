@@ -69,21 +69,34 @@ func TestRealDetachedServer(t *testing.T) {
 		t.Fatalf("server log: %v", err)
 	}
 
-	// Typing exit ends the shell, the only session, and so the server. The
-	// user's real shell runs here, with an unknown prompt, and shells discard
-	// input while they start, so type it again until the server is gone.
+	// Typing exit ends the shell, the only session. The user's real shell
+	// runs here, with an unknown prompt, and shells discard input while they
+	// start, so type it again until the session ends. Then the client
+	// leaves, and with no session and no client the server exits.
 	deadline := time.Now().Add(apitest.Wait)
-	for time.Now().Before(deadline) {
+	ended := false
+	for !ended && time.Now().Before(deadline) {
 		for _, r := range "exit" {
 			c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: string(r), Text: string(r)}})
 		}
 		c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
 		for range 20 {
-			if _, err := os.Stat(path); os.IsNotExist(err) {
-				return
+			m, _ := c.Next(50 * time.Millisecond)
+			if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
+				ended = true
+				break
 			}
-			time.Sleep(50 * time.Millisecond)
 		}
 	}
-	t.Fatal("the server did not exit after its last session ended")
+	if !ended {
+		t.Fatal("the session did not end after exit")
+	}
+	c.Close()
+	for time.Now().Before(deadline.Add(apitest.Wait)) {
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatal("the server did not exit after its last session and client left")
 }

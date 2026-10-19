@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/vt"
@@ -15,6 +16,14 @@ import (
 // ErrReplyPipe means the emulator's reply pipe could not be closed, so a
 // goroutine may outlive the pane. It signals an incompatible vt version.
 var ErrReplyPipe = errors.New("term: emulator reply pipe is not closable")
+
+// ErrCloseTimeout means Close gave up waiting for the pane's goroutines,
+// for example a read from the PTY that never returned. They are left
+// running, and the emulator stays open for them.
+var ErrCloseTimeout = errors.New("term: pane goroutines did not stop")
+
+// closeWait bounds how long Close waits for the pane's goroutines.
+var closeWait = 5 * time.Second
 
 // Pane is one program on a PTY plus the screen its output draws. All methods
 // are safe for concurrent use.
@@ -242,13 +251,23 @@ func (p *Pane) Err() error {
 // The order matters. vt's Close is not locked and races with a goroutine
 // blocked in Read, so Close wakes that reader by closing the reply pipe
 // (which is safe concurrently), waits for every goroutine, and only then
-// closes the emulator.
+// closes the emulator. It waits at most closeWait, then returns
+// ErrCloseTimeout: a stuck PTY read must not hang the server.
 func (p *Pane) Close() error {
 	p.closeOnce.Do(func() {
 		p.stop()
 		ptyErr := p.pty.Close()
 		pipeErr := p.closeReplyPipe()
-		p.wg.Wait()
+		stopped := make(chan struct{})
+		go func() { p.wg.Wait(); close(stopped) }()
+		select {
+		case <-stopped:
+		case <-time.After(closeWait):
+			// A goroutine still running may write to the emulator, so it
+			// must not be closed under it.
+			p.closeErr = errors.Join(ptyErr, pipeErr, ErrCloseTimeout)
+			return
+		}
 		p.mu.Lock()
 		emuErr := p.emu.Close()
 		p.mu.Unlock()

@@ -22,7 +22,7 @@ var ErrInvalidSessionRequest = errors.New("api: invalid session request")
 type Detach struct{}
 
 // KillSession ends a session and every program in it. Clients attached to
-// it receive an Error with CodeSessionEnded. The server answers the sender
+// it receive an Error with CodeSessionEnded and stay connected, detached. The server answers the sender
 // with an Error when there is no such session.
 type KillSession struct {
 	Session string `json:"session"`

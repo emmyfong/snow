@@ -1,6 +1,7 @@
 package home
 
 import (
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +21,6 @@ func TestFuzzyMatch(t *testing.T) {
 		{"re", "rename"},
 		{"k", "kill"},
 		{"q", "quit"},
-		{"ex", "exit"},
 		{"nw", "new"},
 		{"", "new"}, // no query keeps the table order
 	}
@@ -29,6 +29,9 @@ func TestFuzzyMatch(t *testing.T) {
 		if len(got) == 0 || got[0].name != tt.first {
 			t.Errorf("matchCommands(%q) ranks %v first, want %s", tt.query, names(got), tt.first)
 		}
+	}
+	if got := names(matchCommands("exit")); slices.Contains(got, "exit") {
+		t.Errorf("matchCommands(exit) = %v; /exit is gone, /quit quits", got)
 	}
 	if got := matchCommands("xyz"); len(got) != 0 {
 		t.Errorf("matchCommands(xyz) = %v, want nothing", names(got))
@@ -93,7 +96,6 @@ func TestSlashCommands(t *testing.T) {
 		{"new with an existing name attaches", false, "/new web", OpenMsg{Session: "web"}, ""},
 		{"partial command runs the best match", false, "/ne", OpenMsg{Create: true}, ""},
 		{"quit", false, "/quit", QuitMsg{}, ""},
-		{"exit", false, "/exit", QuitMsg{}, ""},
 		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, ""},
 		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, ""},
 		{"rename with nothing highlighted", false, "/rename backend", nil, "Select a session"},

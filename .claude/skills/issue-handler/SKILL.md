@@ -111,6 +111,10 @@ for the reviewer models and count, then writes a curated report.
 
 ## 6. Open the PR
 
+Run the local gate (`review-wave/references/local-gate.md`) on the final
+branch. Open the PR only when every check passes, and list the results in
+the PR body.
+
 Before the first push, rebase on main:
 `git -C <wt> fetch origin && git -C <wt> rebase origin/main`. After the first
 push, never rebase. Merge `origin/main` into the branch instead, because force

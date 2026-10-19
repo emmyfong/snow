@@ -11,13 +11,19 @@ import (
 // home page needs. The session keeps running.
 func (st *state) detach(c *client) {
 	prev := c.session
-	c.session = ""
-	c.last, c.seen = nil, nil
+	unattach(c)
 	if sess, ok := st.sessions[prev]; ok {
 		st.fitSession(sess) // the session may grow back
 	}
 	// c is unattached now, so this sends it the list too.
 	st.sessionsChanged()
+}
+
+// unattach leaves c connected but attached to no session, with no screen
+// sent, so a later attach sends every screen in full.
+func unattach(c *client) {
+	c.session = ""
+	c.last, c.seen = nil, nil
 }
 
 // killRequest ends the session a client named.

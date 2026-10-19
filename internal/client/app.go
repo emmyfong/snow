@@ -15,7 +15,6 @@ import (
 type Result struct {
 	Session  string // the attached session's name
 	Detached bool   // the user detached; the session keeps running
-	Ended    bool   // the session ended, for example because its shell exited
 	Err      error  // a refused request (*api.Error) or ErrConnectionLost
 }
 
@@ -165,7 +164,19 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		switch msg.Code {
 		case api.CodeSessionEnded:
-			a.result.Ended = true
+			// An end sent before the user left the session arrives after:
+			// the home page or the session being opened stays.
+			if _, on := a.screen.(*session.Model); !on || a.opening {
+				return a, nil
+			}
+			// The server keeps the connection, detached; the session and
+			// the list naming it are gone.
+			if a.back == a.result.Session {
+				a.back = ""
+			}
+			a.result, a.sessions = Result{}, nil
+			a.showHome(msg.Message)
+			return a, nil
 		case api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize:
 			// A refused request changes nothing; the screen shows why.
 			return a, a.screen.Update(msg)
@@ -174,7 +185,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Quit
 	case connClosedMsg:
-		if !a.result.Ended && !a.result.Detached && a.result.Err == nil {
+		if !a.result.Detached && a.result.Err == nil {
 			a.result.Err = ErrConnectionLost
 		}
 		return a, tea.Quit

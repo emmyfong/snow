@@ -1,10 +1,9 @@
 package server
 
 import (
-	"errors"
-	"io"
 	"net"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -93,27 +92,26 @@ func TestUpdateRateCapped(t *testing.T) {
 	}
 }
 
-func TestSessionEndClosesConnection(t *testing.T) {
+// TestSessionEndDetachesClient: when the last pane exits, the attached
+// client hears that the session ended and stays connected, unattached, so it
+// can show the home page.
+func TestSessionEndDetachesClient(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 80, 24)
 	c.Send(&api.Attach{Session: "work", Create: true})
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 	typeLine(s.pane(t, "work"), "exit")
-	ended := false
-	deadline := time.Now().Add(15 * time.Second)
-	for time.Now().Before(deadline) {
-		m, err := c.Next(time.Second)
-		if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
-			ended = true
-		}
-		if errors.Is(err, io.EOF) || (err != nil && !errors.Is(err, apitest.ErrTimeout)) {
-			if !ended {
-				t.Fatal("connection closed without saying the session ended")
-			}
-			return
-		}
+	if e := nextError(t, c); e.Code != api.CodeSessionEnded {
+		t.Fatalf("got %+v, want CodeSessionEnded", e)
 	}
-	t.Fatal("connection stayed open after the session ended")
+	nextList(t, c, func(l *api.SessionList) bool {
+		return !slices.ContainsFunc(l.Sessions, func(i api.SessionInfo) bool { return i.Name == "work" })
+	})
+	// Still connected: the server answers a request.
+	c.Send(&api.KillSession{Session: "nope"})
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed {
+		t.Fatalf("after the session ended: %+v, want CodeCommandFailed from a live connection", e)
+	}
 }
 
 // floodSpec prints x forever.

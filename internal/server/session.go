@@ -93,14 +93,15 @@ func (st *state) killSession(name string) error {
 	return nil
 }
 
-// endSession forgets sess and closes Done when no session is left.
+// endSession forgets sess and closes Done when no session and no client is
+// left. Its clients stay connected, detached, so they can show the home page.
 func (st *state) endSession(sess *session) {
 	delete(st.sessions, sess.name)
 	st.unsaveLater(sess.name)
 	for c := range st.clients {
 		if c.session == sess.name {
 			st.enqueue(c, &api.Error{Code: api.CodeSessionEnded, Message: "session " + sess.name + " ended"})
-			st.closeClient(c)
+			unattach(c)
 		}
 	}
 	st.srv.log.Info("session ended", "session", sess.name)
@@ -177,7 +178,9 @@ func (st *state) closeAll() {
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
 			for _, p := range w.panes {
-				_ = p.term.Close()
+				if err := p.term.Close(); err != nil {
+					st.srv.log.Warn("pane close", "pane", p.id, "err", err)
+				}
 			}
 		}
 	}
