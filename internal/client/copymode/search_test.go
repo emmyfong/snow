@@ -137,6 +137,17 @@ func TestSearchPrompt(t *testing.T) {
 	key(m, press('q', 0, "q"))
 }
 
+// TestSearchAltGr: a character typed with AltGr (Ctrl+Alt with text on
+// Windows) goes into the search (#209).
+func TestSearchAltGr(t *testing.T) {
+	m, _ := open(t, 100)
+	key(m, press('/', 0, "/"))
+	key(m, press('{', tea.ModCtrl|tea.ModAlt, "{"))
+	if got := m.Prompt(); got != "Search down: {" {
+		t.Fatalf("prompt %q, want the AltGr character", got)
+	}
+}
+
 func TestSearchNotes(t *testing.T) {
 	m, srv := open(t, 100)
 	key(m, press('n', 0, "n"))

@@ -93,14 +93,14 @@ func (m *Model) themeList(p placement) []string {
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	lines := []string{indent([]string{muted.Render("Themes")}, p.x)[0]}
 	themes := theme.Builtin()
-	items := make([]ui.ListItem, 0, p.count)
-	for _, t := range themes[p.first : p.first+p.count] {
+	items := make([]ui.ListItem, 0, p.list.count)
+	for _, t := range themes[p.list.first : p.list.first+p.list.count] {
 		note := ""
 		if t.Name == m.before.Name {
 			note = "in use"
 		}
 		items = append(items, ui.ListItem{Cols: []string{t.Name, note}})
 	}
-	list := ui.List(th, ui.ListOptions{Items: items, Selected: m.themeSel - p.first, Width: p.width})
+	list := ui.List(th, ui.ListOptions{Items: items, Selected: m.themeSel - p.list.first, Width: p.width})
 	return append(lines, indent(strings.Split(list, "\n"), p.x)...)
 }

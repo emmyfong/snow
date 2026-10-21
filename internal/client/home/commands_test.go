@@ -99,7 +99,8 @@ func TestSlashCommands(t *testing.T) {
 		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, ""},
 		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, ""},
 		{"rename with nothing highlighted", false, "/rename backend", nil, "Select a session"},
-		{"rename to a bad name", true, "/rename  ", nil, "/rename"},
+		{"rename with no name asks for one", true, "/rename  ", nil, ""},
+		{"rename with no session and no name", false, "/rename", nil, "Pick a session"},
 		{"kill an unknown session", false, "/kill nope", nil, "No session named nope"},
 		{"unknown command", false, "/xyz", nil, "Unknown command"},
 	}
@@ -185,11 +186,17 @@ func TestCommandsGolden120x40(t *testing.T) { goldenTyped(t, 120, 40, "/re") }
 func TestHelpGolden80x24(t *testing.T)      { goldenTyped(t, 80, 24, "/help\r") }
 func TestKillGolden80x24(t *testing.T)      { goldenTyped(t, 80, 24, "/kill api\r") }
 
+// goldenTyped types typed on a home page with two sessions, where "\r" is
+// Enter and "↓" is Down, and compares the view with its golden file.
 func goldenTyped(t *testing.T, cols, rows int, typed string) {
 	m := screen(cols, rows, session("api", time.Minute, 1), session("web", time.Hour, 0))
 	for _, r := range typed {
-		if r == '\r' {
+		switch r {
+		case '\r':
 			m.Update(press(tea.KeyEnter))
+			continue
+		case '↓':
+			m.Update(press(tea.KeyDown))
 			continue
 		}
 		typeText(m, string(r))
@@ -226,5 +233,37 @@ func TestBackFollowsRenameAndKill(t *testing.T) {
 	m.Update(&api.SessionList{}) // backend was killed
 	if _, ok := msgOf(m.Update(press(tea.KeyEscape))).(QuitMsg); !ok {
 		t.Fatal("Esc with the back session gone should quit")
+	}
+}
+
+// TestSlashWithAltGr: on Windows, AltGr arrives as Ctrl+Alt with the text
+// set. A "/" typed that way must still start a command (#84).
+func TestSlashWithAltGr(t *testing.T) {
+	m := screen(80, 24, session("0", time.Minute, 0))
+	m.Update(tea.KeyPressMsg(tea.Key{Code: '/', Text: "/", Mod: tea.ModCtrl | tea.ModAlt}))
+	typeText(m, "rename 0 test")
+	got := enter(m)
+	s, ok := got.(SendMsg)
+	if !ok {
+		t.Fatalf("Enter gave %#v, want a rename", got)
+	}
+	if r, ok := s.Msg.(*api.RenameSession); !ok || *r != (api.RenameSession{Session: "0", Name: "test"}) {
+		t.Fatalf("sent %#v, want rename 0 to test", s.Msg)
+	}
+}
+
+// TestCtrlAndAltShortcutsTypeNothing: a shortcut with only Ctrl or only Alt
+// is not text, even when the terminal reports text for it.
+func TestCtrlAndAltShortcutsTypeNothing(t *testing.T) {
+	for _, k := range []tea.Key{
+		{Code: 'a', Mod: tea.ModCtrl},
+		{Code: 'x', Text: "x", Mod: tea.ModAlt},
+		{Code: 'x', Text: "x", Mod: tea.ModCtrl},
+	} {
+		m := screen(80, 24)
+		m.Update(tea.KeyPressMsg(k))
+		if m.input != "" {
+			t.Errorf("%v typed %q, want nothing", k, m.input)
+		}
 	}
 }

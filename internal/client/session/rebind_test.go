@@ -101,6 +101,19 @@ func TestRenameWindow(t *testing.T) {
 	}
 }
 
+// TestRenameWindowAltGr: a character typed with AltGr (reported as
+// Ctrl+Alt with text on Windows) goes into the name (#84).
+func TestRenameWindowAltGr(t *testing.T) {
+	m, r := withConfig(t, config.Defaults().Keys)
+	m.Update(ctrlB)
+	m.Update(press(',', 0, ","))
+	m.Update(press('@', tea.ModCtrl|tea.ModAlt, "@"))
+	m.Update(press(tea.KeyEnter, 0, ""))
+	if c := lastCommand(t, r); c.Args[api.ArgName] != "dev@" {
+		t.Fatalf("sent name %q, want dev@", c.Args[api.ArgName])
+	}
+}
+
 func TestRenameCancelAndEmpty(t *testing.T) {
 	m, r := withConfig(t, config.Defaults().Keys)
 	m.Update(ctrlB)

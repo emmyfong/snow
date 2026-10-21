@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/confirm"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -41,6 +42,7 @@ type Model struct {
 	cmdSel     int      // index into the matching commands
 	notice     string   // why the last command or request was refused
 	help       bool     // the help panel is open
+	naming     *naming  // the new name /rename asks for, when open
 	confirm    *confirm.Model
 	killing    string // the session the open popup would end
 	picking    bool   // the theme list is open
@@ -100,7 +102,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 // click handles a left click: a popup button, a command row (completed,
-// or run when it takes no argument), or a session row (opened).
+// or run when it takes no argument), or a session row (opened, or picked
+// and the command run, under a command that acts on a session).
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
@@ -112,7 +115,15 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.help = false
 		return nil
 	}
-	i, ok := m.layout().rowAt(msg.Y)
+	if m.naming != nil {
+		return nil
+	}
+	p := m.layout()
+	if i, ok := p.sessions.rowAt(msg.Y); ok && m.pickingSession() {
+		m.target = m.sessions[i].Name
+		return m.runCommand()
+	}
+	i, ok := p.list.rowAt(msg.Y)
 	if !ok {
 		return nil
 	}
@@ -144,6 +155,9 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		return nil
 	}
 	m.notice = ""
+	if m.naming != nil {
+		return m.namingKey(k)
+	}
 	if m.commanding() {
 		if cmd, ok := m.commandKey(k); ok {
 			return cmd
@@ -170,22 +184,25 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		if m.selected < len(m.shown())-1 {
 			m.selected++
 		}
-	case k.Code == tea.KeyBackspace:
-		if r := []rune(m.input); len(r) > 0 {
-			m.input, m.selected, m.cmdSel = string(r[:len(r)-1]), -1, 0
+	default:
+		if s, ok := keys.Edit(m.input, k); ok {
+			m.setInput(s)
 		}
-	case k.Text != "" && k.Mod&(tea.ModCtrl|tea.ModAlt) == 0:
-		if m.input == "" && k.Text == "/" {
-			// The command acts on the session highlighted now; typing
-			// clears the highlight.
-			m.target = ""
-			if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
-				m.target = shown[m.selected].Name
-			}
-		}
-		m.input, m.selected, m.cmdSel = m.input+k.Text, -1, 0
 	}
 	return nil
+}
+
+// setInput changes the input to s. A "/" that starts the input begins a
+// command, which acts on the session highlighted now; editing clears the
+// highlight.
+func (m *Model) setInput(s string) {
+	if m.input == "" && strings.HasPrefix(s, "/") {
+		m.target = ""
+		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
+			m.target = shown[m.selected].Name
+		}
+	}
+	m.input, m.selected, m.cmdSel = s, -1, 0
 }
 
 // choice is what Enter opens: the selected session, else the typed name
