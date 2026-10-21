@@ -123,7 +123,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.target = m.sessions[i].Name
 		return m.runCommand()
 	}
-	i, ok := p.rowAt(msg.Y)
+	i, ok := p.list.rowAt(msg.Y)
 	if !ok {
 		return nil
 	}
