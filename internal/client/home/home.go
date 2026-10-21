@@ -12,6 +12,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/confirm"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -174,18 +175,25 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		if r := []rune(m.input); len(r) > 0 {
 			m.input, m.selected, m.cmdSel = string(r[:len(r)-1]), -1, 0
 		}
-	case k.Text != "" && k.Mod&(tea.ModCtrl|tea.ModAlt) == 0:
-		if m.input == "" && k.Text == "/" {
-			// The command acts on the session highlighted now; typing
-			// clears the highlight.
-			m.target = ""
-			if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
-				m.target = shown[m.selected].Name
-			}
+	default:
+		if text, ok := keys.Typed(k); ok {
+			m.typeText(text)
 		}
-		m.input, m.selected, m.cmdSel = m.input+k.Text, -1, 0
 	}
 	return nil
+}
+
+// typeText adds text to the input. A "/" that starts the input begins a
+// command, which acts on the session highlighted now; typing clears the
+// highlight.
+func (m *Model) typeText(text string) {
+	if m.input == "" && text == "/" {
+		m.target = ""
+		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
+			m.target = shown[m.selected].Name
+		}
+	}
+	m.input, m.selected, m.cmdSel = m.input+text, -1, 0
 }
 
 // choice is what Enter opens: the selected session, else the typed name

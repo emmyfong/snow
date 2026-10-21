@@ -5,6 +5,7 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -47,8 +48,10 @@ func (m *Model) renameKey(k tea.Key) {
 		}
 	case k.Mod == tea.ModCtrl && k.Code == 'u':
 		r.text = nil
-	case k.Mod&(tea.ModCtrl|tea.ModAlt) == 0 && k.Text != "" && utf8.RuneCountInString(k.Text) == 1 && len(r.text) < maxWindowName:
-		r.text = append(r.text, []rune(k.Text)...)
+	default:
+		if text, ok := keys.Typed(k); ok && utf8.RuneCountInString(text) == 1 && len(r.text) < maxWindowName {
+			r.text = append(r.text, []rune(text)...)
+		}
 	}
 }
 

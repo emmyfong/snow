@@ -228,3 +228,35 @@ func TestBackFollowsRenameAndKill(t *testing.T) {
 		t.Fatal("Esc with the back session gone should quit")
 	}
 }
+
+// TestSlashWithAltGr: on Windows, AltGr arrives as Ctrl+Alt with the text
+// set. A "/" typed that way must still start a command (#84).
+func TestSlashWithAltGr(t *testing.T) {
+	m := screen(80, 24, session("0", time.Minute, 0))
+	m.Update(tea.KeyPressMsg(tea.Key{Code: '/', Text: "/", Mod: tea.ModCtrl | tea.ModAlt}))
+	typeText(m, "rename 0 test")
+	got := enter(m)
+	s, ok := got.(SendMsg)
+	if !ok {
+		t.Fatalf("Enter gave %#v, want a rename", got)
+	}
+	if r, ok := s.Msg.(*api.RenameSession); !ok || *r != (api.RenameSession{Session: "0", Name: "test"}) {
+		t.Fatalf("sent %#v, want rename 0 to test", s.Msg)
+	}
+}
+
+// TestCtrlAndAltShortcutsTypeNothing: a shortcut with only Ctrl or only Alt
+// is not text, even when the terminal reports text for it.
+func TestCtrlAndAltShortcutsTypeNothing(t *testing.T) {
+	for _, k := range []tea.Key{
+		{Code: 'a', Mod: tea.ModCtrl},
+		{Code: 'x', Text: "x", Mod: tea.ModAlt},
+		{Code: 'x', Text: "x", Mod: tea.ModCtrl},
+	} {
+		m := screen(80, 24)
+		m.Update(tea.KeyPressMsg(k))
+		if m.input != "" {
+			t.Errorf("%v typed %q, want nothing", k, m.input)
+		}
+	}
+}
