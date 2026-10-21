@@ -113,7 +113,7 @@ func (m *Model) hints() []ui.Hint {
 		return []ui.Hint{{Key: "enter", Desc: "keep"}, {Key: "↑↓", Desc: "preview"}, {Key: "esc", Desc: "cancel"}}
 	}
 	if m.naming != nil {
-		return []ui.Hint{{Key: "enter", Desc: "rename"}, {Key: "esc", Desc: "back"}}
+		return []ui.Hint{{Key: "enter", Desc: "rename"}, {Key: "ctrl+u", Desc: "clear"}, {Key: "esc", Desc: "back"}}
 	}
 	if m.pickingSession() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "↑↓", Desc: "pick session"}, {Key: "esc", Desc: "clear"}}

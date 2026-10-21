@@ -63,3 +63,53 @@ func TestRenameEscCancels(t *testing.T) {
 }
 
 func TestRenameNameGolden80x24(t *testing.T) { goldenTyped(t, 80, 24, "/rename↓\r") }
+
+// TestRenameGoneSession: a session killed elsewhere after it was picked is
+// refused with a notice, not offered for a new name.
+func TestRenameGoneSession(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	typeText(m, "/rename")
+	m.Update(press(tea.KeyDown)) // api
+	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("web", time.Hour, 0)}})
+	enter(m)
+	if m.naming != nil || !strings.Contains(m.notice, "No session named api") {
+		t.Fatalf("prompt open %v, notice %q", m.naming != nil, m.notice)
+	}
+}
+
+// TestRenameNoSessions: with no sessions, /rename says so.
+func TestRenameNoSessions(t *testing.T) {
+	m := screen(80, 24)
+	typeText(m, "/rename")
+	enter(m)
+	if !strings.Contains(m.notice, "No sessions to rename") {
+		t.Fatalf("notice %q", m.notice)
+	}
+}
+
+// TestRenameLongNamePrompt: a long session name is cut in the prompt, so the
+// typed name stays visible at 80 columns.
+func TestRenameLongNamePrompt(t *testing.T) {
+	long := strings.Repeat("x", api.MaxSessionName)
+	m := screen(80, 24, session(long, time.Minute, 0))
+	typeText(m, "/rename")
+	m.Update(press(tea.KeyDown))
+	enter(m)
+	m.Update(tea.KeyPressMsg(tea.Key{Code: 'u', Mod: tea.ModCtrl}))
+	typeText(m, "short")
+	if !strings.Contains(ansi.Strip(m.View().Content), "short") {
+		t.Fatalf("the typed name is hidden:\n%s", ansi.Strip(m.View().Content))
+	}
+}
+
+// TestCtrlCQuitsFromNameStep: Ctrl+C leaves Snow from the name step, as from
+// the rest of the page.
+func TestCtrlCQuitsFromNameStep(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0))
+	typeText(m, "/rename")
+	m.Update(press(tea.KeyDown))
+	enter(m)
+	if got := msgOf(m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))); got != (QuitMsg{}) {
+		t.Fatalf("Ctrl+C gave %#v, want QuitMsg", got)
+	}
+}

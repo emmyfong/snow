@@ -1,9 +1,8 @@
 package home
 
 import (
-	"strings"
-
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -26,6 +25,9 @@ func (m *Model) startNaming(session string) {
 // session, and a refused name keeps the prompt open with the reason.
 func (m *Model) namingKey(k tea.Key) tea.Cmd {
 	n := m.naming
+	if k.Code == 'c' && k.Mod == tea.ModCtrl {
+		return func() tea.Msg { return QuitMsg{} }
+	}
 	switch k.Code {
 	case tea.KeyEscape:
 		m.naming = nil
@@ -49,7 +51,11 @@ func (m *Model) namingKey(k tea.Key) tea.Cmd {
 	return nil
 }
 
+// maxPromptName bounds the session name in the prompt, so a long name
+// leaves room for the new one.
+const maxPromptName = 20
+
 // namingPrompt is the input box's prompt while a name is typed.
 func (m *Model) namingPrompt() string {
-	return "New name for " + strings.TrimSpace(m.naming.session) + ": "
+	return "New name for " + ansi.Truncate(m.naming.session, maxPromptName, "…") + ": "
 }

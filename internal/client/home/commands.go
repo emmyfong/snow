@@ -25,13 +25,13 @@ type command struct {
 
 // commands lists the slash commands in the order the list shows them.
 var commands = []command{
-	{"new", "[name]", "Start or open a session", false, (*Model).cmdNew},
-	{"sessions", "", "Show the sessions", false, (*Model).cmdSessions},
-	{"rename", "[session] <name>", "Rename a session", true, (*Model).cmdRename},
-	{"kill", "[session]", "End a session and its programs", true, (*Model).cmdKill},
-	{"theme", "[name]", "Pick the colors", false, (*Model).cmdTheme},
-	{"help", "", "Show commands and keys", false, (*Model).cmdHelp},
-	{"quit", "", "Leave Snow; sessions keep running", false, (*Model).cmdQuit},
+	{name: "new", args: "[name]", desc: "Start or open a session", run: (*Model).cmdNew},
+	{name: "sessions", args: "", desc: "Show the sessions", run: (*Model).cmdSessions},
+	{name: "rename", args: "[session] <name>", desc: "Rename a session", session: true, run: (*Model).cmdRename},
+	{name: "kill", args: "[session]", desc: "End a session and its programs", session: true, run: (*Model).cmdKill},
+	{name: "theme", args: "[name]", desc: "Pick the colors", run: (*Model).cmdTheme},
+	{name: "help", args: "", desc: "Show commands and keys", run: (*Model).cmdHelp},
+	{name: "quit", args: "", desc: "Leave Snow; sessions keep running", run: (*Model).cmdQuit},
 }
 
 // matchCommands returns the commands whose names fuzzy-match query, best
@@ -180,6 +180,12 @@ func (m *Model) cmdRename(rest string) tea.Cmd {
 		session, name = first, strings.TrimSpace(after)
 	}
 	switch {
+	case len(m.sessions) == 0:
+		m.notice = "No sessions to rename."
+		return nil
+	case session != "" && !m.exists(session):
+		m.notice = "No session named " + session + "."
+		return nil
 	case rest == "" && session != "":
 		m.startNaming(session)
 		return nil
