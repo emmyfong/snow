@@ -30,15 +30,18 @@ func ByName(name string) (Theme, bool) {
 // theme reads as one line of its palette.
 func palette(name, border, focus, barBG, barFG, tabBG, tabFG, promptBG, promptFG, accent, muted, success, errColor, selection string) Theme {
 	c := lipgloss.Color
+	onAccent := ink(colorprofile.TrueColor, c(accent))
 	return Theme{
-		Name: name, Border: c(border), FocusBorder: c(focus), BarBG: c(barBG), BarFG: c(barFG),
-		TabActiveBG: c(tabBG), TabActive: c(tabFG), PromptBG: c(promptBG), PromptFG: c(promptFG),
+		// The status bar is the accent, and the shown window's tab is the
+		// bar inverted, so the current window is a block of its own color.
+		Name: name, Border: c(border), FocusBorder: c(focus), BarBG: c(accent), BarFG: onAccent,
+		TabActiveBG: onAccent, TabActive: c(accent), PromptBG: c(promptBG), PromptFG: c(promptFG),
 		Accent: c(accent), Muted: c(muted), Success: c(success), Error: c(errColor),
 		ErrorFG: ink(colorprofile.TrueColor, c(errColor)), Selection: c(selection),
 		SelectionFG: ink(colorprofile.TrueColor, c(selection)),
-		// Copy mode reuses pairs the palette already has: the marker looks
-		// like the status bar, matches like a question, the current match
-		// like the active tab.
+		// Copy mode reuses pairs the palette already has: the marker in the
+		// bar colors, matches like a question, the current match in the tab
+		// colors.
 		IndicatorFG: c(barFG), IndicatorBG: c(barBG),
 		MatchFG: c(promptFG), MatchBG: c(promptBG),
 		CurrentFG: c(tabFG), CurrentBG: c(tabBG),

@@ -90,12 +90,12 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
 	active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
 	g := th.Glyphs
-	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight)
+	first := bar.Bold(true).Render(" " + g.SessionLeft + o.Session + g.SessionRight + " ")
 	parts := []string{first}
 	x := ansi.StringWidth(first)
 	var spans []TabSpan
 	for _, t := range o.Tabs {
-		label := strconv.Itoa(t.Index) + ":" + t.Name
+		label := strconv.Itoa(t.Index) + " " + t.Name
 		if t.Active {
 			label += g.ActiveTab
 		}
@@ -106,11 +106,13 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		if t.Active {
 			style = active
 		}
-		sep := bar.Render(" ")
-		// The space before a tab belongs to the gap, not to the tab.
-		spans = append(spans, TabSpan{Index: t.Index, X: x + ansi.StringWidth(sep), W: ansi.StringWidth(label)})
-		parts = append(parts, sep+style.Render(label))
-		x += ansi.StringWidth(sep) + ansi.StringWidth(label)
+		// The padding belongs to the tab, so the current window's block and
+		// its click target are the same cells.
+		label = " " + label + " "
+		w := ansi.StringWidth(label)
+		spans = append(spans, TabSpan{Index: t.Index, X: x, W: w})
+		parts = append(parts, style.Render(label))
+		x += w
 	}
 	left := strings.Join(parts, "")
 	right := o.Right
