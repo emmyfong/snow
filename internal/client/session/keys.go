@@ -4,6 +4,7 @@ import (
 	"unicode"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -34,6 +35,10 @@ func toAPIKey(k tea.Key) (api.Key, bool) {
 		code = string(unicode.ToLower(k.Code))
 	}
 	out := api.Key{Code: code, Text: k.Text}
+	if _, typed := keys.Typed(k); typed && k.Mod&(tea.ModCtrl|tea.ModAlt) != 0 {
+		// AltGr text: a Ctrl+Alt chord would reach the shell as ESC.
+		return out, true
+	}
 	for _, m := range apiMods {
 		if k.Mod&m.bit != 0 {
 			out.Mod = append(out.Mod, m.name)

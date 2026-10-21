@@ -36,6 +36,19 @@ func TestToAPIKey(t *testing.T) {
 	}
 }
 
+// TestToAPIKeyAltGr: AltGr arrives as Ctrl+Alt with text on Windows. The
+// pane must get the text, not a Ctrl+Alt chord the shell sees as ESC (#209).
+func TestToAPIKeyAltGr(t *testing.T) {
+	got, ok := toAPIKey(tea.Key{Code: '@', Text: "@", Mod: tea.ModCtrl | tea.ModAlt})
+	if !ok || got.Text != "@" || len(got.Mod) != 0 {
+		t.Fatalf("AltGr @ became %+v, want the text @ with no modifiers", got)
+	}
+	got, _ = toAPIKey(tea.Key{Code: 'x', Mod: tea.ModCtrl | tea.ModAlt})
+	if !slices.Equal(got.Mod, []string{api.ModAlt, api.ModCtrl}) {
+		t.Fatalf("Ctrl+Alt+x became %+v, want it to keep its modifiers", got)
+	}
+}
+
 func TestToAPIKeyDropsUnknown(t *testing.T) {
 	if _, ok := toAPIKey(tea.Key{Code: tea.KeyF20}); ok {
 		t.Fatal("F20 has no protocol name and should be dropped")

@@ -6,6 +6,7 @@ import (
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -59,9 +60,9 @@ func (m *Model) promptKey(k tea.Key) {
 		}
 	case k.Code == 'u' && k.Mod == tea.ModCtrl:
 		m.search.input = ""
-	case k.Text != "" && k.Mod&^tea.ModShift == 0:
-		if len(m.search.input)+len(k.Text) <= api.MaxQueryBytes {
-			m.search.input += k.Text
+	default:
+		if text, ok := keys.Typed(k); ok && len(m.search.input)+len(text) <= api.MaxQueryBytes {
+			m.search.input += text
 		}
 	}
 }
