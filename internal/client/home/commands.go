@@ -180,8 +180,11 @@ func (m *Model) cmdRename(rest string) tea.Cmd {
 		session, name = first, strings.TrimSpace(after)
 	}
 	switch {
+	case rest == "" && session != "":
+		m.startNaming(session)
+		return nil
 	case rest == "":
-		m.notice = "Type /rename <new name> for the selected session, or /rename <session> <new name>."
+		m.notice = "Pick a session with the arrows, or type /rename <session> <new name>."
 		return nil
 	case session == "":
 		m.notice = "Select a session first, or type /rename <session> <new name>."

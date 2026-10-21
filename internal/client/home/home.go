@@ -42,6 +42,7 @@ type Model struct {
 	cmdSel     int      // index into the matching commands
 	notice     string   // why the last command or request was refused
 	help       bool     // the help panel is open
+	naming     *naming  // the new name /rename asks for, when open
 	confirm    *confirm.Model
 	killing    string // the session the open popup would end
 	picking    bool   // the theme list is open
@@ -114,6 +115,9 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.help = false
 		return nil
 	}
+	if m.naming != nil {
+		return nil
+	}
 	p := m.layout()
 	if i, ok := p.sessions.rowAt(msg.Y); ok && m.pickingSession() {
 		m.target = m.sessions[i].Name
@@ -151,6 +155,9 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		return nil
 	}
 	m.notice = ""
+	if m.naming != nil {
+		return m.namingKey(k)
+	}
 	if m.commanding() {
 		if cmd, ok := m.commandKey(k); ok {
 			return cmd

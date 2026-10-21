@@ -107,6 +107,9 @@ func (m *Model) listSel() int {
 	if m.commanding() {
 		return m.cmdSel
 	}
+	if m.naming != nil {
+		return slices.IndexFunc(m.sessions, func(s api.SessionInfo) bool { return s.Name == m.naming.session })
+	}
 	return m.selected
 }
 
@@ -139,10 +142,14 @@ func (m *Model) View() tea.View {
 		lines = append(lines, strings.Split(ui.Wordmark(th, m.cols), "\n")...)
 		lines = append(lines, center(muted.Render(m.version), m.cols), "")
 	}
-	field := ui.Input(th, ui.InputOptions{
+	in := ui.InputOptions{
 		Value: m.input, Placeholder: "session name, Enter for a new one, / for commands",
 		Prompt: th.Glyphs.Pointer, Width: max(p.width-2, 0), Focused: true,
-	})
+	}
+	if m.naming != nil {
+		in.Value, in.Placeholder, in.Prompt = m.naming.name, "", m.namingPrompt()
+	}
+	field := ui.Input(th, in)
 	lines = append(lines, indent(strings.Split(ui.Panel(th, ui.PanelOptions{Body: field, Width: p.width}), "\n"), p.x)...)
 	notice := ""
 	if m.notice != "" {
@@ -159,7 +166,7 @@ func (m *Model) View() tea.View {
 			lines = append(lines, m.sessionList(p.x, p.width, b, m.sessions, m.targetIndex())...)
 		}
 	default:
-		lines = append(lines, m.sessionList(p.x, p.width, band{first: p.first, count: p.count}, m.shown(), m.selected)...)
+		lines = append(lines, m.sessionList(p.x, p.width, band{first: p.first, count: p.count}, m.shown(), m.listSel())...)
 		lines = append(lines, indent(m.noteLines(), p.x)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
@@ -222,6 +229,9 @@ func (m *Model) commandList(p placement) []string {
 func (m *Model) hints() []ui.Hint {
 	if m.picking {
 		return []ui.Hint{{Key: "enter", Desc: "keep"}, {Key: "↑↓", Desc: "preview"}, {Key: "esc", Desc: "cancel"}}
+	}
+	if m.naming != nil {
+		return []ui.Hint{{Key: "enter", Desc: "rename"}, {Key: "esc", Desc: "back"}}
 	}
 	if m.pickingSession() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "↑↓", Desc: "pick session"}, {Key: "esc", Desc: "clear"}}
