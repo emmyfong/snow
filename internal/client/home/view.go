@@ -1,6 +1,7 @@
 package home
 
 import (
+	"slices"
 	"strconv"
 	"strings"
 
@@ -18,9 +19,16 @@ type placement struct {
 	header         bool // wordmark and version fit
 	top            int  // first row of the page
 	x, width       int  // the column and width of the input, list, and hints
-	listTop, lines int  // the first row of the session list and its rows
-	first          int  // index of the first session shown
-	count          int  // sessions shown
+	listTop, lines int  // the first row of the main list and its rows
+	first          int  // index of the first item shown
+	count          int  // items shown
+	sessions       band // the sessions under the command list; empty otherwise
+}
+
+// band is a second list on the page: the sessions while a command is typed.
+type band struct {
+	top, lines   int // the first row of the rows and how many there are
+	first, count int // index of the first session shown, and sessions shown
 }
 
 // Rows of each part. The header is the wordmark, the version, and a blank.
@@ -28,10 +36,12 @@ const (
 	headerRows = ui.WordmarkHeight + 2
 	inputRows  = 3                         // a framed one-line input
 	fixedRows  = inputRows + 1 + 1 + 1 + 1 // input, blank, label, blank, hints
+	bandRows   = 2                         // a blank and the label above a band
 )
 
 // layout places the page in the screen: centered, the list as tall as the
-// room allows, the wordmark dropped first when the screen is short.
+// room allows, the wordmark dropped first when the screen is short. While a
+// command is typed, the sessions follow the commands and shrink first.
 func (m *Model) layout() placement {
 	p := placement{width: min(64, max(m.cols-4, 0))}
 	p.x = max((m.cols-p.width)/2, 0)
@@ -47,6 +57,12 @@ func (m *Model) layout() placement {
 	if p.header {
 		total += headerRows
 	}
+	if m.commanding() && !m.picking {
+		if n := min(max(len(m.sessions), 1), room-p.lines-bandRows); n > 0 {
+			p.sessions.lines = n
+			total += bandRows + n
+		}
+	}
 	p.top = max((m.rows-total)/2, 0)
 	p.listTop = p.top + inputRows + 2
 	if p.header {
@@ -56,7 +72,20 @@ func (m *Model) layout() placement {
 	if selected >= p.count {
 		p.first = selected - p.count + 1
 	}
+	if b := &p.sessions; b.lines > 0 {
+		b.top = p.listTop + p.lines + bandRows
+		b.count = min(len(m.sessions), b.lines)
+		if t := m.targetIndex(); t >= b.count {
+			b.first = t - b.count + 1
+		}
+	}
 	return p
+}
+
+// targetIndex is the index in the sessions of the session a command acts
+// on, or -1.
+func (m *Model) targetIndex() int {
+	return slices.IndexFunc(m.sessions, func(s api.SessionInfo) bool { return s.Name == m.target })
 }
 
 // listLen and listSel are the list's length and selected row: the matching
@@ -117,8 +146,12 @@ func (m *Model) View() tea.View {
 		lines = append(lines, m.themeList(p)...)
 	case m.commanding():
 		lines = append(lines, m.commandList(p)...)
+		if b := p.sessions; b.lines > 0 {
+			lines = append(lines, "")
+			lines = append(lines, m.sessionList(p.x, p.width, b, m.sessions, m.targetIndex())...)
+		}
 	default:
-		lines = append(lines, m.sessionList(p)...)
+		lines = append(lines, m.sessionList(p.x, p.width, band{first: p.first, count: p.count}, m.shown(), m.selected)...)
 		lines = append(lines, indent(m.noteLines(), p.x)...)
 	}
 	lines = append(lines, "", indent([]string{ui.KeyHints(th, m.hints(), p.width)}, p.x)[0])
@@ -142,23 +175,22 @@ func (m *Model) View() tea.View {
 	return v
 }
 
-// sessionList draws the label and the sessions that fit.
-func (m *Model) sessionList(p placement) []string {
+// sessionList draws the label and the sessions b shows, from x, width
+// wide, with sessions[selected] highlighted.
+func (m *Model) sessionList(x, width int, b band, sessions []api.SessionInfo, selected int) []string {
 	th := m.theme
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
-	lines := []string{indent([]string{muted.Render("Sessions")}, p.x)[0]}
-	if p.count == 0 {
-		lines = append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, p.x)[0])
-	} else {
-		shown := m.shown()[p.first : p.first+p.count]
-		items := make([]ui.ListItem, len(shown))
-		for i, s := range shown {
-			items[i] = ui.ListItem{Cols: []string{s.Name, state(s), ago(m.now().Sub(s.LastUsed))}}
-		}
-		list := ui.List(th, ui.ListOptions{Items: items, Selected: m.selected - p.first, Width: p.width})
-		lines = append(lines, indent(strings.Split(list, "\n"), p.x)...)
+	lines := []string{indent([]string{muted.Render("Sessions")}, x)[0]}
+	if b.count == 0 {
+		return append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, x)[0])
 	}
-	return lines
+	shown := sessions[b.first : b.first+b.count]
+	items := make([]ui.ListItem, len(shown))
+	for i, s := range shown {
+		items[i] = ui.ListItem{Cols: []string{s.Name, state(s), ago(m.now().Sub(s.LastUsed))}}
+	}
+	list := ui.List(th, ui.ListOptions{Items: items, Selected: selected - b.first, Width: width})
+	return append(lines, indent(strings.Split(list, "\n"), x)...)
 }
 
 // commandList draws the label and the matching commands that fit.

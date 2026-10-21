@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -258,5 +259,64 @@ func TestCtrlAndAltShortcutsTypeNothing(t *testing.T) {
 		if m.input != "" {
 			t.Errorf("%v typed %q, want nothing", k, m.input)
 		}
+	}
+}
+
+// TestCommandListKeepsSessions: the sessions stay on screen while a command
+// is typed, unfiltered by the command text (#85).
+func TestCommandListKeepsSessions(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	typeText(m, "/rename")
+	view := ansi.Strip(m.View().Content)
+	for _, want := range []string{"/rename", "Sessions", "api", "web"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%s", want, view)
+		}
+	}
+}
+
+// TestCommandListShortScreen: on a short screen the sessions shrink first;
+// the commands stay, and no line is wider than the screen.
+func TestCommandListShortScreen(t *testing.T) {
+	m := screen(80, 10, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	typeText(m, "/")
+	view := m.View().Content
+	plain := ansi.Strip(view)
+	if !strings.Contains(plain, "/new") {
+		t.Fatalf("the commands are gone on 80x10:\n%s", plain)
+	}
+	for i, l := range strings.Split(view, "\n") {
+		if w := ansi.StringWidth(l); w > 80 {
+			t.Errorf("line %d is %d cells wide", i, w)
+		}
+	}
+}
+
+// TestCommandKeepsTarget: the session highlighted before "/" stays marked
+// under the commands.
+func TestCommandKeepsTarget(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	m.Update(press(tea.KeyDown))
+	m.Update(press(tea.KeyDown)) // web
+	typeText(m, "/kill")
+	p := m.layout()
+	if p.sessions.lines == 0 {
+		t.Fatal("no session rows under the commands")
+	}
+	row := strings.Split(ansi.Strip(m.View().Content), "\n")[p.sessions.top+1]
+	if !strings.Contains(row, theme.Default().Glyphs.Pointer) || !strings.Contains(row, "web") {
+		t.Fatalf("row %q, want web marked", row)
+	}
+}
+
+// TestClickOnSessionWhileCommanding: a click on a session row under the
+// commands does nothing yet and keeps the input.
+func TestClickOnSessionWhileCommanding(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0), session("web", time.Hour, 0))
+	typeText(m, "/kill")
+	p := m.layout()
+	cmd := m.Update(tea.MouseClickMsg{X: p.x + 2, Y: p.sessions.top + 1, Button: tea.MouseLeft})
+	if cmd != nil || m.input != "/kill" {
+		t.Fatalf("click gave %v, input %q", cmd, m.input)
 	}
 }
