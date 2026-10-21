@@ -41,6 +41,22 @@ func TestCommandListShortScreen(t *testing.T) {
 	}
 }
 
+// TestShortScreenKeepsSessions: from 11 rows up, a session row stays under
+// the commands, so a pick is never blind. The wordmark and the commands give
+// up rows first.
+func TestShortScreenKeepsSessions(t *testing.T) {
+	for _, rows := range []int{11, 14, 16, 20} {
+		for typed, command := range map[string]string{"/": "/new", "/kill": "/kill"} {
+			m := screen(80, rows, session("api", time.Minute, 0), session("web", time.Hour, 0))
+			typeText(m, typed)
+			plain := ansi.Strip(m.View().Content)
+			if !strings.Contains(plain, "api") || !strings.Contains(plain, command) {
+				t.Errorf("80x%d %q: want a command and a session row:\n%s", rows, typed, plain)
+			}
+		}
+	}
+}
+
 // TestCommandKeepsTarget: the session highlighted before "/" stays marked
 // under the commands.
 func TestCommandKeepsTarget(t *testing.T) {
@@ -120,3 +136,4 @@ func TestClickPicksSession(t *testing.T) {
 }
 
 func TestPickedGolden80x24(t *testing.T) { goldenTyped(t, 80, 24, "/kill↓↓") }
+func TestPickedGolden80x14(t *testing.T) { goldenTyped(t, 80, 14, "/kill↓↓") }

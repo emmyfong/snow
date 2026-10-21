@@ -34,23 +34,29 @@ const (
 
 // layout places the page in the screen: centered, the list as tall as the
 // room allows, the wordmark dropped first when the screen is short. While a
-// command is typed, the sessions follow the commands and shrink first.
+// command is typed, the sessions follow the commands.
 func (m *Model) layout() placement {
 	p := placement{width: min(64, max(m.cols-4, 0))}
 	p.x = max((m.cols-p.width)/2, 0)
 	shown, selected := m.listLen(), m.listSel()
 	notes := len(m.noteLines())
 	room := m.rows - fixedRows - notes
-	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)
+	// While a command is typed, a few session rows are set aside first, so
+	// the wordmark and a long command list never hide what a pick picks.
+	reserve := 0
+	if m.commanding() && !m.picking {
+		reserve = bandRows + min(max(len(m.sessions), 1), 3)
+	}
+	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)+reserve
 	if p.header {
 		room -= headerRows
 	}
-	p.list.lines = min(max(shown, 1), max(room, 1))
+	p.list.lines = min(max(shown, 1), max(room-reserve, 1))
 	total := fixedRows + p.list.lines + notes
 	if p.header {
 		total += headerRows
 	}
-	if m.commanding() && !m.picking {
+	if reserve > 0 {
 		if n := min(max(len(m.sessions), 1), room-p.list.lines-bandRows); n > 0 {
 			p.sessions.lines = n
 			total += bandRows + n
