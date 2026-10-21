@@ -1,7 +1,6 @@
 package session
 
 import (
-	"slices"
 	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
@@ -34,23 +33,17 @@ func (m *Model) startRename() {
 // name is not sent, because the server refuses one.
 func (m *Model) renameKey(k tea.Key) {
 	r := m.rename
-	switch {
-	case k.Code == tea.KeyEscape:
+	switch k.Code {
+	case tea.KeyEscape:
 		m.rename = nil
-	case k.Code == tea.KeyEnter:
+	case tea.KeyEnter:
 		m.rename = nil
 		if name := string(r.text); name != "" {
 			m.send(&api.Command{Op: api.OpRenameWindow, Target: r.window, Args: map[string]string{api.ArgName: name}})
 		}
-	case k.Code == tea.KeyBackspace:
-		if n := len(r.text); n > 0 {
-			r.text = slices.Delete(r.text, n-1, n)
-		}
-	case k.Mod == tea.ModCtrl && k.Code == 'u':
-		r.text = nil
 	default:
-		if text, ok := keys.Typed(k); ok && utf8.RuneCountInString(text) == 1 && len(r.text) < maxWindowName {
-			r.text = append(r.text, []rune(text)...)
+		if s, ok := keys.Edit(string(r.text), k); ok && utf8.RuneCountInString(s) <= maxWindowName {
+			r.text = []rune(s)
 		}
 	}
 }

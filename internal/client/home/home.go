@@ -184,29 +184,25 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		if m.selected < len(m.shown())-1 {
 			m.selected++
 		}
-	case k.Code == tea.KeyBackspace:
-		if r := []rune(m.input); len(r) > 0 {
-			m.input, m.selected, m.cmdSel = string(r[:len(r)-1]), -1, 0
-		}
 	default:
-		if text, ok := keys.Typed(k); ok {
-			m.typeText(text)
+		if s, ok := keys.Edit(m.input, k); ok {
+			m.setInput(s)
 		}
 	}
 	return nil
 }
 
-// typeText adds text to the input. A "/" that starts the input begins a
-// command, which acts on the session highlighted now; typing clears the
+// setInput changes the input to s. A "/" that starts the input begins a
+// command, which acts on the session highlighted now; editing clears the
 // highlight.
-func (m *Model) typeText(text string) {
-	if m.input == "" && text == "/" {
+func (m *Model) setInput(s string) {
+	if m.input == "" && strings.HasPrefix(s, "/") {
 		m.target = ""
 		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
 			m.target = shown[m.selected].Name
 		}
 	}
-	m.input, m.selected, m.cmdSel = m.input+text, -1, 0
+	m.input, m.selected, m.cmdSel = s, -1, 0
 }
 
 // choice is what Enter opens: the selected session, else the typed name

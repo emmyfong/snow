@@ -3,7 +3,6 @@ package copymode
 import (
 	"fmt"
 	"sort"
-	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
@@ -48,21 +47,15 @@ func (m *Model) Status() string { return m.notice }
 
 // promptKey handles a key while the search prompt is open.
 func (m *Model) promptKey(k tea.Key) {
-	switch {
-	case k.Code == tea.KeyEscape:
+	switch k.Code {
+	case tea.KeyEscape:
 		m.search.typing = false
-	case k.Code == tea.KeyEnter:
+	case tea.KeyEnter:
 		m.search.typing = false
 		m.submit(m.search.input)
-	case k.Code == tea.KeyBackspace:
-		if _, n := utf8.DecodeLastRuneInString(m.search.input); n > 0 {
-			m.search.input = m.search.input[:len(m.search.input)-n]
-		}
-	case k.Code == 'u' && k.Mod == tea.ModCtrl:
-		m.search.input = ""
 	default:
-		if text, ok := keys.Typed(k); ok && len(m.search.input)+len(text) <= api.MaxQueryBytes {
-			m.search.input += text
+		if s, ok := keys.Edit(m.search.input, k); ok && len(s) <= api.MaxQueryBytes {
+			m.search.input = s
 		}
 	}
 }

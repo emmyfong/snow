@@ -26,11 +26,11 @@ func (m *Model) startNaming(session string) {
 // session, and a refused name keeps the prompt open with the reason.
 func (m *Model) namingKey(k tea.Key) tea.Cmd {
 	n := m.naming
-	switch {
-	case k.Code == tea.KeyEscape:
+	switch k.Code {
+	case tea.KeyEscape:
 		m.naming = nil
 		m.input, m.target = "/rename ", n.session
-	case k.Code == tea.KeyEnter:
+	case tea.KeyEnter:
 		if err := api.ValidSessionName(n.name); err != nil {
 			m.notice = "/rename: " + reason(err)
 			return nil
@@ -41,15 +41,9 @@ func (m *Model) namingKey(k tea.Key) tea.Cmd {
 			m.back = n.name
 		}
 		return sendCmd(&api.RenameSession{Session: n.session, Name: n.name})
-	case k.Code == tea.KeyBackspace:
-		if r := []rune(n.name); len(r) > 0 {
-			n.name = string(r[:len(r)-1])
-		}
-	case k.Code == 'u' && k.Mod == tea.ModCtrl:
-		n.name = ""
 	default:
-		if text, ok := keys.Typed(k); ok {
-			n.name += text
+		if s, ok := keys.Edit(n.name, k); ok {
+			n.name = s
 		}
 	}
 	return nil
