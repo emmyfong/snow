@@ -15,21 +15,23 @@ import (
 // end or rename a session. The home page itself holds no connection.
 type SendMsg struct{ Msg api.Message }
 
-// command is one slash command.
+// command is one slash command. A command with session set acts on a
+// session, which the user can pick from the list.
 type command struct {
 	name, args, desc string
+	session          bool
 	run              func(m *Model, rest string) tea.Cmd
 }
 
 // commands lists the slash commands in the order the list shows them.
 var commands = []command{
-	{"new", "[name]", "Start or open a session", (*Model).cmdNew},
-	{"sessions", "", "Show the sessions", (*Model).cmdSessions},
-	{"rename", "[session] <name>", "Rename a session", (*Model).cmdRename},
-	{"kill", "[session]", "End a session and its programs", (*Model).cmdKill},
-	{"theme", "[name]", "Pick the colors", (*Model).cmdTheme},
-	{"help", "", "Show commands and keys", (*Model).cmdHelp},
-	{"quit", "", "Leave Snow; sessions keep running", (*Model).cmdQuit},
+	{"new", "[name]", "Start or open a session", false, (*Model).cmdNew},
+	{"sessions", "", "Show the sessions", false, (*Model).cmdSessions},
+	{"rename", "[session] <name>", "Rename a session", true, (*Model).cmdRename},
+	{"kill", "[session]", "End a session and its programs", true, (*Model).cmdKill},
+	{"theme", "[name]", "Pick the colors", false, (*Model).cmdTheme},
+	{"help", "", "Show commands and keys", false, (*Model).cmdHelp},
+	{"quit", "", "Leave Snow; sessions keep running", false, (*Model).cmdQuit},
 }
 
 // matchCommands returns the commands whose names fuzzy-match query, best
@@ -68,14 +70,35 @@ func (m *Model) matches() []command {
 	return matchCommands(word)
 }
 
+// pickingSession reports whether the arrows pick a session: the typed word
+// names a command that acts on one. While the word is partial, the arrows
+// move in the command list.
+func (m *Model) pickingSession() bool {
+	word, _ := m.commandWord()
+	i := slices.IndexFunc(commands, func(c command) bool { return c.name == word })
+	return i >= 0 && commands[i].session && len(m.sessions) > 0
+}
+
+// pickSession moves the command's session by delta, from the first one when
+// none is picked yet.
+func (m *Model) pickSession(delta int) {
+	i := m.targetIndex()
+	if i < 0 {
+		i = 0
+	} else {
+		i = min(max(i+delta, 0), len(m.sessions)-1)
+	}
+	m.target = m.sessions[i].Name
+}
+
 // commandKey handles the keys that act on the command list, and reports
 // whether it handled k.
 func (m *Model) commandKey(k tea.Key) (tea.Cmd, bool) {
 	switch k.Code {
 	case tea.KeyUp:
-		m.cmdSel = max(m.cmdSel-1, 0)
+		m.move(-1)
 	case tea.KeyDown:
-		m.cmdSel = min(m.cmdSel+1, max(len(m.matches())-1, 0))
+		m.move(1)
 	case tea.KeyTab:
 		if ms := m.matches(); m.cmdSel < len(ms) {
 			m.complete(ms[m.cmdSel])
@@ -86,6 +109,16 @@ func (m *Model) commandKey(k tea.Key) (tea.Cmd, bool) {
 		return nil, false
 	}
 	return nil, true
+}
+
+// move moves the picked session when the arrows pick one, else the
+// highlight in the command list.
+func (m *Model) move(delta int) {
+	if m.pickingSession() {
+		m.pickSession(delta)
+		return
+	}
+	m.cmdSel = min(max(m.cmdSel+delta, 0), max(len(m.matches())-1, 0))
 }
 
 // complete puts command c in the input, ready for its argument.

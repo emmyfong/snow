@@ -118,6 +118,14 @@ func (p placement) rowAt(y int) (int, bool) {
 	return p.first + y - p.listTop, true
 }
 
+// rowAt returns the index of the session on screen row y.
+func (b band) rowAt(y int) (int, bool) {
+	if y < b.top || y >= b.top+b.count {
+		return 0, false
+	}
+	return b.first + y - b.top, true
+}
+
 // View draws the home page.
 func (m *Model) View() tea.View {
 	th := m.theme
@@ -214,6 +222,9 @@ func (m *Model) commandList(p placement) []string {
 func (m *Model) hints() []ui.Hint {
 	if m.picking {
 		return []ui.Hint{{Key: "enter", Desc: "keep"}, {Key: "↑↓", Desc: "preview"}, {Key: "esc", Desc: "cancel"}}
+	}
+	if m.pickingSession() {
+		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "↑↓", Desc: "pick session"}, {Key: "esc", Desc: "clear"}}
 	}
 	if m.commanding() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "tab", Desc: "complete"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "clear"}}

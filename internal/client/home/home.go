@@ -101,7 +101,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 }
 
 // click handles a left click: a popup button, a command row (completed,
-// or run when it takes no argument), or a session row (opened).
+// or run when it takes no argument), or a session row (opened, or picked
+// and the command run, under a command that acts on a session).
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
@@ -113,7 +114,12 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 		m.help = false
 		return nil
 	}
-	i, ok := m.layout().rowAt(msg.Y)
+	p := m.layout()
+	if i, ok := p.sessions.rowAt(msg.Y); ok && m.pickingSession() {
+		m.target = m.sessions[i].Name
+		return m.runCommand()
+	}
+	i, ok := p.rowAt(msg.Y)
 	if !ok {
 		return nil
 	}
