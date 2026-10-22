@@ -12,7 +12,8 @@ linters:
           files: ["**/internal/client/**"]
           deny:
             - { pkg: "github.com/emmyfong/snow/internal/server", desc: "the client talks to the server only through pkg/api" }
-            - { pkg: "github.com/emmyfong/snow/internal/backend", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "server-side package; holds API keys; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
