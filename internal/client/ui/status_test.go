@@ -40,6 +40,20 @@ func TestStatusBarMarksCurrentWindow(t *testing.T) {
 	}
 }
 
+// TestStatusBarDividesMessage: a dark cell sits before the error strip in
+// every theme, because the strip can share the bar's color (Clay).
+func TestStatusBarDividesMessage(t *testing.T) {
+	for _, th := range theme.Builtin() {
+		divider := lipgloss.NewStyle().Background(th.BarFG).Render(" ")
+		for _, w := range []int{30, 60} {
+			out := StatusBar(th, StatusOptions{Width: w, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}, Message: "no room"})
+			if !strings.Contains(out, divider) || ansi.StringWidth(out) != w {
+				t.Errorf("%s at %d: want a divider and width %d: %q", th.Name, w, w, out)
+			}
+		}
+	}
+}
+
 func TestStatusBarMessageReplacesRight(t *testing.T) {
 	got := ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 40, Session: "a", Right: "sh 14:02", Message: "no room to split"}))
 	if !strings.Contains(got, "no room to split") || strings.Contains(got, "14:02") {
@@ -108,7 +122,7 @@ func TestTabSpansMatchTheDrawnBar(t *testing.T) {
 		{"cut by the width", StatusOptions{Width: 25, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1 logs* ", " 2"}},
 		{"tab cut", StatusOptions{Width: 16, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1"}},
 		{"tab hidden", StatusOptions{Width: 7, Session: "api", Tabs: tabs}, nil},
-		{"cut by a message", StatusOptions{Width: 32, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{" 0 dev "}},
+		{"cut by a message", StatusOptions{Width: 33, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{" 0 dev "}},
 		{"no tabs", StatusOptions{Width: 30, Session: "api"}, nil},
 	}
 	for _, tt := range tests {
