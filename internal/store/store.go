@@ -55,7 +55,7 @@ func (s *Store) Save(snap Snapshot) error {
 	if err != nil {
 		return err
 	}
-	if err := writeAtomic(path, writeBytes(b)); err != nil {
+	if err := private.WriteAtomic(path, private.Bytes(b)); err != nil {
 		return fmt.Errorf("save session %q: %w", snap.Name, err)
 	}
 	return nil
@@ -84,8 +84,8 @@ func (s *Store) Delete(session string) error {
 		return err
 	}
 	var errs []error
-	for _, p := range []string{path, tempPath(path)} {
-		if err := remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
+	for _, p := range []string{path, private.TempPath(path)} {
+		if err := private.Remove(p); err != nil && !errors.Is(err, fs.ErrNotExist) {
 			errs = append(errs, fmt.Errorf("delete session %q: %w", session, err))
 		}
 	}

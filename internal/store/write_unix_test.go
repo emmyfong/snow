@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/private"
 )
 
 func perm(t *testing.T, path string) os.FileMode {
@@ -30,8 +32,8 @@ func TestSnapshotFileMode(t *testing.T) {
 	path := filepath.Join(dir, "api.json")
 	// A loose file left by a user and a loose stale temp file must not leak
 	// their modes into the snapshot.
-	for _, p := range []string{path, tempPath(path)} {
-		if err := os.WriteFile(p, oldData, 0o644); err != nil {
+	for _, p := range []string{path, private.TempPath(path)} {
+		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

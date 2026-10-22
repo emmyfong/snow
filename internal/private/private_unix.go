@@ -1,7 +1,8 @@
 //go:build !windows
 
-// Package private makes folders only the current user can read: the socket
-// folder and the saved sessions, which hold terminal output.
+// Package private keeps the current user's files private: folders only the
+// user can read (the socket folder, the saved sessions, the credentials
+// file), and files replaced in one atomic step.
 package private
 
 import (

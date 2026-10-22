@@ -65,7 +65,7 @@ func (s *Store) MoveBroken(path string, at time.Time) (string, error) {
 		}
 		moved = filepath.Join(dir, fmt.Sprintf("%s-%d.json", stem, n))
 	}
-	if err := rename(path, moved); err != nil {
+	if err := private.Rename(path, moved); err != nil {
 		return "", fmt.Errorf("move broken snapshot: %w", err)
 	}
 	return moved, nil

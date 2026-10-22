@@ -1,4 +1,4 @@
-package store
+package private
 
 import (
 	"os"
@@ -16,7 +16,7 @@ func TestRenameWaitsForOpenTarget(t *testing.T) {
 		t.Fatal(err)
 	}
 	time.AfterFunc(30*time.Millisecond, func() { _ = f.Close() })
-	if err := writeAtomic(path, writeBytes(newData)); err != nil {
+	if err := WriteAtomic(path, Bytes(newData)); err != nil {
 		t.Fatalf("write over a briefly open file: %v", err)
 	}
 	assertContent(t, path, newData)
