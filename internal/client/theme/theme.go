@@ -20,7 +20,7 @@ type Theme struct {
 	BarBG       color.Color // status bar background
 	TabActive   color.Color // the shown window's tab text
 	TabActiveBG color.Color // the shown window's tab background
-	Accent      color.Color // highlights: the prompt mark, commands, links
+	Accent      color.Color // highlights: the status bar in built-in themes, the prompt mark, commands, links
 	Muted       color.Color // secondary text
 	Success     color.Color // something that worked or runs
 	Error       color.Color // a refused request's message: its background

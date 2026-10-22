@@ -71,11 +71,13 @@ func TestClickFocusedPaneSendsNothing(t *testing.T) {
 
 func TestClickTabSelectsWindow(t *testing.T) {
 	m, r := threePaneScreen(t)
-	// The bar reads " [api] 1:dev* 2:logs": the second tab starts at column 14.
-	m.Update(click(15, 23))
-	c := lastCommand(t, r)
-	if c.Op != api.OpSelectWindow || c.Target != 2 {
-		t.Fatalf("sent %+v, want select-window 2", c)
+	// The bar reads " [api]  1 dev*  2 logs ": tab 1 ends at column 14 and
+	// tab 2 starts at column 15.
+	for _, tt := range []struct{ x, want int }{{17, 2}, {14, 1}, {15, 2}} {
+		m.Update(click(tt.x, 23))
+		if c := lastCommand(t, r); c.Op != api.OpSelectWindow || c.Target != tt.want {
+			t.Fatalf("click at column %d sent %+v, want select-window %d", tt.x, c, tt.want)
+		}
 	}
 	r.sent = nil
 	m.Update(click(70, 23)) // the bar, not a tab

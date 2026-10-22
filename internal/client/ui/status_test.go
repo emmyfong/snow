@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
@@ -16,13 +17,40 @@ func TestStatusBar(t *testing.T) {
 		Right: "sh  14:02",
 	})
 	got := ansi.Strip(out)
-	for _, want := range []string{"[api]", "1:dev*", "2:logsZ", "sh  14:02"} {
+	for _, want := range []string{"[api]", " 1 dev* ", " 2 logsZ ", "sh  14:02"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status %q lacks %q", got, want)
 		}
 	}
 	if w := ansi.StringWidth(out); w != 50 {
 		t.Fatalf("width %d, want 50", w)
+	}
+}
+
+// TestStatusBarMarksCurrentWindow: in every theme, the shown window is a
+// block in the tab colors and the other windows are plain bar text.
+func TestStatusBarMarksCurrentWindow(t *testing.T) {
+	for _, th := range theme.Builtin() {
+		out := StatusBar(th, StatusOptions{Width: 50, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}})
+		active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
+		bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
+		if !strings.Contains(out, active.Render(" 1 dev* ")) || !strings.Contains(out, bar.Render(" 2 logs ")) {
+			t.Errorf("%s: want the current window in the tab colors and the other plain: %q", th.Name, out)
+		}
+	}
+}
+
+// TestStatusBarDividesMessage: a dark cell sits before the error strip in
+// every theme, because the strip can share the bar's color (Clay).
+func TestStatusBarDividesMessage(t *testing.T) {
+	for _, th := range theme.Builtin() {
+		divider := lipgloss.NewStyle().Background(th.BarFG).Render(" ")
+		for _, w := range []int{30, 60} {
+			out := StatusBar(th, StatusOptions{Width: w, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}, Message: "no room"})
+			if !strings.Contains(out, divider) || ansi.StringWidth(out) != w {
+				t.Errorf("%s at %d: want a divider and width %d: %q", th.Name, w, w, out)
+			}
+		}
 	}
 }
 
@@ -58,7 +86,7 @@ func TestStatusBarUsesThemeGlyphs(t *testing.T) {
 	th := theme.Default()
 	th.Glyphs.ActiveTab, th.Glyphs.SessionLeft, th.Glyphs.SessionRight = "!", "<", ">"
 	got := ansi.Strip(StatusBar(th, StatusOptions{Width: 30, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}}}))
-	if !strings.Contains(got, "<api>") || !strings.Contains(got, "1:dev!") {
+	if !strings.Contains(got, "<api>") || !strings.Contains(got, "1 dev!") {
 		t.Fatalf("status %q ignores the theme's glyphs", got)
 	}
 }
@@ -77,7 +105,8 @@ func TestStatusBarPromptTakesTheBar(t *testing.T) {
 		t.Fatalf("width %d, want 50", w)
 	}
 	opts.Prompt = ""
-	if plain := StatusBar(th, opts); strings.Contains(out, plain[:8]) && out[:8] == plain[:8] {
+	style := func(s string) string { return s[:strings.IndexByte(s, 'm')+1] }
+	if plain := StatusBar(th, opts); style(out) == style(plain) {
 		t.Fatal("the question uses the normal bar colors")
 	}
 }
@@ -89,11 +118,11 @@ func TestTabSpansMatchTheDrawnBar(t *testing.T) {
 		o    StatusOptions
 		want []string // the text under each returned span
 	}{
-		{"all fit", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02"}, []string{"0:dev", "1:logs*", "2:漢字Z"}},
-		{"cut by the width", StatusOptions{Width: 22, Session: "api", Tabs: tabs}, []string{"0:dev", "1:logs*", "2"}},
-		{"tab cut", StatusOptions{Width: 14, Session: "api", Tabs: tabs}, []string{"0:dev", "1"}},
+		{"all fit", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02"}, []string{" 0 dev ", " 1 logs* ", " 2 漢字Z "}},
+		{"cut by the width", StatusOptions{Width: 25, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1 logs* ", " 2"}},
+		{"tab cut", StatusOptions{Width: 16, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1"}},
 		{"tab hidden", StatusOptions{Width: 7, Session: "api", Tabs: tabs}, nil},
-		{"cut by a message", StatusOptions{Width: 30, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{"0:dev"}},
+		{"cut by a message", StatusOptions{Width: 33, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{" 0 dev "}},
 		{"no tabs", StatusOptions{Width: 30, Session: "api"}, nil},
 	}
 	for _, tt := range tests {

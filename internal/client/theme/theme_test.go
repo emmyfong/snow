@@ -61,6 +61,10 @@ func TestResolveFillsMissingTokens(t *testing.T) {
 	}
 }
 
+// minSeparation is the contrast two touching backgrounds need to read as
+// separate blocks. It is lower than text needs.
+const minSeparation = 2.0
+
 // TestTokensDownsample: every text-on-background pair stays readable when a
 // terminal can show only 256 or 16 colors. Readable means a contrast ratio of
 // at least 3:1, the WCAG minimum for bold interface text. For adjusts a
@@ -85,6 +89,10 @@ func TestTokensDownsample(t *testing.T) {
 				if r := contrast(p.Convert(pair[0]), p.Convert(pair[1])); r < minContrast {
 					t.Errorf("%s at %s: %s contrast %.2f, want at least %.0f", th.Name, p, what, r, minContrast)
 				}
+			}
+			// The shown window's block must stand out from the bar around it.
+			if r := contrast(p.Convert(th.TabActiveBG), p.Convert(th.BarBG)); r < minSeparation {
+				t.Errorf("%s at %s: tab block vs bar contrast %.2f, want at least %.0f", th.Name, p, r, minSeparation)
 			}
 		}
 	}

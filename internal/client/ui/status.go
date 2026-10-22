@@ -50,8 +50,13 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 		rightStyle = lipgloss.NewStyle().Foreground(th.ErrorFG).Background(th.Error).Bold(true)
 	}
 	left := ansi.Truncate(l.left, l.leftMax, "")
-	gap := max(o.Width-ansi.StringWidth(left)-ansi.StringWidth(l.right), 0)
-	return left + bar.Render(strings.Repeat(" ", gap)) + rightStyle.Render(l.right)
+	divider := ""
+	if o.Message != "" && l.right != "" {
+		// A dark cell, because the error strip can share the bar's color.
+		divider = lipgloss.NewStyle().Background(th.BarFG).Render(" ")
+	}
+	gap := max(o.Width-ansi.StringWidth(left)-ansi.StringWidth(divider)-ansi.StringWidth(l.right), 0)
+	return left + bar.Render(strings.Repeat(" ", gap)) + divider + rightStyle.Render(l.right)
 }
 
 // TabSpan is the columns a window's tab covers in the status bar.
@@ -90,12 +95,12 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
 	active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
 	g := th.Glyphs
-	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight)
+	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight + " ")
 	parts := []string{first}
 	x := ansi.StringWidth(first)
 	var spans []TabSpan
 	for _, t := range o.Tabs {
-		label := strconv.Itoa(t.Index) + ":" + t.Name
+		label := strconv.Itoa(t.Index) + " " + t.Name
 		if t.Active {
 			label += g.ActiveTab
 		}
@@ -106,11 +111,13 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		if t.Active {
 			style = active
 		}
-		sep := bar.Render(" ")
-		// The space before a tab belongs to the gap, not to the tab.
-		spans = append(spans, TabSpan{Index: t.Index, X: x + ansi.StringWidth(sep), W: ansi.StringWidth(label)})
-		parts = append(parts, sep+style.Render(label))
-		x += ansi.StringWidth(sep) + ansi.StringWidth(label)
+		// The padding belongs to the tab, so the current window's block and
+		// its click target are the same cells.
+		label = " " + label + " "
+		w := ansi.StringWidth(label)
+		spans = append(spans, TabSpan{Index: t.Index, X: x, W: w})
+		parts = append(parts, style.Render(label))
+		x += w
 	}
 	left := strings.Join(parts, "")
 	right := o.Right
@@ -119,6 +126,9 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	}
 	right = " " + right + " "
 	lw, rw := ansi.StringWidth(left), ansi.StringWidth(right)
+	if o.Message != "" {
+		rw++ // the divider StatusBar draws before the message
+	}
 	leftMax := o.Width
 	switch {
 	case lw+rw <= o.Width:
