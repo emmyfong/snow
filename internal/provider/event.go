@@ -3,7 +3,7 @@ package provider
 import "encoding/json"
 
 // Event is one piece of a streamed reply: *Start, *TextDelta,
-// *ThinkingDelta, *ToolUse, *Usage, or *Stop.
+// *ThinkingDelta, *Thinking, *ToolUse, *Usage, or *Stop.
 type Event interface{ event() }
 
 // Block is one piece of a Message: *Text, *Thinking, *ToolUse, or
@@ -46,6 +46,7 @@ const (
 	StopToolUse   StopReason = "tool_use"   // the model waits for tool results
 	StopMaxTokens StopReason = "max_tokens" // the reply hit its length limit
 	StopRefusal   StopReason = "refusal"    // the model declined
+	StopContext   StopReason = "context"    // the context window is full
 	StopOther     StopReason = "other"      // a reason Snow does not know
 )
 
@@ -55,8 +56,9 @@ type Stop struct{ Reason StopReason }
 // Text is text in a Message.
 type Text struct{ Text string }
 
-// Thinking is reasoning from an earlier reply, sent back unchanged.
-// Signature is the vendor's proof that the text is its own.
+// Thinking is a whole block of reasoning: an event when the block ends,
+// after its ThinkingDeltas, and a block when the conversation is sent back,
+// unchanged. Signature is the vendor's proof that the text is its own.
 type Thinking struct {
 	Text      string
 	Signature string
@@ -75,6 +77,7 @@ func (*ThinkingDelta) event() {}
 func (*ToolUse) event()       {}
 func (*Usage) event()         {}
 func (*Stop) event()          {}
+func (*Thinking) event()      {}
 
 func (*Text) block()       {}
 func (*Thinking) block()   {}

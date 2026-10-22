@@ -31,6 +31,13 @@ type Stream interface {
 	Close() error
 }
 
+// KeySource gives a provider its API key when it needs one, so a key saved
+// or removed while Snow runs takes effect on the next request.
+// internal/credential satisfies it.
+type KeySource interface {
+	APIKey(provider string) (string, error)
+}
+
 // Model is a model a provider offers.
 type Model struct {
 	ID            string // the vendor's ID, for example "claude-opus-5-5"
