@@ -1,4 +1,4 @@
-package store
+package private
 
 import (
 	"bytes"
@@ -12,7 +12,7 @@ import (
 
 // crashEnv makes TestAtomicWrite act as the crashing child process: it
 // starts a write to the path in the variable and exits halfway through.
-const crashEnv = "SNOW_STORE_CRASH_PATH"
+const crashEnv = "SNOW_PRIVATE_CRASH_PATH"
 
 const crashExit = 3
 
@@ -23,7 +23,7 @@ var (
 
 func TestAtomicWrite(t *testing.T) {
 	if path := os.Getenv(crashEnv); path != "" {
-		_ = writeAtomic(path, func(w io.Writer) error {
+		_ = WriteAtomic(path, func(w io.Writer) error {
 			if _, err := w.Write(newData[:len(newData)/2]); err != nil {
 				return err
 			}
@@ -36,17 +36,17 @@ func TestAtomicWrite(t *testing.T) {
 	t.Run("error mid-write", func(t *testing.T) {
 		path := oldFile(t)
 		errCrash := errors.New("disk full")
-		err := writeAtomic(path, func(w io.Writer) error {
+		err := WriteAtomic(path, func(w io.Writer) error {
 			if _, err := w.Write(newData[:len(newData)/2]); err != nil {
 				return err
 			}
 			return errCrash
 		})
 		if !errors.Is(err, errCrash) {
-			t.Fatalf("writeAtomic error %v, want %v", err, errCrash)
+			t.Fatalf("WriteAtomic error %v, want %v", err, errCrash)
 		}
 		assertContent(t, path, oldData)
-		if _, err := os.Stat(tempPath(path)); !errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(TempPath(path)); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("temp file left after a failed write: %v", err)
 		}
 	})
@@ -65,13 +65,13 @@ func TestAtomicWrite(t *testing.T) {
 			t.Fatalf("child did not crash mid-write: %v\n%s", err, out)
 		}
 		assertContent(t, path, oldData)
-		assertContent(t, tempPath(path), newData[:len(newData)/2])
+		assertContent(t, TempPath(path), newData[:len(newData)/2])
 
-		if err := writeAtomic(path, writeBytes(newData)); err != nil {
+		if err := WriteAtomic(path, Bytes(newData)); err != nil {
 			t.Fatalf("write after a crash: %v", err)
 		}
 		assertContent(t, path, newData)
-		if _, err := os.Stat(tempPath(path)); !errors.Is(err, os.ErrNotExist) {
+		if _, err := os.Stat(TempPath(path)); !errors.Is(err, os.ErrNotExist) {
 			t.Fatalf("temp file left after a good write: %v", err)
 		}
 	})
@@ -80,7 +80,7 @@ func TestAtomicWrite(t *testing.T) {
 func TestAtomicWriteReplacesExisting(t *testing.T) {
 	path := oldFile(t)
 	for range 3 {
-		if err := writeAtomic(path, writeBytes(newData)); err != nil {
+		if err := WriteAtomic(path, Bytes(newData)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -90,7 +90,7 @@ func TestAtomicWriteReplacesExisting(t *testing.T) {
 func oldFile(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "api.json")
-	if err := writeAtomic(path, writeBytes(oldData)); err != nil {
+	if err := WriteAtomic(path, Bytes(oldData)); err != nil {
 		t.Fatal(err)
 	}
 	return path

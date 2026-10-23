@@ -16,9 +16,9 @@ Go standard layout. No `src/`.
 cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
-                     store, config,
-                     later: backend, skills, context, gate, editor,
-                     hook, worktree
+                     store, config, provider, credential,
+                     later: agent, tool, convstore, skills, gate,
+                     editor, worktree
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -31,8 +31,10 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► backend, gate, skills, store
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store
                │                       │
+               │                       │    (provider never imports credential;
+               │                       │     keys reach it through KeySource)
                │                       └──► term, layout   (leaf packages)
                └──────────► config ◄───┘    (leaf; read by client and server)
 ```
@@ -90,8 +92,8 @@ folder, without edits across the codebase.
 - A bug fix starts with a failing regression test.
 - Prefer table-driven tests. Use `teatest` golden files for UI and real PTYs
   for terminal code.
-- Do not mock Snow's own packages. Fakes are allowed at the `Backend` and
-  `Gate` boundaries.
+- Do not mock Snow's own packages. Fakes are allowed at the `Provider` and
+  `Gate` boundaries (`internal/provider/providertest` has the Provider fake).
 - Tests that speak the protocol use `internal/apitest`: its client rebuilds
   the screen from updates, and it gives short socket paths. Extend it; do not
   write another client.

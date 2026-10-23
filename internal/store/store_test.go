@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/private"
 )
 
 func openStore(t *testing.T) *Store {
@@ -75,13 +77,13 @@ func TestKillDeletesSnapshot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(tempPath(path), []byte("{"), 0o600); err != nil {
+	if err := os.WriteFile(private.TempPath(path), []byte("{"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := st.Delete("api"); err != nil {
 		t.Fatal(err)
 	}
-	for _, p := range []string{path, tempPath(path)} {
+	for _, p := range []string{path, private.TempPath(path)} {
 		if _, err := os.Stat(p); !errors.Is(err, fs.ErrNotExist) {
 			t.Fatalf("%s still exists after Delete: %v", filepath.Base(p), err)
 		}

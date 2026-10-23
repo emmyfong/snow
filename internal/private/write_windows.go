@@ -1,4 +1,4 @@
-package store
+package private
 
 import (
 	"errors"
@@ -11,12 +11,12 @@ import (
 // renameTries bounds the retries: about 0.5 s in total.
 const renameTries = 10
 
-// rename replaces to with from. Go's os.Rename uses MoveFileEx with
+// Rename replaces to with from. Go's os.Rename uses MoveFileEx with
 // MOVEFILE_REPLACE_EXISTING, which replaces the file in one step. It fails
 // while another process holds the target open without FILE_SHARE_DELETE:
 // a reader, a virus scanner, or the search indexer. Those holds are short,
 // so rename retries for a moment before it gives up.
-func rename(from, to string) error {
+func Rename(from, to string) error {
 	var err error
 	for i := range renameTries {
 		err = os.Rename(from, to)
@@ -28,9 +28,9 @@ func rename(from, to string) error {
 	return err
 }
 
-// remove deletes path, retrying while another process holds it open, as
-// rename does.
-func remove(path string) error {
+// Remove deletes path, retrying while another process holds it open, as
+// Rename does.
+func Remove(path string) error {
 	var err error
 	for i := range renameTries {
 		err = os.Remove(path)
