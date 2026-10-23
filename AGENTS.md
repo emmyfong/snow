@@ -31,8 +31,10 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, store
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store
                │                       │
+               │                       │    (provider never imports credential;
+               │                       │     keys reach it through KeySource)
                │                       └──► term, layout   (leaf packages)
                └──────────► config ◄───┘    (leaf; read by client and server)
 ```

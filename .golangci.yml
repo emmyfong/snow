@@ -17,6 +17,10 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
+        provider-gets-keys-through-keysource:
+          files: ["**/internal/provider/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "providers read keys through provider.KeySource, so the key store can change without them" }
         charm-x-only-in-term:
           files: ["$all", "!**/internal/term/**"]
           deny:

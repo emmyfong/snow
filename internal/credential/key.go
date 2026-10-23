@@ -32,6 +32,7 @@ func NewKey(s string) (Key, error) {
 // Reveal returns the key's value, to send to its provider.
 func (k Key) Reveal() string { return k.value }
 
+// String hides the key from %v and %s.
 func (k Key) String() string { return hidden }
 
 // GoString hides the key from %#v.
