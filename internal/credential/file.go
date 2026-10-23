@@ -32,7 +32,12 @@ func readFile(path string) (map[string]string, error) {
 	defer func() { _ = f.Close() }()
 	sc := bufio.NewScanner(f)
 	for n := 1; sc.Scan(); n++ {
-		line := strings.TrimSpace(sc.Text())
+		line := sc.Text()
+		if n == 1 {
+			// Notepad on Windows starts a UTF-8 file with a byte order mark.
+			line = strings.TrimPrefix(line, "\ufeff")
+		}
+		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Source is where a key was found.
@@ -19,6 +20,7 @@ const (
 	SourceFile                   // the private credentials file
 )
 
+// String names the place, for messages.
 func (s Source) String() string {
 	switch s {
 	case SourceEnv:
@@ -34,7 +36,7 @@ func (s Source) String() string {
 
 var (
 	// ErrNoKey means no key is saved for the provider.
-	ErrNoKey = errors.New("no API key saved")
+	ErrNoKey = errors.New("nothing saved")
 	// ErrInEnvironment means the key comes from an environment variable,
 	// which Snow cannot change; the user unsets it.
 	ErrInEnvironment = errors.New("the key is set in the environment")
@@ -43,17 +45,27 @@ var (
 // fileName is the credentials file inside the store's folder.
 const fileName = "credentials"
 
+// osTimeout bounds one OS store call: a locked keyring can wait on an
+// unlock prompt that never comes, for example in a session with no
+// desktop.
+const osTimeout = 5 * time.Second
+
 // Store finds and saves API keys per provider name. It is safe for use from
-// several goroutines.
+// several goroutines. An OS store call can wait up to five seconds, so the
+// server calls a Store off its state goroutine (ADR 0007).
 type Store struct {
 	lookupEnv func(string) (string, bool)
 	osStore   OSStore // nil when the system has none
 	dir       string
 	notice    func(string)
+	timeout   time.Duration
 
+	// mu guards the probe result and the file. OS store calls run
+	// without it, so a slow keyring cannot block a file lookup.
 	mu         sync.Mutex
 	probed     bool
 	osWorks    bool
+	osCause    error // why the OS store is unavailable
 	noticeOnce sync.Once
 }
 
@@ -68,7 +80,7 @@ func newStore(lookupEnv func(string) (string, bool), osStore OSStore, dir string
 	if notice == nil {
 		notice = func(string) {}
 	}
-	return &Store{lookupEnv: lookupEnv, osStore: osStore, dir: dir, notice: notice}
+	return &Store{lookupEnv: lookupEnv, osStore: osStore, dir: dir, notice: notice, timeout: osTimeout}
 }
 
 // EnvVar is the environment variable that holds provider's key, for
@@ -77,31 +89,43 @@ func EnvVar(provider string) string {
 	return strings.ToUpper(strings.ReplaceAll(provider, "-", "_")) + "_API_KEY"
 }
 
+// env returns provider's key from the environment, without the spaces or
+// line ending a pasted value can carry.
+func (s *Store) env(provider string) (string, bool) {
+	v, ok := s.lookupEnv(EnvVar(provider))
+	v = strings.TrimSpace(v)
+	return v, ok && v != ""
+}
+
 // Get returns provider's key and where it was found: the environment, then
 // the OS store, then the file. It returns ErrNoKey when none has it.
 func (s *Store) Get(provider string) (Key, Source, error) {
-	if v, ok := s.lookupEnv(EnvVar(provider)); ok && v != "" {
+	if v, ok := s.env(provider); ok {
 		k, err := NewKey(v)
 		if err != nil {
 			return Key{}, 0, fmt.Errorf("%s: %w", EnvVar(provider), err)
 		}
 		return k, SourceEnv, nil
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.osAvailable() {
-		v, err := s.osStore.Get(provider)
+	works, err := s.osAvailable()
+	if err != nil {
+		return Key{}, 0, err
+	}
+	if works {
+		v, err := s.osGet(provider)
 		switch {
 		case err == nil:
-			k, err := NewKey(v)
+			k, err := NewKey(strings.TrimSpace(v))
 			if err != nil {
 				return Key{}, 0, fmt.Errorf("OS credential store: %w", err)
 			}
 			return k, SourceOS, nil
-		case !errors.Is(err, ErrNotFound):
+		case !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrUnavailable):
 			return Key{}, 0, fmt.Errorf("read the OS credential store: %w", err)
 		}
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	keys, err := readFile(s.path())
 	if err != nil {
 		return Key{}, 0, err
@@ -113,7 +137,7 @@ func (s *Store) Get(provider string) (Key, Source, error) {
 		}
 		return k, SourceFile, nil
 	}
-	return Key{}, 0, fmt.Errorf("%w for %s", ErrNoKey, provider)
+	return Key{}, 0, fmt.Errorf("%w for %s; set %s", ErrNoKey, provider, EnvVar(provider))
 }
 
 // APIKey returns provider's key value, for providers that read keys
@@ -127,22 +151,33 @@ func (s *Store) APIKey(provider string) (string, error) {
 }
 
 // Set saves provider's key in the OS store, or in the file when the system
-// has no store, and returns where it went.
+// has no store, and returns where it went. A key saved in the OS store
+// leaves no copy in the file.
 func (s *Store) Set(provider string, k Key) (Source, error) {
 	if k.value == "" {
 		return 0, ErrBadKey
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.osAvailable() {
-		if err := s.osStore.Set(provider, k.value); err != nil {
+	works, err := s.osAvailable()
+	if err != nil {
+		return 0, err
+	}
+	if works {
+		err := s.osSet(provider, k.value)
+		if err == nil {
+			if err := s.removeFromFile(provider); err != nil {
+				return SourceOS, fmt.Errorf("saved in the OS credential store, but the old copy stays: %w", err)
+			}
+			return SourceOS, nil
+		}
+		if !errors.Is(err, ErrUnavailable) {
 			return 0, fmt.Errorf("save to the OS credential store: %w", err)
 		}
-		return SourceOS, nil
+		s.mu.Lock()
+		s.osCause = err
+		s.mu.Unlock()
 	}
-	s.noticeOnce.Do(func() {
-		s.notice("No OS credential store found; API keys are saved in " + s.path() + ", readable only by you.")
-	})
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	keys, err := readFile(s.path())
 	if err != nil {
 		return 0, err
@@ -151,6 +186,9 @@ func (s *Store) Set(provider string, k Key) (Source, error) {
 	if err := writeFile(s.dir, s.path(), keys); err != nil {
 		return 0, err
 	}
+	s.noticeOnce.Do(func() {
+		s.notice(fmt.Sprintf("API keys are saved in plain text in %s, readable only by you. Reason: %v.", s.path(), s.osCause))
+	})
 	return SourceFile, nil
 }
 
@@ -158,20 +196,24 @@ func (s *Store) Set(provider string, k Key) (Source, error) {
 // key in the environment cannot be removed: Delete returns
 // ErrInEnvironment. With no saved key it returns ErrNoKey.
 func (s *Store) Delete(provider string) error {
-	if v, ok := s.lookupEnv(EnvVar(provider)); ok && v != "" {
+	if _, ok := s.env(provider); ok {
 		return fmt.Errorf("%w (%s)", ErrInEnvironment, EnvVar(provider))
 	}
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	works, err := s.osAvailable()
+	if err != nil {
+		return err
+	}
 	removed := false
-	if s.osAvailable() {
-		switch err := s.osStore.Delete(provider); {
+	if works {
+		switch err := s.osDelete(provider); {
 		case err == nil:
 			removed = true
-		case !errors.Is(err, ErrNotFound):
+		case !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrUnavailable):
 			return fmt.Errorf("delete from the OS credential store: %w", err)
 		}
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	keys, err := readFile(s.path())
 	if err != nil {
 		return err
@@ -189,21 +231,123 @@ func (s *Store) Delete(provider string) error {
 	return nil
 }
 
+// removeFromFile drops provider's line from the file, if it has one.
+func (s *Store) removeFromFile(provider string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	keys, err := readFile(s.path())
+	if err != nil {
+		return err
+	}
+	if _, ok := keys[provider]; !ok {
+		return nil
+	}
+	delete(keys, provider)
+	return writeFile(s.dir, s.path(), keys)
+}
+
 func (s *Store) path() string { return filepath.Join(s.dir, fileName) }
 
-// osAvailable asks the OS store once whether it works. A lookup of a name
-// no one saves tells a working store (not found) from a missing one, such
-// as Secret Service in WSL with no D-Bus session. The caller holds s.mu.
-func (s *Store) osAvailable() bool {
-	if !s.probed {
-		s.probed = true
-		if s.osStore != nil {
-			_, err := s.osStore.Get(probeName)
-			s.osWorks = err == nil || errors.Is(err, ErrNotFound)
-		}
+// osAvailable reports whether to use the OS store. A lookup of a name no
+// one saves tells a working store (not found) from a missing one, such as
+// Secret Service in WSL with no D-Bus session. Only those two answers are
+// kept. A store that is there but fails, for example a locked keyring,
+// returns its error, so a key never goes to the file because of it; the
+// next call asks again. A store that did not answer in time sends this
+// call to the file and is asked again next time.
+func (s *Store) osAvailable() (bool, error) {
+	s.mu.Lock()
+	if s.probed {
+		defer s.mu.Unlock()
+		return s.osWorks, nil
 	}
-	return s.osWorks
+	s.mu.Unlock()
+	if s.osStore == nil {
+		s.keep(false, ErrUnavailable)
+		return false, nil
+	}
+	_, err := s.osGet(probeName)
+	switch {
+	case err == nil || errors.Is(err, ErrNotFound):
+		s.keep(true, nil)
+		return true, nil
+	case errors.Is(err, errOSTimeout):
+		s.mu.Lock()
+		s.osCause = err
+		s.mu.Unlock()
+		return false, nil
+	case errors.Is(err, ErrUnavailable):
+		s.keep(false, err)
+		return false, nil
+	default:
+		return false, fmt.Errorf("the OS credential store failed: %w", err)
+	}
+}
+
+func (s *Store) keep(works bool, cause error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.probed, s.osWorks, s.osCause = true, works, cause
 }
 
 // probeName is never saved, so looking it up only tests the store.
 const probeName = "snow-probe"
+
+// errOSTimeout means an OS store call did not return in time.
+var errOSTimeout = fmt.Errorf("%w: it did not answer", ErrUnavailable)
+
+func (s *Store) osGet(provider string) (string, error) {
+	return osCall(s.timeout, func() (string, error) { return s.osStore.Get(provider) })
+}
+
+func (s *Store) osSet(provider, key string) error {
+	_, err := osCall(s.timeout, func() (struct{}, error) { return struct{}{}, s.osStore.Set(provider, key) })
+	return scrub(err, key)
+}
+
+// scrub hides key in err's text, for a store whose error repeats what it
+// was given. errors.Is still sees the original, but nothing unwraps to it.
+func scrub(err error, key string) error {
+	if err == nil || !strings.Contains(err.Error(), key) {
+		return err
+	}
+	return &scrubbed{msg: strings.ReplaceAll(err.Error(), key, hidden), orig: err}
+}
+
+type scrubbed struct {
+	msg  string
+	orig error
+}
+
+func (e *scrubbed) Error() string { return e.msg }
+
+// Is matches what the original error matches, such as ErrUnavailable.
+func (e *scrubbed) Is(target error) bool { return errors.Is(e.orig, target) }
+
+func (s *Store) osDelete(provider string) error {
+	_, err := osCall(s.timeout, func() (struct{}, error) { return struct{}{}, s.osStore.Delete(provider) })
+	return err
+}
+
+// osCall runs f with a timeout. On a timeout f keeps running in the
+// background until the OS returns; its result is dropped.
+func osCall[T any](timeout time.Duration, f func() (T, error)) (T, error) {
+	type result struct {
+		v   T
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		v, err := f()
+		done <- result{v, err}
+	}()
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+	select {
+	case r := <-done:
+		return r.v, r.err
+	case <-timer.C:
+		var zero T
+		return zero, errOSTimeout
+	}
+}
