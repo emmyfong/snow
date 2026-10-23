@@ -15,12 +15,13 @@ import (
 // stream turns the SDK's server-sent events into provider events. One SDK
 // event can give zero, one, or two provider events, so they queue.
 type stream struct {
-	ctx   context.Context
-	sse   *ssestream.Stream[sdk.MessageStreamEventUnion]
-	queue []provider.Event
-	usage provider.Usage
-	stop  provider.StopReason
-	done  bool
+	ctx    context.Context
+	sse    *ssestream.Stream[sdk.MessageStreamEventUnion]
+	queue  []provider.Event
+	usage  provider.Usage
+	stop   provider.StopReason
+	done   bool // message_stop arrived
+	closed bool
 
 	// The block being streamed, kept until its stop event.
 	kind      string
@@ -29,15 +30,20 @@ type stream struct {
 	toolInput strings.Builder
 	thinking  strings.Builder
 	signature string
+	redacted  string
 }
 
 func newStream(ctx context.Context, sse *ssestream.Stream[sdk.MessageStreamEventUnion]) *stream {
-	return &stream{ctx: ctx, sse: sse}
+	// A reply that stops without a reason in message_delta still ends.
+	return &stream{ctx: ctx, sse: sse, stop: provider.StopOther}
 }
 
 // Next implements provider.Stream.
 func (s *stream) Next() (provider.Event, error) {
 	for {
+		if s.closed {
+			return nil, io.EOF
+		}
 		if err := s.ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -62,7 +68,7 @@ func (s *stream) Next() (provider.Event, error) {
 
 // Close implements provider.Stream.
 func (s *stream) Close() error {
-	s.done = true
+	s.closed = true
 	return s.sse.Close()
 }
 
@@ -81,9 +87,12 @@ func (s *stream) handle(ev sdk.MessageStreamEventUnion) {
 		s.kind = e.ContentBlock.Type
 		s.toolInput.Reset()
 		s.thinking.Reset()
-		s.signature = ""
-		if tu, ok := e.ContentBlock.AsAny().(sdk.ToolUseBlock); ok {
-			s.toolID, s.toolName = tu.ID, tu.Name
+		s.signature, s.redacted = "", ""
+		switch b := e.ContentBlock.AsAny().(type) {
+		case sdk.ToolUseBlock:
+			s.toolID, s.toolName = b.ID, b.Name
+		case sdk.RedactedThinkingBlock:
+			s.redacted = b.Data
 		}
 	case sdk.ContentBlockDeltaEvent:
 		switch d := e.Delta.AsAny().(type) {
@@ -107,10 +116,14 @@ func (s *stream) handle(ev sdk.MessageStreamEventUnion) {
 			s.queue = append(s.queue, &provider.ToolUse{ID: s.toolID, Name: s.toolName, Input: input})
 		case "thinking":
 			s.queue = append(s.queue, &provider.Thinking{Text: s.thinking.String(), Signature: s.signature})
+		case "redacted_thinking":
+			s.queue = append(s.queue, &provider.RedactedThinking{Data: s.redacted})
 		}
 		s.kind = ""
 	case sdk.MessageDeltaEvent:
-		s.stop = stopReason(e.Delta.StopReason)
+		if e.Delta.StopReason != "" {
+			s.stop = stopReason(e.Delta.StopReason)
+		}
 		// The delta's counts are totals so far, and a zero means "not sent".
 		if e.Usage.InputTokens > 0 {
 			s.usage.Input = int(e.Usage.InputTokens)

@@ -6,8 +6,10 @@ package anthropic
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
+	"sync"
+	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -22,11 +24,15 @@ const Name = "anthropic"
 // limit from timing out.
 const defaultMaxTokens = 64000
 
-// Provider talks to the Anthropic API.
+// Provider talks to the Anthropic API. It is safe for concurrent use.
 type Provider struct {
 	keys    provider.KeySource
 	baseURL string
-	client  *http.Client
+	http    *http.Client
+
+	mu     sync.Mutex
+	caps   map[string]caps // by model ID, filled by Models
+	listed bool            // Models succeeded once
 }
 
 // Option changes how New builds a Provider.
@@ -35,58 +41,68 @@ type Option func(*Provider)
 // WithBaseURL sends requests to url instead of the Anthropic API, for tests.
 func WithBaseURL(url string) Option { return func(p *Provider) { p.baseURL = url } }
 
-// WithHTTPClient sends requests through c.
-func WithHTTPClient(c *http.Client) Option { return func(p *Provider) { p.client = c } }
+// WithHTTPClient sends requests through a copy of c that refuses redirects
+// to another host.
+func WithHTTPClient(c *http.Client) Option { return func(p *Provider) { p.http = c } }
 
 // New returns a Provider that reads its key from keys.
 func New(keys provider.KeySource, opts ...Option) *Provider {
-	p := &Provider{keys: keys}
+	p := &Provider{keys: keys, caps: map[string]caps{}}
 	for _, o := range opts {
 		o(p)
 	}
+	p.http = guarded(p.http)
 	return p
+}
+
+// guarded copies c, or builds a client like the SDK's default, and makes
+// it refuse a redirect to another host: Go's client would send the
+// x-api-key header along.
+func guarded(c *http.Client) *http.Client {
+	var g http.Client
+	if c != nil {
+		g = *c
+	} else if t, ok := http.DefaultTransport.(*http.Transport); ok {
+		t = t.Clone()
+		t.ResponseHeaderTimeout = 10 * time.Minute
+		g.Transport = t
+	}
+	g.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if req.URL.Host != via[0].URL.Host {
+			return errors.New("refused a redirect to another host")
+		}
+		if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	return &g
 }
 
 // Name implements provider.Provider.
 func (p *Provider) Name() string { return Name }
 
-// sdkClient builds a client with the current key. The SDK's own retries
-// are off: a rate limit or an overload goes back to the user with its
-// retry time, and Snow never retries or switches models by itself.
+// sdkClient builds a client with the current key. The SDK reads
+// ANTHROPIC_BASE_URL, ANTHROPIC_AUTH_TOKEN, and profile files by default;
+// those are off, so a key Snow saved goes only to the Anthropic API. The
+// SDK's retries are off too: a rate limit or an overload goes back to the
+// user with its retry time, and Snow never retries or switches models by
+// itself.
 func (p *Provider) sdkClient() (sdk.Client, error) {
 	key, err := p.keys.APIKey(Name)
 	if err != nil {
-		return sdk.Client{}, fmt.Errorf("anthropic: %w", err)
+		return sdk.Client{}, &provider.Error{Kind: provider.KindNoKey, Err: err}
 	}
-	opts := []option.RequestOption{option.WithAPIKey(key), option.WithMaxRetries(0)}
+	opts := []option.RequestOption{
+		option.WithoutEnvironmentDefaults(),
+		option.WithAPIKey(key),
+		option.WithMaxRetries(0),
+		option.WithHTTPClient(p.http),
+	}
 	if p.baseURL != "" {
 		opts = append(opts, option.WithBaseURL(p.baseURL))
 	}
-	if p.client != nil {
-		opts = append(opts, option.WithHTTPClient(p.client))
-	}
 	return sdk.NewClient(opts...), nil
-}
-
-// Models implements provider.Provider. Retired models are left out.
-func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
-	c, err := p.sdkClient()
-	if err != nil {
-		return nil, err
-	}
-	var out []provider.Model
-	pager := c.Models.ListAutoPaging(ctx, sdk.ModelListParams{})
-	for pager.Next() {
-		m := pager.Current()
-		if m.Lifecycle == sdk.ModelInfoLifecycleRetired {
-			continue
-		}
-		out = append(out, provider.Model{ID: m.ID, DisplayName: m.DisplayName, ContextWindow: int(m.MaxInputTokens)})
-	}
-	if err := pager.Err(); err != nil {
-		return nil, mapErr(ctx, err)
-	}
-	return out, nil
 }
 
 // CheckKey makes one small model list call: nil means the key works, and
@@ -102,13 +118,19 @@ func (p *Provider) CheckKey(ctx context.Context) error {
 	return nil
 }
 
-// Stream implements provider.Provider.
+// Stream implements provider.Provider. Thinking and effort are sent only
+// when the model takes them; the first request for a model the provider
+// has not seen lists the models to find out.
 func (p *Provider) Stream(ctx context.Context, req provider.Request) (provider.Stream, error) {
-	params, err := toParams(req)
+	c, err := p.sdkClient()
 	if err != nil {
 		return nil, err
 	}
-	c, err := p.sdkClient()
+	mc, err := p.capsFor(ctx, req.Model)
+	if err != nil {
+		return nil, err
+	}
+	params, err := toParams(req, mc)
 	if err != nil {
 		return nil, err
 	}

@@ -9,20 +9,23 @@ import (
 	"github.com/emmyfong/snow/internal/provider"
 )
 
-// toParams turns a provider.Request into the SDK's request. Thinking is
-// adaptive with summaries, so the chat can show the model's reasoning.
-func toParams(req provider.Request) (sdk.MessageNewParams, error) {
+// toParams turns a provider.Request into the SDK's request for a model
+// that takes mc. Thinking is adaptive with summaries, so the chat can show
+// the model's reasoning.
+func toParams(req provider.Request, mc caps) (sdk.MessageNewParams, error) {
 	maxTokens := req.MaxTokens
 	if maxTokens == 0 {
 		maxTokens = defaultMaxTokens
 	}
-	adaptive := sdk.ThinkingConfigAdaptiveParam{Display: sdk.ThinkingConfigAdaptiveDisplaySummarized}
 	params := sdk.MessageNewParams{
 		Model:     sdk.Model(req.Model),
 		MaxTokens: int64(maxTokens),
-		Thinking:  sdk.ThinkingConfigParamUnion{OfAdaptive: &adaptive},
 	}
-	if req.Effort != "" {
+	if mc.adaptive {
+		adaptive := sdk.ThinkingConfigAdaptiveParam{Display: sdk.ThinkingConfigAdaptiveDisplaySummarized}
+		params.Thinking = sdk.ThinkingConfigParamUnion{OfAdaptive: &adaptive}
+	}
+	if req.Effort != "" && mc.takes(req.Effort) {
 		params.OutputConfig = sdk.OutputConfigParam{Effort: sdk.OutputConfigEffort(req.Effort)}
 	}
 	if req.System != "" {
@@ -53,6 +56,8 @@ func toMessage(m provider.Message) (sdk.MessageParam, error) {
 			blocks = append(blocks, sdk.NewTextBlock(b.Text))
 		case *provider.Thinking:
 			blocks = append(blocks, sdk.NewThinkingBlock(b.Signature, b.Text))
+		case *provider.RedactedThinking:
+			blocks = append(blocks, sdk.NewRedactedThinkingBlock(b.Data))
 		case *provider.ToolUse:
 			blocks = append(blocks, sdk.NewToolUseBlock(b.ID, b.Input, b.Name))
 		case *provider.ToolResult:

@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
@@ -27,7 +29,11 @@ func mapErr(ctx context.Context, err error) error {
 		return &provider.Error{Kind: provider.KindNetwork, Err: err}
 	}
 	errType, msg := apiMessage(apiErr)
-	cause := fmt.Errorf("HTTP %d %s: %s", apiErr.StatusCode, errType, msg)
+	label := errType
+	if label == "" {
+		label = http.StatusText(apiErr.StatusCode)
+	}
+	cause := fmt.Errorf("HTTP %d %s: %s", apiErr.StatusCode, label, msg)
 	pe := &provider.Error{Kind: kindOf(apiErr.StatusCode, errType, msg), Err: cause}
 	if pe.Kind == provider.KindRateLimited && apiErr.Response != nil {
 		pe.RetryAfter = retryAfter(apiErr.Response.Header.Get("retry-after"))
@@ -64,7 +70,8 @@ func kindOf(status int, errType, msg string) provider.Kind {
 		return provider.KindContextTooLong
 	case 429:
 		return provider.KindRateLimited
-	case 529:
+	case 502, 503, 504, 529:
+		// A gateway or proxy in front of the API is busy or down.
 		return provider.KindOverloaded
 	}
 	return provider.KindOther
@@ -72,7 +79,12 @@ func kindOf(status int, errType, msg string) provider.Kind {
 
 func tooLong(msg string) bool {
 	m := strings.ToLower(msg)
-	return strings.Contains(m, "prompt is too long") || strings.Contains(m, "context window") || strings.Contains(m, "too many tokens")
+	for _, s := range []string{"prompt is too long", "context window", "exceed context limit", "too many tokens"} {
+		if strings.Contains(m, s) {
+			return true
+		}
+	}
+	return false
 }
 
 // apiMessage reads the type and message from the API's error body:
@@ -85,16 +97,34 @@ func apiMessage(e *sdk.Error) (errType, msg string) {
 		} `json:"error"`
 	}
 	if json.Unmarshal([]byte(e.RawJSON()), &body) == nil && body.Error.Type != "" {
-		return body.Error.Type, body.Error.Message
+		return body.Error.Type, cut(body.Error.Message)
 	}
 	return string(e.Type()), "no message"
 }
 
+// maxMessage keeps a vendor's message short enough for one line in the UI.
+const maxMessage = 500
+
+func cut(msg string) string {
+	r := []rune(msg)
+	if len(r) <= maxMessage {
+		return msg
+	}
+	return string(r[:maxMessage]) + "..."
+}
+
+// maxRetryAfter caps a vendor's retry time, so a bad header cannot ask the
+// user to wait for days.
+const maxRetryAfter = time.Hour
+
 // retryAfter reads a retry-after header in seconds. Zero means unknown.
 func retryAfter(v string) time.Duration {
 	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil || n <= 0 {
+	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n <= 0 {
 		return 0
+	}
+	if n >= maxRetryAfter.Seconds() {
+		return maxRetryAfter
 	}
 	return time.Duration(n * float64(time.Second))
 }
