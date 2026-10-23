@@ -21,19 +21,21 @@ type Provider interface {
 	Stream(ctx context.Context, req Request) (Stream, error)
 }
 
-// Stream is one reply, read event by event.
+// Stream is one reply, read event by event. One goroutine calls Next; to
+// stop a Next that waits, cancel the context given to Provider.Stream.
 type Stream interface {
 	// Next returns the next event, io.EOF after the last one, or an error
 	// that ends the stream.
 	Next() (Event, error)
-	// Close stops the stream and frees its connection. It is safe to call
-	// more than once and after the end.
+	// Close stops the stream and frees its connection; Next then returns
+	// io.EOF. It is safe to call more than once and after the end.
 	Close() error
 }
 
 // KeySource gives a provider its API key when it needs one, so a key saved
 // or removed while Snow runs takes effect on the next request.
-// internal/credential satisfies it.
+// internal/credential satisfies it. The key is a plain string because the
+// vendor's client needs one; a provider never puts it in an error or a log.
 type KeySource interface {
 	APIKey(provider string) (string, error)
 }
@@ -45,7 +47,8 @@ type Model struct {
 	ContextWindow int // in tokens; 0 when the vendor does not say
 }
 
-// Effort is how hard the model thinks before it answers.
+// Effort is how hard the model thinks before it answers. Not every model
+// takes every level; a provider leaves out a level the model does not take.
 type Effort string
 
 // The efforts a Request may ask for. An empty Effort leaves the vendor's

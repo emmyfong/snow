@@ -3,11 +3,11 @@ package provider
 import "encoding/json"
 
 // Event is one piece of a streamed reply: *Start, *TextDelta,
-// *ThinkingDelta, *Thinking, *ToolUse, *Usage, or *Stop.
+// *ThinkingDelta, *Thinking, *RedactedThinking, *ToolUse, *Usage, or *Stop.
 type Event interface{ event() }
 
-// Block is one piece of a Message: *Text, *Thinking, *ToolUse, or
-// *ToolResult.
+// Block is one piece of a Message: *Text, *Thinking, *RedactedThinking,
+// *ToolUse, or *ToolResult.
 type Block interface{ block() }
 
 // Start opens a reply. Model is the ID the vendor says it used, which can
@@ -29,7 +29,8 @@ type ToolUse struct {
 }
 
 // Usage counts the tokens of a reply so far. A later Usage replaces an
-// earlier one.
+// earlier one. Input excludes CacheRead and CacheWrite: a provider whose
+// API counts cached tokens in its prompt total subtracts them.
 type Usage struct {
 	Input      int
 	Output     int
@@ -64,6 +65,10 @@ type Thinking struct {
 	Signature string
 }
 
+// RedactedThinking is reasoning the vendor encrypted. Data is opaque: keep
+// it and send it back unchanged with the rest of the turn.
+type RedactedThinking struct{ Data string }
+
 // ToolResult answers a ToolUse.
 type ToolResult struct {
 	ToolUseID string
@@ -71,15 +76,17 @@ type ToolResult struct {
 	IsError   bool
 }
 
-func (*Start) event()         {}
-func (*TextDelta) event()     {}
-func (*ThinkingDelta) event() {}
-func (*ToolUse) event()       {}
-func (*Usage) event()         {}
-func (*Stop) event()          {}
-func (*Thinking) event()      {}
+func (*Start) event()            {}
+func (*TextDelta) event()        {}
+func (*ThinkingDelta) event()    {}
+func (*ToolUse) event()          {}
+func (*Usage) event()            {}
+func (*Stop) event()             {}
+func (*Thinking) event()         {}
+func (*RedactedThinking) event() {}
 
-func (*Text) block()       {}
-func (*Thinking) block()   {}
-func (*ToolUse) block()    {}
-func (*ToolResult) block() {}
+func (*Text) block()             {}
+func (*Thinking) block()         {}
+func (*RedactedThinking) block() {}
+func (*ToolUse) block()          {}
+func (*ToolResult) block()       {}

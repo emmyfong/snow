@@ -25,4 +25,21 @@ func ParseModelName(s string) (ModelName, error) {
 	return ModelName{Provider: p, Model: m}, nil
 }
 
+// String gives the full name, for example "anthropic/claude-opus-5-5".
 func (n ModelName) String() string { return n.Provider + "/" + n.Model }
+
+// Undated returns a model ID without a trailing "-YYYYMMDD" snapshot date,
+// for example claude-opus-5-5 for claude-opus-5-5-20261001. An ID without
+// a date comes back unchanged.
+func Undated(id string) string {
+	const n = len("-20060102")
+	if len(id) <= n || id[len(id)-n] != '-' {
+		return id
+	}
+	for _, c := range id[len(id)-n+1:] {
+		if c < '0' || c > '9' {
+			return id
+		}
+	}
+	return id[:len(id)-n]
+}

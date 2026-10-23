@@ -41,17 +41,27 @@ var prices = map[ModelName]Price{
 	},
 }
 
-// LookupPrice returns the built-in price of a model.
+// LookupPrice returns the built-in price of a model. A snapshot ID with a
+// date, such as claude-opus-5-5-20261001, also matches the entry without
+// the date, because a stream reports the snapshot it used.
 func LookupPrice(name ModelName) (Price, bool) {
-	p, ok := prices[name]
-	return p, ok
+	if p, ok := prices[name]; ok {
+		return p, true
+	}
+	if base := Undated(name.Model); base != name.Model {
+		p, ok := prices[ModelName{Provider: name.Provider, Model: base}]
+		return p, ok
+	}
+	return Price{}, false
 }
 
-// Cost estimates what usage cost in US dollars. ok is false when the model
-// is not in the list: the cost is unknown, not zero. Callers label the
-// number as an estimate.
+// Cost estimates what usage cost in US dollars. u is the usage of one
+// request: the long-prompt rates depend on that request's prompt size, so
+// add up the costs of requests, not their usage. ok is false when the
+// model is not in the list: the cost is unknown, not zero. Callers label
+// the number as an estimate.
 func Cost(name ModelName, u Usage) (dollars float64, ok bool) {
-	p, ok := prices[name]
+	p, ok := LookupPrice(name)
 	if !ok {
 		return 0, false
 	}
@@ -73,5 +83,6 @@ func ContextWindow(name ModelName, fromProvider int) int {
 	if fromProvider > 0 {
 		return fromProvider
 	}
-	return prices[name].ContextWindow
+	p, _ := LookupPrice(name)
+	return p.ContextWindow
 }

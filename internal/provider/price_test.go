@@ -28,6 +28,8 @@ func TestCost(t *testing.T) {
 		// and 1,000 output at $2.50/M.
 		{"long prompt", "claude-haiku-5-5", Usage{Input: 100_001, Output: 1000}, 0.0500005 + 0.0025},
 		{"no tokens", "claude-sonnet-5-5", Usage{}, 0},
+		// The snapshot ID a stream reports prices as its alias.
+		{"snapshot ID", "claude-opus-5-5-20261001", Usage{Input: 1_000_000}, 4},
 	}
 	for _, tt := range tests {
 		got, ok := Cost(anthropic(tt.model), tt.u)
@@ -39,7 +41,13 @@ func TestCost(t *testing.T) {
 
 // TestCostUnknownModel: a model not in the list has no cost, never $0.
 func TestCostUnknownModel(t *testing.T) {
-	for _, n := range []ModelName{anthropic("claude-next"), {Provider: "openai", Model: "gpt-x"}} {
+	for _, n := range []ModelName{
+		anthropic("claude-next"),
+		anthropic("claude-next-20261001"),
+		anthropic("claude-opus-5-5-2026"),
+		anthropic("claude-opus-5-5-2026100x"),
+		{Provider: "openai", Model: "claude-opus-5-5"},
+	} {
 		if got, ok := Cost(n, Usage{Input: 1000}); ok || got != 0 {
 			t.Errorf("Cost(%s) = %v, %v; want unknown", n, got, ok)
 		}
@@ -55,6 +63,7 @@ func TestContextWindow(t *testing.T) {
 		{anthropic("claude-opus-5-5"), 500_000, 500_000},
 		{anthropic("claude-opus-5-5"), 0, 1_000_000},
 		{anthropic("claude-haiku-4-5"), 0, 200_000},
+		{anthropic("claude-haiku-4-5-20251001"), 0, 200_000},
 		{anthropic("claude-next"), 0, 0},
 		{anthropic("claude-next"), 300_000, 300_000},
 	}

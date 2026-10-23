@@ -15,7 +15,7 @@ import (
 func TestErrorKinds(t *testing.T) {
 	cause := errors.New("status 400")
 	for _, k := range []provider.Kind{
-		provider.KindBadKey, provider.KindModelNotFound, provider.KindRateLimited,
+		provider.KindBadKey, provider.KindNoKey, provider.KindModelNotFound, provider.KindRateLimited,
 		provider.KindOverloaded, provider.KindContextTooLong, provider.KindNetwork, provider.KindOther,
 	} {
 		var err error = &provider.Error{Kind: k, Err: cause}
@@ -95,5 +95,21 @@ func TestRegistry(t *testing.T) {
 	}
 	if got := r.Names(); len(got) != 2 || got[0] != "a" || got[1] != "b" {
 		t.Fatalf("Names = %v", got)
+	}
+}
+
+func TestUndated(t *testing.T) {
+	tests := map[string]string{
+		"claude-opus-5-5-20261001": "claude-opus-5-5",
+		"claude-opus-5-5":          "claude-opus-5-5",
+		"claude-opus-5-5-2026100x": "claude-opus-5-5-2026100x",
+		"claude-5-2026":            "claude-5-2026",
+		"-20261001":                "-20261001",
+		"":                         "",
+	}
+	for in, want := range tests {
+		if got := provider.Undated(in); got != want {
+			t.Errorf("Undated(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
