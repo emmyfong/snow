@@ -5,7 +5,6 @@ import (
 	"errors"
 	"io"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -24,11 +23,11 @@ func TestLive(t *testing.T) {
 	if os.Getenv(liveEnv) == "" {
 		t.Skip("set " + liveEnv + "=1 to run against the real API")
 	}
-	home, err := os.UserHomeDir()
+	dir, err := credential.DefaultDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := New(credential.New(filepath.Join(home, ".snow"), nil))
+	p := New(credential.New(dir, nil))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 

@@ -2,8 +2,8 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,21 +13,22 @@ import (
 )
 
 // liveEnv turns on TestLive, the manual check against the real API. It
-// costs a fraction of a cent: one short reply from GPT-6 Luna.
+// costs a fraction of a cent: two short turns from GPT-6 Luna.
 const liveEnv = "SNOW_LIVE_OPENAI"
 
-// TestLive checks the key, lists models, and streams one reply from the
-// real OpenAI API. The key comes from OPENAI_API_KEY or Snow's saved key
-// and is never printed.
+// TestLive checks the key, lists models, and runs two turns against the
+// real OpenAI API: the first calls a tool, the second sends back the
+// reasoning, the call, and its result, as the agent loop will. The key
+// comes from OPENAI_API_KEY or Snow's saved key and is never printed.
 func TestLive(t *testing.T) {
 	if os.Getenv(liveEnv) == "" {
 		t.Skip("set " + liveEnv + "=1 to run against the real API")
 	}
-	home, err := os.UserHomeDir()
+	dir, err := credential.DefaultDir()
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := New(credential.New(filepath.Join(home, ".snow"), nil))
+	p := New(credential.New(dir, nil))
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
@@ -38,30 +39,64 @@ func TestLive(t *testing.T) {
 	if err != nil || len(models) == 0 {
 		t.Fatalf("Models: %d, %v", len(models), err)
 	}
-	for _, m := range models {
-		t.Logf("model %s", m.ID)
-	}
+	t.Logf("%d models", len(models))
 
 	const model = "gpt-6-luna"
-	s, err := p.Stream(ctx, provider.Request{
-		Model: model, Effort: provider.EffortLow, MaxTokens: 2000,
-		Messages: []provider.Message{{Role: provider.RoleUser, Content: []provider.Block{&provider.Text{Text: "Reply with one short sentence."}}}},
-	})
-	if err != nil {
-		t.Fatalf("Stream: %v", err)
+	tools := []provider.ToolDef{{
+		Name: "get_time", Description: "Returns the current time.",
+		Schema: json.RawMessage(`{"type":"object","properties":{}}`),
+	}}
+	msgs := []provider.Message{{Role: provider.RoleUser, Content: []provider.Block{
+		&provider.Text{Text: "Call get_time once, then tell me the time in one short sentence."},
+	}}}
+	turn := func(n int) []provider.Event {
+		s, err := p.Stream(ctx, provider.Request{Model: model, Effort: provider.EffortLow, MaxTokens: 2000, Tools: tools, Messages: msgs})
+		if err != nil {
+			t.Fatalf("turn %d: Stream: %v", n, err)
+		}
+		evs, err := providertest.Collect(t, s)
+		if err != nil {
+			t.Fatalf("turn %d: Next: %v", n, err)
+		}
+		usage := providertest.Only[*provider.Usage](evs)
+		stop := providertest.Only[*provider.Stop](evs)
+		if len(usage) != 1 || len(stop) != 1 {
+			t.Fatalf("turn %d: incomplete reply: %#v", n, evs)
+		}
+		cost, _ := provider.Cost(provider.ModelName{Provider: Name, Model: model}, *usage[0])
+		t.Logf("turn %d: stop %s; usage %+v; est. $%.6f", n, stop[0].Reason, *usage[0], cost)
+		return evs
 	}
-	evs, err := providertest.Collect(t, s)
-	if err != nil {
-		t.Fatalf("Next: %v", err)
+
+	evs := turn(1)
+	calls := providertest.Only[*provider.ToolUse](evs)
+	if len(calls) == 0 {
+		t.Fatalf("turn 1 made no tool call: %#v", evs)
 	}
+	var reply []provider.Block
+	var results []provider.Block
+	for _, ev := range evs {
+		switch e := ev.(type) {
+		case *provider.Thinking:
+			reply = append(reply, e)
+		case *provider.RedactedThinking:
+			reply = append(reply, e)
+		case *provider.ToolUse:
+			reply = append(reply, e)
+			results = append(results, &provider.ToolResult{ToolUseID: e.ID, Content: "12:00 UTC"})
+		}
+	}
+	msgs = append(msgs,
+		provider.Message{Role: provider.RoleAssistant, Content: reply},
+		provider.Message{Role: provider.RoleUser, Content: results})
+
+	evs = turn(2)
 	var text string
 	for _, d := range providertest.Only[*provider.TextDelta](evs) {
 		text += d.Text
 	}
-	start, stop, usage := providertest.Only[*provider.Start](evs), providertest.Only[*provider.Stop](evs), providertest.Only[*provider.Usage](evs)
-	if len(start) != 1 || len(stop) != 1 || len(usage) != 1 || text == "" {
-		t.Fatalf("incomplete reply: %#v", evs)
+	if text == "" {
+		t.Fatalf("turn 2 gave no text: %#v", evs)
 	}
-	cost, _ := provider.Cost(provider.ModelName{Provider: Name, Model: model}, *usage[0])
-	t.Logf("model %s said %q; stop %s; usage %+v; est. $%.6f", start[0].Model, text, stop[0].Reason, *usage[0], cost)
+	t.Logf("turn 2 said %q", text)
 }
