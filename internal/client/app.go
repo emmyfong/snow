@@ -200,6 +200,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case home.ThemeMsg:
 		return a, a.useTheme(msg.Name)
+	case session.ThemeMsg:
+		if th, err := theme.Named(msg.Name); err == nil {
+			a.applyTheme(th)
+		}
+		return a, a.useTheme(msg.Name)
 	case configCheckedMsg:
 		a.configMod = msg.mod
 		if msg.th != nil && msg.th.Name != a.theme.Name {
@@ -210,8 +215,12 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, watchTheme(a.configPath, a.configMod)
 	case themeSaveFailedMsg:
-		if h, ok := a.screen.(*home.Model); ok {
-			h.SetNotice("The theme is in use but was not saved: " + msg.err.Error())
+		text := "The theme is in use but was not saved: " + msg.err.Error()
+		switch s := a.screen.(type) {
+		case *home.Model:
+			s.SetNotice(text)
+		case *session.Model:
+			return a, s.ShowError(text)
 		}
 		return a, nil
 	case home.QuitMsg:

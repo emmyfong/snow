@@ -30,6 +30,7 @@ func TestDefaultBindings(t *testing.T) {
 		{"M-Left", "resize-left-5"}, {"M-Right", "resize-right-5"}, {"M-Up", "resize-up-5"}, {"M-Down", "resize-down-5"},
 		{"d", "detach"},
 		{"s", "sessions"},
+		{":", "command-prompt"},
 		{"[", "copy-mode"},
 		{"C-b", "send-prefix"},
 	}
@@ -247,5 +248,30 @@ func TestNewReportsPrefixThatShadowsADefault(t *testing.T) {
 	cfg.Bind = map[string]string{"c": config.UnbindAction}
 	if _, err := New(cfg); err != nil {
 		t.Fatalf("unbound default still conflicts: %v", err)
+	}
+}
+
+// TestCommandPromptKey: ":" after the prefix opens the command list, as in
+// tmux.
+func TestCommandPromptKey(t *testing.T) {
+	a, ok := Default().Lookup(tea.Key{Code: ':', Text: ":"})
+	if !ok || a.Name != "command-prompt" {
+		t.Fatalf(": = %q (bound %v), want command-prompt", a.Name, ok)
+	}
+}
+
+// TestRebindCommandPrompt: the command list can move to another key.
+func TestRebindCommandPrompt(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Bind = map[string]string{";": "command-prompt", ":": config.UnbindAction}
+	tab, err := New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, ok := tab.Action(";"); !ok || a.Name != "command-prompt" {
+		t.Errorf("; = %q %v, want command-prompt", a.Name, ok)
+	}
+	if _, ok := tab.Action(":"); ok {
+		t.Error(": is still bound")
 	}
 }

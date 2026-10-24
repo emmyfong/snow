@@ -14,6 +14,8 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		return nil
 	case m.switcher != nil:
 		return m.switcherKey(k)
+	case m.prompt != nil:
+		return m.promptKey(k)
 	case m.copy != nil:
 		return m.copyKey(k)
 	case m.confirm != nil:

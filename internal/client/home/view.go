@@ -98,7 +98,7 @@ func (m *Model) commandList(p placement) []string {
 	}
 	items := make([]ui.ListItem, 0, p.list.count)
 	for _, c := range ms[p.list.first : p.list.first+p.list.count] {
-		items = append(items, ui.ListItem{Cols: []string{strings.TrimSpace("/" + c.name + " " + c.args), c.desc}})
+		items = append(items, ui.ListItem{Cols: []string{"/" + c.Line(), c.Desc}})
 	}
 	list := ui.List(th, ui.ListOptions{Items: items, Selected: m.cmdSel - p.list.first, Width: p.width})
 	return append(lines, indent(strings.Split(list, "\n"), p.x)...)

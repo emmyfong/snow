@@ -73,3 +73,10 @@ func TestPartialGroupListsItsKeys(t *testing.T) {
 		t.Errorf("keys = %q, want Up/Down", got)
 	}
 }
+
+// TestEntriesListCommandPrompt: which-key shows the command list's key.
+func TestEntriesListCommandPrompt(t *testing.T) {
+	if got := entryFor(t, Default().Entries(), "Command prompt").Keys; got != ":" {
+		t.Fatalf("Command prompt keys = %q, want :", got)
+	}
+}

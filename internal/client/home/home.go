@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
@@ -123,7 +124,7 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if m.commanding() {
 		c := m.matches()[i]
 		m.complete(c)
-		if c.args == "" {
+		if c.Args == "" {
 			return m.runCommand()
 		}
 		return nil
@@ -229,7 +230,7 @@ func openCmd(o OpenMsg) tea.Cmd { return func() tea.Msg { return o } }
 // open opens o, unless its name would be refused: then the notice says why.
 func (m *Model) open(o OpenMsg) tea.Cmd {
 	if err := (&api.Attach{Session: o.Session}).Validate(); err != nil {
-		m.notice = reason(err)
+		m.notice = command.Reason(err)
 		return nil
 	}
 	return openCmd(o)

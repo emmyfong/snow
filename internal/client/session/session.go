@@ -49,6 +49,7 @@ type Model struct {
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
 	switcher   *sessionlist.Model        // the session list, when open
+	prompt     *prompting                // the command popup, when open
 	confirm    *confirmation             // a question waiting for y or n
 	rename     *renaming                 // the window name being typed
 	menu       *menu.Model               // the right-click menu
@@ -151,6 +152,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	}
 	return nil
 }
+
+// ShowError shows text in the status bar for a moment, as a refused
+// request's reason is shown.
+func (m *Model) ShowError(text string) tea.Cmd { return m.refuse(text) }
 
 // refuse shows why a request failed in the status bar for a moment.
 func (m *Model) refuse(text string) tea.Cmd {
@@ -269,5 +274,5 @@ func resize(lines []string, rows int) []string {
 
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.switcher != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
+	return m.picker != nil || m.switcher != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

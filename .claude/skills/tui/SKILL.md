@@ -21,6 +21,7 @@ internal/client/
   home/          the home page (one screen)
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
+  command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
   sessionlist/   session rows (name, state, last used) for the home page, and the session list popup (Ctrl+b s)
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)

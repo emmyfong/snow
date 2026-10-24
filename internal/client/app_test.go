@@ -336,3 +336,28 @@ func TestSessionListReachesTheSessionScreen(t *testing.T) {
 		t.Fatal("the session list does not show web")
 	}
 }
+
+// TestSessionThemeAppliesAndSaves: a theme picked inside a session colors
+// the session at once and is saved; a failed save shows in the status bar.
+func TestSessionThemeAppliesAndSaves(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	var saved []string
+	a.saveTheme = func(name string) error { saved = append(saved, name); return nil }
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	before := a.View().Content
+	_, cmd := a.Update(session.ThemeMsg{Name: "Nord"})
+	run(a, cmd)
+	if a.theme.Name != "Nord" || len(saved) != 1 || saved[0] != "Nord" {
+		t.Fatalf("theme %q, saved %v; want Nord used and saved", a.theme.Name, saved)
+	}
+	if a.View().Content == before {
+		t.Fatal("the session screen still draws with the old theme")
+	}
+	a.saveTheme = func(string) error { return errors.New("disk full") }
+	_, cmd = a.Update(session.ThemeMsg{Name: "Dracula"})
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "disk full") {
+		t.Fatal("a failed save is not in the status bar")
+	}
+}

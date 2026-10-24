@@ -1,7 +1,6 @@
 package home
 
 import (
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,41 +8,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-func TestFuzzyMatch(t *testing.T) {
-	tests := []struct {
-		query string
-		first string
-	}{
-		{"ses", "sessions"},
-		{"re", "rename"},
-		{"k", "kill"},
-		{"q", "quit"},
-		{"nw", "new"},
-		{"", "new"}, // no query keeps the table order
-	}
-	for _, tt := range tests {
-		got := matchCommands(tt.query)
-		if len(got) == 0 || got[0].name != tt.first {
-			t.Errorf("matchCommands(%q) ranks %v first, want %s", tt.query, names(got), tt.first)
+// TestEveryHomeCommandHasHandler: each command the registry lists for the
+// home page does something here.
+func TestEveryHomeCommandHasHandler(t *testing.T) {
+	for _, c := range command.In(command.Home) {
+		if runs[c.Name] == nil {
+			t.Errorf("no handler for /%s", c.Name)
 		}
 	}
-	if got := names(matchCommands("exit")); slices.Contains(got, "exit") {
-		t.Errorf("matchCommands(exit) = %v; /exit is gone, /quit quits", got)
-	}
-	if got := matchCommands("xyz"); len(got) != 0 {
-		t.Errorf("matchCommands(xyz) = %v, want nothing", names(got))
-	}
-}
-
-func names(cs []command) []string {
-	out := make([]string, len(cs))
-	for i, c := range cs {
-		out[i] = c.name
-	}
-	return out
 }
 
 // msgOf runs cmd and returns its message, or nil.

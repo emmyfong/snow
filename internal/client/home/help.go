@@ -5,6 +5,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/ui"
 )
 
@@ -14,6 +15,7 @@ var helpKeys = [][2]string{
 	{"/", "type a command; Tab completes"},
 	{"/rename, /kill", "arrows or a click pick the session"},
 	{"Ctrl+b s", "switch to another session"},
+	{"Ctrl+b :", "run a command inside a session"},
 	{"Ctrl+b d", "detach and come here"},
 }
 
@@ -33,8 +35,8 @@ func (m *Model) helpPanel() (box string, x, y int) {
 		row := accent.Render(padRight(key, keyWidth)) + desc
 		rows = append(rows, " "+ansi.Truncate(row, inner, "…"))
 	}
-	for _, c := range commands {
-		add(strings.TrimSpace("/"+c.name+" "+c.args), c.desc)
+	for _, c := range command.In(command.Home) {
+		add("/"+c.Line(), c.Desc)
 	}
 	rows = append(rows, "")
 	for _, k := range helpKeys {

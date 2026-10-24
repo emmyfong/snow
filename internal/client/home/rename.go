@@ -3,6 +3,7 @@ package home
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -34,7 +35,7 @@ func (m *Model) namingKey(k tea.Key) tea.Cmd {
 		m.input, m.target = "/rename ", n.session
 	case tea.KeyEnter:
 		if err := api.ValidSessionName(n.name); err != nil {
-			m.notice = "/rename: " + reason(err)
+			m.notice = "/rename: " + command.Reason(err)
 			return nil
 		}
 		m.naming = nil
