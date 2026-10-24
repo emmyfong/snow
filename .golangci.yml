@@ -19,6 +19,8 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "server-side package; the server owns conversation files; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "server-side package; agents run in the server; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/tool", desc: "server-side package; tools run in the server; use pkg/api" }
         convstore-keeps-its-own-format:
           files: ["**/internal/convstore/**", "!$test"]
           deny:

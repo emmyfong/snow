@@ -13,10 +13,13 @@ import (
 
 // Reply scripts one call to Stream: Stream returns StartErr, or a stream
 // that yields Events and then ends with Err, or io.EOF when Err is nil.
+// With Wait, the stream waits after its events until its context ends, as
+// a reply that is still streaming does.
 type Reply struct {
 	Events   []provider.Event
 	Err      error
 	StartErr error
+	Wait     bool
 }
 
 // ErrNoReply means Stream was called more times than replies were scripted.
@@ -99,6 +102,10 @@ func (s *stream) Next() (provider.Event, error) {
 	if s.next < len(s.reply.Events) {
 		s.next++
 		return s.reply.Events[s.next-1], nil
+	}
+	if s.reply.Wait {
+		<-s.ctx.Done()
+		return nil, s.ctx.Err()
 	}
 	if s.reply.Err != nil {
 		return nil, s.reply.Err
