@@ -106,7 +106,7 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 		first   = true
 		renamed bool
 	)
-	err := eachLine(path, func(_ int, b []byte) {
+	err := eachLine(path, func(_ int, b []byte, _ bool) {
 		if first {
 			first = false
 			if r, err := Decode(b); err == nil {

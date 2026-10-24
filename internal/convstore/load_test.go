@@ -231,3 +231,81 @@ func TestLoadKeepsFile(t *testing.T) {
 		t.Fatalf("file changed: %q, %v", got, err)
 	}
 }
+
+// writeRecords writes testMeta and recs to the file of testID as they are,
+// without a Writer, and returns its path.
+func writeRecords(t *testing.T, s *Store, recs ...Record) string {
+	t.Helper()
+	var b []byte
+	for _, r := range append([]Record{testMeta()}, recs...) {
+		line, err := Encode(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		b = append(b, line...)
+	}
+	path, _ := s.Path(testID)
+	writeFile(string(b))(t, path)
+	return path
+}
+
+// TestLoadRecordMidTurn: a record that does not end a turn, such as a
+// rename, a model switch, or a type from a later version, stays in place.
+// It does not turn waiting partial text into a cut-off reply, or add a
+// stand-in for a tool result that comes after it.
+func TestLoadRecordMidTurn(t *testing.T) {
+	call := &Assistant{At: at, Stop: StopToolUse, Blocks: []Block{{Kind: BlockToolUse, ID: "t1", Name: "read"}}}
+	result := &ToolResult{At: at, ToolUseID: "t1", Content: "ok"}
+	reply := &Assistant{At: at, Stop: "end_turn", Blocks: []Block{{Kind: BlockText, Text: "whole"}}}
+	partial := &Partial{At: at, Text: "who"}
+	unknown := &Unknown{Kind: "question", Raw: []byte(`{"type":"question"}`)}
+	for _, mid := range []Record{&Rename{At: at, Title: "t"}, &ModelSwitch{At: at, Model: "openai/gpt-6.1-sol"}, unknown} {
+		t.Run(string(mid.Type()), func(t *testing.T) {
+			tests := []struct {
+				name string
+				recs []Record
+				want []Type
+			}{
+				{"between a call and its result", []Record{&User{At: at}, call, mid, result, reply},
+					[]Type{TypeUser, TypeAssistant, mid.Type(), TypeToolResult, TypeAssistant}},
+				{"between partial text and its reply", []Record{&User{At: at}, partial, mid, reply},
+					[]Type{TypeUser, mid.Type(), TypeAssistant}},
+			}
+			for _, tt := range tests {
+				s := openStore(t)
+				writeRecords(t, s, tt.recs...)
+				c := load(t, s)
+				if got := types(c.Records); !reflect.DeepEqual(got, tt.want) {
+					t.Errorf("%s: records %v, want %v", tt.name, got, tt.want)
+				}
+				if c.MidTurn {
+					t.Errorf("%s: MidTurn after a whole reply", tt.name)
+				}
+			}
+		})
+	}
+}
+
+// TestLoadBadLastLineWithNewline: a crash cannot leave a bad line that ends
+// with a newline, so it is damage: marked in place, not dropped as torn.
+func TestLoadBadLastLineWithNewline(t *testing.T) {
+	s := openStore(t)
+	path := writeRecords(t, s, &User{At: at, Text: "hi"})
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := f.WriteString("{\"type\":\n"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	c := load(t, s)
+	if got := types(c.Records); !reflect.DeepEqual(got, []Type{TypeUser, TypeDamaged}) {
+		t.Fatalf("records %v", got)
+	}
+	if len(c.Problems) != 1 || c.Problems[0].Torn {
+		t.Fatalf("problems %v", c.Problems)
+	}
+}

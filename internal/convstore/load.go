@@ -39,8 +39,8 @@ func (*Damaged) Type() Type { return TypeDamaged }
 // Problem is a line that Load dropped or skipped.
 type Problem struct {
 	Line int
-	// Torn is true for a last line cut off by a crash. Otherwise the line
-	// is in the middle of the file and a Damaged record marks its place.
+	// Torn is true for a last line with no newline, cut off by a crash; it
+	// is dropped. Otherwise a Damaged record marks the line's place.
 	Torn bool
 	Err  error
 }
@@ -117,8 +117,10 @@ func (c *Conversation) build(lines []line) {
 		calls   []string // tool calls of the last reply with no result yet
 		open    bool     // a turn has started and not ended
 	)
-	// settle ends what a record other than a result or approval leaves
-	// behind: partial text without its reply, and calls without results.
+	// settle runs where a turn ends or a new reply starts. Partial text
+	// still waiting there lost its reply, and calls still open lost their
+	// results. Other records, such as a rename, can come mid-turn and do
+	// not settle.
 	settle := func() {
 		if partial != nil {
 			c.Records = append(c.Records, &Assistant{At: partial.At, CutOff: true,
@@ -132,7 +134,7 @@ func (c *Conversation) build(lines []line) {
 	}
 	for i, l := range lines {
 		if l.err != nil {
-			if i == len(lines)-1 {
+			if i == len(lines)-1 && !l.ended {
 				c.Problems = append(c.Problems, Problem{Line: l.n, Torn: true, Err: l.err})
 				continue
 			}
@@ -160,8 +162,6 @@ func (c *Conversation) build(lines []line) {
 		case *Interruption:
 			settle()
 			open = false
-		default:
-			settle()
 		}
 		c.Records = append(c.Records, l.rec)
 	}

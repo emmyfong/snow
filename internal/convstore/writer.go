@@ -103,8 +103,10 @@ func endsMidLine(path string) (bool, error) {
 func (w *Writer) Path() string { return w.path }
 
 // Append writes r as one whole line and flushes it to disk before it
-// returns. An Assistant record drops partial text that is not written yet;
-// any other record writes that text first, so a cut-off reply keeps it.
+// returns. Partial text that waits is dropped by an Assistant record, which
+// replaces it, and written first before a User or Interruption record,
+// which ends the reply, so a cut-off reply keeps it. Other records leave it
+// waiting.
 func (w *Writer) Append(r Record) error {
 	line, err := Encode(r)
 	if err != nil {
@@ -115,9 +117,18 @@ func (w *Writer) Append(r Record) error {
 	if err := w.ready(); err != nil {
 		return err
 	}
-	if w.pending != nil {
+	switch r.Type() {
+	case TypeAssistant:
 		p := w.takePending()
-		if r.Type() != TypeAssistant {
+		if err := w.write(line); err != nil {
+			// Keep the text: without its reply on disk it is all there is.
+			w.pending = p
+			w.startTimer()
+			return err
+		}
+		return nil
+	case TypeUser, TypeInterruption:
+		if p := w.takePending(); p != nil {
 			if err := w.writePartial(p); err != nil {
 				return err
 			}
@@ -137,12 +148,19 @@ func (w *Writer) AppendPartial(p Partial) error {
 		return err
 	}
 	w.pending = &p
-	if w.timer == nil {
-		w.gen++
-		gen := w.gen
-		w.timer = time.AfterFunc(w.every, func() { w.flushPartial(gen) })
-	}
+	w.startTimer()
 	return nil
+}
+
+// startTimer starts the partial wait if partial text waits and no wait
+// runs. The caller holds mu.
+func (w *Writer) startTimer() {
+	if w.pending == nil || w.timer != nil {
+		return
+	}
+	w.gen++
+	gen := w.gen
+	w.timer = time.AfterFunc(w.every, func() { w.flushPartial(gen) })
 }
 
 // flushPartial runs when the partial wait ends. A failure is kept for the

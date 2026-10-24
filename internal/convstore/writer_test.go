@@ -77,8 +77,9 @@ func TestPartialRateLimit(t *testing.T) {
 	}
 }
 
-// TestPartialThenRecord: a whole reply replaces partial text that waits; any
-// other record, and Close, write it first, so a cut-off reply keeps it.
+// TestPartialThenRecord: a whole reply replaces partial text that waits; a
+// user message, an interruption, and Close write it first, so a cut-off
+// reply keeps it; any other record leaves it waiting.
 func TestPartialThenRecord(t *testing.T) {
 	tests := []struct {
 		name string
@@ -87,6 +88,8 @@ func TestPartialThenRecord(t *testing.T) {
 	}{
 		{"assistant", func(w *Writer) error { return w.Append(&Assistant{At: at}) }, []Type{TypeAssistant}},
 		{"interruption", func(w *Writer) error { return w.Append(&Interruption{At: at}) }, []Type{TypePartial, TypeInterruption}},
+		{"user", func(w *Writer) error { return w.Append(&User{At: at}) }, []Type{TypePartial, TypeUser}},
+		{"rename", func(w *Writer) error { return w.Append(&Rename{At: at}) }, []Type{TypeRename, TypePartial}},
 		{"close", (*Writer).Close, []Type{TypePartial}},
 	}
 	for _, tt := range tests {
@@ -165,6 +168,26 @@ func TestWriteFailure(t *testing.T) {
 			t.Fatalf("got %v, want a WriteError for %s", err, w.Path())
 		}
 	})
+}
+
+// TestFailedReplyKeepsPartial: when the whole reply cannot be saved, the
+// partial text that waits is kept, since it is all there is on disk.
+func TestFailedReplyKeepsPartial(t *testing.T) {
+	w := openWriter(t, openStore(t))
+	if err := w.AppendPartial(Partial{At: at, Text: "half"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(&Assistant{At: at}); err == nil {
+		t.Fatal("append to a closed file succeeded")
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.pending == nil || w.pending.Text != "half" || w.timer == nil {
+		t.Fatalf("pending %#v, timer %v", w.pending, w.timer)
+	}
 }
 
 // killEnv makes TestAppendKilled act as the child that appends until it is
