@@ -18,6 +18,11 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/gate", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "server-side package; the server owns conversation files; use pkg/api" }
+        convstore-keeps-its-own-format:
+          files: ["**/internal/convstore/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "conversation files have their own record types, so a provider change is never a file format change; the agent loop converts" }
         provider-gets-keys-through-keysource:
           files: ["**/internal/provider/**", "!$test"]
           deny:

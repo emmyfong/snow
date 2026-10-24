@@ -17,8 +17,9 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     later: agent, tool, convstore, skills, gate,
-                     editor, worktree
+                     convstore,
+                     later: agent, tool, skills, gate, editor,
+                     worktree
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -31,12 +32,13 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore
    │           │                       │
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;
-               │                       │     keys reach it through KeySource)
+               │                       │     keys reach it through KeySource;
+               │                       │     convstore never imports provider)
                │                       └──► term, layout   (leaf packages)
                └──────────► config ◄───┘    (leaf; read by client and server)
 ```
