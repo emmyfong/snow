@@ -28,10 +28,11 @@ var version = "dev"
 const usage = `usage:
   snow           open the home page: your sessions, running and saved
   snow <name>    attach to session <name>, or create it
+  snow auth      save or remove provider API keys (snow auth help)
   snow version   print the version (also -v, --version)
   snow help      show this help (also -h, --help)
 
-The names version, help, and server are commands, not sessions.
+The names version, help, server, and auth are commands, not sessions.
 Inside a session, press Ctrl+b then d to go back to the home page, and
 Ctrl+b alone, then wait, to see every key.
 `
@@ -52,18 +53,30 @@ const (
 	kindServer
 	kindVersion
 	kindHelp
+	kindAuth
+	kindAuthHelp
 )
 
 // command is a parsed command line.
 type command struct {
 	kind    kind
 	session string // for kindAttach; "" creates a numbered session
+	auth    authCommand
 }
 
 func parseArgs(args []string) (command, error) {
 	switch {
 	case len(args) == 0:
 		return command{kind: kindAttach}, nil
+	case args[0] == "auth":
+		if len(args) == 2 && (args[1] == "help" || args[1] == "-h" || args[1] == "--help") {
+			return command{kind: kindAuthHelp}, nil
+		}
+		a, err := parseAuth(args[1:])
+		if err != nil {
+			return command{kind: kindAuthHelp}, err
+		}
+		return command{kind: kindAuth, auth: a}, nil
 	case len(args) > 1:
 		return command{}, errors.New("too many arguments")
 	}
@@ -88,7 +101,11 @@ func parseArgs(args []string) (command, error) {
 func run(args []string, stdout, stderr io.Writer) int {
 	cmd, err := parseArgs(args)
 	if err != nil {
-		_, _ = fmt.Fprintf(stderr, "snow: %v\n%s", err, usage)
+		help := usage
+		if cmd.kind == kindAuthHelp {
+			help = authUsage
+		}
+		_, _ = fmt.Fprintf(stderr, "snow: %v\n%s", err, help)
 		return 2
 	}
 	switch cmd.kind {
@@ -100,6 +117,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case kindServer:
 		return serve(stderr)
+	case kindAuthHelp:
+		_, _ = fmt.Fprint(stdout, authUsage)
+		return 0
+	case kindAuth:
+		return runAuth(cmd.auth, stdout, stderr)
 	default:
 		if err := nested(); err != nil {
 			_, _ = fmt.Fprintln(stderr, "snow:", err)
