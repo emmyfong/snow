@@ -16,8 +16,11 @@ import (
 // conversation.
 const partialEvery = time.Second
 
-// errClosed is the cause of a write to a closed Writer.
-var errClosed = errors.New("writer is closed")
+// Causes of a WriteError for a call that is wrong, not for a disk failure.
+var (
+	errClosed     = errors.New("writer is closed")
+	errAppendMeta = errors.New("only Create writes a meta record")
+)
 
 // Writer appends records to one conversation file. It is the only writer
 // of that file in the process. Its methods are safe to call from several
@@ -38,9 +41,60 @@ type Writer struct {
 	closed  bool
 }
 
-// Writer opens the conversation id for appending, and creates its file if
-// it does not exist. A second Writer for the same id gives an error that
-// wraps ErrInUse until the first is closed.
+// Create makes the file of a new conversation and writes meta as its first
+// record, flushed to disk, before it returns the Writer. It stamps
+// meta.Version and gives meta a new ID when it has none. A file that
+// exists gives an error that wraps fs.ErrExist: Create never adds to one.
+func (s *Store) Create(meta Meta) (*Writer, error) {
+	if meta.ID == "" {
+		meta.ID = NewID(time.Now())
+	}
+	meta.Version = Version
+	path, err := s.Path(meta.ID)
+	if err != nil {
+		return nil, err
+	}
+	line, err := Encode(&meta)
+	if err != nil {
+		return nil, &WriteError{Path: path, Err: err}
+	}
+	if err := s.claim(meta.ID); err != nil {
+		return nil, err
+	}
+	w := &Writer{s: s, id: meta.ID, path: path, every: partialEvery}
+	if err := w.create(line); err != nil {
+		s.release(meta.ID)
+		return nil, &WriteError{Path: path, Err: err}
+	}
+	return w, nil
+}
+
+// create makes the file and writes the meta line. On failure it removes
+// the file, which holds no conversation yet.
+func (w *Writer) create(meta []byte) error {
+	f, err := os.OpenFile(w.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE|os.O_EXCL, 0o600)
+	if err != nil {
+		return fmt.Errorf("create: %w", err)
+	}
+	w.f = f
+	err = w.write(meta)
+	if err == nil {
+		// Flush the folder entry too, or a power cut can lose the whole file
+		// with every record that was flushed into it.
+		if err = private.SyncDir(filepath.Dir(w.path)); err != nil {
+			err = fmt.Errorf("flush folder: %w", err)
+		}
+	}
+	if err != nil {
+		return errors.Join(err, f.Close(), private.Remove(w.path))
+	}
+	return nil
+}
+
+// Writer opens an existing conversation to append to it, for example to
+// resume it. A second Writer for the same id gives an error that wraps
+// ErrInUse until the first is closed. A missing file gives a WriteError
+// that wraps fs.ErrNotExist; Create makes new files.
 func (s *Store) Writer(id string) (*Writer, error) {
 	path, err := s.Path(id)
 	if err != nil {
@@ -58,19 +112,11 @@ func (s *Store) Writer(id string) (*Writer, error) {
 }
 
 func (w *Writer) open() error {
-	_, statErr := os.Lstat(w.path)
-	created := errors.Is(statErr, os.ErrNotExist)
-	f, err := os.OpenFile(w.path, os.O_WRONLY|os.O_APPEND|os.O_CREATE, 0o600)
+	f, err := os.OpenFile(w.path, os.O_WRONLY|os.O_APPEND, 0)
 	if err != nil {
 		return fmt.Errorf("open: %w", err)
 	}
-	if created {
-		// Flush the folder entry too, or a power cut can lose the whole file
-		// with every record that was flushed into it.
-		if err := private.SyncDir(filepath.Dir(w.path)); err != nil {
-			return errors.Join(fmt.Errorf("flush folder: %w", err), f.Close())
-		}
-	} else if w.newLine, err = endsMidLine(w.path); err != nil {
+	if w.newLine, err = endsMidLine(w.path); err != nil {
 		return errors.Join(err, f.Close())
 	}
 	w.f = f
@@ -102,15 +148,21 @@ func endsMidLine(path string) (bool, error) {
 // Path returns the file this Writer appends to.
 func (w *Writer) Path() string { return w.path }
 
+// ID returns the ID of the conversation this Writer appends to.
+func (w *Writer) ID() string { return w.id }
+
 // Append writes r as one whole line and flushes it to disk before it
 // returns. Partial text that waits is dropped by an Assistant record, which
 // replaces it, and written first before a User or Interruption record,
 // which ends the reply, so a cut-off reply keeps it. Other records leave it
 // waiting.
 func (w *Writer) Append(r Record) error {
+	if r != nil && r.Type() == TypeMeta {
+		return &WriteError{Path: w.path, Err: errAppendMeta}
+	}
 	line, err := Encode(r)
 	if err != nil {
-		return err
+		return &WriteError{Path: w.path, Err: err}
 	}
 	w.mu.Lock()
 	defer w.mu.Unlock()
@@ -229,7 +281,7 @@ func (w *Writer) takePending() *Partial {
 func (w *Writer) writePartial(p *Partial) error {
 	line, err := Encode(p)
 	if err != nil {
-		return err
+		return &WriteError{Path: w.path, Err: err}
 	}
 	return w.write(line)
 }

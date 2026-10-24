@@ -3,6 +3,7 @@ package convstore
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -13,12 +14,11 @@ import (
 // start, with recs after its meta record.
 func writeConv(t *testing.T, s *Store, id, folder, profile string, start time.Time, recs ...Record) {
 	t.Helper()
-	w, err := s.Writer(id)
+	w, err := s.Create(Meta{ID: id, Folder: folder, Profile: profile, Created: start, Model: "anthropic/claude-opus-5-5"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	meta := &Meta{Version: Version, ID: id, Folder: folder, Profile: profile, Created: start, Model: "anthropic/claude-opus-5-5"}
-	for _, r := range append([]Record{meta}, recs...) {
+	for _, r := range recs {
 		if err := w.Append(r); err != nil {
 			t.Fatal(err)
 		}
@@ -144,22 +144,31 @@ func TestListTornLine(t *testing.T) {
 	}
 }
 
-// TestListAll: every folder, newest first; files that are not
-// conversations are left out.
+// TestListAll: every folder, newest first. Files that are not
+// conversations, and an empty file that a crash in Create can leave, are
+// left out; a conversation file with a bad name is listed with its error.
 func TestListAll(t *testing.T) {
 	s := openStore(t)
 	writeConv(t, s, "one", "/a", "bash", at)
 	writeConv(t, s, "two", "/b", "zsh", at.Add(time.Hour))
-	for _, name := range []string{"notes.txt", "BAD.jsonl", "x.jsonl.tmp"} {
-		if err := os.WriteFile(s.dir+"/"+name, nil, 0o600); err != nil {
+	for _, name := range []string{"notes.txt", "x.jsonl.tmp", "empty.jsonl"} {
+		if err := os.WriteFile(filepath.Join(s.dir, name), nil, 0o600); err != nil {
 			t.Fatal(err)
 		}
+	}
+	bad := filepath.Join(s.dir, "Copy of one.jsonl")
+	if err := os.WriteFile(bad, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
 	}
 	es, err := s.ListAll()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := ids(es); !reflect.DeepEqual(got, []string{"two", "one"}) {
-		t.Fatalf("ListAll = %v", got)
+	// The bad file is dated by its modification time, which is now.
+	if len(es) != 3 || es[0].Path != bad || !errors.Is(es[0].Err, ErrBadID) {
+		t.Fatalf("ListAll = %+v", es)
+	}
+	if got := ids(es[1:]); !reflect.DeepEqual(got, []string{"two", "one"}) {
+		t.Fatalf("ListAll = %v", ids(es))
 	}
 }

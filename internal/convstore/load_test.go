@@ -141,7 +141,8 @@ func TestLoadErrors(t *testing.T) {
 		{"no meta", writeFile(`{"type":"user","text":"hi"}` + "\n"), ErrNoMeta},
 		{"empty", writeFile(""), ErrNoMeta},
 		{"bad meta", writeFile("{\n"), ErrNoMeta},
-		{"other id", writeFile(meta(`{"type":"meta","version":1,"id":"other"}`)), ErrBadID},
+		{"other id", writeFile(meta(`{"type":"meta","version":1,"id":"other"}`)), ErrIDMismatch},
+		{"no version", writeFile(meta(`{"type":"meta","id":"` + testID + `"}`)), ErrNoMeta},
 		{"missing", func(*testing.T, string) {}, fs.ErrNotExist},
 		{"a directory", func(t *testing.T, path string) {
 			if err := os.Mkdir(path, 0o700); err != nil {
@@ -189,10 +190,8 @@ func TestLoadLongLine(t *testing.T) {
 	s := openStore(t)
 	w := openWriter(t, s)
 	long := strings.Repeat("x", 2<<20)
-	for _, r := range []Record{testMeta(), &User{At: at, Text: long}} {
-		if err := w.Append(r); err != nil {
-			t.Fatal(err)
-		}
+	if err := w.Append(&User{At: at, Text: long}); err != nil {
+		t.Fatal(err)
 	}
 	c := load(t, s)
 	if len(c.Records) != 1 || c.Records[0].(*User).Text != long {

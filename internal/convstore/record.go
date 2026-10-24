@@ -219,7 +219,13 @@ var errEmptyType = errors.New("record has no type")
 // with the record's type.
 func Encode(r Record) ([]byte, error) {
 	switch r := r.(type) {
+	case nil:
+		return nil, errors.New("encode record: no record")
 	case *Unknown:
+		// Raw goes out as it is, so it must still be one JSON line.
+		if bytes.ContainsAny(r.Raw, "\r\n") || !json.Valid(r.Raw) {
+			return nil, fmt.Errorf("encode %s record: raw data is not one JSON line", r.Kind)
+		}
 		return append(bytes.Clone(r.Raw), '\n'), nil
 	case *Damaged:
 		return nil, errors.New("encode damaged record: it exists only after a load")
@@ -227,6 +233,10 @@ func Encode(r Record) ([]byte, error) {
 	body, err := json.Marshal(r)
 	if err != nil {
 		return nil, fmt.Errorf("encode %s record: %w", r.Type(), err)
+	}
+	if body[0] != '{' {
+		// A nil pointer of a record type marshals as null.
+		return nil, fmt.Errorf("encode %s record: no record", r.Type())
 	}
 	kind, err := json.Marshal(r.Type())
 	if err != nil {

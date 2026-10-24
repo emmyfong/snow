@@ -66,6 +66,16 @@ func TestDecodeUnknown(t *testing.T) {
 	}
 }
 
+// TestEncodeBad: a record that would not be one valid line is refused.
+func TestEncodeBad(t *testing.T) {
+	for _, r := range []Record{nil, (*User)(nil), &Damaged{Line: 1},
+		&Unknown{Kind: "x", Raw: []byte("{\"type\":\"x\"}\n{}")}, &Unknown{Kind: "x", Raw: []byte("{")}} {
+		if line, err := Encode(r); err == nil {
+			t.Errorf("Encode(%#v) = %q", r, line)
+		}
+	}
+}
+
 func TestDecodeBad(t *testing.T) {
 	for _, line := range []string{``, `{`, `[]`, `{"text":"no type"}`, `{"type":"user","text":5}`} {
 		if r, err := Decode([]byte(line)); err == nil {

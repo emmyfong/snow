@@ -9,6 +9,7 @@ import (
 var (
 	ErrNewerVersion = errors.New("file is from a newer version of Snow")
 	ErrNoMeta       = errors.New("file does not start with a meta record")
+	ErrIDMismatch   = errors.New("meta record names another conversation")
 )
 
 // LoadError reports a conversation file that cannot be loaded. The file is
@@ -101,10 +102,12 @@ func checkMeta(meta *Meta, id string) error {
 	switch {
 	case meta == nil:
 		return ErrNoMeta
+	case meta.Version < 1:
+		return fmt.Errorf("%w: the meta record has no version", ErrNoMeta)
 	case meta.Version > Version:
 		return fmt.Errorf("%w: version %d, this Snow reads up to %d", ErrNewerVersion, meta.Version, Version)
 	case meta.ID != id:
-		return fmt.Errorf("%w: meta record names %q", ErrBadID, meta.ID)
+		return fmt.Errorf("%w: %q", ErrIDMismatch, meta.ID)
 	}
 	return nil
 }

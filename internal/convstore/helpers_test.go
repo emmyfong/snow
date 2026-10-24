@@ -47,10 +47,11 @@ func openStore(t *testing.T) *Store {
 	return s
 }
 
-// openWriter returns a Writer for testID that the test closes.
+// openWriter creates testID with testMeta and returns its Writer, which the
+// test closes.
 func openWriter(t *testing.T, s *Store) *Writer {
 	t.Helper()
-	w, err := s.Writer(testID)
+	w, err := s.Create(*testMeta())
 	if err != nil {
 		t.Fatal(err)
 	}

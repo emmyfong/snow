@@ -62,9 +62,15 @@ func (s *Store) ListAll() ([]Entry, error) {
 	)
 	for _, f := range files {
 		id, ok := strings.CutSuffix(f.Name(), ext)
-		if ok && !f.IsDir() && CheckID(id) == nil {
-			ids, dirs = append(ids, id), append(dirs, f)
+		if !ok || f.IsDir() {
+			continue
 		}
+		// Only a crash inside Create leaves an empty file. It holds no
+		// conversation, so it is not shown.
+		if info, err := f.Info(); err == nil && info.Size() == 0 {
+			continue
+		}
+		ids, dirs = append(ids, id), append(dirs, f)
 	}
 	entries := make([]Entry, len(ids))
 	// Files are read in parallel: on a slow disk, waiting dominates.
@@ -101,6 +107,10 @@ type head struct {
 func (s *Store) entry(id string, f os.DirEntry) Entry {
 	path := filepath.Join(s.dir, f.Name())
 	e := Entry{ID: id, Path: path}
+	if err := CheckID(id); err != nil {
+		// A file the user renamed or copied in: show it, never skip it.
+		return failed(e, f, err)
+	}
 	var (
 		meta    *Meta
 		first   = true
@@ -146,11 +156,7 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 		err = checkMeta(meta, id)
 	}
 	if err != nil {
-		e = Entry{ID: id, Path: path, Err: &LoadError{Path: path, Err: err}}
-		if info, err := f.Info(); err == nil {
-			e.LastActivity = info.ModTime()
-		}
-		return e
+		return failed(Entry{ID: id, Path: path}, f, err)
 	}
 	if !renamed && meta.Title != "" {
 		e.Title = meta.Title
@@ -162,6 +168,16 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 		e.LastActivity = meta.Created
 	}
 	e.Folder, e.Profile = meta.Folder, meta.Profile
+	return e
+}
+
+// failed returns e as the entry of a file that cannot be read, dated by
+// the file's modification time.
+func failed(e Entry, f os.DirEntry, err error) Entry {
+	e.Err = &LoadError{Path: e.Path, Err: err}
+	if info, err := f.Info(); err == nil {
+		e.LastActivity = info.ModTime()
+	}
 	return e
 }
 

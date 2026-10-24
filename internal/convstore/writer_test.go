@@ -17,13 +17,13 @@ import (
 
 func TestAppendWritesWholeLine(t *testing.T) {
 	w := openWriter(t, openStore(t))
-	for _, r := range everyRecord {
+	for _, r := range everyRecord[1:] {
 		if err := w.Append(r); err != nil {
 			t.Fatal(err)
 		}
 	}
-	got := records(t, w.Path())
-	if !reflect.DeepEqual(got, everyRecord) {
+	got := records(t, w.Path())[1:]
+	if !reflect.DeepEqual(got, everyRecord[1:]) {
 		t.Fatalf("read back %d records:\n%#v", len(got), got)
 	}
 }
@@ -40,7 +40,11 @@ func TestAppendAfterTornLine(t *testing.T) {
 	if err := os.WriteFile(path, []byte(`{"type":"user","text":"whole"}`+"\n"+torn), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	w := openWriter(t, s)
+	w, err := s.Writer(testID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = w.Close() }()
 	if err := w.Append(&User{At: at, Text: "next"}); err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +107,7 @@ func TestPartialThenRecord(t *testing.T) {
 			}
 			time.Sleep(partialEvery + 200*time.Millisecond)
 			var got []Type
-			for _, r := range records(t, w.Path()) {
+			for _, r := range records(t, w.Path())[1:] {
 				got = append(got, r.Type())
 			}
 			if !reflect.DeepEqual(got, tt.want) {
@@ -137,7 +141,11 @@ func TestSecondWriter(t *testing.T) {
 	if err := w.Append(&User{At: at}); !errors.Is(err, errClosed) {
 		t.Fatalf("append after close: %v", err)
 	}
-	openWriter(t, s)
+	w, err := s.Writer(testID)
+	if err != nil {
+		t.Fatalf("open after close: %v", err)
+	}
+	_ = w.Close()
 }
 
 // TestWriteFailure: a record that cannot be saved gives a WriteError that
@@ -150,6 +158,9 @@ func TestWriteFailure(t *testing.T) {
 			t.Fatal(err)
 		}
 		var we *WriteError
+		if _, err := s.Create(*testMeta()); !errors.As(err, &we) || we.Path != path {
+			t.Fatalf("got %v, want a WriteError for %s", err, path)
+		}
 		if _, err := s.Writer(testID); !errors.As(err, &we) || we.Path != path {
 			t.Fatalf("got %v, want a WriteError for %s", err, path)
 		}
@@ -221,11 +232,8 @@ func appendUntilKilled(t *testing.T, dir string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	w, err := s.Writer(testID)
+	w, err := s.Create(*testMeta())
 	if err != nil {
-		t.Fatal(err)
-	}
-	if err := w.Append(testMeta()); err != nil {
 		t.Fatal(err)
 	}
 	for i := 1; i < 1_000_000; i++ {
