@@ -35,7 +35,7 @@ func TestErrorMapping(t *testing.T) {
 		text   string // the error text holds it
 	}{
 		{401, json("authentication_error", "invalid x-api-key"), nil, provider.KindBadKey, 0, "invalid x-api-key"},
-		{403, json("permission_error", "no access"), nil, provider.KindBadKey, 0, "no access"},
+		{403, json("permission_error", "no access"), nil, provider.KindOther, 0, "no access"},
 		{404, json("not_found_error", "model: claude-old"), nil, provider.KindModelNotFound, 0, "model: claude-old"},
 		{429, json("rate_limit_error", "slow down"), map[string]string{"retry-after": "30"}, provider.KindRateLimited, 30 * time.Second, "slow down"},
 		{529, json("overloaded_error", "Overloaded"), nil, provider.KindOverloaded, 0, "Overloaded"},

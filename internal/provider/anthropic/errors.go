@@ -40,10 +40,11 @@ func mapErr(ctx context.Context, err error) error {
 }
 
 // kindOf reads the error type first, because an error inside a stream
-// arrives with the stream's status, 200.
+// arrives with the stream's status, 200. A permission error is not a bad
+// key: the key is valid but lacks access, and the message says to what.
 func kindOf(status int, errType, msg string) provider.Kind {
 	switch errType {
-	case "authentication_error", "permission_error":
+	case "authentication_error":
 		return provider.KindBadKey
 	case "not_found_error":
 		return provider.KindModelNotFound
@@ -60,7 +61,7 @@ func kindOf(status int, errType, msg string) provider.Kind {
 		return provider.KindOther
 	}
 	switch status {
-	case 401, 403:
+	case 401:
 		return provider.KindBadKey
 	case 404:
 		return provider.KindModelNotFound

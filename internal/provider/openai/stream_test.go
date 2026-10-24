@@ -119,6 +119,28 @@ func TestStreamErrors(t *testing.T) {
 	}
 }
 
+// TestStreamErrorRepeats: after an error, Next keeps returning it; it
+// never reports the clean end of a reply that failed.
+func TestStreamErrorRepeats(t *testing.T) {
+	for _, fixture := range []string{"failed.sse", "error_event.sse"} {
+		as := newAPIServer(t, fixture)
+		s, err := newTest(as.URL).Stream(context.Background(), provider.Request{Model: "gpt-6.1-sol"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var first error
+		for first == nil {
+			_, first = s.Next()
+		}
+		for range 3 {
+			if _, err := s.Next(); err != first {
+				t.Errorf("%s: Next after %v = %v, want the same error", fixture, first, err)
+			}
+		}
+		_ = s.Close()
+	}
+}
+
 func TestStreamCancel(t *testing.T) {
 	as := newAPIServer(t, "text.sse")
 	ctx, cancel := context.WithCancel(context.Background())

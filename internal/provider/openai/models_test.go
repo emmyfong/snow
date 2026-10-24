@@ -46,6 +46,16 @@ func TestCheckKey(t *testing.T) {
 	}
 }
 
+// TestCheckKeyForbidden: a 403 means the key is valid but may not list
+// models, as a restricted project key without the Models scope. The key
+// still works for replies, so the check passes.
+func TestCheckKeyForbidden(t *testing.T) {
+	srv := rawServer(t, 403, "application/json", errBody("", "invalid_request_error", "Missing scopes: api.model.read"), nil)
+	if err := newTest(srv.URL).CheckKey(context.Background()); err != nil {
+		t.Fatalf("CheckKey on 403 = %v, want nil", err)
+	}
+}
+
 func TestCapsFor(t *testing.T) {
 	tests := []struct {
 		model     string
@@ -58,6 +68,11 @@ func TestCapsFor(t *testing.T) {
 		{"gpt-4.1", false, false},
 		{"gpt-4o-2024-11-20", false, false},
 		{"gpt-7", true, true},
+		{"o3", true, true},
+		{"codex-mini-latest", true, true},
+		{"gpt-3.5-turbo", false, false},
+		{"gpt-5-chat-latest", false, false},
+		{"ft:gpt-4.1:org::abc", false, false},
 	}
 	for _, tt := range tests {
 		c := capsFor(tt.model)

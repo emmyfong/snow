@@ -107,3 +107,12 @@ func TestNoKey(t *testing.T) {
 		t.Fatalf("requests sent without a key: %d lists, %d messages", lists, messages)
 	}
 }
+
+// TestCheckKeyForbidden: a 403 means the key is valid but lacks access to
+// the model list, so the check passes.
+func TestCheckKeyForbidden(t *testing.T) {
+	srv := errServer(t, 403, "permission_error", "no access to models", nil)
+	if err := newTest(srv.URL).CheckKey(context.Background()); err != nil {
+		t.Fatalf("CheckKey on 403 = %v, want nil", err)
+	}
+}

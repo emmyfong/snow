@@ -70,6 +70,8 @@ func failure(status int, code, errType, msg string) *provider.Error {
 
 // kindOf reads the error code first: an error inside a stream has no
 // status, and a 429 can mean an empty balance, which a wait does not fix.
+// A 403 is not a bad key: the key is valid but lacks a scope, a region,
+// or access to the model, and the vendor's message says which.
 func kindOf(status int, code, errType, msg string) provider.Kind {
 	switch code {
 	case "invalid_api_key", "invalid_authentication", "unauthorized":
@@ -92,7 +94,7 @@ func kindOf(status int, code, errType, msg string) provider.Kind {
 		return provider.KindContextTooLong
 	}
 	switch status {
-	case 401, 403:
+	case 401:
 		return provider.KindBadKey
 	case 404:
 		return provider.KindModelNotFound

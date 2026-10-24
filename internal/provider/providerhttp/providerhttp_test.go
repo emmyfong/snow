@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -88,6 +89,26 @@ func TestGuardedRedirect(t *testing.T) {
 	defer mu.Unlock()
 	if leaked {
 		t.Fatal("the other host received the header")
+	}
+}
+
+// TestGuardedDowngrade: a redirect from https to http on the same host is
+// refused, so the key never goes out in clear text.
+func TestGuardedDowngrade(t *testing.T) {
+	req := func(raw string) *http.Request {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return &http.Request{URL: u}
+	}
+	c := Guarded(nil)
+	via := []*http.Request{req("https://api.example.com/v1/models")}
+	if err := c.CheckRedirect(req("http://api.example.com/v1/models"), via); err == nil {
+		t.Fatal("followed a redirect from https to http")
+	}
+	if err := c.CheckRedirect(req("https://api.example.com/v1/models/"), via); err != nil {
+		t.Fatalf("same host and scheme refused: %v", err)
 	}
 }
 

@@ -48,17 +48,39 @@ var knownCaps = map[string]caps{
 	"gpt-5.3-codex": {reasoning: true, efforts: toXHigh},
 }
 
-// capsFor returns what model takes. An unknown model is sent the effort
-// asked for, and the API's answer says if it does not take it; the older
-// gpt-4 family takes no reasoning at all.
+// capsFor returns what model takes. An unknown model of a reasoning
+// family (o-series, gpt-5 and later, codex) is sent the effort asked for,
+// and the API's answer says if it does not take it. Any other model, such
+// as gpt-4.1, gpt-3.5, or a chat-latest alias, gets no reasoning at all.
 func capsFor(model string) caps {
 	if c, ok := knownCaps[provider.Undated(model)]; ok {
 		return c
 	}
-	if strings.HasPrefix(model, "gpt-4") || strings.HasPrefix(model, "chatgpt-4") {
-		return caps{}
+	if reasoningFamily(model) {
+		return caps{reasoning: true}
 	}
-	return caps{reasoning: true}
+	return caps{}
+}
+
+func reasoningFamily(id string) bool {
+	if strings.Contains(id, "-chat") {
+		return false
+	}
+	if isOSeries(id) || strings.HasPrefix(id, "codex-") {
+		return true
+	}
+	rest, ok := strings.CutPrefix(id, "gpt-")
+	if !ok {
+		return false
+	}
+	major := 0
+	for _, c := range rest {
+		if c < '0' || c > '9' {
+			break
+		}
+		major = major*10 + int(c-'0')
+	}
+	return major >= 5
 }
 
 // Models implements provider.Provider. The API lists every model the key

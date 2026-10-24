@@ -6,6 +6,7 @@ package anthropic
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"sync"
 
@@ -81,13 +82,18 @@ func (p *Provider) sdkClient() (sdk.Client, error) {
 }
 
 // CheckKey makes one small model list call: nil means the key works, and
-// an error of KindBadKey means the API rejected it.
+// an error of KindBadKey means the API rejected it. A 403 passes: the key
+// is valid but may lack access to the model list.
 func (p *Provider) CheckKey(ctx context.Context) error {
 	c, err := p.sdkClient()
 	if err != nil {
 		return err
 	}
 	if _, err := c.Models.List(ctx, sdk.ModelListParams{Limit: sdk.Int(1)}); err != nil {
+		var apiErr *sdk.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden {
+			return nil
+		}
 		return mapErr(ctx, err)
 	}
 	return nil

@@ -10,8 +10,8 @@ import (
 )
 
 // Guarded copies c, or builds a client like the vendor SDKs' default, and
-// makes it refuse a redirect to another host: Go's client would send the
-// key header along.
+// makes it refuse a redirect to another host or from https to http: Go's
+// client sends the key header along to the same host, even in clear text.
 func Guarded(c *http.Client) *http.Client {
 	var g http.Client
 	if c != nil {
@@ -24,6 +24,9 @@ func Guarded(c *http.Client) *http.Client {
 	g.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if req.URL.Host != via[0].URL.Host {
 			return errors.New("refused a redirect to another host")
+		}
+		if req.URL.Scheme != via[0].URL.Scheme {
+			return errors.New("refused a redirect to another scheme")
 		}
 		if len(via) >= 10 {
 			return errors.New("stopped after 10 redirects")

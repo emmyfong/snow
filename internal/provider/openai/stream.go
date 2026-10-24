@@ -18,7 +18,8 @@ type stream struct {
 	ctx    context.Context
 	sse    *ssestream.Stream[responses.ResponseStreamEventUnion]
 	queue  []provider.Event
-	done   bool // the response completed, stopped early, or failed
+	done   bool  // the response completed or stopped early
+	err    error // the error that ended the reply; Next returns it again
 	closed bool
 
 	toolCalls bool // the reply holds a tool call
@@ -35,6 +36,9 @@ func (s *stream) Next() (provider.Event, error) {
 		if s.closed {
 			return nil, io.EOF
 		}
+		if s.err != nil {
+			return nil, s.err
+		}
 		if err := s.ctx.Err(); err != nil {
 			return nil, err
 		}
@@ -48,13 +52,15 @@ func (s *stream) Next() (provider.Event, error) {
 		}
 		if !s.sse.Next() {
 			if err := s.sse.Err(); err != nil {
-				return nil, mapErr(s.ctx, err)
+				s.err = mapErr(s.ctx, err)
+			} else {
+				// The connection ended before response.completed: the reply was cut.
+				s.err = &provider.Error{Kind: provider.KindNetwork, Err: io.ErrUnexpectedEOF}
 			}
-			// The connection ended before response.completed: the reply was cut.
-			return nil, &provider.Error{Kind: provider.KindNetwork, Err: io.ErrUnexpectedEOF}
+			return nil, s.err
 		}
 		if err := s.handle(s.sse.Current()); err != nil {
-			s.done = true
+			s.err = err
 			return nil, err
 		}
 	}

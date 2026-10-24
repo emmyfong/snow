@@ -6,6 +6,7 @@ package openai
 
 import (
 	"context"
+	"errors"
 	"net/http"
 
 	sdk "github.com/openai/openai-go/v3"
@@ -74,7 +75,8 @@ func (p *Provider) options() ([]option.RequestOption, error) {
 }
 
 // CheckKey makes one model list call: nil means the key works, and an
-// error of KindBadKey means the API rejected it.
+// error of KindBadKey means the API rejected it. A 403 passes: the key is
+// valid, but a restricted key may not list models and can still reply.
 func (p *Provider) CheckKey(ctx context.Context) error {
 	opts, err := p.options()
 	if err != nil {
@@ -82,6 +84,10 @@ func (p *Provider) CheckKey(ctx context.Context) error {
 	}
 	models := sdk.NewModelService(opts...)
 	if _, err := models.List(ctx); err != nil {
+		var apiErr *sdk.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden {
+			return nil
+		}
 		return mapErr(ctx, err)
 	}
 	return nil

@@ -32,7 +32,7 @@ func TestErrorMapping(t *testing.T) {
 		text   string // the error text holds it
 	}{
 		{401, errBody("invalid_api_key", "invalid_request_error", "Incorrect API key provided."), nil, provider.KindBadKey, 0, "Incorrect API key"},
-		{403, errBody("", "invalid_request_error", "Project does not have access."), nil, provider.KindBadKey, 0, "does not have access"},
+		{403, errBody("", "invalid_request_error", "Project does not have access."), nil, provider.KindOther, 0, "does not have access"},
 		{404, errBody("model_not_found", "invalid_request_error", "The model `gpt-old` does not exist."), nil, provider.KindModelNotFound, 0, "gpt-old"},
 		{400, errBody("model_not_found", "invalid_request_error", "The model does not exist."), nil, provider.KindModelNotFound, 0, "does not exist"},
 		{429, errBody("rate_limit_exceeded", "requests", "Rate limit reached."), map[string]string{"retry-after-ms": "1500"}, provider.KindRateLimited, 1500 * time.Millisecond, "Rate limit reached"},
