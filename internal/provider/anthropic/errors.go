@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
 	"net/http"
-	"strconv"
 	"strings"
-	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providerhttp"
 )
 
 // mapErr turns an SDK failure into a *provider.Error. The SDK's error holds
@@ -36,7 +34,7 @@ func mapErr(ctx context.Context, err error) error {
 	cause := fmt.Errorf("HTTP %d %s: %s", apiErr.StatusCode, label, msg)
 	pe := &provider.Error{Kind: kindOf(apiErr.StatusCode, errType, msg), Err: cause}
 	if pe.Kind == provider.KindRateLimited && apiErr.Response != nil {
-		pe.RetryAfter = retryAfter(apiErr.Response.Header.Get("retry-after"))
+		pe.RetryAfter = providerhttp.RetryAfter(apiErr.Response.Header.Get("retry-after"))
 	}
 	return pe
 }
@@ -97,34 +95,7 @@ func apiMessage(e *sdk.Error) (errType, msg string) {
 		} `json:"error"`
 	}
 	if json.Unmarshal([]byte(e.RawJSON()), &body) == nil && body.Error.Type != "" {
-		return body.Error.Type, cut(body.Error.Message)
+		return body.Error.Type, providerhttp.Cut(body.Error.Message)
 	}
 	return string(e.Type()), "no message"
-}
-
-// maxMessage keeps a vendor's message short enough for one line in the UI.
-const maxMessage = 500
-
-func cut(msg string) string {
-	r := []rune(msg)
-	if len(r) <= maxMessage {
-		return msg
-	}
-	return string(r[:maxMessage]) + "..."
-}
-
-// maxRetryAfter caps a vendor's retry time, so a bad header cannot ask the
-// user to wait for days.
-const maxRetryAfter = time.Hour
-
-// retryAfter reads a retry-after header in seconds. Zero means unknown.
-func retryAfter(v string) time.Duration {
-	n, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
-	if err != nil || math.IsNaN(n) || math.IsInf(n, 0) || n <= 0 {
-		return 0
-	}
-	if n >= maxRetryAfter.Seconds() {
-		return maxRetryAfter
-	}
-	return time.Duration(n * float64(time.Second))
 }

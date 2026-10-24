@@ -3,7 +3,6 @@ package anthropic
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -15,14 +14,10 @@ import (
 	"testing"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
 const testKey = "sk-ant-api03-SECRET-test-key"
-
-// keys is a provider.KeySource with one fixed key.
-type keys string
-
-func (k keys) APIKey(string) (string, error) { return string(k), nil }
 
 // sseServer answers /v1/messages with a fixture and records the request.
 // Other paths, such as the model list, are not found, so the provider
@@ -52,25 +47,7 @@ func sseServer(t *testing.T, fixture string, got *map[string]any) *httptest.Serv
 	return srv
 }
 
-func newTest(url string) *Provider { return New(keys(testKey), WithBaseURL(url)) }
-
-// collect reads a stream to its end and returns the events and the error
-// that ended it (nil for io.EOF).
-func collect(t *testing.T, s provider.Stream) ([]provider.Event, error) {
-	t.Helper()
-	defer func() { _ = s.Close() }()
-	var evs []provider.Event
-	for {
-		ev, err := s.Next()
-		if errors.Is(err, io.EOF) {
-			return evs, nil
-		}
-		if err != nil {
-			return evs, err
-		}
-		evs = append(evs, ev)
-	}
-}
+func newTest(url string) *Provider { return New(providertest.Key(testKey), WithBaseURL(url)) }
 
 func streamFixture(t *testing.T, fixture string, req provider.Request) ([]provider.Event, map[string]any, error) {
 	t.Helper()
@@ -80,18 +57,8 @@ func streamFixture(t *testing.T, fixture string, req provider.Request) ([]provid
 	if err != nil {
 		t.Fatal(err)
 	}
-	evs, err := collect(t, s)
+	evs, err := providertest.Collect(t, s)
 	return evs, body, err
-}
-
-func only[T provider.Event](evs []provider.Event) []T {
-	var out []T
-	for _, e := range evs {
-		if v, ok := e.(T); ok {
-			out = append(out, v)
-		}
-	}
-	return out
 }
 
 // errServer answers every request with status, an API error body, and the
@@ -125,7 +92,7 @@ func streamErr(t *testing.T, p *Provider) error {
 	if err != nil {
 		return err
 	}
-	_, err = collect(t, s)
+	_, err = providertest.Collect(t, s)
 	return err
 }
 

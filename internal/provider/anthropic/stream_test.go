@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
 func TestStreamText(t *testing.T) {
@@ -27,7 +28,7 @@ func TestStreamText(t *testing.T) {
 		t.Fatal(err)
 	}
 	var text string
-	for _, d := range only[*provider.TextDelta](evs) {
+	for _, d := range providertest.Only[*provider.TextDelta](evs) {
 		text += d.Text
 	}
 	if text != "Hello, world" {
@@ -57,10 +58,10 @@ func TestStreamThinking(t *testing.T) {
 		t.Fatal(err)
 	}
 	var deltas string
-	for _, d := range only[*provider.ThinkingDelta](evs) {
+	for _, d := range providertest.Only[*provider.ThinkingDelta](evs) {
 		deltas += d.Text
 	}
-	blocks := only[*provider.Thinking](evs)
+	blocks := providertest.Only[*provider.Thinking](evs)
 	want := &provider.Thinking{Text: "The user greets me. I reply.", Signature: "sig-abc"}
 	if deltas != want.Text || len(blocks) != 1 || !reflect.DeepEqual(blocks[0], want) {
 		t.Fatalf("thinking deltas %q, blocks %v", deltas, blocks)
@@ -75,7 +76,7 @@ func TestStreamToolUse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	calls := only[*provider.ToolUse](evs)
+	calls := providertest.Only[*provider.ToolUse](evs)
 	if len(calls) != 1 || calls[0].ID != "toolu_01" || calls[0].Name != "read" {
 		t.Fatalf("tool calls = %v", calls)
 	}
@@ -138,7 +139,7 @@ func TestStreamUsage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	u := only[*provider.Usage](evs)
+	u := providertest.Only[*provider.Usage](evs)
 	want := provider.Usage{Input: 3, Output: 7, CacheRead: 2000, CacheWrite: 500}
 	if len(u) == 0 || *u[len(u)-1] != want {
 		t.Fatalf("last usage = %v, want %v", u, want)
@@ -152,7 +153,7 @@ func TestResponseModel(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if s := only[*provider.Start](evs); len(s) != 1 || s[0].Model != "claude-opus-5-5-20261001" {
+	if s := providertest.Only[*provider.Start](evs); len(s) != 1 || s[0].Model != "claude-opus-5-5-20261001" {
 		t.Fatalf("start = %v", s)
 	}
 }
@@ -165,7 +166,7 @@ func TestStreamCutOff(t *testing.T) {
 	if !errors.As(err, &pe) || pe.Kind != provider.KindNetwork {
 		t.Fatalf("error = %v, want KindNetwork", err)
 	}
-	if len(only[*provider.TextDelta](evs)) != 1 {
+	if len(providertest.Only[*provider.TextDelta](evs)) != 1 {
 		t.Fatalf("the partial text was lost: %v", evs)
 	}
 }
@@ -193,7 +194,7 @@ func TestStreamCancel(t *testing.T) {
 	before := runtime.NumGoroutine()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	s, err := New(keys(testKey), WithBaseURL(srv.URL), WithHTTPClient(client)).Stream(ctx, provider.Request{Model: "m"})
+	s, err := New(providertest.Key(testKey), WithBaseURL(srv.URL), WithHTTPClient(client)).Stream(ctx, provider.Request{Model: "m"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +226,7 @@ func TestStreamRedactedThinking(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := only[*provider.RedactedThinking](evs)
+	got := providertest.Only[*provider.RedactedThinking](evs)
 	if len(got) != 1 || got[0].Data != "EncryptedOpaqueData==" {
 		t.Fatalf("redacted thinking = %v", got)
 	}

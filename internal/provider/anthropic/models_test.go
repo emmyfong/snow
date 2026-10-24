@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
 func TestModels(t *testing.T) {
@@ -28,7 +29,7 @@ func TestCheckKey(t *testing.T) {
 	if err := newTest(srv.URL).CheckKey(context.Background()); err != nil {
 		t.Fatalf("good key: %v", err)
 	}
-	err := New(keys("sk-ant-wrong"), WithBaseURL(srv.URL)).CheckKey(context.Background())
+	err := New(providertest.Key("sk-ant-wrong"), WithBaseURL(srv.URL)).CheckKey(context.Background())
 	var pe *provider.Error
 	if !errors.As(err, &pe) || pe.Kind != provider.KindBadKey {
 		t.Fatalf("bad key: %v, want KindBadKey", err)
@@ -62,7 +63,7 @@ func TestThinkingOnlyWhenSupported(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if _, err := collect(t, s); err != nil {
+				if _, err := providertest.Collect(t, s); err != nil {
 					t.Fatal(err)
 				}
 			}
