@@ -1,5 +1,5 @@
 # Anthropic models that Snow offers, from the Models API on 2026-10-21.
-# TestEveryAnthropicModelPriced fails when one has no price entry.
+# TestEveryModelPriced fails when one has no price entry.
 claude-fable-5-1
 claude-fable-5
 claude-opus-5-5

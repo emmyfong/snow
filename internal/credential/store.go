@@ -247,3 +247,12 @@ func (s *Store) removeFromFile(provider string) error {
 }
 
 func (s *Store) path() string { return filepath.Join(s.dir, fileName) }
+
+// DefaultDir is the folder that holds the credentials file: ~/.snow.
+func DefaultDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("find home folder: %w", err)
+	}
+	return filepath.Join(home, ".snow"), nil
+}

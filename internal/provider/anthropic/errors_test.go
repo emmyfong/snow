@@ -18,6 +18,8 @@ import (
 	sdk "github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providerhttp"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
 func TestErrorMapping(t *testing.T) {
@@ -33,7 +35,7 @@ func TestErrorMapping(t *testing.T) {
 		text   string // the error text holds it
 	}{
 		{401, json("authentication_error", "invalid x-api-key"), nil, provider.KindBadKey, 0, "invalid x-api-key"},
-		{403, json("permission_error", "no access"), nil, provider.KindBadKey, 0, "no access"},
+		{403, json("permission_error", "no access"), nil, provider.KindOther, 0, "no access"},
 		{404, json("not_found_error", "model: claude-old"), nil, provider.KindModelNotFound, 0, "model: claude-old"},
 		{429, json("rate_limit_error", "slow down"), map[string]string{"retry-after": "30"}, provider.KindRateLimited, 30 * time.Second, "slow down"},
 		{529, json("overloaded_error", "Overloaded"), nil, provider.KindOverloaded, 0, "Overloaded"},
@@ -65,29 +67,8 @@ func TestErrorMapping(t *testing.T) {
 func TestLongMessageCut(t *testing.T) {
 	srv := errServer(t, 400, "invalid_request_error", strings.Repeat("x", 2000), nil)
 	err := streamErr(t, newTest(srv.URL))
-	if err == nil || len(err.Error()) > maxMessage+100 || !strings.HasSuffix(err.Error(), "...") {
+	if err == nil || len(err.Error()) > providerhttp.MaxMessage+100 || !strings.HasSuffix(err.Error(), "...") {
 		t.Fatalf("error text is %d bytes: %v", len(fmt.Sprint(err)), err)
-	}
-}
-
-func TestRetryAfter(t *testing.T) {
-	tests := map[string]time.Duration{
-		"30":                            30 * time.Second,
-		" 1.5 ":                         1500 * time.Millisecond,
-		"":                              0,
-		"0":                             0,
-		"-5":                            0,
-		"NaN":                           0,
-		"Inf":                           0,
-		"-Inf":                          0,
-		"1e30":                          time.Hour,
-		"7200":                          time.Hour,
-		"Wed, 21 Oct 2026 07:28:00 GMT": 0,
-	}
-	for in, want := range tests {
-		if got := retryAfter(in); got != want {
-			t.Errorf("retryAfter(%q) = %v, want %v", in, got, want)
-		}
 	}
 }
 
@@ -98,7 +79,7 @@ func TestErrorMidStream(t *testing.T) {
 	if !errors.As(err, &pe) || pe.Kind != provider.KindOverloaded {
 		t.Fatalf("error = %v, want KindOverloaded", err)
 	}
-	if len(only[*provider.TextDelta](evs)) != 1 {
+	if len(providertest.Only[*provider.TextDelta](evs)) != 1 {
 		t.Fatalf("events before the error were lost: %v", evs)
 	}
 }
@@ -149,7 +130,7 @@ func TestIgnoresSDKEnvironment(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "sk-ant-from-env")
 
 	rec := &recorder{}
-	if err := New(keys(testKey), WithHTTPClient(&http.Client{Transport: rec})).CheckKey(context.Background()); err != nil {
+	if err := New(providertest.Key(testKey), WithHTTPClient(&http.Client{Transport: rec})).CheckKey(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if len(rec.reqs) != 1 {

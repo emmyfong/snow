@@ -28,18 +28,34 @@ func ParseModelName(s string) (ModelName, error) {
 // String gives the full name, for example "anthropic/claude-opus-5-5".
 func (n ModelName) String() string { return n.Provider + "/" + n.Model }
 
-// Undated returns a model ID without a trailing "-YYYYMMDD" snapshot date,
-// for example claude-opus-5-5 for claude-opus-5-5-20261001. An ID without
-// a date comes back unchanged.
+// Undated returns a model ID without a trailing snapshot date, for example
+// claude-opus-5-5 for claude-opus-5-5-20261001 and gpt-5.5 for
+// gpt-5.5-2026-04-23. An ID without a date comes back unchanged.
 func Undated(id string) string {
-	const n = len("-20060102")
-	if len(id) <= n || id[len(id)-n] != '-' {
-		return id
-	}
-	for _, c := range id[len(id)-n+1:] {
-		if c < '0' || c > '9' {
-			return id
+	for _, layout := range []string{"20060102", "2006-01-02"} {
+		n := len(layout) + 1
+		if len(id) <= n || id[len(id)-n] != '-' {
+			continue
+		}
+		if datePattern(id[len(id)-n+1:], layout) {
+			return id[:len(id)-n]
 		}
 	}
-	return id[:len(id)-n]
+	return id
+}
+
+// datePattern reports whether s has a digit wherever layout has one and
+// the same character elsewhere.
+func datePattern(s, layout string) bool {
+	for i := range len(layout) {
+		c, l := s[i], layout[i]
+		if l >= '0' && l <= '9' {
+			if c < '0' || c > '9' {
+				return false
+			}
+		} else if c != l {
+			return false
+		}
+	}
+	return true
 }

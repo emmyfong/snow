@@ -16,7 +16,7 @@ Go standard layout. No `src/`.
 cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
-                     store, config, provider, credential,
+                     store, config, provider, credential, signin,
                      later: agent, tool, convstore, skills, gate,
                      editor, worktree
 pkg/api/             the only public package: API types for other clients
@@ -32,6 +32,8 @@ Import direction. depguard fails CI on a wrong import.
 
 ```
 cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store
+   │           │                       │
+   └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;
                │                       │     keys reach it through KeySource)
@@ -44,6 +46,8 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
 - `gofmt`, `go vet`, and `golangci-lint` must be clean. CI enforces them.
   CI pins the golangci-lint version in `.github/workflows/`. Run that same
   version locally before you push; another version reports other issues.
+  After you change a depguard rule, run `golangci-lint cache clean`: a stale
+  cache hides the new rule.
 - Accept interfaces, return structs. Wrap `charmbracelet/x` packages behind
   Snow's own interfaces in `internal/term`; they are experimental.
 - Wrap errors with `%w`. Never discard an error. Return typed errors at package
@@ -55,6 +59,12 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
   that stops reading blocks the write, and every reader of that lock with it.
 - The server's state belongs to one goroutine (ADR 0007). Add closures and
   fields, not locks. Code in that goroutine must never block.
+- A provider keeps its key on its vendor's host. Turn off the vendor SDK's
+  environment defaults (base URL, extra tokens, organization, profiles),
+  refuse redirects to another host (`internal/provider/providerhttp`),
+  rebuild SDK errors from the status and message only (the SDK's error
+  holds the request and its key header), and turn off SDK retries. Snow
+  never retries or switches models by itself.
 - On Windows, start background processes with `CREATE_NO_WINDOW`, never
   `DETACHED_PROCESS`. A process with no console makes each console program it
   runs open a visible window.

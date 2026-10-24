@@ -53,12 +53,27 @@ arrow keys and Enter.
 ```text
 snow           open the home page
 snow <name>    attach to session <name>, or create it
+snow auth      save or remove provider API keys
 snow version   print the version
 snow help      show the commands
 ```
 
 Inside a session, `Ctrl+b` then `d` goes back to the home page; the session
 keeps running. Press `Ctrl+b` and wait half a second to see every key.
+
+### Provider keys
+
+Snow connects to Anthropic (Claude) and OpenAI with your API key.
+
+```text
+snow auth login anthropic   check a key and save it
+snow auth logout openai     remove a saved key
+snow auth status            show which providers have a key
+```
+
+Keys go to the OS credential store, or to `~/.snow/credentials` (readable
+only by you) where the system has none. `ANTHROPIC_API_KEY` or
+`OPENAI_API_KEY`, when set, takes precedence over a saved key.
 
 ### Home page commands
 

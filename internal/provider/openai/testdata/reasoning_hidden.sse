@@ -1,0 +1,15 @@
+event: response.created
+data: {"type":"response.created","sequence_number":0,"response":{"id":"resp_1","object":"response","created_at":1761200000,"status":"in_progress","model":"gpt-6.1-sol-2026-09-30","output":[],"usage":null}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":1,"output_index":0,"item":{"type":"reasoning","id":"rs_2","summary":[],"encrypted_content":"ENC-2"}}
+
+event: response.output_item.done
+data: {"type":"response.output_item.done","sequence_number":2,"output_index":1,"item":{"type":"reasoning","id":"rs_3","summary":[{"type":"summary_text","text":"lost"}],"encrypted_content":null}}
+
+event: response.output_text.delta
+data: {"type":"response.output_text.delta","sequence_number":3,"item_id":"msg_1","output_index":0,"content_index":0,"delta":"Done.","logprobs":[]}
+
+event: response.completed
+data: {"type":"response.completed","sequence_number":4,"response":{"id":"resp_1","object":"response","created_at":1761200000,"status":"completed","model":"gpt-6.1-sol-2026-09-30","output":[{"type":"reasoning","id":"rs_2","summary":[],"encrypted_content":"ENC-2"},{"type":"reasoning","id":"rs_3","summary":[{"type":"summary_text","text":"lost"}],"encrypted_content":null}],"usage":{"input_tokens":120,"input_tokens_details":{"cached_tokens":100,"cache_write_tokens":0},"output_tokens":7,"output_tokens_details":{"reasoning_tokens":0},"total_tokens":127}}}
+

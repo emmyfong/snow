@@ -9,12 +9,12 @@ import (
 	"errors"
 	"net/http"
 	"sync"
-	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providerhttp"
 )
 
 // Name is the provider's part of a model name: "anthropic/claude-opus-5-5".
@@ -51,32 +51,8 @@ func New(keys provider.KeySource, opts ...Option) *Provider {
 	for _, o := range opts {
 		o(p)
 	}
-	p.http = guarded(p.http)
+	p.http = providerhttp.Guarded(p.http)
 	return p
-}
-
-// guarded copies c, or builds a client like the SDK's default, and makes
-// it refuse a redirect to another host: Go's client would send the
-// x-api-key header along.
-func guarded(c *http.Client) *http.Client {
-	var g http.Client
-	if c != nil {
-		g = *c
-	} else if t, ok := http.DefaultTransport.(*http.Transport); ok {
-		t = t.Clone()
-		t.ResponseHeaderTimeout = 10 * time.Minute
-		g.Transport = t
-	}
-	g.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if req.URL.Host != via[0].URL.Host {
-			return errors.New("refused a redirect to another host")
-		}
-		if len(via) >= 10 {
-			return errors.New("stopped after 10 redirects")
-		}
-		return nil
-	}
-	return &g
 }
 
 // Name implements provider.Provider.
@@ -106,13 +82,18 @@ func (p *Provider) sdkClient() (sdk.Client, error) {
 }
 
 // CheckKey makes one small model list call: nil means the key works, and
-// an error of KindBadKey means the API rejected it.
+// an error of KindBadKey means the API rejected it. A 403 passes: the key
+// is valid but may lack access to the model list.
 func (p *Provider) CheckKey(ctx context.Context) error {
 	c, err := p.sdkClient()
 	if err != nil {
 		return err
 	}
 	if _, err := c.Models.List(ctx, sdk.ModelListParams{Limit: sdk.Int(1)}); err != nil {
+		var apiErr *sdk.Error
+		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden {
+			return nil
+		}
 		return mapErr(ctx, err)
 	}
 	return nil
