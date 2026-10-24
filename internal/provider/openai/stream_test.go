@@ -48,6 +48,25 @@ func TestStreamReasoning(t *testing.T) {
 	}
 }
 
+// TestStreamReasoningItems: the summaries of two reasoning items are
+// apart in the streamed text too, not only in their Thinking events.
+func TestStreamReasoningItems(t *testing.T) {
+	evs, _, err := streamFixture(t, "reasoning_two.sse", provider.Request{Model: "gpt-6.1-sol"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var deltas string
+	for _, d := range providertest.Only[*provider.ThinkingDelta](evs) {
+		deltas += d.Text
+	}
+	if deltas != "First.\n\nSecond." {
+		t.Errorf("thinking deltas = %q", deltas)
+	}
+	if th := providertest.Only[*provider.Thinking](evs); len(th) != 2 {
+		t.Errorf("thinking events = %#v", th)
+	}
+}
+
 // TestStreamHiddenReasoning: reasoning with no summary arrives as
 // RedactedThinking; reasoning without encrypted content is not kept.
 func TestStreamHiddenReasoning(t *testing.T) {
@@ -133,7 +152,7 @@ func TestStreamErrorRepeats(t *testing.T) {
 			_, first = s.Next()
 		}
 		for range 3 {
-			if _, err := s.Next(); err != first {
+			if _, err := s.Next(); !errors.Is(err, first) {
 				t.Errorf("%s: Next after %v = %v, want the same error", fixture, first, err)
 			}
 		}

@@ -32,6 +32,15 @@ func TestRetryAfter(t *testing.T) {
 	}
 }
 
+func TestSeconds(t *testing.T) {
+	tests := map[float64]time.Duration{1.5: 1500 * time.Millisecond, 0: 0, -1: 0, 1e9: time.Hour}
+	for in, want := range tests {
+		if got := Seconds(in); got != want {
+			t.Errorf("Seconds(%v) = %v, want %v", in, got, want)
+		}
+	}
+}
+
 func TestCut(t *testing.T) {
 	if got := Cut("short"); got != "short" {
 		t.Errorf("Cut(short) = %q", got)

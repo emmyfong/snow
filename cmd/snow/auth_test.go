@@ -3,18 +3,17 @@ package main
 import (
 	"bytes"
 	"errors"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	"github.com/zalando/go-keyring"
 
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 	"github.com/emmyfong/snow/internal/signin"
 )
 
@@ -50,8 +49,8 @@ func TestParseAuthArgs(t *testing.T) {
 	}
 }
 
-// checks counts the key checks that reached the fake API of authTest.
-var checks atomic.Int32
+// keyServer is the fake API of the running authTest.
+var keyServer *providertest.KeyServer
 
 // authTest sets up `snow auth` with a temporary home folder, an in-memory
 // OS store, no keys in the environment, and key checks against a fake API
@@ -64,18 +63,8 @@ func authTest(t *testing.T) string {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
-	checks.Store(0)
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		checks.Add(1)
-		w.Header().Set("Content-Type", "application/json")
-		if r.Header.Get("X-Api-Key") != goodKey && r.Header.Get("Authorization") != "Bearer "+goodKey {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid key"}}`)
-			return
-		}
-		_, _ = io.WriteString(w, `{"object":"list","data":[],"has_more":false}`)
-	}))
-	t.Cleanup(srv.Close)
+	srv := providertest.NewKeyServer(t, goodKey)
+	keyServer = srv
 	old, oldIn := authProviders, stdin
 	authProviders = func() []signin.Provider {
 		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL})
@@ -133,7 +122,7 @@ func TestLoginBadInput(t *testing.T) {
 			t.Errorf("input %q: code %d, err %q, want %q", in, code, errOut, want)
 		}
 	}
-	if n := checks.Load(); n != 0 {
+	if n := keyServer.Requests(); n != 0 {
 		t.Fatalf("%d key checks went out for bad input", n)
 	}
 	if _, _, err := credential.New(dir, nil).Get("openai"); !errors.Is(err, credential.ErrNoKey) {

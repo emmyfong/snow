@@ -22,8 +22,9 @@ type stream struct {
 	err    error // the error that ended the reply; Next returns it again
 	closed bool
 
-	toolCalls bool // the reply holds a tool call
-	refused   bool // the reply holds a refusal
+	toolCalls bool   // the reply holds a tool call
+	refused   bool   // the reply holds a refusal
+	lastItem  string // the reasoning item whose summary streamed last
 }
 
 func newStream(ctx context.Context, sse *ssestream.Stream[responses.ResponseStreamEventUnion]) *stream {
@@ -82,9 +83,10 @@ func (s *stream) handle(ev responses.ResponseStreamEventUnion) error {
 		s.refused = true
 		s.queue = append(s.queue, &provider.TextDelta{Text: e.Delta})
 	case responses.ResponseReasoningSummaryPartAddedEvent:
-		if e.SummaryIndex > 0 {
+		if e.SummaryIndex > 0 || (s.lastItem != "" && e.ItemID != s.lastItem) {
 			s.queue = append(s.queue, &provider.ThinkingDelta{Text: summarySep})
 		}
+		s.lastItem = e.ItemID
 	case responses.ResponseReasoningSummaryTextDeltaEvent:
 		s.queue = append(s.queue, &provider.ThinkingDelta{Text: e.Delta})
 	case responses.ResponseOutputItemDoneEvent:

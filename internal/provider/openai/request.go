@@ -70,7 +70,11 @@ func toItems(m provider.Message, reasoning bool) ([]responses.ResponseInputItemU
 		case *provider.Text:
 			items = append(items, responses.ResponseInputItemParamOfMessage(b.Text, role))
 		case *provider.ToolUse:
-			items = append(items, responses.ResponseInputItemParamOfFunctionCall(string(b.Input), b.ID, b.Name))
+			args := string(b.Input)
+			if args == "" {
+				args = "{}"
+			}
+			items = append(items, responses.ResponseInputItemParamOfFunctionCall(args, b.ID, b.Name))
 		case *provider.ToolResult:
 			out := b.Content
 			if b.IsError {

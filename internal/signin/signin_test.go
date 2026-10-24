@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,29 +15,13 @@ import (
 
 	"github.com/emmyfong/snow/internal/credential"
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
 const (
 	goodKey = "sk-good-SECRET"
 	badKey  = "sk-bad-SECRET"
 )
-
-// vendor is a fake API for both providers: a model list that accepts only
-// goodKey, by either vendor's key header.
-func vendor(t *testing.T) *httptest.Server {
-	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if r.Header.Get("X-Api-Key") != goodKey && r.Header.Get("Authorization") != "Bearer "+goodKey {
-			w.WriteHeader(http.StatusUnauthorized)
-			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"authentication_error","message":"invalid key"}}`)
-			return
-		}
-		_, _ = io.WriteString(w, `{"object":"list","data":[],"has_more":false}`)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
-}
 
 // testSetup returns the built-in providers pointed at a fake API, and a
 // credential store in a temporary folder with an in-memory OS store and
@@ -48,7 +31,7 @@ func testSetup(t *testing.T) ([]Provider, *credential.Store, string) {
 	keyring.MockInit()
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
-	srv := vendor(t)
+	srv := providertest.NewKeyServer(t, goodKey)
 	dir := t.TempDir()
 	return ProvidersAt(BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}), credential.New(dir, nil), dir
 }

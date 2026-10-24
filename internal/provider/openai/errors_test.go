@@ -50,16 +50,17 @@ func TestErrorMapping(t *testing.T) {
 		{504, "", nil, provider.KindOverloaded, 0, "HTTP 504 Gateway Timeout"},
 	}
 	for _, tt := range tests {
-		srv := rawServer(t, tt.status, "application/json", tt.body, tt.header)
-		err := streamErr(t, newTest(srv.URL))
-		var pe *provider.Error
-		if !errors.As(err, &pe) || pe.Kind != tt.want || pe.RetryAfter != tt.retry {
-			t.Errorf("%d %s: got %v (%#v), want kind %v retry %v", tt.status, tt.body, err, pe, tt.want, tt.retry)
-			continue
-		}
-		if !strings.Contains(err.Error(), tt.text) {
-			t.Errorf("%d: message %q lacks %q", tt.status, err.Error(), tt.text)
-		}
+		t.Run(fmt.Sprintf("%d %s", tt.status, tt.text), func(t *testing.T) {
+			srv := rawServer(t, tt.status, "application/json", tt.body, tt.header)
+			err := streamErr(t, newTest(srv.URL))
+			var pe *provider.Error
+			if !errors.As(err, &pe) || pe.Kind != tt.want || pe.RetryAfter != tt.retry {
+				t.Fatalf("got %v (%#v), want kind %v retry %v", err, pe, tt.want, tt.retry)
+			}
+			if !strings.Contains(err.Error(), tt.text) {
+				t.Errorf("message %q lacks %q", err.Error(), tt.text)
+			}
+		})
 	}
 }
 

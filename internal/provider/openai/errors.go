@@ -123,7 +123,7 @@ func tooLong(msg string) bool {
 // retry-after in seconds. Zero means unknown.
 func retryAfter(h http.Header) time.Duration {
 	if ms, err := strconv.ParseFloat(strings.TrimSpace(h.Get("retry-after-ms")), 64); err == nil {
-		return providerhttp.RetryAfter(strconv.FormatFloat(ms/1000, 'f', -1, 64))
+		return providerhttp.Seconds(ms / 1000)
 	}
 	return providerhttp.RetryAfter(h.Get("retry-after"))
 }

@@ -145,6 +145,21 @@ func TestRequestTools(t *testing.T) {
 	}
 }
 
+// TestRequestEmptyToolInput: a tool call with no input goes out as {}, as
+// the stream gives it.
+func TestRequestEmptyToolInput(t *testing.T) {
+	msgs := []provider.Message{user("Hi"), {Role: provider.RoleAssistant, Content: []provider.Block{
+		&provider.ToolUse{ID: "call_1", Name: "now"},
+	}}}
+	_, body, err := streamFixture(t, "text.sse", provider.Request{Model: "gpt-6.1-sol", Messages: msgs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := items(t, body)[1]["arguments"]; got != "{}" {
+		t.Fatalf("arguments = %q, want {}", got)
+	}
+}
+
 func TestRequestBadInput(t *testing.T) {
 	bad := []provider.Request{
 		{Model: "m", Messages: []provider.Message{{Role: "system", Content: []provider.Block{&provider.Text{Text: "x"}}}}},
