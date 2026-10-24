@@ -33,11 +33,3 @@ type Env struct {
 	// against it.
 	Folder Folder
 }
-
-// Folder is a conversation folder: a path, and the WSL distribution it
-// belongs to, if any. A WSL folder and its Windows view are different
-// folders.
-type Folder struct {
-	Path   string
-	Distro string // empty for a folder of the OS Snow runs on
-}

@@ -20,6 +20,14 @@ func NewRegistry() *Registry { return &Registry{byName: map[string]Tool{}} }
 // builtin holds the tools that register themselves in init.
 var builtin = NewRegistry()
 
+// register adds t to the built-in registry. A duplicate name is a bug in
+// this package, so it panics.
+func register(t Tool) {
+	if err := builtin.Register(t); err != nil {
+		panic(err)
+	}
+}
+
 // Builtin returns a new registry with every built-in tool. The caller may
 // add more without changing the built-in set.
 func Builtin() *Registry {
