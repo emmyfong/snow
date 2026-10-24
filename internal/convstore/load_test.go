@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -149,15 +148,6 @@ func TestLoadErrors(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, nil},
-		{"unreadable", func(t *testing.T, path string) {
-			if runtime.GOOS == "windows" || os.Getuid() == 0 {
-				t.Skip("needs a file mode the user cannot read")
-			}
-			writeFile(meta(`{"type":"meta","version":1,"id":"`+testID+`"}`))(t, path)
-			if err := os.Chmod(path, 0); err != nil {
-				t.Fatal(err)
-			}
-		}, fs.ErrPermission},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -174,6 +164,15 @@ func TestLoadErrors(t *testing.T) {
 			}
 		})
 	}
+	t.Run("unreadable", func(t *testing.T) {
+		s := openStore(t)
+		path := writeRecords(t, s)
+		want := makeUnreadable(t, path)
+		var le *LoadError
+		if _, err := s.Load(testID); !errors.As(err, &le) || le.Path != path || !errors.Is(err, want) {
+			t.Fatalf("got %v, want a LoadError for %s wrapping %v", err, path, want)
+		}
+	})
 }
 
 // writeFile returns a setup that writes body to the file.

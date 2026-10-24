@@ -1,6 +1,7 @@
 package convstore
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -132,6 +133,20 @@ func TestListBadFile(t *testing.T) {
 	}
 }
 
+// TestListUnreadable: a file the user cannot open is listed with its error.
+func TestListUnreadable(t *testing.T) {
+	s := openStore(t)
+	path := writeRecords(t, s)
+	want := makeUnreadable(t, path)
+	es, err := s.ListAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(es) != 1 || es[0].Path != path || !errors.Is(es[0].Err, want) {
+		t.Fatalf("entries %+v, want an error wrapping %v", es, want)
+	}
+}
+
 func TestListTornLine(t *testing.T) {
 	s := openStore(t)
 	fixture(t, s, "torn.jsonl")
@@ -170,5 +185,14 @@ func TestListAll(t *testing.T) {
 	}
 	if got := ids(es[1:]); !reflect.DeepEqual(got, []string{"two", "one"}) {
 		t.Fatalf("ListAll = %v", ids(es))
+	}
+}
+
+// TestPartialPrefix: the list skips partial lines by their start, so
+// Encode must start each one with partialPrefix.
+func TestPartialPrefix(t *testing.T) {
+	line, err := Encode(&Partial{At: at, Text: "x"})
+	if err != nil || !bytes.HasPrefix(line, partialPrefix) {
+		t.Fatalf("partial line %q, %v", line, err)
 	}
 }

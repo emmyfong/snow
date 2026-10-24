@@ -2,6 +2,7 @@ package convstore
 
 import (
 	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -57,27 +58,34 @@ func TestAppendAfterTornLine(t *testing.T) {
 	}
 }
 
-// TestPartialRateLimit: many partials in one second give one write, with
-// the latest text, when the second ends.
+// TestPartialRateLimit: many partials within one wait give one write, with
+// the latest text, when the wait ends. The wait is short here, so a stalled
+// runner cannot end it early; TestPartialEvery checks the real one.
 func TestPartialRateLimit(t *testing.T) {
 	w := openWriter(t, openStore(t))
-	start := time.Now()
+	w.every = 300 * time.Millisecond
 	for i := range 50 {
 		if err := w.AppendPartial(Partial{At: at, Text: fmt.Sprint("text ", i)}); err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(2 * time.Millisecond)
 	}
-	if got := partials(t, w.Path()); len(got) != 0 && time.Since(start) < partialEvery {
-		t.Fatalf("partial written before the second ended: %q", got)
+	lines, _ := fileLines(t, w.Path())
+	if len(lines) != 1 {
+		t.Fatalf("%d lines written before the wait ended", len(lines)-1)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for len(partials(t, w.Path())) == 0 && time.Now().Before(deadline) {
-		time.Sleep(20 * time.Millisecond)
+	time.Sleep(3 * w.every)
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
 	}
-	time.Sleep(100 * time.Millisecond)
 	if got := partials(t, w.Path()); !reflect.DeepEqual(got, []string{"text 49"}) {
 		t.Fatalf("partials %q, want one with the latest text", got)
+	}
+}
+
+// TestPartialEvery: a Writer waits one second between partial writes.
+func TestPartialEvery(t *testing.T) {
+	if w := openWriter(t, openStore(t)); partialEvery != time.Second || w.every != partialEvery {
+		t.Fatalf("partialEvery %v, writer waits %v", partialEvery, w.every)
 	}
 }
 
@@ -99,13 +107,14 @@ func TestPartialThenRecord(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := openWriter(t, openStore(t))
+			w.every = 50 * time.Millisecond
 			if err := w.AppendPartial(Partial{At: at, Text: "half"}); err != nil {
 				t.Fatal(err)
 			}
 			if err := tt.then(w); err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(partialEvery + 200*time.Millisecond)
+			time.Sleep(4 * w.every)
 			var got []Type
 			for _, r := range records(t, w.Path())[1:] {
 				got = append(got, r.Type())
@@ -201,6 +210,33 @@ func TestFailedReplyKeepsPartial(t *testing.T) {
 	}
 }
 
+// TestNewLineAfterFailedWrite: a write that fails may leave half a line,
+// so the next record starts on a new line.
+func TestNewLineAfterFailedWrite(t *testing.T) {
+	w := openWriter(t, openStore(t))
+	if err := w.f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(&User{At: at, Text: "lost"}); err == nil {
+		t.Fatal("append to a closed file succeeded")
+	}
+	f, err := os.OpenFile(w.Path(), os.O_WRONLY|os.O_APPEND, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w.f = f
+	if err := w.Append(&User{At: at, Text: "next"}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(w.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(data, []byte("\n\n{\"type\":\"user\"")) {
+		t.Fatalf("next record does not start on a new line: %q", data)
+	}
+}
+
 // killEnv makes TestAppendKilled act as the child that appends until it is
 // killed.
 const killEnv = "SNOW_CONVSTORE_KILL_DIR"
@@ -214,7 +250,20 @@ func TestAppendKilled(t *testing.T) {
 	}
 	dir := filepath.Join(t.TempDir(), "conversations")
 	acked := killAppender(t, dir)
-	rs := records(t, filepath.Join(dir, testID+ext))[1:]
+	// The kill may tear the one record that was being written; only
+	// acknowledged records must be whole.
+	lines, torn := fileLines(t, filepath.Join(dir, testID+ext))
+	if torn {
+		lines = lines[:len(lines)-1]
+	}
+	var rs []Record
+	for i, l := range lines[1:] {
+		r, err := Decode(l)
+		if err != nil {
+			t.Fatalf("line %d %q: %v", i+2, l, err)
+		}
+		rs = append(rs, r)
+	}
 	if len(rs) < acked {
 		t.Fatalf("file has %d records, %d were acknowledged", len(rs), acked)
 	}

@@ -71,6 +71,10 @@ func TestListSpeed(t *testing.T) {
 	if err != nil || len(es) != 1000 {
 		t.Fatalf("%d entries, %v", len(es), err)
 	}
+	if raceDetector {
+		t.Logf("listed 1000 files in %v with the race detector; no limit", took)
+		return
+	}
 	if took > listLimit {
 		t.Fatalf("listing 1000 files took %v, limit %v", took, listLimit)
 	}

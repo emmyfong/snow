@@ -1,6 +1,7 @@
 package convstore
 
 import (
+	"bytes"
 	"cmp"
 	"encoding/json"
 	"fmt"
@@ -96,6 +97,9 @@ func (s *Store) ListAll() ([]Entry, error) {
 	return entries, nil
 }
 
+// partialPrefix starts every line that Encode writes for a Partial.
+var partialPrefix = []byte(`{"type":"partial"`)
+
 // head is the part of a record that the list needs from every line.
 type head struct {
 	Type Type      `json:"type"`
@@ -124,6 +128,11 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 			if r, err := Decode(b); err == nil {
 				meta, _ = r.(*Meta)
 			}
+			return
+		}
+		// Each partial holds the whole reply so far, so partial lines are
+		// the biggest; the reply or the next record dates the turn.
+		if bytes.HasPrefix(b, partialPrefix) {
 			return
 		}
 		var h head
