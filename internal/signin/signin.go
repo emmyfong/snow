@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/internal/provider/anthropic"
 	"github.com/emmyfong/snow/internal/provider/openai"
 )
@@ -82,18 +83,49 @@ func Find(ps []Provider, name string) (Provider, error) {
 	return Provider{}, fmt.Errorf("%w %q; use one of: %s", ErrUnknownProvider, name, strings.Join(names, ", "))
 }
 
+// Result is what Login did.
+type Result struct {
+	Source   credential.Source // where the key went
+	Shadowed bool              // an environment variable holds a key for the provider, and Snow uses it first
+}
+
 // Login checks k with the provider and saves it only if the provider
-// accepts it. It returns where the key went. A rejected key comes back as
-// a *provider.Error, wrapped.
-func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (credential.Source, error) {
+// accepts it. A rejected key comes back as a *provider.Error of
+// KindBadKey; a check that could not run (no network, a timeout, an
+// overload) saves nothing either and says so.
+func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (Result, error) {
+	if p.check == nil {
+		return Result{}, fmt.Errorf("%w %q", ErrUnknownProvider, p.Name)
+	}
 	if err := p.check(ctx, k.Reveal()); err != nil {
-		return 0, fmt.Errorf("%s did not accept the key: %w", p.Title, err)
+		var pe *provider.Error
+		if errors.As(err, &pe) && pe.Kind == provider.KindBadKey {
+			return Result{}, fmt.Errorf("%s did not accept the key: %w", p.Title, err)
+		}
+		return Result{}, fmt.Errorf("could not check the key with %s, so it was not saved: %w", p.Title, err)
 	}
 	src, err := s.Set(p.Name, k)
 	if err != nil {
-		return src, fmt.Errorf("save the key: %w", err)
+		return Result{Source: src}, fmt.Errorf("save the key: %w", err)
 	}
-	return src, nil
+	_, now, err := s.Get(p.Name)
+	return Result{Source: src, Shadowed: err == nil && now == credential.SourceEnv}, nil
+}
+
+// Stored reports whether a key is saved for the provider, even one that
+// cannot be read, so Logout can remove it. It returns an error matching
+// credential.ErrInEnvironment when an environment variable holds the key,
+// which Snow cannot remove.
+func (p Provider) Stored(s Store) (bool, error) {
+	_, src, err := s.Get(p.Name)
+	switch {
+	case err == nil && src == credential.SourceEnv:
+		return false, fmt.Errorf("%w (%s)", credential.ErrInEnvironment, credential.EnvVar(p.Name))
+	case errors.Is(err, credential.ErrNoKey):
+		return false, nil
+	default:
+		return true, nil
+	}
 }
 
 // Logout removes the provider's saved key. It returns an error matching

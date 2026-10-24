@@ -6,8 +6,10 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/zalando/go-keyring"
@@ -48,6 +50,9 @@ func TestParseAuthArgs(t *testing.T) {
 	}
 }
 
+// checks counts the key checks that reached the fake API of authTest.
+var checks atomic.Int32
+
 // authTest sets up `snow auth` with a temporary home folder, an in-memory
 // OS store, no keys in the environment, and key checks against a fake API
 // that accepts only goodKey. It returns the folder of the credentials file.
@@ -59,7 +64,9 @@ func authTest(t *testing.T) string {
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("ANTHROPIC_API_KEY", "")
 	t.Setenv("OPENAI_API_KEY", "")
+	checks.Store(0)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		checks.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		if r.Header.Get("X-Api-Key") != goodKey && r.Header.Get("Authorization") != "Bearer "+goodKey {
 			w.WriteHeader(http.StatusUnauthorized)
@@ -111,11 +118,39 @@ func TestLoginAPIKey(t *testing.T) {
 	}
 }
 
-func TestLoginNoInput(t *testing.T) {
-	authTest(t)
-	for _, in := range []string{"", "\n", "two words\n"} {
-		if code, _, errOut := auth(t, in, "login", "openai"); code != 1 || errOut == "" {
-			t.Errorf("input %q: code %d, err %q", in, code, errOut)
+// TestLoginBadInput: input that is not a key fails before any request
+// and saves nothing.
+func TestLoginBadInput(t *testing.T) {
+	dir := authTest(t)
+	tests := map[string]string{
+		"":            "no input",
+		"\n":          "one word with no spaces",
+		"two words\n": "one word with no spaces",
+	}
+	for in, want := range tests {
+		code, _, errOut := auth(t, in, "login", "openai")
+		if code != 1 || !strings.Contains(errOut, want) {
+			t.Errorf("input %q: code %d, err %q, want %q", in, code, errOut, want)
+		}
+	}
+	if n := checks.Load(); n != 0 {
+		t.Fatalf("%d key checks went out for bad input", n)
+	}
+	if _, _, err := credential.New(dir, nil).Get("openai"); !errors.Is(err, credential.ErrNoKey) {
+		t.Fatalf("bad input saved a key: %v", err)
+	}
+}
+
+// TestLoginLineEndings: a key piped from Windows cmd.exe ends with
+// " \r\n", and one from printf may have no line end at all.
+func TestLoginLineEndings(t *testing.T) {
+	for _, in := range []string{goodKey + " \r\n", goodKey} {
+		dir := authTest(t)
+		if code, _, errOut := auth(t, in, "login", "anthropic"); code != 0 {
+			t.Fatalf("input %q: code %d, err %q", in, code, errOut)
+		}
+		if k, _, err := credential.New(dir, nil).Get("anthropic"); err != nil || k.Reveal() != goodKey {
+			t.Fatalf("input %q: saved key differs: %v", in, err)
 		}
 	}
 }
@@ -142,7 +177,7 @@ func TestLogoutConfirm(t *testing.T) {
 	if _, _, err := credential.New(dir, nil).Get("openai"); err != nil {
 		t.Fatalf("the key went after n: %v", err)
 	}
-	if code, out, _ := auth(t, "y\n", "logout", "openai"); code != 0 || !strings.Contains(out, "Removed the openai key.") {
+	if code, out, _ := auth(t, "y", "logout", "openai"); code != 0 || !strings.Contains(out, "Removed the openai key.") {
 		t.Fatalf("answer y: code %d, out %q", code, out)
 	}
 	if _, _, err := credential.New(dir, nil).Get("openai"); !errors.Is(err, credential.ErrNoKey) {
@@ -157,7 +192,7 @@ func TestLogoutEnvironment(t *testing.T) {
 	authTest(t)
 	t.Setenv("ANTHROPIC_API_KEY", goodKey)
 	code, _, errOut := auth(t, "y\n", "logout", "anthropic")
-	if code != 1 || !strings.Contains(errOut, "comes from ANTHROPIC_API_KEY") {
+	if code != 1 || !strings.Contains(errOut, "environment (ANTHROPIC_API_KEY). Unset it") {
 		t.Fatalf("code %d, err %q", code, errOut)
 	}
 }
@@ -194,5 +229,51 @@ func TestSessionNamedAuth(t *testing.T) {
 	}
 	if !strings.Contains(usage, "snow auth") || !strings.Contains(usage, "server, and auth are commands") {
 		t.Fatalf("usage does not list auth:\n%s", usage)
+	}
+}
+
+// writeCredentials writes a credentials file with a line Snow cannot read
+// as a key, as a hand edit can leave.
+func writeCredentials(t *testing.T, dir, body string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "credentials"), []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestUnreadableKey: status says the key cannot be read, and logout still
+// removes it.
+func TestUnreadableKey(t *testing.T) {
+	dir := authTest(t)
+	writeCredentials(t, dir, "anthropic = two words\n")
+	if _, out, _ := auth(t, "", "status"); !strings.Contains(out, "anthropic  cannot read the key:") {
+		t.Fatalf("status: %q", out)
+	}
+	if code, out, errOut := auth(t, "y\n", "logout", "anthropic"); code != 0 || !strings.Contains(out, "Removed the anthropic key.") {
+		t.Fatalf("logout: code %d, out %q, err %q", code, out, errOut)
+	}
+	if _, out, _ := auth(t, "", "status"); !strings.Contains(out, "anthropic  no key.") {
+		t.Fatalf("status after logout: %q", out)
+	}
+}
+
+// TestLoginCouldNotCheck: with the vendor unreachable, login saves nothing
+// and does not blame the key.
+func TestLoginCouldNotCheck(t *testing.T) {
+	dir := authTest(t)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close()
+	authProviders = func() []signin.Provider {
+		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL})
+	}
+	code, _, errOut := auth(t, goodKey+"\n", "login", "openai")
+	if code != 1 || !strings.Contains(errOut, "could not check the key") || strings.Contains(errOut, "did not accept") {
+		t.Fatalf("code %d, err %q", code, errOut)
+	}
+	if _, _, err := credential.New(dir, nil).Get("openai"); !errors.Is(err, credential.ErrNoKey) {
+		t.Fatalf("saved without a check: %v", err)
 	}
 }

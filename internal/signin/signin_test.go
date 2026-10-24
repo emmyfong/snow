@@ -65,9 +65,9 @@ func key(t *testing.T, s string) credential.Key {
 func TestLogin(t *testing.T) {
 	ps, store, _ := testSetup(t)
 	for _, p := range ps {
-		src, err := p.Login(context.Background(), store, key(t, goodKey))
-		if err != nil || src != credential.SourceOS {
-			t.Fatalf("%s: Login = %v, %v", p.Name, src, err)
+		res, err := p.Login(context.Background(), store, key(t, goodKey))
+		if err != nil || res != (Result{Source: credential.SourceOS}) {
+			t.Fatalf("%s: Login = %+v, %v", p.Name, res, err)
 		}
 		got, _, err := store.Get(p.Name)
 		if err != nil || got.Reveal() != goodKey {
@@ -95,6 +95,70 @@ func TestLoginRejected(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "credentials")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("a credentials file was written: %v", err)
+	}
+}
+
+// TestLoginCouldNotCheck: when the check cannot run, nothing is saved and
+// the error does not blame the key.
+func TestLoginCouldNotCheck(t *testing.T) {
+	_, store, _ := testSetup(t)
+	srv := httptest.NewServer(http.NotFoundHandler())
+	srv.Close()
+	for _, p := range ProvidersAt(BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}) {
+		_, err := p.Login(context.Background(), store, key(t, goodKey))
+		if err == nil || !strings.Contains(err.Error(), "could not check the key") || strings.Contains(err.Error(), "did not accept") {
+			t.Fatalf("%s: Login = %v", p.Name, err)
+		}
+		if _, _, err := store.Get(p.Name); !errors.Is(err, credential.ErrNoKey) {
+			t.Fatalf("%s: saved after a failed check: %v", p.Name, err)
+		}
+	}
+}
+
+// TestLoginShadowed: Login says when an environment variable will be used
+// before the key it saved.
+func TestLoginShadowed(t *testing.T) {
+	ps, store, _ := testSetup(t)
+	t.Setenv("OPENAI_API_KEY", "sk-env")
+	res, err := ps[1].Login(context.Background(), store, key(t, goodKey))
+	if err != nil || !res.Shadowed || res.Source != credential.SourceOS {
+		t.Fatalf("Login = %+v, %v; want saved and shadowed", res, err)
+	}
+}
+
+func TestLoginZeroProvider(t *testing.T) {
+	_, store, _ := testSetup(t)
+	if _, err := (Provider{Name: "x"}).Login(context.Background(), store, key(t, goodKey)); !errors.Is(err, ErrUnknownProvider) {
+		t.Fatalf("Login on a zero Provider = %v", err)
+	}
+}
+
+// TestStored: nothing saved, a saved key, a key that cannot be read, and a
+// key in the environment.
+func TestStored(t *testing.T) {
+	ps, store, dir := testSetup(t)
+	p := ps[0]
+	if ok, err := p.Stored(store); ok || err != nil {
+		t.Fatalf("empty: %v, %v", ok, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "credentials"), []byte("anthropic = two words\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := p.Stored(store); !ok || err != nil {
+		t.Fatalf("unreadable: %v, %v; want stored", ok, err)
+	}
+	if err := p.Logout(store); err != nil {
+		t.Fatalf("Logout of an unreadable key: %v", err)
+	}
+	if _, err := p.Login(context.Background(), store, key(t, goodKey)); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := p.Stored(store); !ok || err != nil {
+		t.Fatalf("saved: %v, %v", ok, err)
+	}
+	t.Setenv("ANTHROPIC_API_KEY", goodKey)
+	if _, err := p.Stored(store); !errors.Is(err, credential.ErrInEnvironment) || !strings.Contains(err.Error(), "ANTHROPIC_API_KEY") {
+		t.Fatalf("environment: %v", err)
 	}
 }
 

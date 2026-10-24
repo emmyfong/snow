@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 	"time"
 
@@ -90,25 +91,25 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 		return 1
 	}
 	store := credential.New(dir, func(msg string) { _, _ = fmt.Fprintln(stdout, msg) })
-	in := bufio.NewReader(stdin)
-	switch cmd.action {
-	case authStatus:
+	if cmd.action == authStatus {
 		return authStatusCmd(store, stdout)
-	case authLogout:
-		return authLogoutCmd(store, cmd.provider, in, stdout, stderr)
-	default:
-		return authLoginCmd(store, cmd.provider, in, stdout, stderr)
 	}
-}
-
-func authLoginCmd(store *credential.Store, name string, in *bufio.Reader, stdout, stderr io.Writer) int {
-	p, err := signin.Find(authProviders(), name)
+	// parseAuth has already found the provider.
+	p, err := signin.Find(authProviders(), cmd.provider)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 2
 	}
+	in := bufio.NewReader(stdin)
+	if cmd.action == authLogout {
+		return authLogoutCmd(store, p, in, stdout, stderr)
+	}
+	return authLoginCmd(store, p, in, stdout, stderr)
+}
+
+func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
 	_, _ = fmt.Fprintf(stdout, "Create a %s API key at %s\n", p.Title, p.KeyURL)
-	secret, err := readSecret(in, stdout, "Paste the key (it does not show): ")
+	secret, err := readSecret(in, stderr, "Paste the key (it does not show): ")
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
@@ -121,36 +122,28 @@ func authLoginCmd(store *credential.Store, name string, in *bufio.Reader, stdout
 	_, _ = fmt.Fprintf(stdout, "Checking the key with %s...\n", p.Title)
 	ctx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
-	src, err := p.Login(ctx, store, k)
+	res, err := p.Login(ctx, store, k)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "Saved the %s key in the %s.\n", p.Name, src)
-	if v := credential.EnvVar(p.Name); os.Getenv(v) != "" {
-		_, _ = fmt.Fprintf(stdout, "%s is set, and Snow uses it before the saved key. Unset it to use the saved key.\n", v)
+	_, _ = fmt.Fprintf(stdout, "Saved the %s key in the %s.\n", p.Name, res.Source)
+	if res.Shadowed {
+		_, _ = fmt.Fprintf(stdout, "%s is set, and Snow uses it before the saved key. Unset it to use the saved key.\n", credential.EnvVar(p.Name))
 	}
 	return 0
 }
 
-func authLogoutCmd(store *credential.Store, name string, in *bufio.Reader, stdout, stderr io.Writer) int {
-	p, err := signin.Find(authProviders(), name)
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "snow:", err)
-		return 2
-	}
-	switch _, src, err := store.Get(p.Name); {
-	case errors.Is(err, credential.ErrNoKey):
+func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
+	switch stored, err := p.Stored(store); {
+	case err != nil:
+		_, _ = fmt.Fprintf(stderr, "snow: %v. Unset it to sign out.\n", err)
+		return 1
+	case !stored:
 		_, _ = fmt.Fprintf(stdout, "No %s key is saved.\n", p.Name)
 		return 0
-	case err != nil:
-		_, _ = fmt.Fprintln(stderr, "snow:", err)
-		return 1
-	case src == credential.SourceEnv:
-		_, _ = fmt.Fprintf(stderr, "snow: the %s key comes from %s. Unset it to sign out.\n", p.Name, credential.EnvVar(p.Name))
-		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "Remove the saved %s key? [y/N] ", p.Name)
+	_, _ = fmt.Fprintf(stderr, "Remove the saved %s key? [y/N] ", p.Name)
 	answer, err := in.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
@@ -168,7 +161,7 @@ func authLogoutCmd(store *credential.Store, name string, in *bufio.Reader, stdou
 	return 0
 }
 
-func authStatusCmd(store *credential.Store, stdout io.Writer) int {
+func authStatusCmd(store signin.Store, stdout io.Writer) int {
 	for _, s := range signin.Statuses(authProviders(), store) {
 		var line string
 		switch {
@@ -186,12 +179,13 @@ func authStatusCmd(store *credential.Store, stdout io.Writer) int {
 
 // readSecret reads one line without showing it when stdin is a terminal.
 // From a pipe, for example `echo $KEY | snow auth login openai`, it reads
-// the first line.
-func readSecret(in *bufio.Reader, stdout io.Writer, prompt string) (string, error) {
+// the first line. The prompt goes to stderr, so it shows even when stdout
+// goes to a file.
+func readSecret(in *bufio.Reader, stderr io.Writer, prompt string) (string, error) {
+	_, _ = fmt.Fprint(stderr, prompt)
 	if f, ok := stdin.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		_, _ = fmt.Fprint(stdout, prompt)
-		b, err := term.ReadPassword(int(f.Fd()))
-		_, _ = fmt.Fprintln(stdout)
+		b, err := readHidden(int(f.Fd()))
+		_, _ = fmt.Fprintln(stderr)
 		if err != nil {
 			return "", fmt.Errorf("read the key: %w", err)
 		}
@@ -202,4 +196,30 @@ func readSecret(in *bufio.Reader, stdout io.Writer, prompt string) (string, erro
 		return "", errors.New("read the key: no input")
 	}
 	return line, nil
+}
+
+// readHidden is term.ReadPassword that gives the terminal back on Ctrl+C:
+// ReadPassword turns echo off and restores it only when it returns, but
+// Ctrl+C ends the process first.
+func readHidden(fd int) ([]byte, error) {
+	state, err := term.GetState(fd)
+	if err != nil {
+		return nil, fmt.Errorf("read the terminal state: %w", err)
+	}
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, os.Interrupt)
+	done := make(chan struct{})
+	defer func() {
+		signal.Stop(stop)
+		close(done)
+	}()
+	go func() {
+		select {
+		case <-stop:
+			_ = term.Restore(fd, state)
+			os.Exit(130)
+		case <-done:
+		}
+	}()
+	return term.ReadPassword(fd)
 }
