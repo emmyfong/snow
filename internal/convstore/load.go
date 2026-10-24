@@ -1,0 +1,164 @@
+package convstore
+
+import (
+	"fmt"
+)
+
+// Problem is a line that Load dropped or skipped.
+type Problem struct {
+	Line int
+	// Torn is true for a last line with no newline, cut off by a crash; it
+	// is dropped. Otherwise a Damaged record marks the line's place.
+	Torn bool
+	Err  error
+}
+
+// String describes the problem for a log line.
+func (p Problem) String() string {
+	if p.Torn {
+		return fmt.Sprintf("line %d: torn last line dropped: %v", p.Line, p.Err)
+	}
+	return fmt.Sprintf("line %d: damaged line skipped: %v", p.Line, p.Err)
+}
+
+// resultLost is the content of a tool result that Load adds for a tool call
+// whose result was never saved.
+const resultLost = "result lost"
+
+// Conversation is a conversation file as Load read it.
+type Conversation struct {
+	Path string
+	Meta Meta
+	// Records follow the meta record, in file order, with Load's changes:
+	// partial text becomes a cut-off Assistant, a lost tool result gets a
+	// stand-in, and a damaged line becomes a Damaged record.
+	Records  []Record
+	Problems []Problem
+	// MidTurn is true when the file ends in the middle of a turn: after a
+	// user message, with no whole reply or interruption after it. The
+	// caller shows the turn as interrupted; Load does not write the file.
+	MidTurn bool
+}
+
+// Load reads the conversation id. It never writes, renames, or deletes the
+// file. A file it cannot load gives a *LoadError; a bad id gives an error
+// wrapping ErrBadID.
+func (s *Store) Load(id string) (*Conversation, error) {
+	path, err := s.Path(id)
+	if err != nil {
+		return nil, err
+	}
+	lines, err := readLines(path)
+	if err != nil {
+		return nil, &LoadError{Path: path, Err: err}
+	}
+	var meta *Meta
+	if len(lines) > 0 {
+		meta, _ = lines[0].rec.(*Meta)
+	}
+	if err := checkMeta(meta, id); err != nil {
+		return nil, &LoadError{Path: path, Err: err}
+	}
+	c := &Conversation{Path: path, Meta: *meta}
+	c.build(lines[1:])
+	return c, nil
+}
+
+// checkMeta checks the meta record of the file of conversation id. A nil
+// meta means the first line is not a meta record.
+func checkMeta(meta *Meta, id string) error {
+	switch {
+	case meta == nil:
+		return ErrNoMeta
+	case meta.Version < 1:
+		return fmt.Errorf("%w: the meta record has no version", ErrNoMeta)
+	case meta.Version > Version:
+		return fmt.Errorf("%w: version %d, this Snow reads up to %d", ErrNewerVersion, meta.Version, Version)
+	case meta.ID != id:
+		return fmt.Errorf("%w: %q", ErrIDMismatch, meta.ID)
+	}
+	return nil
+}
+
+// build turns the lines after the meta record into Records, Problems, and
+// MidTurn.
+func (c *Conversation) build(lines []line) {
+	var (
+		partial *Partial // the latest partial text since the last reply
+		calls   []string // tool calls of the last reply with no result yet
+		open    bool     // a turn has started and not ended
+	)
+	// settle runs where a turn ends or a new reply starts. Partial text
+	// still waiting there lost its reply, and calls still open lost their
+	// results. Other records, such as a rename, can come mid-turn and do
+	// not settle.
+	settle := func() {
+		if partial != nil {
+			c.Records = append(c.Records, &Assistant{At: partial.At, CutOff: true,
+				Blocks: []Block{{Kind: BlockText, Text: partial.Text}}})
+			partial = nil
+		}
+		for _, id := range calls {
+			c.Records = append(c.Records, &ToolResult{ToolUseID: id, Content: resultLost, IsError: true, Lost: true})
+		}
+		calls = nil
+	}
+	for i, l := range lines {
+		if l.err != nil {
+			if i == len(lines)-1 && !l.ended {
+				c.Problems = append(c.Problems, Problem{Line: l.n, Torn: true, Err: l.err})
+				continue
+			}
+			c.Problems = append(c.Problems, Problem{Line: l.n, Err: l.err})
+			c.Records = append(c.Records, &Damaged{Line: l.n, Err: l.err})
+			continue
+		}
+		switch r := l.rec.(type) {
+		case *Partial:
+			partial = r
+			continue
+		case *Assistant:
+			partial = nil
+			settle()
+			c.Records = append(c.Records, r)
+			calls = toolCalls(r)
+			open = r.Stop == StopToolUse
+			continue
+		case *ToolResult:
+			calls = remove(calls, r.ToolUseID)
+		case *Approval:
+		case *User:
+			settle()
+			open = true
+		case *Interruption:
+			settle()
+			open = false
+		}
+		c.Records = append(c.Records, l.rec)
+	}
+	if partial != nil || len(calls) > 0 {
+		open = true
+	}
+	settle()
+	c.MidTurn = open
+}
+
+// toolCalls returns the IDs of the tool calls in a reply.
+func toolCalls(a *Assistant) []string {
+	var ids []string
+	for _, b := range a.Blocks {
+		if b.Kind == BlockToolUse {
+			ids = append(ids, b.ID)
+		}
+	}
+	return ids
+}
+
+func remove(ids []string, id string) []string {
+	for i, v := range ids {
+		if v == id {
+			return append(ids[:i:i], ids[i+1:]...)
+		}
+	}
+	return ids
+}

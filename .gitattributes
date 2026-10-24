@@ -3,3 +3,5 @@
 internal/shell/hooks/** text eol=lf
 # Golden files are compared byte for byte; never convert their line endings.
 *.golden -text
+# Conversation fixtures test exact line endings, torn lines included.
+internal/convstore/testdata/** -text

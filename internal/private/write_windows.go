@@ -42,6 +42,6 @@ func Remove(path string) error {
 	return err
 }
 
-// syncDir does nothing: Windows cannot flush a folder handle, and NTFS
-// journals the rename itself.
-func syncDir(string) error { return nil }
+// SyncDir does nothing: Windows cannot flush a folder handle, and NTFS
+// journals renames and new files itself.
+func SyncDir(string) error { return nil }

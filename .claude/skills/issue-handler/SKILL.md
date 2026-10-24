@@ -142,6 +142,12 @@ Pass the title in single quotes and the body only through `--body-file`.
 If a sub-issue was left out, do not close the epic. Leave out its `Closes`
 line and tell the user which sub-issues remain open.
 
+GitHub closes a linked epic when its PR merges, even without a `Closes`
+line, because `gh issue develop` linked the branch to it. So when a
+sub-issue was left out, tell the user in the step 7 report that the epic
+will close on merge. In step 8, after you confirm the merge, reopen the
+epic with a comment that names the open sub-issues.
+
 ## 7. Report and stop
 
 Tell the user: the PR link, the issues it closes, what changed, and anything

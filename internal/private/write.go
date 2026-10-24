@@ -47,7 +47,7 @@ func WriteAtomic(path string, write func(io.Writer) error) (err error) {
 	if err := Rename(tmp, path); err != nil {
 		return fmt.Errorf("replace %s: %w", filepath.Base(path), err)
 	}
-	if err := syncDir(filepath.Dir(path)); err != nil {
+	if err := SyncDir(filepath.Dir(path)); err != nil {
 		return fmt.Errorf("flush folder: %w", err)
 	}
 	return nil
