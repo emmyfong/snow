@@ -45,3 +45,22 @@ func TestHomeClientSeesSessions(t *testing.T) {
 	}
 	nextSessionList(t, home, func(l *api.SessionList) bool { return len(l.Sessions) == 0 })
 }
+
+// TestAttachedClientSeesSessions: an attached client, whose session screen
+// can open the session list, also gets the list whenever it changes (#88).
+func TestAttachedClientSeesSessions(t *testing.T) {
+	s := newTestServer(t)
+	worker := connect(t, s, 80, 24)
+	worker.Send(&api.Attach{Session: "work", Create: true})
+	nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 1 && l.Sessions[0].Attached == 1 })
+
+	other := connect(t, s, 80, 24)
+	other.Send(&api.Attach{Session: "api", Create: true})
+	nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 2 })
+
+	other.Send(&api.RenameSession{Session: "api", Name: "backend"})
+	l := nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 2 && l.Sessions[0].Name == "backend" })
+	if l.Sessions[1].Name != "work" {
+		t.Fatalf("sessions %+v, want backend and work", l.Sessions)
+	}
+}

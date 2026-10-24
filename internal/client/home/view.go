@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -82,11 +83,7 @@ func (m *Model) sessionList(x, width int, b band, sessions []api.SessionInfo, se
 		return append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, x)[0])
 	}
 	shown := sessions[b.first : b.first+b.count]
-	items := make([]ui.ListItem, len(shown))
-	for i, s := range shown {
-		items[i] = ui.ListItem{Cols: []string{s.Name, state(s), ago(m.now().Sub(s.LastUsed))}}
-	}
-	list := ui.List(th, ui.ListOptions{Items: items, Selected: selected - b.first, Width: width})
+	list := ui.List(th, ui.ListOptions{Items: sessionlist.Items(shown, m.now()), Selected: selected - b.first, Width: width})
 	return append(lines, indent(strings.Split(list, "\n"), x)...)
 }
 
@@ -121,19 +118,7 @@ func (m *Model) hints() []ui.Hint {
 	if m.commanding() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "tab", Desc: "complete"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "clear"}}
 	}
-	return []ui.Hint{{Key: "enter", Desc: "open or create"}, {Key: "/", Desc: "commands"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: m.escHint()}}
-}
-
-// state describes a session in a few words.
-func state(s api.SessionInfo) string {
-	switch s.Attached {
-	case 0:
-		return s.State
-	case 1:
-		return s.State + ", 1 client"
-	default:
-		return s.State + ", " + strconv.Itoa(s.Attached) + " clients"
-	}
+	return []ui.Hint{{Key: "enter", Desc: "open or create"}, {Key: "/", Desc: "commands"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "quit"}}
 }
 
 func indent(rows []string, x int) []string {
@@ -147,15 +132,6 @@ func indent(rows []string, x int) []string {
 
 func center(s string, width int) string {
 	return strings.Repeat(" ", max((width-ansi.StringWidth(s))/2, 0)) + s
-}
-
-// escHint says what Esc does: go back to the session the page was opened
-// from, or quit.
-func (m *Model) escHint() string {
-	if m.back != "" {
-		return "back to " + m.back
-	}
-	return "quit"
 }
 
 // maxNotes bounds the note lines on the page; the rest are counted.

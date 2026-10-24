@@ -39,9 +39,6 @@ func (m *Model) namingKey(k tea.Key) tea.Cmd {
 		}
 		m.naming = nil
 		m.done()
-		if n.session == m.back {
-			m.back = n.name
-		}
 		return sendCmd(&api.RenameSession{Session: n.session, Name: n.name})
 	default:
 		if s, ok := keys.Edit(n.name, k); ok {

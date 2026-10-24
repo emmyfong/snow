@@ -232,9 +232,11 @@ const (
 	StateSaved   = "saved"
 )
 
-// SessionList lists the server's sessions. Notes holds problems with saved
-// sessions the user should know about: a file the server could not read
-// and moved aside, with both paths, or saving that fails.
+// SessionList lists the server's sessions. The server sends it to every
+// client, attached or not, whenever the list changes; since protocol 6 an
+// attached client gets it too, for its session list. Notes holds problems
+// with saved sessions the user should know about: a file the server could
+// not read and moved aside, with both paths, or saving that fails.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
 	Notes    []string      `json:"notes,omitempty"`

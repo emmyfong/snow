@@ -219,23 +219,6 @@ func TestBadNamesAreRefused(t *testing.T) {
 	}
 }
 
-// TestBackFollowsRenameAndKill: Esc goes back to the session Ctrl+b s came
-// from, under its new name after /rename, and quits once it is gone.
-func TestBackFollowsRenameAndKill(t *testing.T) {
-	m := screen(80, 24, session("api", time.Minute, 0))
-	m.SetBack("api")
-	typeText(m, "/rename api backend")
-	enter(m)
-	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("backend", time.Minute, 0)}})
-	if got := msgOf(m.Update(press(tea.KeyEscape))); got != (OpenMsg{Session: "backend"}) {
-		t.Fatalf("Esc after the rename gave %#v, want to open backend", got)
-	}
-	m.Update(&api.SessionList{}) // backend was killed
-	if _, ok := msgOf(m.Update(press(tea.KeyEscape))).(QuitMsg); !ok {
-		t.Fatal("Esc with the back session gone should quit")
-	}
-}
-
 // TestSlashWithAltGr: on Windows, AltGr arrives as Ctrl+Alt with the text
 // set. A "/" typed that way must still start a command (#84).
 func TestSlashWithAltGr(t *testing.T) {

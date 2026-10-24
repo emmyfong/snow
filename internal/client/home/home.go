@@ -4,7 +4,6 @@
 package home
 
 import (
-	"cmp"
 	"github.com/charmbracelet/colorprofile"
 	"slices"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -36,7 +36,6 @@ type Model struct {
 	sessions   []api.SessionInfo // most recently used first
 	input      string
 	selected   int      // index into the shown sessions; -1 means none
-	back       string   // the session Esc returns to; "" means Esc quits
 	target     string   // the session highlighted when a slash command began
 	notes      []string // problems with saved sessions, from the server
 	cmdSel     int      // index into the matching commands
@@ -57,10 +56,6 @@ func New(version string, th theme.Theme) *Model {
 	return &Model{version: version, theme: th, base: th, now: time.Now, selected: -1}
 }
 
-// SetBack makes Esc return to session name instead of quitting, for a home
-// page opened from a session to switch away from it.
-func (m *Model) SetBack(name string) { m.back = name }
-
 // SetNotice shows text under the input, such as why a session could not be
 // opened.
 func (m *Model) SetNotice(text string) { m.notice = text }
@@ -80,16 +75,10 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		if shown := m.shown(); m.selected >= 0 && m.selected < len(shown) {
 			chosen = shown[m.selected].Name
 		}
-		m.sessions = slices.Clone(msg.Sessions)
-		slices.SortFunc(m.sessions, func(a, b api.SessionInfo) int {
-			return cmp.Or(b.LastUsed.Compare(a.LastUsed), cmp.Compare(a.Name, b.Name))
-		})
+		m.sessions = sessionlist.Sort(msg.Sessions)
 		// The new list may be in another order: keep the highlight on the
 		// same session, or drop it when that session is gone.
 		m.selected = slices.IndexFunc(m.shown(), func(s api.SessionInfo) bool { return s.Name == chosen })
-		if m.back != "" && !m.exists(m.back) {
-			m.back = "" // killed: Esc can only quit now
-		}
 	case *api.Error:
 		// A refused rename or kill; the server says why.
 		m.notice = msg.Message
@@ -167,9 +156,6 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	case k.Code == 'c' && k.Mod == tea.ModCtrl:
 		return func() tea.Msg { return QuitMsg{} }
 	case k.Code == tea.KeyEscape:
-		if m.input == "" && m.back != "" {
-			return openCmd(OpenMsg{Session: m.back})
-		}
 		if m.input == "" {
 			return func() tea.Msg { return QuitMsg{} }
 		}

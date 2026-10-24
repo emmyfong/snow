@@ -61,7 +61,7 @@ func buildActions() []Action {
 	}
 	return append(as,
 		Action{Name: "copy-mode", Desc: "Copy mode"},
-		Action{Name: "sessions", Desc: "Sessions"},
+		Action{Name: "sessions", Desc: "Switch session"},
 		Action{Name: "detach", Desc: "Detach"},
 		Action{Name: "send-prefix", Desc: "Send the prefix key"},
 	)

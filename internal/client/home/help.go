@@ -13,7 +13,7 @@ var helpKeys = [][2]string{
 	{"Enter", "open or create a session"},
 	{"/", "type a command; Tab completes"},
 	{"/rename, /kill", "arrows or a click pick the session"},
-	{"Ctrl+b s", "switch sessions; Esc goes back"},
+	{"Ctrl+b s", "switch to another session"},
 	{"Ctrl+b d", "detach and come here"},
 }
 

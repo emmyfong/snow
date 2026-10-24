@@ -201,9 +201,8 @@ func TestMenuNewWindowCloseWindowAndDetach(t *testing.T) {
 
 	m, _ = pickerScreen(t, 80, 24)
 	m.Update(rightClick(50, 3))
-	for range 8 {
-		m.Update(press(tea.KeyDown, 0, ""))
-	}
+	// Up wraps to the last item, Detach.
+	m.Update(press(tea.KeyUp, 0, ""))
 	cmd := m.Update(enter)
 	if cmd == nil {
 		t.Fatal("Detach returned no command")

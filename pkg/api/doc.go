@@ -14,7 +14,8 @@
 //     closed connection, means also bumps it. Version 2 added the
 //     session-ended Error, so a close without it now means a lost connection.
 //     Version 3 added Errors that leave the session running (bad-command,
-//     command-failed), which older clients treated as fatal.
+//     command-failed), which older clients treated as fatal. Version 6
+//     sends SessionList to attached clients, which a session screen needs.
 //   - The frame header, Hello, Welcome, Error, and Shutdown never change
 //     shape, so peers of any version can always detect a mismatch, and a
 //     newer client can always ask an older server to stop.
@@ -26,4 +27,4 @@ package api
 
 // ProtocolVersion changes when a client and server of different versions can
 // no longer understand each other.
-const ProtocolVersion = 5
+const ProtocolVersion = 6

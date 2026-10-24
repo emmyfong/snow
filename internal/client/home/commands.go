@@ -201,9 +201,6 @@ func (m *Model) cmdRename(rest string) tea.Cmd {
 		return nil
 	}
 	m.done()
-	if session == m.back {
-		m.back = name
-	}
 	return sendCmd(&api.RenameSession{Session: session, Name: name})
 }
 

@@ -109,7 +109,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Ctrl` + arrows | Resize the pane by 1 cell |
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
-| `s` | Home page to switch sessions; Esc comes back |
+| `s` | Switch to another session from a list |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
