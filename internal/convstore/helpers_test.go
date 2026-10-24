@@ -14,6 +14,29 @@ var at = time.Date(2026, 10, 23, 19, 15, 0, 0, time.UTC)
 // testID is a valid conversation ID for tests.
 const testID = "20261023-191500-a1b2c3d4"
 
+// testMeta returns the meta record of testID.
+func testMeta() *Meta {
+	return &Meta{Version: Version, ID: testID, Folder: "/home/u/p", Created: at, Model: "anthropic/claude-opus-5-5"}
+}
+
+// fixture copies testdata/name to the file of testID in s and returns its
+// path.
+func fixture(t *testing.T, s *Store, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	path, err := s.Path(testID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
 // openStore returns a store in a new temporary folder.
 func openStore(t *testing.T) *Store {
 	t.Helper()

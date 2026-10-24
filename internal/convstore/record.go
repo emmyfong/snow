@@ -64,7 +64,14 @@ type Assistant struct {
 	Blocks []Block `json:"blocks"`
 	Stop   string  `json:"stop,omitempty"`
 	Usage  *Usage  `json:"usage,omitempty"`
+	// CutOff is set by Load on a reply made from partial text whose whole
+	// reply was never saved.
+	CutOff bool `json:"cut_off,omitempty"`
 }
+
+// StopToolUse is the Stop of a reply that waits for tool results; the turn
+// goes on after them.
+const StopToolUse = "tool_use"
 
 // The kinds of a Block.
 const (
@@ -103,6 +110,9 @@ type ToolResult struct {
 	ToolUseID string    `json:"tool_use_id"`
 	Content   string    `json:"content"`
 	IsError   bool      `json:"is_error,omitempty"`
+	// Lost is set by Load on a stand-in result for a tool call whose
+	// result was never saved, so the next request to the provider is valid.
+	Lost bool `json:"lost,omitempty"`
 }
 
 // Approval records the user's answer to a tool call that needed approval.
@@ -208,8 +218,11 @@ var errEmptyType = errors.New("record has no type")
 // Encode returns r as one JSON line, ending in a newline. The line starts
 // with the record's type.
 func Encode(r Record) ([]byte, error) {
-	if u, ok := r.(*Unknown); ok {
-		return append(bytes.Clone(u.Raw), '\n'), nil
+	switch r := r.(type) {
+	case *Unknown:
+		return append(bytes.Clone(r.Raw), '\n'), nil
+	case *Damaged:
+		return nil, errors.New("encode damaged record: it exists only after a load")
 	}
 	body, err := json.Marshal(r)
 	if err != nil {

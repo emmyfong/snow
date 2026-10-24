@@ -180,7 +180,7 @@ func TestAppendKilled(t *testing.T) {
 	}
 	dir := filepath.Join(t.TempDir(), "conversations")
 	acked := killAppender(t, dir)
-	rs := records(t, filepath.Join(dir, testID+ext))
+	rs := records(t, filepath.Join(dir, testID+ext))[1:]
 	if len(rs) < acked {
 		t.Fatalf("file has %d records, %d were acknowledged", len(rs), acked)
 	}
@@ -200,6 +200,9 @@ func appendUntilKilled(t *testing.T, dir string) {
 	}
 	w, err := s.Writer(testID)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := w.Append(testMeta()); err != nil {
 		t.Fatal(err)
 	}
 	for i := 1; i < 1_000_000; i++ {
