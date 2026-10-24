@@ -50,8 +50,8 @@ type Conversation struct {
 	cmds  chan any
 	done  chan struct{}
 
-	// Read and written only by the goroutine that runs the current turn;
-	// turns never overlap, and the loop hands each one over.
+	// Used by the goroutine that runs the current turn. Turns never
+	// overlap, and the loop changes the model only between turns.
 	history []provider.Message
 	model   string // "provider/model"
 	effort  provider.Effort
@@ -60,6 +60,7 @@ type Conversation struct {
 // Commands posted to the loop.
 type (
 	sendCmd      struct{ text string }
+	switchCmd    struct{ sw *convstore.ModelSwitch }
 	interruptCmd struct{}
 	closeCmd     struct{}
 )
@@ -134,6 +135,17 @@ func (c *Conversation) Agent() ID { return c.agent }
 // the next turn when the running one ends.
 func (c *Conversation) Send(text string) error { return c.post(sendCmd{text}) }
 
+// SwitchModel makes the next turn use model ("provider/model") with
+// effort. A running turn keeps its model. The switch is saved in the
+// conversation file before it applies, and a ModelChanged event reports
+// it, or why it could not be saved.
+func (c *Conversation) SwitchModel(model, effort string) error {
+	if _, err := provider.ParseModelName(model); err != nil {
+		return fmt.Errorf("switch model: %w", err)
+	}
+	return c.post(switchCmd{&convstore.ModelSwitch{Model: model, Effort: effort}})
+}
+
 // Interrupt stops the running turn: it cancels the stream and any running
 // tool, saves what arrived, and marks the turn interrupted. Queued messages
 // stay queued and start the next turn.
@@ -171,7 +183,8 @@ func (c *Conversation) loop() {
 	defer close(c.done)
 	var (
 		queue   []string
-		cancel  context.CancelFunc // of the running turn; nil when idle
+		pending *convstore.ModelSwitch // applies when the running turn ends
+		cancel  context.CancelFunc     // of the running turn; nil when idle
 		ended   = make(chan struct{})
 		turn    int
 		closing bool
@@ -196,6 +209,12 @@ func (c *Conversation) loop() {
 					queue = append(queue, cmd.text)
 					c.emit(&QueueChanged{Messages: append([]string(nil), queue...)})
 				}
+			case switchCmd:
+				if cancel == nil {
+					c.applySwitch(cmd.sw)
+				} else {
+					pending = cmd.sw
+				}
 			case interruptCmd:
 				if cancel != nil {
 					cancel()
@@ -213,6 +232,10 @@ func (c *Conversation) loop() {
 			if closing {
 				return
 			}
+			if pending != nil {
+				c.applySwitch(pending)
+				pending = nil
+			}
 			if len(queue) == 0 {
 				c.emit(&StateChanged{State: StateIdle})
 				continue
@@ -223,4 +246,16 @@ func (c *Conversation) loop() {
 			start(next)
 		}
 	}
+}
+
+// applySwitch saves sw and makes it the model of the next turn. It runs
+// only between turns, so no turn reads the model while it changes.
+func (c *Conversation) applySwitch(sw *convstore.ModelSwitch) {
+	sw.At = c.now()
+	if err := c.w.Append(sw); err != nil {
+		c.emit(&ModelChanged{Model: c.model, Effort: string(c.effort), Failure: &Failure{Kind: FailSave, Message: err.Error()}})
+		return
+	}
+	c.model, c.effort = sw.Model, provider.Effort(sw.Effort)
+	c.emit(&ModelChanged{Model: c.model, Effort: sw.Effort})
 }

@@ -1,7 +1,10 @@
 package agent
 
 import (
+	"errors"
 	"time"
+
+	"github.com/emmyfong/snow/internal/provider"
 )
 
 // FailureKind says why a turn failed, so the user gets the right choices.
@@ -40,7 +43,29 @@ type Failure struct {
 	Choices    []Choice
 }
 
-// failure describes a provider error for the user.
+// failure describes a provider error for the user, with what the user can
+// do about it. The agent itself never retries and never changes the model.
 func failure(err error) *Failure {
-	return &Failure{Kind: FailOther, Message: err.Error(), Choices: []Choice{ChoiceRetry}}
+	f := &Failure{Kind: FailOther, Message: err.Error(), Choices: []Choice{ChoiceRetry, ChoicePickModel}}
+	var pe *provider.Error
+	if !errors.As(err, &pe) {
+		return f
+	}
+	switch pe.Kind {
+	case provider.KindBadKey:
+		f.Kind, f.Choices = FailBadKey, []Choice{ChoiceLogin, ChoicePickModel}
+	case provider.KindNoKey:
+		f.Kind, f.Choices = FailNoKey, []Choice{ChoiceLogin, ChoicePickModel}
+	case provider.KindModelNotFound:
+		f.Kind, f.Choices = FailModelNotFound, []Choice{ChoicePickModel}
+	case provider.KindRateLimited:
+		f.Kind, f.RetryAfter, f.Choices = FailRateLimited, pe.RetryAfter, []Choice{ChoiceWait, ChoiceRetry, ChoicePickModel}
+	case provider.KindOverloaded:
+		f.Kind, f.Choices = FailOverloaded, []Choice{ChoiceRetry, ChoiceWait, ChoicePickModel}
+	case provider.KindContextTooLong:
+		f.Kind, f.Choices = FailContextTooLong, []Choice{ChoicePickModel}
+	case provider.KindNetwork:
+		f.Kind, f.Choices = FailNetwork, []Choice{ChoiceRetry}
+	}
+	return f
 }

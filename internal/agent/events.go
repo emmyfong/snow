@@ -21,7 +21,7 @@ type Event struct {
 
 // Body is what happened: *TurnStarted, *TurnEnded, *TextDelta,
 // *ThinkingDelta, *ToolCall, *ToolResult, *ApprovalRequest, *Question,
-// *TasksChanged, *Usage, *StateChanged, or *QueueChanged.
+// *TasksChanged, *Usage, *StateChanged, *QueueChanged, or *ModelChanged.
 type Body interface{ body() }
 
 // TurnStarted opens a turn. Turns count from 1 in each run of the
@@ -135,6 +135,14 @@ type StateChanged struct{ State State }
 // QueueChanged gives the messages that wait for the running turn to end.
 type QueueChanged struct{ Messages []string }
 
+// ModelChanged gives the model the next turn uses. Failure is set when a
+// switch could not be saved; the model stays as it was.
+type ModelChanged struct {
+	Model   string // "provider/model"
+	Effort  string
+	Failure *Failure
+}
+
 func (*TurnStarted) body()     {}
 func (*TurnEnded) body()       {}
 func (*TextDelta) body()       {}
@@ -147,3 +155,4 @@ func (*TasksChanged) body()    {}
 func (*Usage) body()           {}
 func (*StateChanged) body()    {}
 func (*QueueChanged) body()    {}
+func (*ModelChanged) body()    {}
