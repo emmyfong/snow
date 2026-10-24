@@ -180,13 +180,13 @@ func (c *Conversation) toolDefs() []provider.ToolDef {
 // an interrupt, the calls that did not finish get an "interrupted" result,
 // so the saved exchange stays valid for the provider.
 func (c *Conversation) runTools(ctx context.Context, calls []*provider.ToolUse) ([]provider.Block, error) {
-	env := tool.Env{Folder: c.cfg.Folder, Shell: c.cfg.Shell}
+	env := c.env()
 	var results []provider.Block
 	for _, call := range calls {
 		var res tool.Result
 		if ctx.Err() == nil {
 			c.emit(&StateChanged{State: StateTool})
-			res = c.cfg.Tools.Call(ctx, env, call.Name, call.Input, c.approve)
+			res = c.cfg.Tools.Call(ctx, env, call.Name, call.Input, c.approver(call.ID))
 		}
 		if ctx.Err() != nil {
 			res = tool.Result{Content: "interrupted by the user", IsError: true}

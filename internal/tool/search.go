@@ -140,3 +140,6 @@ func (s *searcher) file(ctx context.Context, osPath, name string) error {
 		}
 	}
 }
+
+// Paths implements Pather.
+func (searchTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, ".") }

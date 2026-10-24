@@ -23,6 +23,8 @@ func newRecord(t Type) Record {
 		return &Approval{}
 	case TypeModelSwitch:
 		return &ModelSwitch{}
+	case TypeMode:
+		return &Mode{}
 	case TypeInterruption:
 		return &Interruption{}
 	case TypePartial:

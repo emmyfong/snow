@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync/atomic"
 	"time"
 
 	"github.com/emmyfong/snow/internal/convstore"
@@ -55,12 +56,25 @@ type Conversation struct {
 	history []provider.Message
 	model   string // "provider/model"
 	effort  provider.Effort
+	grants  map[string]bool // tools the user said yes to for this conversation
+
+	mode atomic.Value // Mode; set by the loop, read by the turn
 }
 
 // Commands posted to the loop.
 type (
-	sendCmd      struct{ text string }
-	switchCmd    struct{ sw *convstore.ModelSwitch }
+	sendCmd   struct{ text string }
+	switchCmd struct{ sw *convstore.ModelSwitch }
+	modeCmd   struct{ mode Mode }
+	waitCmd   struct {
+		req   *ApprovalRequest
+		reply chan<- Answer
+	}
+	answerCmd struct {
+		a   Answer
+		res chan<- error
+	}
+	pendingCmd   struct{ res chan<- *ApprovalRequest }
 	interruptCmd struct{}
 	closeCmd     struct{}
 )
@@ -99,6 +113,11 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 		}
 	}
 	c.history = history(loaded.Records)
+	for _, r := range loaded.Records {
+		if m, ok := r.(*convstore.Mode); ok && Mode(m.Mode).valid() {
+			c.mode.Store(Mode(m.Mode))
+		}
+	}
 	if loaded.MidTurn {
 		// The turn that was running when Snow stopped is over; record it, so
 		// the next load does not see it open.
@@ -117,12 +136,15 @@ func newConversation(cfg Config, w *convstore.Writer) *Conversation {
 	if cfg.Events == nil {
 		cfg.Events = func(Event) {}
 	}
-	return &Conversation{
+	c := &Conversation{
 		cfg: cfg, id: w.ID(), agent: ID(w.ID()), w: w,
-		ev:   newEmitter(cfg.Events),
-		cmds: make(chan any),
-		done: make(chan struct{}),
+		ev:     newEmitter(cfg.Events),
+		cmds:   make(chan any),
+		done:   make(chan struct{}),
+		grants: map[string]bool{},
 	}
+	c.mode.Store(ModeAsk)
+	return c
 }
 
 // ID returns the conversation's ID.
@@ -144,6 +166,44 @@ func (c *Conversation) SwitchModel(model, effort string) error {
 		return fmt.Errorf("switch model: %w", err)
 	}
 	return c.post(switchCmd{&convstore.ModelSwitch{Model: model, Effort: effort}})
+}
+
+// Mode returns the approval mode.
+func (c *Conversation) Mode() Mode { return c.mode.Load().(Mode) }
+
+// SetMode changes the approval mode, from the next tool call on. The mode
+// is saved in the conversation file, so it survives a resume; a
+// ModeChanged event reports it, or why it could not be saved.
+func (c *Conversation) SetMode(m Mode) error {
+	if !m.valid() {
+		return fmt.Errorf("set mode: unknown mode %q", m)
+	}
+	return c.post(modeCmd{m})
+}
+
+// Answer answers a waiting approval request. An ID that matches no
+// waiting request gives an error wrapping ErrNoApproval.
+func (c *Conversation) Answer(a Answer) error {
+	switch a.Decision {
+	case DecisionYes, DecisionAlways, DecisionNo:
+	default:
+		return fmt.Errorf("answer: unknown decision %q", a.Decision)
+	}
+	res := make(chan error, 1)
+	if err := c.post(answerCmd{a, res}); err != nil {
+		return err
+	}
+	return <-res
+}
+
+// Pending returns the approval request that waits for an answer, or nil.
+// A client that attaches shows it again.
+func (c *Conversation) Pending() *ApprovalRequest {
+	res := make(chan *ApprovalRequest, 1)
+	if c.post(pendingCmd{res}) != nil {
+		return nil
+	}
+	return <-res
 }
 
 // Interrupt stops the running turn: it cancels the stream and any running
@@ -184,6 +244,7 @@ func (c *Conversation) loop() {
 	var (
 		queue   []string
 		pending *convstore.ModelSwitch // applies when the running turn ends
+		waiting *waitCmd               // the approval the turn waits for
 		cancel  context.CancelFunc     // of the running turn; nil when idle
 		ended   = make(chan struct{})
 		turn    int
@@ -215,6 +276,24 @@ func (c *Conversation) loop() {
 				} else {
 					pending = cmd.sw
 				}
+			case modeCmd:
+				c.applyMode(cmd.mode)
+			case waitCmd:
+				waiting = &cmd
+			case answerCmd:
+				if waiting == nil || waiting.req.ID != cmd.a.ID {
+					cmd.res <- fmt.Errorf("answer %q: %w", cmd.a.ID, ErrNoApproval)
+					continue
+				}
+				waiting.reply <- cmd.a
+				waiting = nil
+				cmd.res <- nil
+			case pendingCmd:
+				if waiting != nil {
+					cmd.res <- waiting.req
+				} else {
+					cmd.res <- nil
+				}
 			case interruptCmd:
 				if cancel != nil {
 					cancel()
@@ -229,6 +308,7 @@ func (c *Conversation) loop() {
 		case <-ended:
 			cancel()
 			cancel = nil
+			waiting = nil
 			if closing {
 				return
 			}
@@ -258,4 +338,15 @@ func (c *Conversation) applySwitch(sw *convstore.ModelSwitch) {
 	}
 	c.model, c.effort = sw.Model, provider.Effort(sw.Effort)
 	c.emit(&ModelChanged{Model: c.model, Effort: sw.Effort})
+}
+
+// applyMode saves m and puts it in force. The file write may race a turn's
+// writes; the Writer orders them.
+func (c *Conversation) applyMode(m Mode) {
+	if err := c.w.Append(&convstore.Mode{At: c.now(), Mode: string(m)}); err != nil {
+		c.emit(&ModeChanged{Mode: c.Mode(), Failure: &Failure{Kind: FailSave, Message: err.Error()}})
+		return
+	}
+	c.mode.Store(m)
+	c.emit(&ModeChanged{Mode: m})
 }

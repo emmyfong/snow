@@ -45,11 +45,11 @@ func TestCallApproval(t *testing.T) {
 		ran = in
 		return "ok", nil
 	}})
-	deny := func(context.Context, Def, json.RawMessage) (bool, string) { return false, "not now" }
+	deny := func(context.Context, Tool, json.RawMessage) (bool, string) { return false, "not now" }
 	if got := r.Call(context.Background(), Env{}, "edit", nil, deny); !got.IsError || got.Content != "denied: not now" || ran != nil {
 		t.Fatalf("denied call: %+v, ran %q", got, ran)
 	}
-	allow := func(_ context.Context, d Def, _ json.RawMessage) (bool, string) { return d.Changes, "" }
+	allow := func(_ context.Context, t Tool, _ json.RawMessage) (bool, string) { return t.Def().Changes, "" }
 	if got := r.Call(context.Background(), Env{}, "edit", nil, allow); got.IsError || got.Content != "ok" || string(ran) != "{}" {
 		t.Fatalf("allowed call: %+v, ran %q", got, ran)
 	}

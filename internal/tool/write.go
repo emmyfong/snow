@@ -68,3 +68,6 @@ func writeKeepMode(file string, data []byte) error {
 	}
 	return os.WriteFile(file, data, mode)
 }
+
+// Paths implements Pather.
+func (writeTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, "") }

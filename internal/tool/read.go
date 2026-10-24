@@ -112,3 +112,6 @@ func cutLine(s string, n int) string {
 	}
 	return s[:n] + "…"
 }
+
+// Paths implements Pather.
+func (readTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, "") }

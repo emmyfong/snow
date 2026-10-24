@@ -22,6 +22,7 @@ type harness struct {
 	fake   *providertest.Fake
 	store  *convstore.Store
 	tools  *tool.Registry
+	folder string
 	events chan Event
 }
 
@@ -33,7 +34,7 @@ func newHarness(t *testing.T, tools []tool.Tool, replies ...providertest.Reply) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &harness{fake: providertest.New("fake", replies...), store: store, tools: tool.NewRegistry(), events: make(chan Event, 1000)}
+	h := &harness{fake: providertest.New("fake", replies...), store: store, tools: tool.NewRegistry(), folder: t.TempDir(), events: make(chan Event, 1000)}
 	for _, tl := range tools {
 		if err := h.tools.Register(tl); err != nil {
 			t.Fatal(err)
@@ -53,7 +54,7 @@ func (h *harness) config(t *testing.T) Config {
 		t.Fatal(err)
 	}
 	return Config{Store: h.store, Providers: providers, Tools: h.tools,
-		Folder: tool.Folder{Path: t.TempDir()}, Events: func(e Event) { h.events <- e }}
+		Folder: tool.Folder{Path: h.folder}, Events: func(e Event) { h.events <- e }}
 }
 
 // next waits for the next event whose body is a T, and returns it. Other

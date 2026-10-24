@@ -99,3 +99,6 @@ func lineChanges(before, after string) (added, removed int) {
 	}
 	return len(b), len(a)
 }
+
+// Paths implements Pather.
+func (editTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, "") }

@@ -21,7 +21,8 @@ type Event struct {
 
 // Body is what happened: *TurnStarted, *TurnEnded, *TextDelta,
 // *ThinkingDelta, *ToolCall, *ToolResult, *ApprovalRequest, *Question,
-// *TasksChanged, *Usage, *StateChanged, *QueueChanged, or *ModelChanged.
+// *TasksChanged, *Usage, *StateChanged, *QueueChanged, *ModelChanged, or
+// *ModeChanged.
 type Body interface{ body() }
 
 // TurnStarted opens a turn. Turns count from 1 in each run of the
@@ -73,6 +74,9 @@ type ApprovalRequest struct {
 	Tool  string
 	Input json.RawMessage
 	Diff  *Diff // for a tool that changes a file; nil otherwise
+	// Outside lists the paths outside the conversation folder that the
+	// call names; they are why it asks, whatever the mode.
+	Outside []string
 }
 
 // Diff is the change a tool call would make to one file.
@@ -143,6 +147,13 @@ type ModelChanged struct {
 	Failure *Failure
 }
 
+// ModeChanged gives the approval mode now in force. Failure is set when
+// a change could not be saved; the mode stays as it was.
+type ModeChanged struct {
+	Mode    Mode
+	Failure *Failure
+}
+
 func (*TurnStarted) body()     {}
 func (*TurnEnded) body()       {}
 func (*TextDelta) body()       {}
@@ -156,3 +167,4 @@ func (*Usage) body()           {}
 func (*StateChanged) body()    {}
 func (*QueueChanged) body()    {}
 func (*ModelChanged) body()    {}
+func (*ModeChanged) body()     {}

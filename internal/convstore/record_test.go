@@ -21,6 +21,7 @@ var everyRecord = []Record{
 	&ToolResult{At: at, ToolUseID: "call_1", Content: "package a", IsError: true},
 	&Approval{At: at, ToolUseID: "call_1", Decision: "no", Reason: "not that file"},
 	&ModelSwitch{At: at, Model: "openai/gpt-6.1-sol", Effort: "low"},
+	&Mode{At: at, Mode: "auto"},
 	&Interruption{At: at, Reason: "user"},
 	&Partial{At: at, Text: "Half a rep"},
 	&Rename{At: at, Title: "New title"},

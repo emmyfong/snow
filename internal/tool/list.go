@@ -73,3 +73,6 @@ func (listTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 	}
 	return out.String(""), nil
 }
+
+// Paths implements Pather.
+func (listTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, ".") }
