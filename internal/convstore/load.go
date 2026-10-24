@@ -83,32 +83,30 @@ func (s *Store) Load(id string) (*Conversation, error) {
 	if err != nil {
 		return nil, &LoadError{Path: path, Err: err}
 	}
-	c := &Conversation{Path: path}
-	meta, rest, err := splitMeta(lines)
-	if err != nil {
+	var meta *Meta
+	if len(lines) > 0 {
+		meta, _ = lines[0].rec.(*Meta)
+	}
+	if err := checkMeta(meta, id); err != nil {
 		return nil, &LoadError{Path: path, Err: err}
 	}
-	if meta.ID != id {
-		return nil, &LoadError{Path: path, Err: fmt.Errorf("%w: meta record names %q", ErrBadID, meta.ID)}
-	}
-	c.Meta = *meta
-	c.build(rest)
+	c := &Conversation{Path: path, Meta: *meta}
+	c.build(lines[1:])
 	return c, nil
 }
 
-// splitMeta checks the first line and returns it as the meta record.
-func splitMeta(lines []line) (*Meta, []line, error) {
-	if len(lines) == 0 || lines[0].err != nil {
-		return nil, nil, ErrNoMeta
+// checkMeta checks the meta record of the file of conversation id. A nil
+// meta means the first line is not a meta record.
+func checkMeta(meta *Meta, id string) error {
+	switch {
+	case meta == nil:
+		return ErrNoMeta
+	case meta.Version > Version:
+		return fmt.Errorf("%w: version %d, this Snow reads up to %d", ErrNewerVersion, meta.Version, Version)
+	case meta.ID != id:
+		return fmt.Errorf("%w: meta record names %q", ErrBadID, meta.ID)
 	}
-	meta, ok := lines[0].rec.(*Meta)
-	if !ok {
-		return nil, nil, ErrNoMeta
-	}
-	if meta.Version > Version {
-		return nil, nil, fmt.Errorf("%w: version %d, this Snow reads up to %d", ErrNewerVersion, meta.Version, Version)
-	}
-	return meta, lines[1:], nil
+	return nil
 }
 
 // build turns the lines after the meta record into Records, Problems, and
