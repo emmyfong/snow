@@ -12,6 +12,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/tool"
 )
 
@@ -23,6 +24,9 @@ type Config struct {
 	// Folder is the conversation folder. For a new conversation it is also
 	// saved in the meta record.
 	Folder tool.Folder
+	// Shell is the profile saved with the conversation; the run tool uses
+	// it.
+	Shell  shell.Profile
 	System string // the system prompt
 	// Events receives every event, in order, from one goroutine of the
 	// Conversation's own. A slow receiver delays later events, never the

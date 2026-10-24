@@ -62,6 +62,9 @@ type Launch struct {
 	Args []string
 	Env  []string // variables to add to the inherited environment
 	Dir  string   // working folder; empty for WSL, which takes --cd instead
+	// CmdLine, when set, is the whole command line on Windows, passed as it
+	// is instead of joined from Path and Args. cmd needs it.
+	CmdLine string
 }
 
 // Launch returns the command that starts p in dir with the folder hook from

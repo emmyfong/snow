@@ -6,6 +6,8 @@ package tool
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/emmyfong/snow/internal/shell"
 )
 
 // Def describes a tool to the model and to the approval step.
@@ -32,4 +34,7 @@ type Env struct {
 	// Folder is the conversation folder. Tools resolve relative paths
 	// against it.
 	Folder Folder
+	// Shell is the profile saved with the conversation. The run tool runs
+	// commands through it.
+	Shell shell.Profile
 }

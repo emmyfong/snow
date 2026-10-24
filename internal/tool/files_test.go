@@ -39,13 +39,14 @@ func run(t *testing.T, env Env, name, in string) Result {
 }
 
 func TestBuiltinTools(t *testing.T) {
-	for _, name := range []string{"read", "list", "search"} {
+	changes := map[string]bool{"read": false, "list": false, "search": false, "edit": true, "write": true, "run": true}
+	for name, want := range changes {
 		tl, ok := Builtin().Get(name)
 		if !ok {
 			t.Fatalf("%s is not built in", name)
 		}
 		d := tl.Def()
-		if d.Changes || d.Description == "" || !json.Valid(d.Schema) {
+		if d.Changes != want || d.Description == "" || !json.Valid(d.Schema) {
 			t.Errorf("%s: %+v", name, d)
 		}
 	}

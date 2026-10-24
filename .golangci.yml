@@ -43,6 +43,14 @@ linters:
           files: ["**/internal/term/**", "**/internal/layout/**", "**/internal/shell/**", "**/internal/config/**", "!$test"]
           deny:
             - { pkg: "github.com/emmyfong/snow", desc: "term, layout, shell, and config are leaf packages and import no other Snow package" }
+        tools-know-only-shell:
+          files: ["**/internal/tool/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "the agent calls tools; tools never call back into it" }
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "tools get what they need through tool.Env" }
+            - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "the agent saves results; tools only return them" }
+            - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "tools do not talk to models" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "tools never see keys" }
 
 formatters:
   enable:
