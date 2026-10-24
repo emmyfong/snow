@@ -1,41 +1,8 @@
 package convstore
 
 import (
-	"errors"
 	"fmt"
 )
-
-// Errors that Load and List wrap in a *LoadError.
-var (
-	ErrNewerVersion = errors.New("file is from a newer version of Snow")
-	ErrNoMeta       = errors.New("file does not start with a meta record")
-	ErrIDMismatch   = errors.New("meta record names another conversation")
-)
-
-// LoadError reports a conversation file that cannot be loaded. The file is
-// kept as it is, for the user.
-type LoadError struct {
-	Path string
-	Err  error
-}
-
-func (e *LoadError) Error() string { return fmt.Sprintf("load conversation %s: %v", e.Path, e.Err) }
-
-// Unwrap returns the underlying error.
-func (e *LoadError) Unwrap() error { return e.Err }
-
-// TypeDamaged is the type of a Damaged record.
-const TypeDamaged Type = "damaged"
-
-// Damaged marks the place of a line that Load could not read. Load makes
-// it; it is never in a file.
-type Damaged struct {
-	Line int
-	Err  error
-}
-
-// Type implements Record.
-func (*Damaged) Type() Type { return TypeDamaged }
 
 // Problem is a line that Load dropped or skipped.
 type Problem struct {
@@ -46,6 +13,7 @@ type Problem struct {
 	Err  error
 }
 
+// String describes the problem for a log line.
 func (p Problem) String() string {
 	if p.Torn {
 		return fmt.Sprintf("line %d: torn last line dropped: %v", p.Line, p.Err)

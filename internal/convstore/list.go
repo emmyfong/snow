@@ -36,8 +36,10 @@ type Entry struct {
 }
 
 // List returns the conversations of one folder and shell profile, newest
-// first. Folder and profile must both match: a WSL folder and its Windows
-// path are different folders. A file that cannot be read is in the list
+// first. Folder and profile must both match, byte for byte: a WSL folder
+// and its Windows path are different folders. The caller cleans the folder
+// the same way when it writes Meta.Folder and when it lists, so that
+// C:\Proj and c:\proj\ do not give two histories. A file that cannot be read is in the list
 // with its error, whatever its folder, so the user can see it.
 func (s *Store) List(folder, profile string) ([]Entry, error) {
 	all, err := s.ListAll()

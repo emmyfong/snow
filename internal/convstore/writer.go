@@ -12,10 +12,6 @@ import (
 	"github.com/emmyfong/snow/internal/private"
 )
 
-// partialEvery is the shortest time between two partial writes of one
-// conversation.
-const partialEvery = time.Second
-
 // Causes of a WriteError for a call that is wrong, not for a disk failure.
 var (
 	errClosed     = errors.New("writer is closed")
@@ -23,8 +19,10 @@ var (
 )
 
 // Writer appends records to one conversation file. It is the only writer
-// of that file in the process. Its methods are safe to call from several
-// goroutines.
+// of that file in its Store. Its methods are safe to call from several
+// goroutines, and every one of them can block on the disk, for as long as
+// an fsync takes: call them from the conversation's own goroutine, never
+// from the server's state goroutine (ADR 0007).
 type Writer struct {
 	s     *Store
 	id    string
@@ -152,7 +150,7 @@ func (w *Writer) Path() string { return w.path }
 func (w *Writer) ID() string { return w.id }
 
 // Append writes r as one whole line and flushes it to disk before it
-// returns. Partial text that waits is dropped by an Assistant record, which
+// returns, so it blocks until the disk has the record. Partial text that waits is dropped by an Assistant record, which
 // replaces it, and written first before a User or Interruption record,
 // which ends the reply, so a cut-off reply keeps it. Other records leave it
 // waiting.
@@ -189,46 +187,6 @@ func (w *Writer) Append(r Record) error {
 	return w.write(line)
 }
 
-// AppendPartial saves the text of a reply that is still streaming. It
-// writes at most once per partialEvery for this conversation and keeps only
-// the latest text: the first call starts the wait, and the text current
-// when it ends is written.
-func (w *Writer) AppendPartial(p Partial) error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if err := w.ready(); err != nil {
-		return err
-	}
-	w.pending = &p
-	w.startTimer()
-	return nil
-}
-
-// startTimer starts the partial wait if partial text waits and no wait
-// runs. The caller holds mu.
-func (w *Writer) startTimer() {
-	if w.pending == nil || w.timer != nil {
-		return
-	}
-	w.gen++
-	gen := w.gen
-	w.timer = time.AfterFunc(w.every, func() { w.flushPartial(gen) })
-}
-
-// flushPartial runs when the partial wait ends. A failure is kept for the
-// next call, which returns it.
-func (w *Writer) flushPartial(gen int) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-	if gen != w.gen || w.closed || w.pending == nil {
-		return
-	}
-	w.timer = nil
-	if err := w.writePartial(w.takePending()); err != nil && w.err == nil {
-		w.err = err
-	}
-}
-
 // Close writes partial text that is still waiting, closes the file, and
 // lets another Writer open the conversation.
 func (w *Writer) Close() error {
@@ -263,27 +221,6 @@ func (w *Writer) ready() error {
 		return err
 	}
 	return nil
-}
-
-// takePending clears the waiting partial text and returns it. The caller
-// holds mu.
-func (w *Writer) takePending() *Partial {
-	p := w.pending
-	w.pending = nil
-	if w.timer != nil {
-		w.timer.Stop()
-		w.timer = nil
-		w.gen++
-	}
-	return p
-}
-
-func (w *Writer) writePartial(p *Partial) error {
-	line, err := Encode(p)
-	if err != nil {
-		return &WriteError{Path: w.path, Err: err}
-	}
-	return w.write(line)
 }
 
 // write appends one line and flushes it. The caller holds mu. A line that

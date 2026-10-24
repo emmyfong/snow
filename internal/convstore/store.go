@@ -30,6 +30,9 @@ type Store struct {
 }
 
 // Open returns the store in dir, and creates dir, private to the user.
+// The one-writer rule holds per Store: the server opens one Store for the
+// folder and shares it. Two Stores, or two processes, on one folder can
+// each open a Writer for the same conversation.
 func Open(dir string) (*Store, error) {
 	if err := private.Dir(dir); err != nil {
 		return nil, fmt.Errorf("open conversations: %w", err)

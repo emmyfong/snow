@@ -3,7 +3,6 @@ package convstore
 import (
 	"crypto/rand"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,10 +10,6 @@ import (
 
 // maxID is the longest conversation ID that CheckID accepts.
 const maxID = 64
-
-// ErrBadID is the cause of an error for a conversation ID that is not a safe
-// file name.
-var ErrBadID = errors.New("not a valid conversation ID")
 
 // NewID returns a new conversation ID: the UTC time and 8 random hex
 // characters, for example "20261023-191500-a1b2c3d4". IDs sort by time and
