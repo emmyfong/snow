@@ -91,17 +91,27 @@ func (m *Model) focusedChat() *chat.Model {
 	return nil
 }
 
-// chatKey gives k to the focused chat and sends what it returns. It
-// reports false when the focused pane is not a chat.
-func (m *Model) chatKey(k tea.Key) bool {
+// chatKey gives k to the focused chat, which must exist, and sends what it
+// returns.
+func (m *Model) chatKey(k tea.Key) tea.Cmd {
 	c := m.focusedChat()
-	if c == nil {
-		return false
-	}
 	if in := c.Key(k); in != nil {
 		m.send(in)
 	}
-	return true
+	return m.chatAsked(c)
+}
+
+// chatAsked shows what to do for a request c raised.
+func (m *Model) chatAsked(c *chat.Model) tea.Cmd {
+	switch c.Asked() {
+	case chat.AskLogin:
+		// TODO(#114): open /login instead.
+		return m.ShowError("Run snow auth in a terminal to save a key, then retry.")
+	case chat.AskPickModel:
+		// TODO(#113): open the model picker instead.
+		return m.ShowError("Set [chat] model in config.toml, then open a new chat.")
+	}
+	return nil
 }
 
 // newChat splits the focused pane with a chat on the right.

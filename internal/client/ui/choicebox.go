@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -8,56 +9,72 @@ import (
 	"github.com/emmyfong/snow/internal/client/theme"
 )
 
-// ApprovalOptions configures ApprovalBox.
-type ApprovalOptions struct {
+// ChoiceOptions configures ChoiceBox.
+type ChoiceOptions struct {
 	Width   int
-	Title   string   // the question, for example "Allow write?"
+	Title   string   // for example "Allow write?" or "Rate limited"
 	Body    []string // rows above the choices; may hold styles
-	Choices []string // button labels, in order
-	// Selected is the index of the highlighted choice.
+	Choices []string // button labels, in order; none draws no button row
+	// Selected is the index of the highlighted choice; -1 highlights none.
 	Selected int
+	// Alert draws the box in the error colors instead of the prompt
+	// colors, for a failure.
+	Alert bool
 	// Reason replaces the choices with a field for why the answer is no.
 	Reason      bool
 	ReasonValue string
 }
 
-// approvalHints are the keys a reason field takes.
-var approvalHints = []Hint{{Key: "Enter", Desc: "answer no"}, {Key: "Esc", Desc: "back"}}
+// reasonHints are the keys a reason field takes.
+var reasonHints = []Hint{{Key: "Enter", Desc: "answer no"}, {Key: "Esc", Desc: "back"}}
 
-// ApprovalBox draws a question about a tool call in a frame exactly Width
-// cells wide, in the prompt colors: the title in the top edge, Body, then
-// the choices as buttons with Selected highlighted. The buttons share a row
-// when they fit and take one row each when they do not. With Reason set, a
-// text field and its keys replace them. Nothing below 4 cells.
-func ApprovalBox(th theme.Theme, o ApprovalOptions) string {
+// ChoiceBox draws a question, or a failure and what to do about it, in a
+// frame exactly Width cells wide, in the prompt colors (the error colors
+// with Alert): the title in the top edge, Body, then the choices as
+// buttons with Selected highlighted. The buttons share a row when they fit
+// and take one row each when they do not. With Reason set, a text field
+// and its keys replace them. Nothing below 4 cells.
+func ChoiceBox(th theme.Theme, o ChoiceOptions) string {
 	if o.Width < 4 {
 		return ""
 	}
 	inner := o.Width - 2
 	rows := append([]string(nil), o.Body...)
-	rows = append(rows, "")
+	if o.Reason || len(o.Choices) > 0 {
+		rows = append(rows, "")
+	}
 	if o.Reason {
 		rows = append(rows,
 			Input(th, InputOptions{Width: inner, Prompt: " Reason: ", Value: o.ReasonValue, Placeholder: "optional", Focused: true}),
-			" "+KeyHints(th, approvalHints, inner-1))
-	} else {
+			" "+KeyHints(th, reasonHints, inner-1))
+	} else if len(o.Choices) > 0 {
 		rows = append(rows, buttonRows(th, o)...)
 	}
-	title := lipgloss.NewStyle().Foreground(th.PromptFG).Background(th.PromptBG).Render(" " + plainLine(o.Title) + " ")
-	return frameIn(th, th.PromptBG, title, rows, o.Width)
+	fg, bg := boxColors(th, o)
+	title := lipgloss.NewStyle().Foreground(fg).Background(bg).Render(" " + plainLine(o.Title) + " ")
+	return frameIn(th, bg, title, rows, o.Width)
 }
 
-// ButtonSpan is where one choice of an ApprovalBox sits, in cells from the
+// boxColors are the title and selected button colors: the prompt's, or
+// the error's for an alert.
+func boxColors(th theme.Theme, o ChoiceOptions) (fg, bg color.Color) {
+	if o.Alert {
+		return th.ErrorFG, th.Error
+	}
+	return th.PromptFG, th.PromptBG
+}
+
+// ButtonSpan is where one choice of a ChoiceBox sits, in cells from the
 // box's top-left corner.
 type ButtonSpan struct {
 	Index   int
 	X, Y, W int
 }
 
-// ApprovalButtons returns where each choice sits in the box ApprovalBox
+// ChoiceButtons returns where each choice sits in the box ChoiceBox
 // draws for the same options, so a click maps to a choice. None while the
 // reason field shows.
-func ApprovalButtons(o ApprovalOptions) []ButtonSpan {
+func ChoiceButtons(o ChoiceOptions) []ButtonSpan {
 	if o.Width < 4 || o.Reason {
 		return nil
 	}
@@ -98,8 +115,9 @@ func oneRow(labels []string, width int) bool {
 	return w-1 <= width
 }
 
-func buttonRows(th theme.Theme, o ApprovalOptions) []string {
-	on := lipgloss.NewStyle().Foreground(th.PromptFG).Background(th.PromptBG).Bold(true)
+func buttonRows(th theme.Theme, o ChoiceOptions) []string {
+	fg, bg := boxColors(th, o)
+	on := lipgloss.NewStyle().Foreground(fg).Background(bg).Bold(true)
 	off := lipgloss.NewStyle().Foreground(th.Accent)
 	labels := buttonLabels(o.Choices)
 	styled := make([]string, len(labels))

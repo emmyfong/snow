@@ -59,7 +59,7 @@ func choices(p *api.ChatApproval, diffShown bool) []string {
 }
 
 // boxOptions are what the box shows for p at width.
-func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ApprovalOptions {
+func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 	head := p.Tool
 	t := &api.ChatTool{Name: p.Tool, Input: p.Input, Diff: p.Diff}
 	if s := subject(t); s != "" {
@@ -81,7 +81,7 @@ func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ApprovalOptions {
 			body = append(body, " "+r)
 		}
 	}
-	return ui.ApprovalOptions{
+	return ui.ChoiceOptions{
 		Width: width, Title: "Allow " + p.Tool + "?", Body: body,
 		Choices: choices(p, m.box.diff), Selected: m.box.choice,
 		Reason: m.box.reason, ReasonValue: m.box.text,

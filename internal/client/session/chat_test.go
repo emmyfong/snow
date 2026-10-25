@@ -138,3 +138,22 @@ func chatSessionGolden(t *testing.T, cols, rows int) {
 
 func TestChatSessionGolden80x24(t *testing.T)  { chatSessionGolden(t, 80, 24) }
 func TestChatSessionGolden120x40(t *testing.T) { chatSessionGolden(t, 120, 40) }
+
+// TestChatAskShowsWhatToDo: choosing Log in after a rejected key sends
+// nothing and tells the user how to save a key.
+func TestChatAskShowsWhatToDo(t *testing.T) {
+	m, r := chatScreen(t, 100, 30)
+	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "hi"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed,
+		Error: &api.ChatError{Code: api.ChatErrBadKey, Message: "key rejected", Choices: []string{api.ChatChoiceLogin}}}))
+	sent := len(r.sent)
+	if cmd := m.Update(press(tea.KeyEnter, 0, "")); cmd == nil {
+		t.Fatal("no message")
+	}
+	if len(r.sent) != sent {
+		t.Fatalf("sent %+v", r.sent[sent:])
+	}
+	if s := ansi.Strip(content(m)); !strings.Contains(s, "snow auth") {
+		t.Fatalf("screen:\n%s", s)
+	}
+}

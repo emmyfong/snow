@@ -24,6 +24,9 @@ func (m *Model) hasBar() bool { return m.height >= minBarHeight }
 // window the gauge does.
 func (m *Model) barOptions() ui.TopBarOptions {
 	o := ui.TopBarOptions{Width: m.width, Title: m.snap.Title, Model: m.snap.Model}
+	if o.Model == "" {
+		o.Model = "no model"
+	}
 	if m.snap.Effort != "" {
 		o.Model += " " + m.snap.Effort
 	}

@@ -28,7 +28,10 @@ type Model struct {
 	expanded      map[string]bool
 	box           approval
 	drawn         rendered
-	usage         bool // the top bar shows the context gauge and the cost
+	usage         bool   // the top bar shows the context gauge and the cost
+	errAt         int    // the entry of the failure whose choices take keys
+	errChoice     int    // its highlighted choice
+	asked         string // a request for the session; see Asked
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -37,7 +40,7 @@ func New(snap *api.ChatSnapshot, th theme.Theme, now func() time.Time) *Model {
 	if now == nil {
 		now = time.Now
 	}
-	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true}
+	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1}
 	m.Snapshot(snap)
 	return m
 }

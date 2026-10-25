@@ -12,6 +12,9 @@ import (
 type hit struct {
 	tool string // the tool call whose cell holds the row
 	box  int    // for a row of the approval box, its first row plus one; else 0
+	// failure is, for a row of a failure's box, the entry index plus one,
+	// and errTop its first row plus one.
+	failure, errTop int
 }
 
 // rendered is the transcript drawn at one width. Drawing is the costly
@@ -73,10 +76,18 @@ func (m *Model) draw() {
 	if m.snap.Earlier > 0 {
 		text(ui.EntryNote, fmt.Sprintf("%d earlier entries are not shown", m.snap.Earlier), false)
 	}
-	if len(m.snap.Entries) == 0 && len(m.snap.Queue) == 0 {
+	switch {
+	case len(m.snap.Entries) > 0 || len(m.snap.Queue) > 0:
+	case m.snap.Model == "":
+		// No provider has a saved key, so the chat has no model to start with.
+		box := ui.ChoiceBox(m.th, ui.ChoiceOptions{Width: m.width - indent, Title: "Connect a provider", Selected: -1, Alert: true,
+			Body: []string{" No provider has a saved key.", " Run snow auth in a terminal, then open a new chat."}})
+		add(indented(box), hit{}, false)
+	default:
 		text(ui.EntryNote, "No messages yet. Model: "+m.snap.Model, false)
 	}
-	for _, e := range m.snap.Entries {
+	live := m.liveError()
+	for i, e := range m.snap.Entries {
 		switch e.Kind {
 		case api.EntryUser:
 			text(ui.EntryUser, e.Text, false)
@@ -95,11 +106,16 @@ func (m *Model) draw() {
 		case api.EntryReported:
 			text(ui.EntryModel, "Asked for "+e.Requested+", but the API reported "+e.Text+".", false)
 		case api.EntryError:
-			msg := "failed"
-			if e.Error != nil {
-				msg = e.Error.Message
+			if e.Error == nil {
+				text(ui.EntryError, "failed", false)
+				continue
 			}
-			text(ui.EntryError, msg, false)
+			top := len(m.drawn.rows)
+			if top > 0 {
+				top++
+			}
+			box, _ := m.errorBox(e.Error, i == live, m.width-indent)
+			add(indented(box), hit{failure: i + 1, errTop: top + 1}, false)
 		}
 	}
 	if p := m.pending(); p != nil {
@@ -107,7 +123,7 @@ func (m *Model) draw() {
 		if top > 0 {
 			top++ // the blank row add puts first
 		}
-		add(indented(ui.ApprovalBox(m.th, m.boxOptions(p, m.width-indent))), hit{box: top + 1}, false)
+		add(indented(ui.ChoiceBox(m.th, m.boxOptions(p, m.width-indent))), hit{box: top + 1}, false)
 	}
 	for _, q := range m.snap.Queue {
 		text(ui.EntryQueued, "queued: "+q, false)
@@ -147,6 +163,18 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		m.selected = h.tool
 		m.expanded[h.tool] = !m.expanded[h.tool]
 		m.invalidate()
+	case h.failure > 0:
+		if h.failure-1 != m.liveError() {
+			return nil
+		}
+		e := m.snap.Entries[h.failure-1].Error
+		_, o := m.errorBox(e, true, m.width-ui.TranscriptIndent(m.width))
+		bx, by := x-ui.TranscriptIndent(m.width), start+row-(h.errTop-1)
+		for _, b := range ui.ChoiceButtons(o) {
+			if by == b.Y && bx >= b.X && bx < b.X+b.W {
+				return m.pickError(h.failure-1, b.Index)
+			}
+		}
 	case h.box > 0:
 		p := m.pending()
 		if p == nil {
@@ -154,7 +182,7 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		}
 		o := m.boxOptions(p, m.width-ui.TranscriptIndent(m.width))
 		bx, by := x-ui.TranscriptIndent(m.width), start+row-(h.box-1)
-		for _, b := range ui.ApprovalButtons(o) {
+		for _, b := range ui.ChoiceButtons(o) {
 			if by == b.Y && bx >= b.X && bx < b.X+b.W {
 				return m.choose(p, b.Index)
 			}

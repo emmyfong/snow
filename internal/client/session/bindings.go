@@ -34,8 +34,8 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		return nil
 	case m.keys.IsPrefix(k):
 		return m.startPrefix(k)
-	case m.chatKey(k):
-		return nil
+	case m.focusedChat() != nil:
+		return m.chatKey(k)
 	}
 	m.sendKey(k)
 	return nil

@@ -23,6 +23,9 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 			return in
 		}
 	}
+	if in, ok := m.errorKey(k); ok {
+		return in
+	}
 	switch {
 	case m.selected != "" && k.Code == tea.KeyEnter && k.Mod == 0:
 		m.expanded[m.selected] = !m.expanded[m.selected]
