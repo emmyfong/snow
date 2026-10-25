@@ -93,3 +93,24 @@ func TestFitSnapshot(t *testing.T) {
 		t.Fatalf("a small snapshot changed: %+v", small)
 	}
 }
+
+// TestApprovalEventFitsFrame: text that escapes to six bytes per byte in
+// JSON passes the per-field caps, so the event itself is measured and cut
+// further, with the cut marked.
+func TestApprovalEventFitsFrame(t *testing.T) {
+	bad := strings.Repeat("\x01", maxDiffText)
+	in, _ := json.Marshal(map[string]string{"path": "a.go", "content": strings.Repeat("\x01", maxInputValue)})
+	for _, body := range []agent.Body{
+		&agent.ApprovalRequest{ID: "w1", Tool: "write", Input: in, Diff: &agent.Diff{Path: "a.go", Old: bad, New: bad}},
+		&agent.ToolCall{ID: "w1", Name: "write", Input: in},
+	} {
+		e := chatEvent(1, agent.Event{Agent: "c1", Body: body})
+		b, err := json.Marshal(e)
+		if err != nil || len(b) > eventBudget {
+			t.Fatalf("%T: %d bytes, budget %d, %v", body, len(b), eventBudget, err)
+		}
+		if a := e.Approval; a != nil && (a.Diff == nil || !strings.HasSuffix(a.Diff.New, "(cut)")) {
+			t.Fatalf("the cut diff is not marked: %+v", a.Diff)
+		}
+	}
+}

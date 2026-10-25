@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -178,6 +179,12 @@ func (m *Model) choose(p *api.ChatApproval, i int) *api.ChatInput {
 }
 
 func (m *Model) answer(p *api.ChatApproval, decision, reason string) *api.ChatInput {
+	// A reason is a short note; a pasted one past the limit is cut, not
+	// refused, so the answer still goes.
+	for len(reason) > api.MaxChatMessage {
+		_, size := utf8.DecodeLastRuneInString(reason)
+		reason = reason[:len(reason)-size]
+	}
 	in := m.chatInput(api.InputAnswer, reason)
 	in.ID, in.Decision = p.ID, decision
 	return in

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -83,6 +84,9 @@ func TestChatInputValidate(t *testing.T) {
 		{"empty message", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage}, false},
 		{"answer without id", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, Decision: DecisionYes}, false},
 		{"unknown decision", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, ID: "t", Decision: "maybe"}, false},
+		{"longest message", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage, Text: strings.Repeat("x", MaxChatMessage)}, true},
+		{"message too long", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
+		{"reason too long", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, ID: "t", Decision: DecisionNo, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

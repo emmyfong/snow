@@ -18,9 +18,10 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		return
 	}
 	var conv *agent.Conversation
+	queued := 0
 	s.call(func(st *state) {
 		if p := st.paneOf(c, in.Pane); p != nil && p.chat != nil && string(p.chat.conv.Agent()) == in.Agent {
-			conv = p.chat.conv
+			conv, queued = p.chat.conv, len(p.chat.snap.Queue)
 		}
 	})
 	if conv == nil {
@@ -30,6 +31,13 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	var err error
 	switch in.Kind {
 	case api.InputMessage:
+		// The queue is read from the snapshot, which can trail the agent
+		// by a message or two; the bound still holds the queue near
+		// MaxChatQueue, well inside a frame.
+		if queued >= api.MaxChatQueue {
+			s.refuse(c, api.CodeCommandFailed, fmt.Errorf("%d messages already wait for the turn to end", queued))
+			return
+		}
 		err = conv.Send(in.Text)
 	case api.InputAnswer:
 		err = conv.Answer(agent.Answer{ID: in.ID, Decision: agent.Decision(in.Decision), Reason: in.Text})

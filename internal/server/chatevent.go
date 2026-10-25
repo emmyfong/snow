@@ -14,6 +14,9 @@ import (
 const (
 	maxDiffText   = 128 << 10 // each side of a diff
 	maxInputValue = 4 << 10   // one string value in a tool call's input
+	// eventBudget bounds one encoded event. Text that JSON escapes to six
+	// bytes per byte passes the caps above, so an event is measured too.
+	eventBudget = api.MaxFrameSize / 3
 )
 
 // chatEvent turns an agent event for chat pane id into its protocol form,
@@ -57,7 +60,39 @@ func chatEvent(id int, e agent.Event) *api.ChatEvent {
 	default:
 		return nil
 	}
+	fitEvent(out)
 	return out
+}
+
+// fitEvent cuts e's tool input and diff further until its encoding fits
+// eventBudget, and drops them if even the smallest cut does not fit.
+func fitEvent(e *api.ChatEvent) {
+	if e.Tool == nil && e.Approval == nil {
+		return
+	}
+	for n := maxDiffText / 4; ; n /= 4 {
+		if b, err := json.Marshal(e); err == nil && len(b) <= eventBudget {
+			return
+		}
+		if n < 1<<10 {
+			break
+		}
+		if t := e.Tool; t != nil {
+			t.Input = capInputTo(t.Input, n)
+		}
+		if a := e.Approval; a != nil {
+			a.Input = capInputTo(a.Input, n)
+			if a.Diff != nil {
+				a.Diff.Old, a.Diff.New = capText(a.Diff.Old, n), capText(a.Diff.New, n)
+			}
+		}
+	}
+	if t := e.Tool; t != nil {
+		t.Input = nil
+	}
+	if a := e.Approval; a != nil {
+		a.Input, a.Diff = nil, nil
+	}
 }
 
 // errorCodes maps agent failure kinds to protocol codes.
@@ -117,8 +152,11 @@ func utf8Start(b byte) bool { return b&0xC0 != 0x80 }
 // capInput returns a tool call's input with long string values cut, such
 // as the whole file a write sends. Input that is not a JSON object is
 // dropped when it is too long to show.
-func capInput(raw json.RawMessage) json.RawMessage {
-	if len(raw) <= maxInputValue {
+func capInput(raw json.RawMessage) json.RawMessage { return capInputTo(raw, maxInputValue) }
+
+// capInputTo is capInput with string values cut to n bytes.
+func capInputTo(raw json.RawMessage, n int) json.RawMessage {
+	if len(raw) <= n {
 		return raw
 	}
 	var m map[string]any
@@ -127,7 +165,7 @@ func capInput(raw json.RawMessage) json.RawMessage {
 	}
 	for k, v := range m {
 		if s, ok := v.(string); ok {
-			m[k] = capText(s, maxInputValue)
+			m[k] = capText(s, n)
 		}
 	}
 	b, err := json.Marshal(m)

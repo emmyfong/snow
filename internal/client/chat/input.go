@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"fmt"
 	"slices"
 	"strings"
 
@@ -115,7 +116,14 @@ func (m *Model) insert(text string) {
 // server queues it.
 func (m *Model) submit() *api.ChatInput {
 	text := string(m.input)
-	if strings.TrimSpace(text) == "" {
+	switch {
+	case strings.TrimSpace(text) == "":
+		return nil
+	case len(text) > api.MaxChatMessage:
+		m.note = fmt.Sprintf("Message too long: at most %d KiB. Shorten it, or save it to a file and name the file.", api.MaxChatMessage>>10)
+		return nil
+	case m.snap.Running && len(m.snap.Queue) >= api.MaxChatQueue:
+		m.note = fmt.Sprintf("%d messages already wait for this turn. Send this one after it ends.", len(m.snap.Queue))
 		return nil
 	}
 	m.input, m.cursor = nil, 0
@@ -139,6 +147,14 @@ func (m *Model) unselect() {
 		m.selected = ""
 		m.invalidate()
 	}
+}
+
+// Note returns a note for the status bar about the last key, such as why a
+// message was not sent, once, or "".
+func (m *Model) Note() string {
+	n := m.note
+	m.note = ""
+	return n
 }
 
 // Follow returns to the latest text, and keeps to it as new text comes.

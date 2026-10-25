@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -428,4 +429,32 @@ func TestSnapshotDoesNotShareTools(t *testing.T) {
 	if out.Entries[0].Tool.Done {
 		t.Fatal("the sent snapshot changed after it was taken")
 	}
+}
+
+// TestChatQueueBounded: a running turn holds at most MaxChatQueue
+// messages; the next one is refused, so the queue always fits a frame.
+func TestChatQueueBounded(t *testing.T) {
+	hold := make(chan struct{})
+	r := reply("ok")
+	r.Hold = hold
+	s, _, _ := newChatServer(t, r)
+	c := connect(t, s, 100, 30)
+	id := openChat(t, c)
+	say(c, id, "first")
+	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Running })
+	for i := range api.MaxChatQueue {
+		say(c, id, fmt.Sprintf("then %d", i))
+		c.WaitChat(id, func(s *api.ChatSnapshot) bool { return len(s.Queue) == i+1 })
+	}
+	say(c, id, "one too many")
+	deadline := time.Now().Add(apitest.Wait)
+	var got *api.Error
+	for got == nil && time.Now().Before(deadline) {
+		r, _ := c.Next(time.Second)
+		got, _ = r.(*api.Error)
+	}
+	if got == nil {
+		t.Fatal("a message past the queue limit was not refused")
+	}
+	close(hold)
 }

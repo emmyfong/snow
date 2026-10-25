@@ -93,6 +93,16 @@ type ChatTool struct {
 	IsError bool   `json:"isError,omitempty"`
 }
 
+// Bounds on what a client sends, so the messages and the queue a
+// snapshot carries always fit a frame, even in JSON's longest escapes.
+const (
+	// MaxChatMessage bounds the bytes of a ChatInput's Text.
+	MaxChatMessage = 16 << 10
+	// MaxChatQueue bounds the messages that wait for a running turn; the
+	// server refuses a message past it.
+	MaxChatQueue = 4
+)
+
 // MaxToolResult bounds ChatTool.Result: a client shows a capped result, and
 // a snapshot must fit in a frame.
 const MaxToolResult = 16 << 10
@@ -250,6 +260,9 @@ func (in *ChatInput) Validate() error {
 		return fmt.Errorf("%w: no pane", ErrInvalidChatInput)
 	case in.Agent == "":
 		return fmt.Errorf("%w: no agent", ErrInvalidChatInput)
+	}
+	if len(in.Text) > MaxChatMessage {
+		return fmt.Errorf("%w: text is over %d bytes", ErrInvalidChatInput, MaxChatMessage)
 	}
 	switch in.Kind {
 	case InputMessage:

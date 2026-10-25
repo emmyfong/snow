@@ -44,6 +44,8 @@ func (c chatPane) result(in *api.ChatInput) (api.Message, string) {
 	case chat.AskPickModel:
 		// TODO(#113): open the model picker instead.
 		note = "Set [chat] model in config.toml, then open a new chat."
+	default:
+		note = c.Note()
 	}
 	if in == nil {
 		return nil, note

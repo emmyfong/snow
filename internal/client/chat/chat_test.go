@@ -270,3 +270,30 @@ func TestScrollFillsPaneAfterGrow(t *testing.T) {
 		t.Fatalf("the pane shows less than it can:\n%s", s)
 	}
 }
+
+// TestChatRefusesWhatServerWould: a message over MaxChatMessage, or one
+// more than the queue holds, is not sent; the text stays and a note says
+// why.
+func TestChatRefusesWhatServerWould(t *testing.T) {
+	m, _ := newChat(80, 24)
+	m.input = []rune(strings.Repeat("x", api.MaxChatMessage+1))
+	m.cursor = len(m.input)
+	if in := m.Key(key(tea.KeyEnter, 0, "")); in != nil {
+		t.Fatalf("sent %d bytes", len(in.Text))
+	}
+	if n := m.Note(); !strings.Contains(n, "too long") || len(m.input) != api.MaxChatMessage+1 {
+		t.Fatalf("note %q, input %d runes", n, len(m.input))
+	}
+
+	m.Snapshot(&api.ChatSnapshot{Pane: 2, Agent: "c1", Model: "a/b", Running: true, Queue: []string{"a", "b", "c", "d"}})
+	m.input, m.cursor = []rune("five"), 4
+	if in := m.Key(key(tea.KeyEnter, 0, "")); in != nil {
+		t.Fatalf("sent %+v past a full queue", in)
+	}
+	if n := m.Note(); !strings.Contains(n, "wait") || string(m.input) != "five" {
+		t.Fatalf("note %q, input %q", n, string(m.input))
+	}
+	if m.Note() != "" {
+		t.Fatal("a note shows twice")
+	}
+}

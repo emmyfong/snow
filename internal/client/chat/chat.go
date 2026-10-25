@@ -33,6 +33,7 @@ type Model struct {
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
 	loaded        bool   // the first snapshot came
+	note          string // a note for the status bar; see Note
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed

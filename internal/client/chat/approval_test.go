@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -260,5 +261,17 @@ func TestApprovalWaitsWhileTyping(t *testing.T) {
 	}
 	if in := m.Key(letter('y')); in == nil || in.Kind != api.InputAnswer || in.Decision != api.DecisionYes {
 		t.Fatalf("y on an empty line sent %+v", in)
+	}
+}
+
+// TestLongReasonStillAnswers: a reason past MaxChatMessage is cut, so the
+// answer is still valid.
+func TestLongReasonStillAnswers(t *testing.T) {
+	m := waiting(t, 100, 30)
+	m.Key(letter('n'))
+	m.box.text = strings.Repeat("é", api.MaxChatMessage)
+	in := m.Key(key(tea.KeyEnter, 0, ""))
+	if in == nil || in.Decision != api.DecisionNo || in.Validate() != nil || !utf8.ValidString(in.Text) {
+		t.Fatalf("answer %d bytes, %v", len(in.Text), in.Validate())
 	}
 }
