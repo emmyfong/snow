@@ -11,9 +11,9 @@ import (
 
 // usageTurn plays a turn whose reply reports u.
 func usageTurn(m *Model, u api.ChatUsage) {
-	m.Event(ev(api.ChatEvent{Kind: api.EventTitle, Text: "Fix the rename bug"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTitle, Text: "Fix the rename bug"}))
 	oneTurn(m, 1, "Why does rename drop spaces?", "It trims the name before it saves it.")
-	m.Event(ev(api.ChatEvent{Kind: api.EventUsage, Usage: &u}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventUsage, Usage: &u}))
 }
 
 var priced = api.ChatUsage{
@@ -42,7 +42,7 @@ func TestTopBarGolden(t *testing.T) {
 		},
 		"Switch": func(m *Model) {
 			usageTurn(m, priced)
-			m.Event(ev(api.ChatEvent{Kind: api.EventModel, Model: "anthropic/claude-opus-5-5", Effort: "high"}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventModel, Model: "anthropic/claude-opus-5-5", Effort: "high"}))
 		},
 	}
 	for name, state := range states {

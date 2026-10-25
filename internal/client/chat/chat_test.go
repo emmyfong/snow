@@ -44,18 +44,18 @@ func screen(m *Model) string { return ansi.Strip(strings.Join(m.View(), "\n")) }
 
 // oneTurn plays a whole turn into m.
 func oneTurn(m *Model, n int, user, reply string) {
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: n, Text: user}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: reply}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: n, Reason: api.EndDone}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: n, Text: user}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: reply}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: n, Reason: api.ChatEndDone}))
 }
 
 // TestChatStreamingAppends: deltas fed as messages append in order, and
 // the transcript follows them.
 func TestChatStreamingAppends(t *testing.T) {
 	m, _ := newChat(60, 12)
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "hi"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "hi"}))
 	for _, d := range []string{"Hel", "lo, ", "wor", "ld."} {
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: d}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: d}))
 	}
 	if got := m.Chat().Entries[1].Text; got != "Hello, world." {
 		t.Fatalf("reply %q", got)
@@ -74,7 +74,7 @@ func TestChatSendsMessage(t *testing.T) {
 	}
 	typeText(m, "fix it")
 	in := m.Key(key(tea.KeyEnter, 0, ""))
-	if in == nil || in.Kind != api.InputMessage || in.Text != "fix it" || in.Pane != 2 || in.Agent != "c1" || in.Validate() != nil {
+	if in == nil || in.Kind != api.ChatInputMessage || in.Text != "fix it" || in.Pane != 2 || in.Agent != "c1" || in.Validate() != nil {
 		t.Fatalf("sent %+v", in)
 	}
 	if len(m.input) != 0 {
@@ -105,9 +105,9 @@ func TestChatEscSendsInterrupt(t *testing.T) {
 	if in := m.Key(key(tea.KeyEscape, 0, "")); in != nil {
 		t.Fatalf("idle Esc sent %+v", in)
 	}
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "hi"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "hi"}))
 	in := m.Key(key(tea.KeyEscape, 0, ""))
-	if in == nil || in.Kind != api.InputInterrupt || in.Validate() != nil {
+	if in == nil || in.Kind != api.ChatInputInterrupt || in.Validate() != nil {
 		t.Fatalf("sent %+v", in)
 	}
 }
@@ -192,7 +192,7 @@ func TestChatResize(t *testing.T) {
 func TestChatSnapshotKeepsInput(t *testing.T) {
 	m, _ := newChat(60, 12)
 	typeText(m, "draft")
-	m.Snapshot(&api.ChatSnapshot{Pane: 2, Agent: "c1", Entries: []api.ChatEntry{{Kind: api.EntryUser, Text: "old"}}})
+	m.Snapshot(&api.ChatSnapshot{Pane: 2, Agent: "c1", Entries: []api.ChatEntry{{Kind: api.ChatEntryUser, Text: "old"}}})
 	if string(m.input) != "draft" || len(m.Chat().Entries) != 1 {
 		t.Fatalf("input %q, entries %+v", string(m.input), m.Chat().Entries)
 	}
@@ -206,16 +206,16 @@ var goldenStates = map[string]func(m *Model, c *clock){
 	},
 	"Streaming": func(m *Model, c *clock) {
 		oneTurn(m, 1, "What does the rename command do?", "It renames the session on screen.")
-		m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 2, Text: "And kill?"}))
-		m.Event(ev(api.ChatEvent{Kind: api.EventState, State: api.ChatStateStreaming}))
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: "Kill ends a session and every program in it. Snow asks"}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 2, Text: "And kill?"}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventState, State: api.ChatStateStreaming}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: "Kill ends a session and every program in it. Snow asks"}))
 		c.t = c.t.Add(12 * time.Second)
 		typeText(m, "and the tests")
 	},
 	"Queued": func(m *Model, c *clock) {
-		m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "Fix the failing test in rename_test.go"}))
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: "Looking at rename_test.go."}))
-		m.Event(ev(api.ChatEvent{Kind: api.EventQueue, Queue: []string{"then run go vet"}}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "Fix the failing test in rename_test.go"}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: "Looking at rename_test.go."}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventQueue, Queue: []string{"then run go vet"}}))
 		c.t = c.t.Add(75 * time.Second)
 	},
 	"Scrolled": func(m *Model, _ *clock) {
@@ -243,14 +243,14 @@ func TestChatGolden(t *testing.T) {
 // not move the rows they read.
 func TestScrolledViewStays(t *testing.T) {
 	m, _ := newChat(60, 12)
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "go"}))
 	for i := range 30 {
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: fmt.Sprintf("line %d\n\n", i)}))
 	}
 	m.Scroll(8)
 	before := screen(m)
 	for i := 30; i < 36; i++ {
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: fmt.Sprintf("line %d\n\n", i)}))
 	}
 	if after := screen(m); after != before {
 		t.Fatalf("the view moved:\nBEFORE\n%s\nAFTER\n%s", before, after)
@@ -261,9 +261,9 @@ func TestScrolledViewStays(t *testing.T) {
 // top still shows a full pane of rows.
 func TestScrollFillsPaneAfterGrow(t *testing.T) {
 	m, _ := newChat(60, 12)
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "go"}))
 	for i := range 20 {
-		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n", i)}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: fmt.Sprintf("line %d\n", i)}))
 	}
 	m.Scroll(1000)
 	m.SetSize(60, 40)
@@ -303,16 +303,16 @@ func TestChatRefusesWhatServerWould(t *testing.T) {
 // message, which the server queues; it is not a block and not an interrupt.
 func TestChatSendsWhileRunning(t *testing.T) {
 	m, _ := newChat(60, 12)
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "run the tests"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "run the tests"}))
 	typeText(m, "then run go vet")
 	in := m.Key(key(tea.KeyEnter, 0, ""))
-	if in == nil || in.Kind != api.InputMessage || in.Text != "then run go vet" || in.Validate() != nil {
+	if in == nil || in.Kind != api.ChatInputMessage || in.Text != "then run go vet" || in.Validate() != nil {
 		t.Fatalf("sent %+v", in)
 	}
 	if len(m.input) != 0 {
 		t.Fatalf("input kept %q", string(m.input))
 	}
-	m.Event(ev(api.ChatEvent{Kind: api.EventQueue, Queue: []string{"then run go vet"}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventQueue, Queue: []string{"then run go vet"}}))
 	if s := screen(m); !strings.Contains(s, "queued: then run go vet") {
 		t.Fatalf("the message does not show as queued:\n%s", s)
 	}
@@ -325,8 +325,8 @@ func TestBoxesFitEverySize(t *testing.T) {
 	states := map[string]func(m *Model){
 		"approval": func(m *Model) {
 			in, _ := json.Marshal(map[string]string{"command": "go test ./... 名前を直して\nrm -rf 'a b'"})
-			m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
-			m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in, Outside: []string{"/etc/名前"}}}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in, Outside: []string{"/etc/名前"}}}))
 		},
 		"diff": func(m *Model) {
 			waitingDiff(m)
@@ -338,8 +338,8 @@ func TestBoxesFitEverySize(t *testing.T) {
 		},
 		"expanded": func(m *Model) {
 			in, _ := json.Marshal(map[string]string{"path": "名前.go"})
-			m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
-			m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "名前\n名前"}}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "名前\n名前"}}))
 			m.expanded["t1"] = true
 		},
 	}
@@ -349,7 +349,7 @@ func TestBoxesFitEverySize(t *testing.T) {
 	for name, state := range states {
 		t.Run(name, func(t *testing.T) {
 			m, _ := newChat(80, 24)
-			m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "go"}))
 			state(m)
 			for _, size := range [][2]int{{80, 24}, {40, 12}, {25, 10}, {15, 8}, {9, 5}, {5, 3}, {1, 1}} {
 				m.SetSize(size[0], size[1])
@@ -374,7 +374,7 @@ func TestBoxesFitEverySize(t *testing.T) {
 // waitingDiff makes the turn wait for an answer about a write with a diff.
 func waitingDiff(m *Model) {
 	call := writeCall
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &call}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &call}))
 	a := writeApproval
-	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &a}))
 }

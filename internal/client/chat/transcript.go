@@ -91,23 +91,23 @@ func (m *Model) draw() {
 	live := m.liveError()
 	for i, e := range m.snap.Entries {
 		switch e.Kind {
-		case api.EntryUser:
+		case api.ChatEntryUser:
 			text(ui.EntryUser, e.Text, false)
-		case api.EntryAssistant:
+		case api.ChatEntryAssistant:
 			text(ui.EntryAgent, e.Text, e.Cut)
-		case api.EntryThinking:
+		case api.ChatEntryThinking:
 			text(ui.EntryThinking, e.Text, false)
-		case api.EntryTool:
+		case api.ChatEntryTool:
 			if e.Tool != nil {
 				add(indented(m.toolCell(e.Tool, m.width-indent)), hit{tool: e.Tool.ID}, true)
 			}
-		case api.EntryModel:
+		case api.ChatEntryModel:
 			text(ui.EntryNote, "switched to "+e.Text, false)
-		case api.EntryInterrupted:
+		case api.ChatEntryInterrupted:
 			text(ui.EntryNote, "interrupted", false)
-		case api.EntryReported:
+		case api.ChatEntryReported:
 			text(ui.EntryModel, "Asked for "+e.Requested+", but the API reported "+e.Text+".", false)
-		case api.EntryError:
+		case api.ChatEntryError:
 			if e.Error == nil {
 				text(ui.EntryError, "failed", false)
 				continue

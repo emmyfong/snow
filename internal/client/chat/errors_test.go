@@ -27,9 +27,9 @@ var failures = map[string]api.ChatError{
 
 // failTurn plays a turn that streams partial text, then fails with e.
 func failTurn(m *Model, e api.ChatError) {
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "Explain the rename command"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: "The rename command changes"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed, Error: &e}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "Explain the rename command"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: "The rename command changes"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndFailed, Error: &e}))
 }
 
 // TestErrorStatesGolden: one golden per failure, and a turn interrupted
@@ -44,9 +44,9 @@ func TestErrorStatesGolden(t *testing.T) {
 	}
 	states["Restarted"] = func(m *Model) {
 		m.Snapshot(&api.ChatSnapshot{Pane: 2, Agent: "c1", Model: "anthropic/claude-sonnet-5-5", Mode: "ask", Turn: 1, Entries: []api.ChatEntry{
-			{Kind: api.EntryUser, Turn: 1, Text: "Explain the rename command"},
-			{Kind: api.EntryAssistant, Turn: 1, Text: "The rename command changes", Cut: true},
-			{Kind: api.EntryInterrupted, Turn: 1},
+			{Kind: api.ChatEntryUser, Turn: 1, Text: "Explain the rename command"},
+			{Kind: api.ChatEntryAssistant, Turn: 1, Text: "The rename command changes", Cut: true},
+			{Kind: api.ChatEntryInterrupted, Turn: 1},
 		}})
 	}
 	for name, state := range states {
@@ -85,7 +85,7 @@ func TestRetrySendsChatInput(t *testing.T) {
 	m, _ := newChat(100, 30)
 	failTurn(m, failures["Network"])
 	in := m.Key(enter)
-	if in == nil || in.Kind != api.InputRetry || in.Pane != 2 || in.Agent != "c1" || in.Validate() != nil {
+	if in == nil || in.Kind != api.ChatInputRetry || in.Pane != 2 || in.Agent != "c1" || in.Validate() != nil {
 		t.Fatalf("Enter sent %+v", in)
 	}
 
@@ -94,7 +94,7 @@ func TestRetrySendsChatInput(t *testing.T) {
 	clicked := false
 	for y, r := range m.View() {
 		if x := strings.Index(ansi.Strip(r), " Retry "); x >= 0 {
-			if in := m.Click(x+1, y); in == nil || in.Kind != api.InputRetry {
+			if in := m.Click(x+1, y); in == nil || in.Kind != api.ChatInputRetry {
 				t.Fatalf("click sent %+v", in)
 			}
 			clicked = true
@@ -107,7 +107,7 @@ func TestRetrySendsChatInput(t *testing.T) {
 	m, _ = newChat(100, 30)
 	failTurn(m, failures["Network"])
 	typeText(m, "never mind")
-	if in := m.Key(enter); in == nil || in.Kind != api.InputMessage || in.Text != "never mind" {
+	if in := m.Key(enter); in == nil || in.Kind != api.ChatInputMessage || in.Text != "never mind" {
 		t.Fatalf("typed Enter sent %+v", in)
 	}
 }
@@ -122,7 +122,7 @@ func TestNoAutoModelSwitch(t *testing.T) {
 			failTurn(m, e)
 			for range errorChoices(&e) {
 				for _, k := range []tea.Key{enter, right} {
-					if in := m.Key(k); in != nil && in.Kind != api.InputRetry {
+					if in := m.Key(k); in != nil && in.Kind != api.ChatInputRetry {
 						t.Fatalf("%v sent %+v", k, in)
 					}
 					if a := m.Asked(); a != "" && a != AskLogin && a != AskPickModel {

@@ -17,87 +17,87 @@ func TestChatApply(t *testing.T) {
 		{
 			name: "streamed reply",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventTurnStarted, Turn: 1, Text: "hi"}),
-				ev(ChatEvent{Kind: EventThinking, Text: "hmm"}),
-				ev(ChatEvent{Kind: EventText, Text: "hel"}),
-				ev(ChatEvent{Kind: EventText, Text: "lo"}),
-				ev(ChatEvent{Kind: EventTurnEnded, Turn: 1, Reason: EndDone}),
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1, Text: "hi"}),
+				ev(ChatEvent{Kind: ChatEventThinking, Text: "hmm"}),
+				ev(ChatEvent{Kind: ChatEventText, Text: "hel"}),
+				ev(ChatEvent{Kind: ChatEventText, Text: "lo"}),
+				ev(ChatEvent{Kind: ChatEventTurnEnded, Turn: 1, Reason: ChatEndDone}),
 			},
 			want: ChatSnapshot{Turn: 1, Entries: []ChatEntry{
-				{Kind: EntryUser, Turn: 1, Text: "hi"},
-				{Kind: EntryThinking, Turn: 1, Text: "hmm"},
-				{Kind: EntryAssistant, Turn: 1, Text: "hello"},
+				{Kind: ChatEntryUser, Turn: 1, Text: "hi"},
+				{Kind: ChatEntryThinking, Turn: 1, Text: "hmm"},
+				{Kind: ChatEntryAssistant, Turn: 1, Text: "hello"},
 			}},
 		},
 		{
 			name: "tool with approval",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventTurnStarted, Turn: 1, Text: "go"}),
-				ev(ChatEvent{Kind: EventToolCall, Tool: &ChatTool{ID: "t", Name: "write"}}),
-				ev(ChatEvent{Kind: EventApproval, Approval: &ChatApproval{ID: "t", Tool: "write", Diff: diff}}),
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1, Text: "go"}),
+				ev(ChatEvent{Kind: ChatEventToolCall, Tool: &ChatTool{ID: "t", Name: "write"}}),
+				ev(ChatEvent{Kind: ChatEventApproval, Approval: &ChatApproval{ID: "t", Tool: "write", Diff: diff}}),
 			},
 			want: ChatSnapshot{Running: true, Turn: 1, Entries: []ChatEntry{
-				{Kind: EntryUser, Turn: 1, Text: "go"},
-				{Kind: EntryTool, Turn: 1, Tool: &ChatTool{ID: "t", Name: "write", Diff: diff}},
+				{Kind: ChatEntryUser, Turn: 1, Text: "go"},
+				{Kind: ChatEntryTool, Turn: 1, Tool: &ChatTool{ID: "t", Name: "write", Diff: diff}},
 			}, Pending: &ChatApproval{ID: "t", Tool: "write", Diff: diff}},
 		},
 		{
 			name: "result clears the approval",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventTurnStarted, Turn: 1}),
-				ev(ChatEvent{Kind: EventToolCall, Tool: &ChatTool{ID: "t", Name: "run"}}),
-				ev(ChatEvent{Kind: EventApproval, Approval: &ChatApproval{ID: "t", Tool: "run"}}),
-				ev(ChatEvent{Kind: EventToolResult, Tool: &ChatTool{ID: "t", Result: "no", IsError: true}}),
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),
+				ev(ChatEvent{Kind: ChatEventToolCall, Tool: &ChatTool{ID: "t", Name: "run"}}),
+				ev(ChatEvent{Kind: ChatEventApproval, Approval: &ChatApproval{ID: "t", Tool: "run"}}),
+				ev(ChatEvent{Kind: ChatEventToolResult, Tool: &ChatTool{ID: "t", Result: "no", IsError: true}}),
 			},
 			want: ChatSnapshot{Running: true, Turn: 1, Entries: []ChatEntry{
-				{Kind: EntryTool, Turn: 1, Tool: &ChatTool{ID: "t", Name: "run", Done: true, Result: "no", IsError: true}},
+				{Kind: ChatEntryTool, Turn: 1, Tool: &ChatTool{ID: "t", Name: "run", Done: true, Result: "no", IsError: true}},
 			}},
 		},
 		{
 			name: "interrupt cuts the reply",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventTurnStarted, Turn: 2, Text: "x"}),
-				ev(ChatEvent{Kind: EventText, Text: "par"}),
-				ev(ChatEvent{Kind: EventTurnEnded, Turn: 2, Reason: EndInterrupted}),
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 2, Text: "x"}),
+				ev(ChatEvent{Kind: ChatEventText, Text: "par"}),
+				ev(ChatEvent{Kind: ChatEventTurnEnded, Turn: 2, Reason: ChatEndInterrupted}),
 			},
 			want: ChatSnapshot{Turn: 2, Entries: []ChatEntry{
-				{Kind: EntryUser, Turn: 2, Text: "x"},
-				{Kind: EntryAssistant, Turn: 2, Text: "par", Cut: true},
-				{Kind: EntryInterrupted, Turn: 2},
+				{Kind: ChatEntryUser, Turn: 2, Text: "x"},
+				{Kind: ChatEntryAssistant, Turn: 2, Text: "par", Cut: true},
+				{Kind: ChatEntryInterrupted, Turn: 2},
 			}},
 		},
 		{
 			name: "failure",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventTurnStarted, Turn: 1, Text: "x"}),
-				ev(ChatEvent{Kind: EventTurnEnded, Turn: 1, Reason: EndFailed, Error: &ChatError{Code: ChatErrNetwork}}),
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1, Text: "x"}),
+				ev(ChatEvent{Kind: ChatEventTurnEnded, Turn: 1, Reason: ChatEndFailed, Error: &ChatError{Code: ChatErrNetwork}}),
 			},
 			want: ChatSnapshot{Turn: 1, Entries: []ChatEntry{
-				{Kind: EntryUser, Turn: 1, Text: "x"},
-				{Kind: EntryError, Turn: 1, Error: &ChatError{Code: ChatErrNetwork}},
+				{Kind: ChatEntryUser, Turn: 1, Text: "x"},
+				{Kind: ChatEntryError, Turn: 1, Error: &ChatError{Code: ChatErrNetwork}},
 			}},
 		},
 		{
 			name: "state, queue, usage, model, mode, title",
 			events: []*ChatEvent{
-				ev(ChatEvent{Kind: EventState, State: ChatStateTool}),
-				ev(ChatEvent{Kind: EventQueue, Queue: []string{"a"}}),
-				ev(ChatEvent{Kind: EventUsage, Usage: &ChatUsage{Input: 1, Cost: 0.25, Priced: true}}),
-				ev(ChatEvent{Kind: EventUsage, Usage: &ChatUsage{Input: 2, Cost: 0.5, Priced: true}}),
-				ev(ChatEvent{Kind: EventModel, Model: "p/m", Effort: "low"}),
-				ev(ChatEvent{Kind: EventModel, Model: "p/n", Error: &ChatError{Code: ChatErrSave}}),
-				ev(ChatEvent{Kind: EventMode, Mode: "auto"}),
-				ev(ChatEvent{Kind: EventTitle, Text: "T"}),
+				ev(ChatEvent{Kind: ChatEventState, State: ChatStateTool}),
+				ev(ChatEvent{Kind: ChatEventQueue, Queue: []string{"a"}}),
+				ev(ChatEvent{Kind: ChatEventUsage, Usage: &ChatUsage{Input: 1, Cost: 0.25, Priced: true}}),
+				ev(ChatEvent{Kind: ChatEventUsage, Usage: &ChatUsage{Input: 2, Cost: 0.5, Priced: true}}),
+				ev(ChatEvent{Kind: ChatEventModel, Model: "p/m", Effort: "low"}),
+				ev(ChatEvent{Kind: ChatEventModel, Model: "p/n", Error: &ChatError{Code: ChatErrSave}}),
+				ev(ChatEvent{Kind: ChatEventMode, Mode: "auto"}),
+				ev(ChatEvent{Kind: ChatEventTitle, Text: "T"}),
 			},
 			want: ChatSnapshot{
 				State: ChatStateTool, Queue: []string{"a"}, Usage: &ChatUsage{Input: 2, Cost: 0.5, Priced: true}, Cost: 0.75,
 				Model: "p/m", Effort: "low", Mode: "auto", Title: "T",
-				Entries: []ChatEntry{{Kind: EntryModel, Text: "p/m"}, {Kind: EntryError, Error: &ChatError{Code: ChatErrSave}}},
+				Entries: []ChatEntry{{Kind: ChatEntryModel, Text: "p/m"}, {Kind: ChatEntryError, Error: &ChatError{Code: ChatErrSave}}},
 			},
 		},
 		{
 			name:   "other pane",
-			events: []*ChatEvent{{Pane: 9, Agent: "a", Kind: EventTitle, Text: "T"}},
+			events: []*ChatEvent{{Pane: 9, Agent: "a", Kind: ChatEventTitle, Text: "T"}},
 		},
 	}
 	for _, tt := range tests {
@@ -140,20 +140,20 @@ func TestReportedMatches(t *testing.T) {
 func TestModelMismatchShowsBoth(t *testing.T) {
 	s := ChatSnapshot{Pane: 1}
 	u := &ChatUsage{Requested: "anthropic/claude-sonnet-5-5", Reported: "claude-haiku-5-5"}
-	s.Apply(&ChatEvent{Pane: 1, Kind: EventTurnStarted, Turn: 1, Text: "hi"})
-	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: u})
-	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: u})
+	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventTurnStarted, Turn: 1, Text: "hi"})
+	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventUsage, Usage: u})
+	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventUsage, Usage: u})
 	var got []ChatEntry
 	for _, e := range s.Entries {
-		if e.Kind == EntryReported {
+		if e.Kind == ChatEntryReported {
 			got = append(got, e)
 		}
 	}
 	if len(got) != 1 || got[0].Text != "claude-haiku-5-5" || got[0].Requested != "anthropic/claude-sonnet-5-5" {
 		t.Fatalf("entries %+v", s.Entries)
 	}
-	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: &ChatUsage{Requested: u.Requested, Reported: "claude-sonnet-5-5-20261001"}})
-	if n := len(s.Entries); s.Entries[n-1].Kind != EntryReported || n != 2 {
+	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventUsage, Usage: &ChatUsage{Requested: u.Requested, Reported: "claude-sonnet-5-5-20261001"}})
+	if n := len(s.Entries); s.Entries[n-1].Kind != ChatEntryReported || n != 2 {
 		t.Fatalf("a dated ID added an entry: %+v", s.Entries)
 	}
 }

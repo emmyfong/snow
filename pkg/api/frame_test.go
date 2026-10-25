@@ -37,9 +37,9 @@ func everyMessage() []Message {
 		&RenameSession{Session: "api", Name: "web"},
 		&Scrollback{Pane: 1, From: 40, Total: 5000, Lines: []string{"\x1b[31mred\x1b[0m", ""}},
 		&Error{Code: "no-session", Message: "session api does not exist"},
-		&ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "x", Model: "a/b", Mode: "ask", State: ChatStateIdle, Entries: []ChatEntry{{Kind: EntryUser, Turn: 1, Text: "hi"}}, Queue: []string{"next"}},
-		&ChatEvent{Pane: 2, Agent: "c1", Kind: EventText, Text: "hi"},
-		&ChatInput{Pane: 2, Agent: "c1", Kind: InputMessage, Text: "go"},
+		&ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "x", Model: "a/b", Mode: "ask", State: ChatStateIdle, Entries: []ChatEntry{{Kind: ChatEntryUser, Turn: 1, Text: "hi"}}, Queue: []string{"next"}},
+		&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventText, Text: "hi"},
+		&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputMessage, Text: "go"},
 	}
 }
 

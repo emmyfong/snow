@@ -85,13 +85,13 @@ func openChat(t *testing.T, c *apitest.Client) int {
 // say sends text to chat pane id.
 func say(c *apitest.Client, id int, text string) {
 	agent := c.Chat(id).Agent
-	c.Send(&api.ChatInput{Pane: id, Agent: agent, Kind: api.InputMessage, Text: text})
+	c.Send(&api.ChatInput{Pane: id, Agent: agent, Kind: api.ChatInputMessage, Text: text})
 }
 
 // lastReply returns the text of the last assistant entry.
 func lastReply(s *api.ChatSnapshot) string {
 	for i := len(s.Entries) - 1; i >= 0; i-- {
-		if s.Entries[i].Kind == api.EntryAssistant {
+		if s.Entries[i].Kind == api.ChatEntryAssistant {
 			return s.Entries[i].Text
 		}
 	}
@@ -112,7 +112,7 @@ func TestChatTurn(t *testing.T) {
 	}
 	say(c, id, "hi")
 	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "hello" && idle(s) })
-	if got.Entries[0].Kind != api.EntryUser || got.Entries[0].Text != "hi" || got.Usage == nil {
+	if got.Entries[0].Kind != api.ChatEntryUser || got.Entries[0].Text != "hi" || got.Usage == nil {
 		t.Fatalf("chat %+v", got)
 	}
 	if reqs := fake.Requests(); len(reqs) != 1 || reqs[0].Model != "model-1" {
@@ -408,8 +408,8 @@ func TestChatInputRefused(t *testing.T) {
 	id := openChat(t, c)
 	agent := c.Chat(id).Agent
 	for _, in := range []*api.ChatInput{
-		{Pane: id, Agent: "someone-else", Kind: api.InputInterrupt},
-		{Pane: id, Agent: agent, Kind: api.InputAnswer, ID: "nope", Decision: api.DecisionYes},
+		{Pane: id, Agent: "someone-else", Kind: api.ChatInputInterrupt},
+		{Pane: id, Agent: agent, Kind: api.ChatInputAnswer, ID: "nope", Decision: api.ChatDecisionYes},
 		{Pane: id, Agent: agent, Kind: "dance"},
 	} {
 		c.Send(in)
@@ -452,8 +452,8 @@ func TestChatNotSetUp(t *testing.T) {
 // tool result. Run with -race.
 func TestSnapshotDoesNotShareTools(t *testing.T) {
 	snap := api.ChatSnapshot{Pane: 1, Agent: "a"}
-	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read"}})
-	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read"}})
+	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read"}})
+	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.ChatEventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read"}})
 	out := fitSnapshot(snap)
 	done := make(chan struct{})
 	go func() {
@@ -465,8 +465,8 @@ func TestSnapshotDoesNotShareTools(t *testing.T) {
 		}
 	}()
 	for range 200 {
-		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read", Diff: &api.ChatDiff{Path: "a"}}})
-		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "x"}})
+		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.ChatEventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read", Diff: &api.ChatDiff{Path: "a"}}})
+		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.ChatEventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "x"}})
 	}
 	<-done
 	if out.Entries[0].Tool.Done {

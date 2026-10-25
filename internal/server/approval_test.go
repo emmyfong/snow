@@ -55,7 +55,7 @@ func TestApprovalEndToEnd(t *testing.T) {
 		t.Fatalf("after attach: %+v", again)
 	}
 
-	c2.Send(&api.ChatInput{Pane: id, Agent: again.Agent, Kind: api.InputAnswer, ID: "t1", Decision: api.DecisionYes})
+	c2.Send(&api.ChatInput{Pane: id, Agent: again.Agent, Kind: api.ChatInputAnswer, ID: "t1", Decision: api.ChatDecisionYes})
 	done := c2.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "written" && idle(s) })
 	if done.Pending != nil {
 		t.Fatalf("pending left: %+v", done.Pending)

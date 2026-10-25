@@ -54,7 +54,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 		return m.submit()
 	case k.Code == tea.KeyEscape:
 		if m.snap.Running {
-			return m.chatInput(api.InputInterrupt, "")
+			return m.chatInput(api.ChatInputInterrupt, "")
 		}
 	case k.Code == tea.KeyPgUp:
 		m.Scroll(max(m.transcriptHeight()-1, 1))
@@ -102,7 +102,7 @@ func (m *Model) Paste(text string) {
 }
 
 // Retry returns the input that runs the failed turn again.
-func (m *Model) Retry() *api.ChatInput { return m.chatInput(api.InputRetry, "") }
+func (m *Model) Retry() *api.ChatInput { return m.chatInput(api.ChatInputRetry, "") }
 
 func (m *Model) insert(text string) {
 	m.unselect()
@@ -128,7 +128,7 @@ func (m *Model) submit() *api.ChatInput {
 	}
 	m.input, m.cursor = nil, 0
 	m.Follow()
-	return m.chatInput(api.InputMessage, text)
+	return m.chatInput(api.ChatInputMessage, text)
 }
 
 func (m *Model) chatInput(kind, text string) *api.ChatInput {

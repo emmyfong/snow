@@ -120,7 +120,7 @@ func (m *Model) approvalKey(p *api.ChatApproval, k tea.Key) (*api.ChatInput, boo
 	if m.box.reason {
 		switch k.Code {
 		case tea.KeyEnter:
-			return m.answer(p, api.DecisionNo, m.box.text), true
+			return m.answer(p, api.ChatDecisionNo, m.box.text), true
 		case tea.KeyEscape:
 			m.box.reason = false
 			return nil, true
@@ -162,9 +162,9 @@ func (m *Model) choose(p *api.ChatApproval, i int) *api.ChatInput {
 	m.box.choice = i
 	switch i {
 	case choiceYes:
-		return m.answer(p, api.DecisionYes, "")
+		return m.answer(p, api.ChatDecisionYes, "")
 	case choiceAlways:
-		return m.answer(p, api.DecisionAlways, "")
+		return m.answer(p, api.ChatDecisionAlways, "")
 	case choiceNo:
 		m.box.reason = true
 	case choiceDiff:
@@ -183,7 +183,7 @@ func (m *Model) answer(p *api.ChatApproval, decision, reason string) *api.ChatIn
 		_, size := utf8.DecodeLastRuneInString(reason)
 		reason = reason[:len(reason)-size]
 	}
-	in := m.chatInput(api.InputAnswer, reason)
+	in := m.chatInput(api.ChatInputAnswer, reason)
 	in.ID, in.Decision = p.ID, decision
 	return in
 }

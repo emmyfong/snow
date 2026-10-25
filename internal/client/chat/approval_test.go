@@ -28,12 +28,12 @@ var writeApproval = api.ChatApproval{
 func waiting(t *testing.T, w, h int) *Model {
 	t.Helper()
 	m, _ := newChat(w, h)
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "Trim names in rename.go"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "Trim names in rename.go"}))
 	call := writeCall
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &call}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &call}))
 	a := writeApproval
-	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventState, State: api.ChatStateApproval}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &a}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventState, State: api.ChatStateApproval}))
 	return m
 }
 
@@ -69,20 +69,20 @@ func TestApprovalBoxKeys(t *testing.T) {
 		decision string
 		text     string
 	}{
-		{"y", []tea.Key{letter('y')}, api.DecisionYes, ""},
-		{"Enter on the first choice", []tea.Key{enter}, api.DecisionYes, ""},
-		{"a", []tea.Key{letter('a')}, api.DecisionAlways, ""},
-		{"Right then Enter", []tea.Key{right, enter}, api.DecisionAlways, ""},
-		{"Left wraps to the diff, back to no", []tea.Key{left, left, enter, enter}, api.DecisionNo, ""},
-		{"n with a reason", reason, api.DecisionNo, "too risky"},
-		{"Esc leaves the reason", []tea.Key{letter('n'), key(tea.KeyEscape, 0, ""), letter('y')}, api.DecisionYes, ""},
-		{"typing waits", []tea.Key{letter('q'), letter('y')}, api.DecisionYes, ""},
+		{"y", []tea.Key{letter('y')}, api.ChatDecisionYes, ""},
+		{"Enter on the first choice", []tea.Key{enter}, api.ChatDecisionYes, ""},
+		{"a", []tea.Key{letter('a')}, api.ChatDecisionAlways, ""},
+		{"Right then Enter", []tea.Key{right, enter}, api.ChatDecisionAlways, ""},
+		{"Left wraps to the diff, back to no", []tea.Key{left, left, enter, enter}, api.ChatDecisionNo, ""},
+		{"n with a reason", reason, api.ChatDecisionNo, "too risky"},
+		{"Esc leaves the reason", []tea.Key{letter('n'), key(tea.KeyEscape, 0, ""), letter('y')}, api.ChatDecisionYes, ""},
+		{"typing waits", []tea.Key{letter('q'), letter('y')}, api.ChatDecisionYes, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			m := waiting(t, 100, 30)
 			in := typeKeys(m, tt.keys...)
-			if in == nil || in.Kind != api.InputAnswer || in.ID != "w1" || in.Decision != tt.decision || in.Text != tt.text || in.Validate() != nil {
+			if in == nil || in.Kind != api.ChatInputAnswer || in.ID != "w1" || in.Decision != tt.decision || in.Text != tt.text || in.Validate() != nil {
 				t.Fatalf("sent %+v", in)
 			}
 			if len(m.input) != 0 {
@@ -95,7 +95,7 @@ func TestApprovalBoxKeys(t *testing.T) {
 	if !strings.Contains(screen(m), "Hide diff") || !strings.Contains(screen(m), "+ import \"strings\"") {
 		t.Fatalf("d did not show the diff:\n%s", screen(m))
 	}
-	if in := m.Key(key(tea.KeyEscape, 0, "")); in == nil || in.Kind != api.InputInterrupt {
+	if in := m.Key(key(tea.KeyEscape, 0, "")); in == nil || in.Kind != api.ChatInputInterrupt {
 		t.Fatalf("Esc sent %+v", in)
 	}
 }
@@ -106,7 +106,7 @@ func TestApprovalBoxClick(t *testing.T) {
 	for y, r := range m.View() {
 		if x := strings.Index(ansi.Strip(r), "Always for write"); x >= 0 {
 			in := m.Click(x+1, y)
-			if in == nil || in.Decision != api.DecisionAlways {
+			if in == nil || in.Decision != api.ChatDecisionAlways {
 				t.Fatalf("click sent %+v", in)
 			}
 			return
@@ -122,7 +122,7 @@ func TestApprovalSurvivesDetach(t *testing.T) {
 	call := writeCall
 	m := New(&api.ChatSnapshot{
 		Pane: 2, Agent: "c1", Model: "fake/model-1", Mode: "ask", State: api.ChatStateApproval, Running: true, Turn: 1,
-		Entries: []api.ChatEntry{{Kind: api.EntryUser, Turn: 1, Text: "Trim names"}, {Kind: api.EntryTool, Turn: 1, Tool: &call}},
+		Entries: []api.ChatEntry{{Kind: api.ChatEntryUser, Turn: 1, Text: "Trim names"}, {Kind: api.ChatEntryTool, Turn: 1, Tool: &call}},
 		Pending: &a,
 	}, waiting(t, 1, 1).th, nil)
 	m.SetSize(100, 30)
@@ -132,10 +132,10 @@ func TestApprovalSurvivesDetach(t *testing.T) {
 	if _, _, ok := m.Cursor(); ok {
 		t.Fatal("the input kept the cursor while the box waits")
 	}
-	if in := m.Key(letter('y')); in == nil || in.ID != "w1" || in.Decision != api.DecisionYes {
+	if in := m.Key(letter('y')); in == nil || in.ID != "w1" || in.Decision != api.ChatDecisionYes {
 		t.Fatalf("sent %+v", in)
 	}
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "w1", Result: "wrote 7 lines"}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolResult, Tool: &api.ChatTool{ID: "w1", Result: "wrote 7 lines"}}))
 	if strings.Contains(screen(m), "Allow write?") {
 		t.Fatal("the box stayed after the result")
 	}
@@ -157,7 +157,7 @@ func TestApprovalBoxGolden(t *testing.T) {
 			a := writeApproval
 			a.ID, a.Diff, a.Outside = "w2", nil, []string{"/etc/hosts"}
 			a.Input = json.RawMessage(`{"path":"/etc/hosts","content":"x"}`)
-			m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
+			m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &a}))
 		},
 	}
 	for name, state := range states {
@@ -177,9 +177,9 @@ func runWaiting(t *testing.T, w, h int, command string) *Model {
 	t.Helper()
 	m, _ := newChat(w, h)
 	in, _ := json.Marshal(map[string]string{"command": command})
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "clean up"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "clean up"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in}}))
 	return m
 }
 
@@ -223,7 +223,7 @@ func TestApprovalBoxCleansText(t *testing.T) {
 	m := runWaiting(t, 80, 30, "echo a\x1b[2Jb\x1b]52;c;QUJD\x07\x1b_Gx\x1b\\\x1bPq\x1b\\\rc")
 	a := *m.snap.Pending
 	a.ID, a.Outside = "r2", []string{"/etc/\x1b[8mpass\x1b[0mwd"}
-	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &a}))
 	assertNoForeignEscapes(t, m.View())
 }
 
@@ -253,13 +253,13 @@ func TestApprovalWaitsWhileTyping(t *testing.T) {
 		t.Fatalf("y sent %+v", in)
 	}
 	in := m.Key(key(tea.KeyEnter, 0, ""))
-	if in == nil || in.Kind != api.InputMessage || in.Text != "and aday" {
+	if in == nil || in.Kind != api.ChatInputMessage || in.Text != "and aday" {
 		t.Fatalf("Enter sent %+v, want the message", in)
 	}
 	if m.pending() == nil {
 		t.Fatal("the box is gone")
 	}
-	if in := m.Key(letter('y')); in == nil || in.Kind != api.InputAnswer || in.Decision != api.DecisionYes {
+	if in := m.Key(letter('y')); in == nil || in.Kind != api.ChatInputAnswer || in.Decision != api.ChatDecisionYes {
 		t.Fatalf("y on an empty line sent %+v", in)
 	}
 }
@@ -271,7 +271,7 @@ func TestLongReasonStillAnswers(t *testing.T) {
 	m.Key(letter('n'))
 	m.box.text = strings.Repeat("é", api.MaxChatMessage)
 	in := m.Key(key(tea.KeyEnter, 0, ""))
-	if in == nil || in.Decision != api.DecisionNo || in.Validate() != nil || !utf8.ValidString(in.Text) {
+	if in == nil || in.Decision != api.ChatDecisionNo || in.Validate() != nil || !utf8.ValidString(in.Text) {
 		t.Fatalf("answer %d bytes, %v", len(in.Text), in.Validate())
 	}
 }

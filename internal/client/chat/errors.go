@@ -74,7 +74,7 @@ func (m *Model) liveError() int {
 	if n < 0 || m.snap.Running {
 		return -1
 	}
-	if e := m.snap.Entries[n]; e.Kind != api.EntryError || e.Error == nil || len(errorChoices(e.Error)) == 0 {
+	if e := m.snap.Entries[n]; e.Kind != api.ChatEntryError || e.Error == nil || len(errorChoices(e.Error)) == 0 {
 		return -1
 	}
 	if m.errAt != n {

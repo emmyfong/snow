@@ -52,32 +52,32 @@ const (
 type ChatEntry struct {
 	Kind string `json:"kind"` // one of the Entry* values
 	Turn int    `json:"turn,omitempty"`
-	// Text is the message for EntryUser, the reply so far for
-	// EntryAssistant and EntryThinking, the new model for EntryModel, and
-	// the model ID the vendor reported for EntryReported.
+	// Text is the message for ChatEntryUser, the reply so far for
+	// ChatEntryAssistant and ChatEntryThinking, the new model for ChatEntryModel, and
+	// the model ID the vendor reported for ChatEntryReported.
 	Text string `json:"text,omitempty"`
 	// Requested is the "provider/model" a turn asked for, for
-	// EntryReported.
+	// ChatEntryReported.
 	Requested string `json:"requested,omitempty"`
-	// Cut marks an EntryAssistant reply that stopped before the model
+	// Cut marks an ChatEntryAssistant reply that stopped before the model
 	// finished it.
 	Cut   bool       `json:"cut,omitempty"`
-	Tool  *ChatTool  `json:"tool,omitempty"`  // for EntryTool
-	Error *ChatError `json:"error,omitempty"` // for EntryError
+	Tool  *ChatTool  `json:"tool,omitempty"`  // for ChatEntryTool
+	Error *ChatError `json:"error,omitempty"` // for ChatEntryError
 }
 
 // Kinds of ChatEntry.
 const (
-	EntryUser        = "user"        // a message the user sent
-	EntryAssistant   = "assistant"   // the model's reply text
-	EntryThinking    = "thinking"    // the model's visible reasoning
-	EntryTool        = "tool"        // a tool call and, once it ran, its result
-	EntryModel       = "model"       // the model changed from the next turn on
-	EntryInterrupted = "interrupted" // the user stopped the turn
-	EntryError       = "error"       // a turn, or a change, failed
-	// EntryReported says the vendor reported another model than the one
+	ChatEntryUser        = "user"        // a message the user sent
+	ChatEntryAssistant   = "assistant"   // the model's reply text
+	ChatEntryThinking    = "thinking"    // the model's visible reasoning
+	ChatEntryTool        = "tool"        // a tool call and, once it ran, its result
+	ChatEntryModel       = "model"       // the model changed from the next turn on
+	ChatEntryInterrupted = "interrupted" // the user stopped the turn
+	ChatEntryError       = "error"       // a turn, or a change, failed
+	// ChatEntryReported says the vendor reported another model than the one
 	// the turn asked for.
-	EntryReported = "reported"
+	ChatEntryReported = "reported"
 )
 
 // ChatTool is one tool call and what came of it.
@@ -179,46 +179,46 @@ type ChatEvent struct {
 	Agent string `json:"agent"`
 	Kind  string `json:"kind"` // one of the Event* values
 	Turn  int    `json:"turn,omitempty"`
-	// Text is the user's message for EventTurnStarted (empty for a retry),
-	// the new text for EventText and EventThinking, and the new title for
-	// EventTitle.
+	// Text is the user's message for ChatEventTurnStarted (empty for a retry),
+	// the new text for ChatEventText and ChatEventThinking, and the new title for
+	// ChatEventTitle.
 	Text     string        `json:"text,omitempty"`
-	Reason   string        `json:"reason,omitempty"`   // for EventTurnEnded: one of the End* values
-	Tool     *ChatTool     `json:"tool,omitempty"`     // for EventToolCall and EventToolResult
-	Approval *ChatApproval `json:"approval,omitempty"` // for EventApproval
-	State    string        `json:"state,omitempty"`    // for EventState
-	Queue    []string      `json:"queue,omitempty"`    // for EventQueue; absent means empty
-	Usage    *ChatUsage    `json:"usage,omitempty"`    // for EventUsage
-	Model    string        `json:"model,omitempty"`    // for EventModel
-	Effort   string        `json:"effort,omitempty"`   // for EventModel
-	Mode     string        `json:"mode,omitempty"`     // for EventMode
-	// Error is why EventTurnEnded failed, or why EventModel or EventMode
+	Reason   string        `json:"reason,omitempty"`   // for ChatEventTurnEnded: one of the End* values
+	Tool     *ChatTool     `json:"tool,omitempty"`     // for ChatEventToolCall and ChatEventToolResult
+	Approval *ChatApproval `json:"approval,omitempty"` // for ChatEventApproval
+	State    string        `json:"state,omitempty"`    // for ChatEventState
+	Queue    []string      `json:"queue,omitempty"`    // for ChatEventQueue; absent means empty
+	Usage    *ChatUsage    `json:"usage,omitempty"`    // for ChatEventUsage
+	Model    string        `json:"model,omitempty"`    // for ChatEventModel
+	Effort   string        `json:"effort,omitempty"`   // for ChatEventModel
+	Mode     string        `json:"mode,omitempty"`     // for ChatEventMode
+	// Error is why ChatEventTurnEnded failed, or why ChatEventModel or ChatEventMode
 	// could not be saved; the model or mode then stays as it was.
 	Error *ChatError `json:"error,omitempty"`
 }
 
 // Kinds of ChatEvent.
 const (
-	EventTurnStarted = "turn-started"
-	EventTurnEnded   = "turn-ended"
-	EventText        = "text"
-	EventThinking    = "thinking"
-	EventToolCall    = "tool-call"
-	EventToolResult  = "tool-result"
-	EventApproval    = "approval"
-	EventState       = "state"
-	EventQueue       = "queue"
-	EventUsage       = "usage"
-	EventModel       = "model"
-	EventMode        = "mode"
-	EventTitle       = "title"
+	ChatEventTurnStarted = "turn-started"
+	ChatEventTurnEnded   = "turn-ended"
+	ChatEventText        = "text"
+	ChatEventThinking    = "thinking"
+	ChatEventToolCall    = "tool-call"
+	ChatEventToolResult  = "tool-result"
+	ChatEventApproval    = "approval"
+	ChatEventState       = "state"
+	ChatEventQueue       = "queue"
+	ChatEventUsage       = "usage"
+	ChatEventModel       = "model"
+	ChatEventMode        = "mode"
+	ChatEventTitle       = "title"
 )
 
 // How a turn ends, in ChatEvent.Reason.
 const (
-	EndDone        = "done"
-	EndInterrupted = "interrupted"
-	EndFailed      = "failed"
+	ChatEndDone        = "done"
+	ChatEndInterrupted = "interrupted"
+	ChatEndFailed      = "failed"
 )
 
 // ChatInput is what the user does in a chat pane.
@@ -226,26 +226,26 @@ type ChatInput struct {
 	Pane  int    `json:"pane"`
 	Agent string `json:"agent"`
 	Kind  string `json:"kind"` // one of the Input* values
-	// Text is the message for InputMessage and the reason for a "no"
-	// InputAnswer.
+	// Text is the message for ChatInputMessage and the reason for a "no"
+	// ChatInputAnswer.
 	Text     string `json:"text,omitempty"`
-	ID       string `json:"id,omitempty"`       // for InputAnswer: the approval request's ID
-	Decision string `json:"decision,omitempty"` // for InputAnswer: one of the Decision* values
+	ID       string `json:"id,omitempty"`       // for ChatInputAnswer: the approval request's ID
+	Decision string `json:"decision,omitempty"` // for ChatInputAnswer: one of the Decision* values
 }
 
 // Kinds of ChatInput.
 const (
-	InputMessage   = "message"   // send Text; during a turn it waits in the queue
-	InputAnswer    = "answer"    // answer approval request ID
-	InputInterrupt = "interrupt" // stop the running turn
-	InputRetry     = "retry"     // run the last turn again after a failure
+	ChatInputMessage   = "message"   // send Text; during a turn it waits in the queue
+	ChatInputAnswer    = "answer"    // answer approval request ID
+	ChatInputInterrupt = "interrupt" // stop the running turn
+	ChatInputRetry     = "retry"     // run the last turn again after a failure
 )
 
 // Answers to an approval request.
 const (
-	DecisionYes    = "yes"
-	DecisionAlways = "always" // yes to this tool for the rest of the conversation
-	DecisionNo     = "no"
+	ChatDecisionYes    = "yes"
+	ChatDecisionAlways = "always" // yes to this tool for the rest of the conversation
+	ChatDecisionNo     = "no"
 )
 
 // ErrInvalidChatInput is returned by ChatInput.Validate.
@@ -265,20 +265,20 @@ func (in *ChatInput) Validate() error {
 		return fmt.Errorf("%w: text is over %d bytes", ErrInvalidChatInput, MaxChatMessage)
 	}
 	switch in.Kind {
-	case InputMessage:
+	case ChatInputMessage:
 		if in.Text == "" {
 			return fmt.Errorf("%w: empty message", ErrInvalidChatInput)
 		}
-	case InputAnswer:
+	case ChatInputAnswer:
 		if in.ID == "" {
 			return fmt.Errorf("%w: answer names no request", ErrInvalidChatInput)
 		}
 		switch in.Decision {
-		case DecisionYes, DecisionAlways, DecisionNo:
+		case ChatDecisionYes, ChatDecisionAlways, ChatDecisionNo:
 		default:
 			return fmt.Errorf("%w: unknown decision %q", ErrInvalidChatInput, in.Decision)
 		}
-	case InputInterrupt, InputRetry:
+	case ChatInputInterrupt, ChatInputRetry:
 	default:
 		return fmt.Errorf("%w: unknown kind %q", ErrInvalidChatInput, in.Kind)
 	}

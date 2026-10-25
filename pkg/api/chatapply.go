@@ -13,27 +13,27 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		return
 	}
 	switch e.Kind {
-	case EventTurnStarted:
+	case ChatEventTurnStarted:
 		s.Running, s.Turn = true, e.Turn
 		if e.Text != "" {
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryUser, Turn: e.Turn, Text: e.Text})
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryUser, Turn: e.Turn, Text: e.Text})
 		}
-	case EventText:
-		s.appendText(EntryAssistant, e.Text)
-	case EventThinking:
-		s.appendText(EntryThinking, e.Text)
-	case EventToolCall:
+	case ChatEventText:
+		s.appendText(ChatEntryAssistant, e.Text)
+	case ChatEventThinking:
+		s.appendText(ChatEntryThinking, e.Text)
+	case ChatEventToolCall:
 		if e.Tool != nil {
 			t := *e.Tool
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryTool, Turn: s.Turn, Tool: &t})
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryTool, Turn: s.Turn, Tool: &t})
 		}
-	case EventApproval:
+	case ChatEventApproval:
 		if e.Approval != nil {
 			a := *e.Approval
 			s.Pending = &a
 			s.changeTool(a.ID, func(t *ChatTool) { t.Diff = a.Diff })
 		}
-	case EventToolResult:
+	case ChatEventToolResult:
 		if e.Tool == nil {
 			return
 		}
@@ -42,22 +42,22 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		if s.Pending != nil && s.Pending.ID == e.Tool.ID {
 			s.Pending = nil
 		}
-	case EventTurnEnded:
+	case ChatEventTurnEnded:
 		s.Running, s.Pending = false, nil
-		if e.Reason != EndDone {
+		if e.Reason != ChatEndDone {
 			s.cutReply(e.Turn)
 		}
 		switch e.Reason {
-		case EndInterrupted:
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryInterrupted, Turn: e.Turn})
-		case EndFailed:
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryError, Turn: e.Turn, Error: e.Error})
+		case ChatEndInterrupted:
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryInterrupted, Turn: e.Turn})
+		case ChatEndFailed:
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryError, Turn: e.Turn, Error: e.Error})
 		}
-	case EventState:
+	case ChatEventState:
 		s.State = e.State
-	case EventQueue:
+	case ChatEventQueue:
 		s.Queue = append([]string(nil), e.Queue...)
-	case EventUsage:
+	case ChatEventUsage:
 		if e.Usage != nil {
 			u := *e.Usage
 			s.Usage = &u
@@ -66,20 +66,20 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 			}
 			s.noteReported(&u)
 		}
-	case EventModel:
+	case ChatEventModel:
 		if e.Error != nil {
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryError, Error: e.Error})
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryError, Error: e.Error})
 			return
 		}
 		s.Model, s.Effort = e.Model, e.Effort
-		s.Entries = append(s.Entries, ChatEntry{Kind: EntryModel, Text: e.Model})
-	case EventMode:
+		s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryModel, Text: e.Model})
+	case ChatEventMode:
 		if e.Error != nil {
-			s.Entries = append(s.Entries, ChatEntry{Kind: EntryError, Error: e.Error})
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryError, Error: e.Error})
 			return
 		}
 		s.Mode = e.Mode
-	case EventTitle:
+	case ChatEventTitle:
 		s.Title = e.Text
 	}
 }
@@ -100,24 +100,24 @@ func (s *ChatSnapshot) appendText(kind, text string) {
 // model was still writing it.
 func (s *ChatSnapshot) cutReply(turn int) {
 	if n := len(s.Entries); n > 0 {
-		if last := &s.Entries[n-1]; last.Kind == EntryAssistant && last.Turn == turn {
+		if last := &s.Entries[n-1]; last.Kind == ChatEntryAssistant && last.Turn == turn {
 			last.Cut = true
 		}
 	}
 }
 
-// noteReported adds an EntryReported when the vendor reported another
+// noteReported adds an ChatEntryReported when the vendor reported another
 // model than u asked for, once per turn and model.
 func (s *ChatSnapshot) noteReported(u *ChatUsage) {
 	if reportedMatches(u.Requested, u.Reported) {
 		return
 	}
 	for i := len(s.Entries) - 1; i >= 0 && s.Entries[i].Turn == s.Turn; i-- {
-		if e := s.Entries[i]; e.Kind == EntryReported && e.Text == u.Reported && e.Requested == u.Requested {
+		if e := s.Entries[i]; e.Kind == ChatEntryReported && e.Text == u.Reported && e.Requested == u.Requested {
 			return
 		}
 	}
-	s.Entries = append(s.Entries, ChatEntry{Kind: EntryReported, Turn: s.Turn, Text: u.Reported, Requested: u.Requested})
+	s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryReported, Turn: s.Turn, Text: u.Reported, Requested: u.Requested})
 }
 
 // reportedMatches reports whether reported, the model ID a vendor says it

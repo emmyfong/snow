@@ -25,8 +25,8 @@ const editNew = "package rename\n\nimport \"strings\"\n\nfunc Rename(s string) s
 
 // toolTurn plays a turn with a read, an edit with a diff, and a failed run.
 func toolTurn(m *Model) {
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "Trim names in rename.go"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: "Reading it first."}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "Trim names in rename.go"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: "Reading it first."}))
 	calls := []api.ChatTool{
 		{ID: "t1", Name: "read", Input: json.RawMessage(`{"path":"internal/rename/rename.go"}`)},
 		{ID: "t2", Name: "edit", Input: json.RawMessage(`{"path":"internal/rename/rename.go","old":"x","new":"y"}`),
@@ -39,11 +39,11 @@ func toolTurn(m *Model) {
 		{ID: "t3", Result: "exit status 1\n--- FAIL: TestRename\n    rename_test.go:12: got \"a \"", IsError: true},
 	}
 	for i := range calls {
-		m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &calls[i]}))
-		m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &results[i]}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &calls[i]}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolResult, Tool: &results[i]}))
 	}
-	m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: "The test still fails."}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndDone}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventText, Text: "The test still fails."}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndDone}))
 }
 
 // TestToolCellGolden: collapsed, expanded, failed, and edit with diff.
@@ -131,14 +131,14 @@ func TestToolAndErrorTextCleaned(t *testing.T) {
 	const bad = "a\x1b[2Jb\x1b]52;c;QUJD\x07\x1b_Gx\x1b\\\x1bPq\x1b\\\rc\x08"
 	m, _ := newChat(80, 40)
 	in, _ := json.Marshal(map[string]string{"path": bad, "k" + bad: "v"})
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "read"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, IsError: true, Result: bad + "\n" + bad}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "read"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, IsError: true, Result: bad + "\n" + bad}}))
 	m.expanded["t1"] = true
 	m.invalidate()
 	assertNoForeignEscapes(t, m.View())
 
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed, Error: &api.ChatError{Code: api.ChatErrOther, Message: bad}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndFailed, Error: &api.ChatError{Code: api.ChatErrOther, Message: bad}}))
 	assertNoForeignEscapes(t, m.View())
 }
 
@@ -147,8 +147,8 @@ func TestToolAndErrorTextCleaned(t *testing.T) {
 func TestDiffWorkedOutOnce(t *testing.T) {
 	m, _ := newChat(80, 30)
 	in, _ := json.Marshal(map[string]string{"path": "a.go", "old": "a\nb\n", "new": "a\nc\n"})
-	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "edit"}))
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "e1", Name: "edit", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "edit"}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "e1", Name: "edit", Input: in}}))
 	m.View()
 	call := m.snap.Entries[len(m.snap.Entries)-1].Tool
 	first := m.diffs.of(call)
@@ -161,7 +161,7 @@ func TestDiffWorkedOutOnce(t *testing.T) {
 	if m.diffs.of(call) != first {
 		t.Fatal("the diff was worked out again for the same call")
 	}
-	m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "e1", Done: true, Result: "ok"}}))
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventToolResult, Tool: &api.ChatTool{ID: "e1", Done: true, Result: "ok"}}))
 	m.View()
 	if len(m.diffs.byTool) != 1 {
 		t.Fatalf("cache holds %d diffs, want only the one shown", len(m.diffs.byTool))

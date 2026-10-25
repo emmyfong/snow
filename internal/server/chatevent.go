@@ -25,27 +25,27 @@ func chatEvent(id int, e agent.Event) *api.ChatEvent {
 	out := &api.ChatEvent{Pane: id, Agent: string(e.Agent)}
 	switch b := e.Body.(type) {
 	case *agent.TurnStarted:
-		out.Kind, out.Turn, out.Text = api.EventTurnStarted, b.Turn, b.Text
+		out.Kind, out.Turn, out.Text = api.ChatEventTurnStarted, b.Turn, b.Text
 	case *agent.TurnEnded:
-		out.Kind, out.Turn, out.Reason, out.Error = api.EventTurnEnded, b.Turn, string(b.Reason), chatError(b.Failure)
+		out.Kind, out.Turn, out.Reason, out.Error = api.ChatEventTurnEnded, b.Turn, string(b.Reason), chatError(b.Failure)
 	case *agent.TextDelta:
-		out.Kind, out.Text = api.EventText, b.Text
+		out.Kind, out.Text = api.ChatEventText, b.Text
 	case *agent.ThinkingDelta:
-		out.Kind, out.Text = api.EventThinking, b.Text
+		out.Kind, out.Text = api.ChatEventThinking, b.Text
 	case *agent.ToolCall:
-		out.Kind, out.Tool = api.EventToolCall, &api.ChatTool{ID: b.ID, Name: b.Name, Input: capInput(b.Input)}
+		out.Kind, out.Tool = api.ChatEventToolCall, &api.ChatTool{ID: b.ID, Name: b.Name, Input: capInput(b.Input)}
 	case *agent.ToolResult:
-		out.Kind = api.EventToolResult
+		out.Kind = api.ChatEventToolResult
 		out.Tool = &api.ChatTool{ID: b.ID, Done: true, Result: capText(b.Content, api.MaxToolResult), IsError: b.IsError}
 	case *agent.ApprovalRequest:
-		out.Kind = api.EventApproval
+		out.Kind = api.ChatEventApproval
 		out.Approval = &api.ChatApproval{ID: b.ID, Tool: b.Tool, Input: capInput(b.Input), Diff: chatDiff(b.Diff), Outside: b.Outside}
 	case *agent.StateChanged:
-		out.Kind, out.State = api.EventState, string(b.State)
+		out.Kind, out.State = api.ChatEventState, string(b.State)
 	case *agent.QueueChanged:
-		out.Kind, out.Queue = api.EventQueue, b.Messages
+		out.Kind, out.Queue = api.ChatEventQueue, b.Messages
 	case *agent.Usage:
-		out.Kind = api.EventUsage
+		out.Kind = api.ChatEventUsage
 		out.Usage = &api.ChatUsage{
 			Requested: b.Requested, Reported: b.Reported, Input: b.Input, Output: b.Output,
 			CacheRead: b.CacheRead, CacheWrite: b.CacheWrite, Cost: b.Cost, Priced: b.Priced,
@@ -54,9 +54,9 @@ func chatEvent(id int, e agent.Event) *api.ChatEvent {
 			out.Usage.Window = provider.ContextWindow(name, 0)
 		}
 	case *agent.ModelChanged:
-		out.Kind, out.Model, out.Effort, out.Error = api.EventModel, b.Model, b.Effort, chatError(b.Failure)
+		out.Kind, out.Model, out.Effort, out.Error = api.ChatEventModel, b.Model, b.Effort, chatError(b.Failure)
 	case *agent.ModeChanged:
-		out.Kind, out.Mode, out.Error = api.EventMode, string(b.Mode), chatError(b.Failure)
+		out.Kind, out.Mode, out.Error = api.ChatEventMode, string(b.Mode), chatError(b.Failure)
 	default:
 		return nil
 	}

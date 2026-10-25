@@ -72,16 +72,16 @@ func TestSessionRoutesKeysToChat(t *testing.T) {
 // running turn keeps a spinner tick going.
 func TestSessionChatStreams(t *testing.T) {
 	m, r := chatScreen(t, 100, 30)
-	cmd := m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "hi"}))
+	cmd := m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "hi"}))
 	if cmd == nil {
 		t.Fatal("no spinner tick while a turn runs")
 	}
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventText, Text: "hello there"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventText, Text: "hello there"}))
 	if s := ansi.Strip(content(m)); !strings.Contains(s, "hello there") || !strings.Contains(s, "Esc interrupt") {
 		t.Fatalf("screen:\n%s", s)
 	}
 	m.Update(press(tea.KeyEscape, 0, ""))
-	if in := lastChatInput(r); in == nil || in.Kind != api.InputInterrupt {
+	if in := lastChatInput(r); in == nil || in.Kind != api.ChatInputInterrupt {
 		t.Fatalf("Esc sent %+v", in)
 	}
 }
@@ -129,9 +129,9 @@ func TestSessionDropsGoneChats(t *testing.T) {
 
 func chatSessionGolden(t *testing.T, cols, rows int) {
 	m, _ := chatScreen(t, cols, rows)
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "Why did the server test fail?"}))
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventText, Text: "It passed on the second run. The first run timed out while the shell started."}))
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndDone}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "Why did the server test fail?"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventText, Text: "It passed on the second run. The first run timed out while the shell started."}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndDone}))
 	for _, r := range "run it again" {
 		m.Update(press(r, 0, string(r)))
 	}
@@ -145,8 +145,8 @@ func TestChatSessionGolden120x40(t *testing.T) { chatSessionGolden(t, 120, 40) }
 // nothing and tells the user how to save a key.
 func TestChatAskShowsWhatToDo(t *testing.T) {
 	m, r := chatScreen(t, 100, 30)
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "hi"}))
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed,
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "hi"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndFailed,
 		Error: &api.ChatError{Code: api.ChatErrBadKey, Message: "key rejected", Choices: []string{api.ChatChoiceLogin}}}))
 	sent := len(r.sent)
 	if cmd := m.Update(press(tea.KeyEnter, 0, "")); cmd == nil {
@@ -164,7 +164,7 @@ func TestChatAskShowsWhatToDo(t *testing.T) {
 // unzooming brings it back with its transcript and keys.
 func TestChatSurvivesZoom(t *testing.T) {
 	m, r := chatScreen(t, 100, 30)
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "remember me"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "remember me"}))
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Zoomed: true, Panes: []api.PaneInfo{
 		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: 100, H: 29}, Profile: "sh", Focused: true},
 	}}}})
@@ -176,7 +176,7 @@ func TestChatSurvivesZoom(t *testing.T) {
 		t.Fatalf("the chat lost its transcript:\n%s", ansi.Strip(content(m)))
 	}
 	m.Update(press(tea.KeyEscape, 0, ""))
-	if in := lastChatInput(r); in == nil || in.Kind != api.InputInterrupt {
+	if in := lastChatInput(r); in == nil || in.Kind != api.ChatInputInterrupt {
 		t.Fatalf("keys did not reach the chat: %+v", in)
 	}
 }
@@ -208,9 +208,9 @@ func TestChatPaneByKind(t *testing.T) {
 
 // longChat fills the chat with a turn of numbered lines.
 func longChat(m *Model) {
-	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "count"}))
+	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "count"}))
 	for i := range 60 {
-		m.Update(chatEvent(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventText, Text: fmt.Sprintf("line %d\n\n", i)}))
 	}
 }
 
@@ -238,13 +238,13 @@ func TestSessionChatMouse(t *testing.T) {
 	t.Run("approval choice", func(t *testing.T) {
 		m, r := chatScreen(t, 100, 30)
 		in := json.RawMessage(`{"path":"a.go","content":"x"}`)
-		m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "write it"}))
-		m.Update(chatEvent(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "w1", Name: "write", Input: in}}))
-		m.Update(chatEvent(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "w1", Tool: "write", Input: in}}))
-		m.Update(chatEvent(api.ChatEvent{Kind: api.EventState, State: api.ChatStateApproval}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "write it"}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventToolCall, Tool: &api.ChatTool{ID: "w1", Name: "write", Input: in}}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventApproval, Approval: &api.ChatApproval{ID: "w1", Tool: "write", Input: in}}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventState, State: api.ChatStateApproval}))
 		clickLabel(t, m, " Yes ", leftClick)
 		got := lastChatInput(r)
-		if got == nil || got.Kind != api.InputAnswer || got.ID != "w1" || got.Decision != api.DecisionYes {
+		if got == nil || got.Kind != api.ChatInputAnswer || got.ID != "w1" || got.Decision != api.ChatDecisionYes {
 			t.Fatalf("sent %+v", got)
 		}
 	})

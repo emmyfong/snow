@@ -30,7 +30,7 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	}
 	var err error
 	switch in.Kind {
-	case api.InputMessage:
+	case api.ChatInputMessage:
 		// The queue is read from the snapshot, which can trail the agent
 		// by a message or two; the bound still holds the queue near
 		// MaxChatQueue, well inside a frame.
@@ -39,11 +39,11 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 			return
 		}
 		err = conv.Send(in.Text)
-	case api.InputAnswer:
+	case api.ChatInputAnswer:
 		err = conv.Answer(agent.Answer{ID: in.ID, Decision: agent.Decision(in.Decision), Reason: in.Text})
-	case api.InputInterrupt:
+	case api.ChatInputInterrupt:
 		err = conv.Interrupt()
-	case api.InputRetry:
+	case api.ChatInputRetry:
 		err = conv.Retry()
 	}
 	// A pane closed meanwhile has nothing to report to.

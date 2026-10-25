@@ -85,9 +85,9 @@ func (m *Model) Snapshot(snap *api.ChatSnapshot) {
 func (m *Model) Event(e *api.ChatEvent) {
 	m.keepPlace(func() { m.snap.Apply(e) })
 	switch e.Kind {
-	case api.EventTurnStarted:
+	case api.ChatEventTurnStarted:
 		m.started = m.now()
-	case api.EventTurnEnded:
+	case api.ChatEventTurnEnded:
 		m.started = time.Time{}
 	}
 }

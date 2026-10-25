@@ -16,20 +16,20 @@ func chatMessages() []Message {
 			Pane: 2, Agent: "c1", Conversation: "c1", Title: "Fix it", Model: "anthropic/claude-sonnet-5-5", Effort: "high",
 			Mode: "ask", State: ChatStateApproval, Running: true, Turn: 3, Earlier: 4,
 			Entries: []ChatEntry{
-				{Kind: EntryUser, Turn: 3, Text: "edit a.go"},
-				{Kind: EntryAssistant, Turn: 3, Text: "ok", Cut: true},
-				{Kind: EntryTool, Turn: 3, Tool: &ChatTool{ID: "t1", Name: "edit", Input: json.RawMessage(`{"path":"a.go"}`), Diff: diff}},
-				{Kind: EntryError, Turn: 2, Error: &ChatError{Code: ChatErrRateLimited, Message: "slow down", RetryAfter: 42, Choices: []string{ChatChoiceWait}}},
+				{Kind: ChatEntryUser, Turn: 3, Text: "edit a.go"},
+				{Kind: ChatEntryAssistant, Turn: 3, Text: "ok", Cut: true},
+				{Kind: ChatEntryTool, Turn: 3, Tool: &ChatTool{ID: "t1", Name: "edit", Input: json.RawMessage(`{"path":"a.go"}`), Diff: diff}},
+				{Kind: ChatEntryError, Turn: 2, Error: &ChatError{Code: ChatErrRateLimited, Message: "slow down", RetryAfter: 42, Choices: []string{ChatChoiceWait}}},
 			},
 			Pending: &ChatApproval{ID: "t1", Tool: "edit", Input: json.RawMessage(`{"path":"a.go"}`), Diff: diff, Outside: []string{"/etc"}},
 			Queue:   []string{"next"},
 			Usage:   &ChatUsage{Requested: "anthropic/claude-sonnet-5-5", Reported: "claude-sonnet-5-5", Input: 10, Output: 5, Cost: 0.01, Priced: true, Window: 200000},
 			Cost:    0.42,
 		},
-		&ChatEvent{Pane: 2, Agent: "c1", Kind: EventText, Turn: 3, Text: "hel"},
-		&ChatEvent{Pane: 2, Agent: "c1", Kind: EventTurnEnded, Turn: 3, Reason: EndFailed, Error: &ChatError{Code: ChatErrBadKey, Message: "no", Choices: []string{ChatChoiceLogin}}},
-		&ChatEvent{Pane: 2, Agent: "c1", Kind: EventQueue, Queue: []string{"a", "b"}},
-		&ChatInput{Pane: 2, Agent: "c1", Kind: InputAnswer, ID: "t1", Decision: DecisionNo, Text: "not that file"},
+		&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventText, Turn: 3, Text: "hel"},
+		&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventTurnEnded, Turn: 3, Reason: ChatEndFailed, Error: &ChatError{Code: ChatErrBadKey, Message: "no", Choices: []string{ChatChoiceLogin}}},
+		&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventQueue, Queue: []string{"a", "b"}},
+		&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputAnswer, ID: "t1", Decision: ChatDecisionNo, Text: "not that file"},
 	}
 }
 
@@ -74,19 +74,19 @@ func TestChatInputValidate(t *testing.T) {
 		in   ChatInput
 		ok   bool
 	}{
-		{"message", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage, Text: "hi"}, true},
-		{"answer", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, ID: "t", Decision: DecisionAlways}, true},
-		{"interrupt", ChatInput{Pane: 1, Agent: "a", Kind: InputInterrupt}, true},
-		{"retry", ChatInput{Pane: 1, Agent: "a", Kind: InputRetry}, true},
-		{"no pane", ChatInput{Agent: "a", Kind: InputInterrupt}, false},
-		{"no agent", ChatInput{Pane: 1, Kind: InputInterrupt}, false},
+		{"message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: "hi"}, true},
+		{"answer", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: ChatDecisionAlways}, true},
+		{"interrupt", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputInterrupt}, true},
+		{"retry", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRetry}, true},
+		{"no pane", ChatInput{Agent: "a", Kind: ChatInputInterrupt}, false},
+		{"no agent", ChatInput{Pane: 1, Kind: ChatInputInterrupt}, false},
 		{"unknown kind", ChatInput{Pane: 1, Agent: "a", Kind: "dance"}, false},
-		{"empty message", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage}, false},
-		{"answer without id", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, Decision: DecisionYes}, false},
-		{"unknown decision", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, ID: "t", Decision: "maybe"}, false},
-		{"longest message", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage, Text: strings.Repeat("x", MaxChatMessage)}, true},
-		{"message too long", ChatInput{Pane: 1, Agent: "a", Kind: InputMessage, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
-		{"reason too long", ChatInput{Pane: 1, Agent: "a", Kind: InputAnswer, ID: "t", Decision: DecisionNo, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
+		{"empty message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage}, false},
+		{"answer without id", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, Decision: ChatDecisionYes}, false},
+		{"unknown decision", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: "maybe"}, false},
+		{"longest message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: strings.Repeat("x", MaxChatMessage)}, true},
+		{"message too long", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
+		{"reason too long", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: ChatDecisionNo, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
