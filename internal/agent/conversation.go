@@ -80,9 +80,13 @@ type (
 )
 
 // Start creates a new conversation with meta, saves its meta record, and
-// starts its goroutine. Meta.Folder is taken from cfg.Folder.
+// starts its goroutine. Meta.Folder is taken from cfg.Folder, and an unset
+// Meta.Created is now.
 func Start(cfg Config, meta convstore.Meta) (*Conversation, error) {
 	meta.Folder = cfg.Folder.Path
+	if meta.Created.IsZero() {
+		meta.Created = now(cfg)
+	}
 	w, err := cfg.Store.Create(meta)
 	if err != nil {
 		return nil, fmt.Errorf("start conversation: %w", err)
@@ -232,6 +236,14 @@ func (c *Conversation) post(cmd any) error {
 }
 
 func (c *Conversation) now() time.Time { return c.cfg.Now() }
+
+// now reads cfg's clock before a Conversation exists.
+func now(cfg Config) time.Time {
+	if cfg.Now == nil {
+		return time.Now()
+	}
+	return cfg.Now()
+}
 
 // emit sends an event about the main agent.
 func (c *Conversation) emit(b Body) {

@@ -33,6 +33,9 @@ func TestTurnToolLoop(t *testing.T) {
 	if got := types(recs); !reflect.DeepEqual(got, want) {
 		t.Fatalf("records %v, want %v", got, want)
 	}
+	if c, _ := h.store.Load(h.conv.ID()); c.Meta.Created.IsZero() {
+		t.Fatal("the meta record has no creation time")
+	}
 	if r := recs[2].(*convstore.ToolResult); r.ToolUseID != "t1" || r.Content != "echoed" {
 		t.Fatalf("first result %+v", r)
 	}
