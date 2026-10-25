@@ -18,6 +18,9 @@ import (
 // expands or collapses it. While an approval waits, its box takes the
 // keys first.
 func (m *Model) Key(k tea.Key) *api.ChatInput {
+	if !m.loaded {
+		return nil
+	}
 	if p := m.pending(); p != nil {
 		if in, ok := m.approvalKey(p, k); ok {
 			return in

@@ -5,7 +5,9 @@ import "strings"
 // Apply changes s by e, the way the server changed its own copy. Server
 // and client fold the same events with it, so they agree on the
 // transcript. It ignores an event for another pane and a kind it does not
-// know.
+// know. It never changes a ChatTool in place but swaps in a changed
+// copy, so a copy of Entries taken earlier stays safe to read, for
+// example by a goroutine that encodes it, while Apply runs.
 func (s *ChatSnapshot) Apply(e *ChatEvent) {
 	if e.Pane != s.Pane {
 		return
@@ -29,17 +31,14 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		if e.Approval != nil {
 			a := *e.Approval
 			s.Pending = &a
-			if t := s.tool(a.ID); t != nil {
-				t.Diff = a.Diff
-			}
+			s.changeTool(a.ID, func(t *ChatTool) { t.Diff = a.Diff })
 		}
 	case EventToolResult:
 		if e.Tool == nil {
 			return
 		}
-		if t := s.tool(e.Tool.ID); t != nil {
-			t.Done, t.Result, t.IsError = true, e.Tool.Result, e.Tool.IsError
-		}
+		r := e.Tool
+		s.changeTool(r.ID, func(t *ChatTool) { t.Done, t.Result, t.IsError = true, r.Result, r.IsError })
 		if s.Pending != nil && s.Pending.ID == e.Tool.ID {
 			s.Pending = nil
 		}
@@ -148,12 +147,15 @@ func ReportedMatches(requested, reported string) bool {
 	return true
 }
 
-// tool returns the call with id, the latest first, or nil.
-func (s *ChatSnapshot) tool(id string) *ChatTool {
+// changeTool replaces the call with id, the latest first, by a copy that
+// change has changed. It does nothing when no call has id.
+func (s *ChatSnapshot) changeTool(id string, change func(*ChatTool)) {
 	for i := len(s.Entries) - 1; i >= 0; i-- {
 		if t := s.Entries[i].Tool; t != nil && t.ID == id {
-			return t
+			c := *t
+			change(&c)
+			s.Entries[i].Tool = &c
+			return
 		}
 	}
-	return nil
 }

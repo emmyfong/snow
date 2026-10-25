@@ -21,8 +21,8 @@ func (m *Model) View() tea.View {
 			if rows := m.copyRows(p.ID); rows != nil {
 				lines = rows
 			}
-			if c := m.chats[p.ID]; c != nil {
-				lines = c.View()
+			if o := m.own[p.ID]; o != nil {
+				lines = o.View()
 			}
 			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused})
 		}
@@ -38,7 +38,7 @@ func (m *Model) View() tea.View {
 	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.prompt == nil {
 		if x, y, ok := m.copyCursor(p.ID); ok {
 			v.Cursor = tea.NewCursor(p.Rect.X+x, p.Rect.Y+y)
-		} else if c := m.chats[p.ID]; c != nil {
+		} else if c := m.own[p.ID]; c != nil {
 			if x, y, ok := c.Cursor(); ok && m.confirm == nil && m.menu == nil && m.rename == nil {
 				v.Cursor = tea.NewCursor(p.Rect.X+x, p.Rect.Y+y)
 			}

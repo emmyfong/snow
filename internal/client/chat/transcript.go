@@ -42,7 +42,7 @@ func (m *Model) draw() {
 		return
 	}
 	m.drawn = rendered{valid: true, width: m.width}
-	if m.width <= 0 {
+	if m.width <= 0 || !m.loaded {
 		return
 	}
 	indent := ui.TranscriptIndent(m.width)

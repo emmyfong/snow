@@ -32,6 +32,7 @@ type Model struct {
 	errAt         int    // the entry of the failure whose choices take keys
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
+	loaded        bool   // the first snapshot came
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -42,6 +43,14 @@ func New(snap *api.ChatSnapshot, th theme.Theme, now func() time.Time) *Model {
 	}
 	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1}
 	m.Snapshot(snap)
+	return m
+}
+
+// Waiting returns the chat pane id before its first snapshot comes: it
+// draws no transcript and sends nothing until Snapshot.
+func Waiting(id int, th theme.Theme, now func() time.Time) *Model {
+	m := New(&api.ChatSnapshot{Pane: id}, th, now)
+	m.loaded = false
 	return m
 }
 
@@ -59,6 +68,7 @@ func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), 
 // attach or after this client fell behind. What the user is typing stays.
 func (m *Model) Snapshot(snap *api.ChatSnapshot) {
 	m.snap = *snap
+	m.loaded = true
 	m.invalidate()
 	if snap.Running && m.started.IsZero() {
 		m.started = m.now()

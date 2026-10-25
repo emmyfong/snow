@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -399,5 +400,32 @@ func TestChatNotSetUp(t *testing.T) {
 			}
 			return
 		}
+	}
+}
+
+// TestSnapshotDoesNotShareTools: a snapshot sent to a client can be
+// encoded on its writer goroutine while the owner goroutine applies a
+// tool result. Run with -race.
+func TestSnapshotDoesNotShareTools(t *testing.T) {
+	snap := api.ChatSnapshot{Pane: 1, Agent: "a"}
+	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read"}})
+	snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read"}})
+	out := fitSnapshot(snap)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for range 200 {
+			if _, err := json.Marshal(out); err != nil {
+				t.Error(err)
+			}
+		}
+	}()
+	for range 200 {
+		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "t1", Tool: "read", Diff: &api.ChatDiff{Path: "a"}}})
+		snap.Apply(&api.ChatEvent{Pane: 1, Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "x"}})
+	}
+	<-done
+	if out.Entries[0].Tool.Done {
+		t.Fatal("the sent snapshot changed after it was taken")
 	}
 }

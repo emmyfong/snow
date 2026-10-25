@@ -120,8 +120,8 @@ func TestChatPaneSkipsCopyMode(t *testing.T) {
 func TestSessionDropsGoneChats(t *testing.T) {
 	m, _ := chatScreen(t, 100, 30)
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 100, H: 29}, Focused: true}}}}})
-	if len(m.chats) != 0 {
-		t.Fatalf("chats %v", m.chats)
+	if len(m.own) != 0 {
+		t.Fatalf("panes %v", m.own)
 	}
 }
 
@@ -154,6 +154,52 @@ func TestChatAskShowsWhatToDo(t *testing.T) {
 		t.Fatalf("sent %+v", r.sent[sent:])
 	}
 	if s := ansi.Strip(content(m)); !strings.Contains(s, "snow auth") {
+		t.Fatalf("screen:\n%s", s)
+	}
+}
+
+// TestChatSurvivesZoom: zooming another pane hides the chat, and
+// unzooming brings it back with its transcript and keys.
+func TestChatSurvivesZoom(t *testing.T) {
+	m, r := chatScreen(t, 100, 30)
+	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "remember me"}))
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Zoomed: true, Panes: []api.PaneInfo{
+		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: 100, H: 29}, Profile: "sh", Focused: true},
+	}}}})
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Panes: []api.PaneInfo{
+		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: 50, H: 29}, Profile: "sh"},
+		{ID: 2, Kind: api.PaneChat, Rect: api.Rect{X: 51, W: 49, H: 29}, Profile: "sh", Focused: true},
+	}}}})
+	if !strings.Contains(ansi.Strip(content(m)), "remember me") {
+		t.Fatalf("the chat lost its transcript:\n%s", ansi.Strip(content(m)))
+	}
+	m.Update(press(tea.KeyEscape, 0, ""))
+	if in := lastChatInput(r); in == nil || in.Kind != api.InputInterrupt {
+		t.Fatalf("keys did not reach the chat: %+v", in)
+	}
+}
+
+// TestChatPaneByKind: a pane the layout lists as a chat draws as a chat,
+// with no terminal under it, before its snapshot comes; typed keys go
+// nowhere until then.
+func TestChatPaneByKind(t *testing.T) {
+	r := &recorder{}
+	m := New(r.send)
+	m.now = fixedClock
+	m.SetSize(100, 30)
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{
+		{ID: 3, Kind: api.PaneChat, Rect: api.Rect{W: 100, H: 29}, Focused: true},
+	}}}})
+	if m.own[3] == nil {
+		t.Fatal("no chat pane from the layout")
+	}
+	m.Update(press('x', 0, "x"))
+	m.Update(press(tea.KeyEnter, 0, ""))
+	if len(r.sent) != 0 || len(r.keys()) != 0 {
+		t.Fatalf("sent %+v before the snapshot", r.sent)
+	}
+	m.Update(&api.ChatSnapshot{Pane: 3, Agent: "c9", Model: "fake/model-1", Mode: "ask"})
+	if s := ansi.Strip(content(m)); !strings.Contains(s, "fake/model-1") {
 		t.Fatalf("screen:\n%s", s)
 	}
 }

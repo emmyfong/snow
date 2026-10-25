@@ -97,13 +97,10 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		if (ev.Button == tea.MouseLeft || ev.Button == tea.MouseRight) && !p.Focused {
 			m.send(&api.Command{Op: api.OpFocus, Target: p.ID})
 		}
-		if c := m.chats[p.ID]; c != nil {
+		if o := m.own[p.ID]; o != nil {
 			switch ev.Button {
 			case tea.MouseLeft:
-				if in := c.Click(h.X, h.Y); in != nil {
-					m.send(in)
-				}
-				return m.chatAsked(c)
+				return m.ownResult(o.Click(h.X, h.Y))
 			case tea.MouseRight:
 				m.openMenu(ev.X, ev.Y)
 			}
@@ -175,7 +172,7 @@ func (m *Model) mouseWheel(ev tea.Mouse) tea.Cmd {
 	if st == nil || (b != api.ButtonWheelUp && b != api.ButtonWheelDown) {
 		return nil
 	}
-	if c := m.chats[h.Pane]; c != nil {
+	if c := m.own[h.Pane]; c != nil {
 		if b == api.ButtonWheelUp {
 			c.Scroll(wheelRows)
 		} else {

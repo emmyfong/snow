@@ -15,8 +15,9 @@ const hotGauge = 80
 // keeps its rows for the transcript and the input.
 const minBarHeight = 4
 
-// hasBar reports whether the pane is tall enough for the top bar.
-func (m *Model) hasBar() bool { return m.height >= minBarHeight }
+// hasBar reports whether the pane shows the top bar: once its snapshot
+// came, when it is tall enough.
+func (m *Model) hasBar() bool { return m.loaded && m.height >= minBarHeight }
 
 // barOptions are what the top bar shows: the title, how full the context
 // was on the last reply, the estimated cost, the model, and the mode.
