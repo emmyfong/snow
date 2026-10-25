@@ -126,9 +126,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case *api.SearchResult:
 		return m.copyReceive(msg)
 	case clipboard.ErrMsg:
-		return m.refuse(msg.Error())
+		return m.ShowError(msg.Error())
 	case *api.Error:
-		return m.refuse(msg.Message)
+		return m.ShowError(msg.Message)
 	case clearMessageMsg:
 		if msg.at.Equal(m.messageAt) {
 			m.message = ""
@@ -153,12 +153,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// ShowError shows text in the status bar for a moment, as a refused
-// request's reason is shown.
-func (m *Model) ShowError(text string) tea.Cmd { return m.refuse(text) }
-
-// refuse shows why a request failed in the status bar for a moment.
-func (m *Model) refuse(text string) tea.Cmd {
+// ShowError shows text in the status bar for a moment: why a request was
+// refused, or why something the user asked for cannot happen.
+func (m *Model) ShowError(text string) tea.Cmd {
 	m.message, m.messageAt = text, m.now()
 	at := m.messageAt
 	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })

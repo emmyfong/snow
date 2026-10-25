@@ -176,12 +176,12 @@ Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),
-`resize-left-5` and the others (by 5), `copy-mode`, `sessions`, `detach`,
-`send-prefix`.
+`resize-left-5` and the others (by 5), `copy-mode`, `sessions`,
+`command-prompt`, `detach`, `send-prefix`.
 
 A mistake in the file stops Snow with the line and the setting at fault.
-`/theme` on the home page changes `[theme] name` for you, and every open
-Snow window follows within two seconds.
+`/theme` on the home page, or `theme` in `Ctrl+b :`, changes `[theme] name`
+for you, and every open Snow window follows within two seconds.
 
 ## Saved sessions
 

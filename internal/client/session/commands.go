@@ -9,10 +9,6 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// ThemeMsg asks the client to use the theme called Name everywhere and to
-// save it in the config file.
-type ThemeMsg struct{ Name string }
-
 // commandRuns maps each session command in internal/client/command to what
 // it does on this screen. Rest is what was typed after the command's name.
 var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
@@ -57,8 +53,7 @@ func (m *Model) cmdSwitch(name string) tea.Cmd {
 	switch {
 	case name == "":
 		m.prompt = nil
-		m.openSessions()
-		return nil
+		return m.openSessions()
 	case !m.exists(name):
 		m.prompt.notice = "No session named " + name + "."
 		return nil
@@ -124,4 +119,4 @@ func (m *Model) cmdTheme(name string) tea.Cmd {
 	return useTheme(th.Name)
 }
 
-func useTheme(name string) tea.Cmd { return func() tea.Msg { return ThemeMsg{Name: name} } }
+func useTheme(name string) tea.Cmd { return func() tea.Msg { return command.ThemeMsg{Name: name} } }

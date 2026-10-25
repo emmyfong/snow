@@ -43,8 +43,8 @@ func buildHandlers() map[string]handler {
 		"zoom":           func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpZoom); return nil },
 		"even-out":       func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpEven); return nil },
 		"detach":         func(*Model, tea.Key) tea.Cmd { return func() tea.Msg { return DetachMsg{} } },
-		"sessions":       func(m *Model, _ tea.Key) tea.Cmd { m.openSessions(); return nil },
-		"command-prompt": func(m *Model, _ tea.Key) tea.Cmd { m.openPrompt(); return nil },
+		"sessions":       func(m *Model, _ tea.Key) tea.Cmd { return m.openSessions() },
+		"command-prompt": func(m *Model, _ tea.Key) tea.Cmd { return m.openPrompt() },
 		"copy-mode":      func(m *Model, _ tea.Key) tea.Cmd { m.enterCopy(); return nil },
 		keys.SendPrefix:  func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
 	}

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,20 +9,26 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// nextSessionList reads until a SessionList that satisfies ok arrives.
+// nextSessionList reads until a SessionList that satisfies ok arrives. A
+// closed connection ends the wait at once.
 func nextSessionList(t *testing.T, c *apitest.Client, ok func(*api.SessionList) bool) *api.SessionList {
 	t.Helper()
 	deadline := time.Now().Add(apitest.Wait)
+	var last error
 	for time.Now().Before(deadline) {
 		m, err := c.Next(time.Second)
-		if err != nil {
+		if errors.Is(err, apitest.ErrTimeout) {
+			last = err
 			continue
+		}
+		if err != nil {
+			t.Fatalf("no matching SessionList: %v", err)
 		}
 		if l, is := m.(*api.SessionList); is && ok(l) {
 			return l
 		}
 	}
-	t.Fatal("no matching SessionList")
+	t.Fatalf("no matching SessionList (last error: %v)", last)
 	return nil
 }
 

@@ -1,8 +1,8 @@
-// Package command is the command registry: the names, arguments, and
-// descriptions of the commands the home page (typed after "/") and the
-// session screen (Ctrl+b :) offer, and the fuzzy match that lists them. It
-// holds no behavior: each screen maps a name to what it does there, so the
-// registry imports no screen and other command lists can reuse it.
+// Package command is the command registry for the home page (typed after
+// "/") and the session screen (Ctrl+b :): command names, arguments, and
+// matching, but no screen behavior. Each screen maps a name to what it does
+// there, so the registry imports no screen and other command lists can
+// reuse it.
 package command
 
 import (
@@ -94,6 +94,10 @@ func Split(text string) (word, rest string) {
 	word, rest, _ = strings.Cut(strings.TrimSpace(text), " ")
 	return word, strings.TrimSpace(rest)
 }
+
+// ThemeMsg asks the client to use the theme called Name everywhere and to
+// save it in the config file. The home page and the session screen send it.
+type ThemeMsg struct{ Name string }
 
 // Reason returns err's message without the protocol's error prefix, to
 // tell the user why a command's argument was refused.

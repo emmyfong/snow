@@ -15,7 +15,8 @@
 //     session-ended Error, so a close without it now means a lost connection.
 //     Version 3 added Errors that leave the session running (bad-command,
 //     command-failed), which older clients treated as fatal. Version 6
-//     sends SessionList to attached clients, which a session screen needs.
+//     sends SessionList to attached clients too; before, only clients that
+//     had not attached got it.
 //   - The frame header, Hello, Welcome, Error, and Shutdown never change
 //     shape, so peers of any version can always detect a mismatch, and a
 //     newer client can always ask an older server to stop.

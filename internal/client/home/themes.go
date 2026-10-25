@@ -6,13 +6,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 )
-
-// ThemeMsg asks the client to use the theme called Name everywhere and to
-// save it in the config file. The home page already shows it.
-type ThemeMsg struct{ Name string }
 
 // setBase makes th the page's theme, adapted to the terminal's colors once
 // they are known.
@@ -48,7 +45,7 @@ func (m *Model) cmdTheme(name string) tea.Cmd {
 		}
 		m.done()
 		m.setBase(th)
-		return func() tea.Msg { return ThemeMsg{Name: th.Name} }
+		return func() tea.Msg { return command.ThemeMsg{Name: th.Name} }
 	}
 	m.done()
 	m.picking, m.before = true, m.base
@@ -84,7 +81,7 @@ func (m *Model) pickTheme(i int) {
 func (m *Model) keepTheme() tea.Cmd {
 	m.picking = false
 	name := m.base.Name
-	return func() tea.Msg { return ThemeMsg{Name: name} }
+	return func() tea.Msg { return command.ThemeMsg{Name: name} }
 }
 
 // themeList draws the label and the themes that fit, the one in use marked.

@@ -253,10 +253,17 @@ func TestNewReportsPrefixThatShadowsADefault(t *testing.T) {
 
 // TestCommandPromptKey: ":" after the prefix opens the command list, as in
 // tmux.
+// Terminals report ":" in two shapes: as the character itself, and, with
+// the kitty keyboard protocol, as Shift+; with ":" as the shifted code.
 func TestCommandPromptKey(t *testing.T) {
-	a, ok := Default().Lookup(tea.Key{Code: ':', Text: ":"})
-	if !ok || a.Name != "command-prompt" {
-		t.Fatalf(": = %q (bound %v), want command-prompt", a.Name, ok)
+	for _, k := range []tea.Key{
+		{Code: ':', Text: ":"},
+		{Code: ';', ShiftedCode: ':', Mod: tea.ModShift, Text: ":"},
+	} {
+		a, ok := Default().Lookup(k)
+		if !ok || a.Name != "command-prompt" {
+			t.Errorf("%+v = %q (bound %v), want command-prompt", k, a.Name, ok)
+		}
 	}
 }
 

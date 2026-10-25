@@ -163,11 +163,11 @@ func TestCommandPopupSwitchOpensList(t *testing.T) {
 	}
 }
 
-func themeOf(cmd tea.Cmd) (ThemeMsg, bool) {
+func themeOf(cmd tea.Cmd) (command.ThemeMsg, bool) {
 	if cmd == nil {
-		return ThemeMsg{}, false
+		return command.ThemeMsg{}, false
 	}
-	th, ok := cmd().(ThemeMsg)
+	th, ok := cmd().(command.ThemeMsg)
 	return th, ok
 }
 
@@ -206,7 +206,10 @@ func TestCommandPopupTabCompletes(t *testing.T) {
 	m, _ := openPrompt(t, 80, 24)
 	typeIn(m, "re")
 	m.Update(press(tea.KeyTab, 0, ""))
-	if m.prompt == nil || m.prompt.input != "rename " {
+	if m.prompt == nil {
+		t.Fatal("Tab closed the popup")
+	}
+	if m.prompt.input != "rename " {
 		t.Fatalf("Tab after re gave %q, want \"rename \"", m.prompt.input)
 	}
 }
@@ -266,10 +269,21 @@ func TestCommandPopupTypedGolden80x24(t *testing.T) { goldenPrompt(t, 80, 24, "r
 func TestCommandThemesGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "theme\r") }
 func TestCommandRenameGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "rename\r") }
 
-// TestCommandPopupTinyScreen: a screen too small for the popup draws none
-// and never panics; the keys still work.
+// TestCommandPopupTinyScreen: a window too small for the popup does not
+// open it, says why, and leaves the keys to the pane; a small window that
+// fits still runs commands.
 func TestCommandPopupTinyScreen(t *testing.T) {
-	for _, sz := range [][2]int{{10, 5}, {30, 8}, {40, 12}} {
+	for _, sz := range [][2]int{{10, 5}, {23, 24}, {80, 7}} {
+		m, r := openPrompt(t, sz[0], sz[1])
+		if m.prompt != nil || m.message != "Window too small for the command list" {
+			t.Errorf("%dx%d: prompt open %v, message %q", sz[0], sz[1], m.prompt != nil, m.message)
+		}
+		m.Update(press('l', 0, "l"))
+		if got := r.keys(); len(got) != 1 || got[0] != "l" {
+			t.Errorf("%dx%d: sent %v, want the key l for the pane", sz[0], sz[1], r.sent)
+		}
+	}
+	for _, sz := range [][2]int{{30, 8}, {40, 12}} {
 		m, _ := openPrompt(t, sz[0], sz[1])
 		typeIn(m, "theme\r")
 		_ = m.View()

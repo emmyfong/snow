@@ -4,6 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/command"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/session"
@@ -41,6 +43,8 @@ type app struct {
 	profile    *tea.ColorProfileMsg
 	sessions   *api.SessionList // the last list, for a screen opened later
 	opening    bool             // a session is being opened; its Layout has not come
+	openName   string           // the session being opened; "" for a new numbered one
+	leftName   string           // the session shown when the opening began
 	cols, rows int
 }
 
@@ -115,13 +119,27 @@ func (a *app) showHome(notice string) {
 // new session screen for it.
 func (a *app) open(session string, create bool) {
 	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir})
-	a.opening = true
+	a.opening, a.openName, a.leftName = true, session, a.result.Session
 	a.result.Detached = false
 	s := a.newSession()
 	a.show(s)
 	if a.sessions != nil {
 		s.Update(a.sessions)
 	}
+}
+
+// staleLayout reports whether l belongs to another session than the one
+// being opened: a Layout of the session left, sent before the server saw
+// the Detach. Taking it would end the opening early, so a refused attach
+// would no longer be recognized.
+func (a *app) staleLayout(l *api.Layout) bool {
+	if !a.opening {
+		return false
+	}
+	if a.openName != "" {
+		return l.Session != a.openName
+	}
+	return a.leftName != "" && l.Session == a.leftName
 }
 
 // refusedOpen reports whether e refuses the attach the home page asked for.
@@ -158,6 +176,9 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case *api.SessionList:
 		a.sessions = msg
 	case *api.Layout:
+		if a.staleLayout(msg) {
+			return a, nil
+		}
 		a.result.Session = msg.Session
 		a.opening = false
 	case *api.Error:
@@ -198,9 +219,9 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case home.SendMsg:
 		a.send(msg.Msg)
 		return a, nil
-	case home.ThemeMsg:
-		return a, a.useTheme(msg.Name)
-	case session.ThemeMsg:
+	case command.ThemeMsg:
+		// The open screen draws with it at once; screens opened later
+		// get it from useTheme.
 		if th, err := theme.Named(msg.Name); err == nil {
 			a.applyTheme(th)
 		}

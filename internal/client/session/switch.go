@@ -14,14 +14,15 @@ type SwitchMsg struct {
 }
 
 // openSessions shows the session list over the window, with this session
-// highlighted.
-func (m *Model) openSessions() {
-	current := ""
-	if m.layout != nil {
-		current = m.layout.Session
-	}
-	m.switcher = sessionlist.New(current, m.now)
+// highlighted. A window too small for it gets a note instead.
+func (m *Model) openSessions() tea.Cmd {
+	m.switcher = sessionlist.New(m.current(), m.now)
 	m.switcher.SetSessions(m.sessions)
+	if box, _, _ := m.switcher.View(m.theme, m.cols, m.windowRows()); box == "" {
+		m.switcher = nil
+		return m.ShowError("Window too small for the session list")
+	}
+	return nil
 }
 
 // switcherKey sends a key to the open session list.

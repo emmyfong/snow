@@ -175,3 +175,17 @@ func TestMenuOpensSessionList(t *testing.T) {
 		t.Fatal("Switch session in the menu did not open the list")
 	}
 }
+
+// TestSessionListTinyScreen: a window too small for the list does not open
+// it and says why.
+func TestSessionListTinyScreen(t *testing.T) {
+	m, r := switchScreen(t, 20, 24)
+	openSessions(m)
+	if m.switcher != nil || m.message != "Window too small for the session list" {
+		t.Fatalf("list open %v, message %q", m.switcher != nil, m.message)
+	}
+	m.Update(press('l', 0, "l"))
+	if got := r.keys(); len(got) != 1 || got[0] != "l" {
+		t.Fatalf("sent %v, want the key l for the pane", r.sent)
+	}
+}
