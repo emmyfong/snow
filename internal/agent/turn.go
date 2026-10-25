@@ -33,10 +33,13 @@ func (r reply) calls() []*provider.ToolUse {
 // runTurn runs one turn from the user's message until the model ends it,
 // the user interrupts it, or it fails. Every record is saved before the
 // next step depends on it. A retry sends no new message when the history
-// already ends with the user's side, and else the last message again.
+// already ends with the user's side, and else the last message again: the
+// one whose save failed, or else the last one in the history.
 func (c *Conversation) runTurn(ctx context.Context, n int, text string, retry bool) {
 	if retry {
-		if len(c.history) > 0 && c.history[len(c.history)-1].Role == provider.RoleUser {
+		if c.unsaved != "" {
+			text = c.unsaved
+		} else if len(c.history) > 0 && c.history[len(c.history)-1].Role == provider.RoleUser {
 			text = ""
 		} else {
 			text = lastUserText(c.history)
@@ -46,9 +49,11 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string, retry bo
 	if text != "" {
 		if err := c.w.Append(&convstore.User{At: c.now(), Text: text}); err != nil {
 			// Nothing goes to the provider that could not be saved.
+			c.unsaved = text
 			c.end(n, EndFailed, saveFailure(err))
 			return
 		}
+		c.unsaved = ""
 		c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
 	}
 	for {

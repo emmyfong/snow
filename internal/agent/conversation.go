@@ -71,6 +71,7 @@ type Conversation struct {
 	model   string // "provider/model"
 	effort  provider.Effort
 	grants  map[string]bool // tools the user said yes to for this conversation
+	unsaved string          // the user's message whose save failed; a retry sends it
 
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }

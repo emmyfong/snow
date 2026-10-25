@@ -79,3 +79,27 @@ func TestRetryWhileBusy(t *testing.T) {
 		t.Fatalf("retry: %v", err)
 	}
 }
+
+// TestRetryAfterUserSaveFailure: the user's message could not be saved,
+// so it never reached the history. A retry tries that message again,
+// not an older one or none, and still sends nothing it cannot save.
+func TestRetryAfterUserSaveFailure(t *testing.T) {
+	h := newHarness(t, nil, text("never"))
+	if err := h.conv.w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.conv.Send("hi")
+	next[*TurnEnded](t, h)
+	if err := h.conv.Retry(); err != nil {
+		t.Fatal(err)
+	}
+	if start := next[*TurnStarted](t, h); start.Text != "hi" {
+		t.Fatalf("retry started %+v, want the unsaved message", start)
+	}
+	if end := next[*TurnEnded](t, h); end.Reason != EndFailed || end.Failure == nil || end.Failure.Kind != FailSave {
+		t.Fatalf("retry ended %+v", end)
+	}
+	if n := len(h.fake.Requests()); n != 0 {
+		t.Fatalf("the provider got %d requests", n)
+	}
+}
