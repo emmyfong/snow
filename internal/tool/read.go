@@ -52,14 +52,22 @@ func (readTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 	if limit <= 0 {
 		limit = readLines
 	}
+	// Check before opening: opening a named pipe blocks until a writer
+	// comes, and a cancel cannot stop it.
+	info, err := os.Stat(p.OS)
+	switch {
+	case err != nil:
+		return "", fmt.Errorf("read %s: %w", in.Path, err)
+	case info.IsDir():
+		return "", fmt.Errorf("%s is a folder; use list", in.Path)
+	case !info.Mode().IsRegular():
+		return "", fmt.Errorf("%s is not a regular file", in.Path)
+	}
 	f, err := os.Open(p.OS)
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", in.Path, err)
 	}
 	defer func() { _ = f.Close() }()
-	if info, err := f.Stat(); err == nil && info.IsDir() {
-		return "", fmt.Errorf("%s is a folder; use list", in.Path)
-	}
 	r := bufio.NewReader(f)
 	if head, _ := r.Peek(8000); isBinary(head) {
 		return "", fmt.Errorf("%s is a binary file", in.Path)
@@ -70,7 +78,7 @@ func (readTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 		if err := ctx.Err(); err != nil {
 			return "", err
 		}
-		line, err := r.ReadString('\n')
+		line, err := readLine(r, readLineChars)
 		if line != "" {
 			n++
 			if n >= first && n < first+limit && !out.full {
@@ -115,3 +123,19 @@ func cutLine(s string, n int) string {
 
 // Paths implements Pather.
 func (readTool) Paths(input json.RawMessage) ([]string, error) { return pathField(input, "") }
+
+// readLine reads one line, with its newline, keeping at most limit+4 bytes
+// of it, so a huge file with no newline cannot fill memory. cutLine then
+// marks the line as cut. The rest of a long line is read and dropped.
+func readLine(r *bufio.Reader, limit int) (string, error) {
+	var b []byte
+	for {
+		chunk, err := r.ReadSlice('\n')
+		if room := limit + 4 - len(b); room > 0 {
+			b = append(b, chunk[:min(room, len(chunk))]...)
+		}
+		if !errors.Is(err, bufio.ErrBufferFull) {
+			return string(b), err
+		}
+	}
+}

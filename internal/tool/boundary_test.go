@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -35,10 +36,17 @@ func TestBoundary(t *testing.T) {
 		{"sibling with the same prefix", root + "-other/a.go", false},
 	}
 	if links {
-		tests = append(tests, struct {
+		// A link whose target does not exist yet still leads outside.
+		_ = os.Symlink(filepath.Join(outside, "new.txt"), filepath.Join(root, "dangling"))
+		_ = os.Symlink(filepath.Join(outside, "nodir"), filepath.Join(root, "danglingdir"))
+		tests = append(tests, []struct {
 			name, path string
 			in         bool
-		}{"symlink out", "out/secret", false})
+		}{
+			{"symlink out", "out/secret", false},
+			{"dangling symlink out", "dangling", false},
+			{"under a dangling dir link", "danglingdir/x", false},
+		}...)
 	}
 	if runtime.GOOS == "windows" {
 		tests = append(tests, struct {
@@ -112,5 +120,35 @@ func TestPreview(t *testing.T) {
 	c, err = write.(Previewer).Preview(env, json.RawMessage(`{"path":"new.go","content":"x"}`))
 	if err != nil || c != (Change{Path: "new.go", New: "x"}) {
 		t.Fatalf("write preview %+v, %v", c, err)
+	}
+}
+
+// TestOutsideUnreadableInput: input the tool cannot read counts as
+// outside, so the call asks instead of running unchecked.
+func TestOutsideUnreadableInput(t *testing.T) {
+	f := Folder{Path: t.TempDir()}
+	write, _ := Builtin().Get("write")
+	in := json.RawMessage(`{"path":"a.txt","content":"x"} {"path":"/etc/x"}`)
+	if got := f.Outside(write, in); len(got) == 0 {
+		t.Fatal("unreadable input counted as inside")
+	}
+	if got := Builtin().Call(context.Background(), Env{Folder: f}, "write", in, nil); !got.IsError {
+		t.Fatalf("write ran with trailing input: %+v", got)
+	}
+}
+
+// TestSearchSkipsSymlinkOut: search does not read through a link that
+// leads outside the folder.
+func TestSearchSkipsSymlinkOut(t *testing.T) {
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret"), []byte("TOPSECRET\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := tree(t, map[string]string{"a.txt": "nothing\n"})
+	if err := os.Symlink(filepath.Join(outside, "secret"), filepath.Join(env.Folder.Path, "link")); err != nil {
+		t.Skip("cannot make symlinks here")
+	}
+	if got := run(t, env, "search", `{"pattern":"TOPSECRET"}`); got.Content != "no matches\n" {
+		t.Fatalf("search read through the link: %+v", got)
 	}
 }

@@ -59,14 +59,47 @@ func (writeTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, e
 	return fmt.Sprintf("%s %s: %d lines\n", verb, in.Path, lines), nil
 }
 
-// writeKeepMode writes data to file. An existing file keeps its mode; a
-// new one gets 0644, which the umask narrows.
+// writeKeepMode writes data to file through a temp file in the same
+// folder and a rename, so a crash or a full disk never leaves the file cut
+// short. An existing file keeps its mode; a new one gets 0644, which the
+// umask narrows. A link is kept: its target is written.
 func writeKeepMode(file string, data []byte) error {
+	if target, err := filepath.EvalSymlinks(file); err == nil {
+		file = target
+	}
 	mode := fs.FileMode(0o644)
 	if info, err := os.Stat(file); err == nil {
 		mode = info.Mode().Perm()
 	}
-	return os.WriteFile(file, data, mode)
+	tmp, err := os.CreateTemp(filepath.Dir(file), ".snow-write-*")
+	if err != nil {
+		return err
+	}
+	_, werr := tmp.Write(data)
+	if werr == nil {
+		werr = tmp.Sync()
+	}
+	if cerr := tmp.Close(); werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(tmp.Name(), mode)
+	}
+	if werr == nil {
+		werr = os.Rename(tmp.Name(), file)
+	}
+	if werr != nil {
+		return errors.Join(werr, removeIfThere(tmp.Name()))
+	}
+	return nil
+}
+
+// removeIfThere removes file; a file that is gone already is not an error.
+func removeIfThere(file string) error {
+	if err := os.Remove(file); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	return nil
 }
 
 // Paths implements Pather.

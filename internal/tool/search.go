@@ -78,7 +78,9 @@ func (searchTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string
 		err = s.file(ctx, p.OS, in.Path)
 	} else {
 		err = walk(ctx, p.OS, func(rel string, d fs.DirEntry) error {
-			if d.IsDir() {
+			// Only plain files: a link could lead outside the folder,
+			// where reading needs the user's approval.
+			if !d.Type().IsRegular() {
 				return nil
 			}
 			return s.file(ctx, filepath.Join(p.OS, filepath.FromSlash(rel)), path.Join(strings.ReplaceAll(in.Path, `\`, "/"), rel))

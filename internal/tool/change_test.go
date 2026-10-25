@@ -3,6 +3,8 @@ package tool
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 )
 
@@ -74,5 +76,45 @@ func TestWriteCreatesAndOverwrites(t *testing.T) {
 	}
 	if got := run(t, env, "write", `{"path":"dir","content":"x"}`); !got.IsError {
 		t.Fatalf("writing over a folder: %+v", got)
+	}
+}
+
+// TestWriteKeepsLinkAndMode: writing through a link inside the folder
+// changes the target and keeps the link, the mode, and no temp file.
+func TestWriteKeepsLinkAndMode(t *testing.T) {
+	env := tree(t, map[string]string{"real.txt": "old\n"})
+	target := filepath.Join(env.Folder.Path, "real.txt")
+	if err := os.Chmod(target, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(env.Folder.Path, "link.txt")
+	if err := os.Symlink("real.txt", link); err != nil {
+		t.Skip("cannot make symlinks here")
+	}
+	if got := run(t, env, "write", `{"path":"link.txt","content":"new\n"}`); got.IsError {
+		t.Fatalf("got %+v", got)
+	}
+	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("the link was replaced: %v", err)
+	}
+	if s := readFile(t, env, "real.txt"); s != "new\n" {
+		t.Fatalf("target %q", s)
+	}
+	if fi, _ := os.Stat(target); runtime.GOOS != "windows" && fi.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v", fi.Mode().Perm())
+	}
+	entries, _ := os.ReadDir(env.Folder.Path)
+	if len(entries) != 2 {
+		t.Fatalf("left behind: %v", entries)
+	}
+}
+
+// TestReadLongLineBounded: a huge line with no newline is cut, and read
+// does not hold it all.
+func TestReadLongLineBounded(t *testing.T) {
+	env := tree(t, map[string]string{"big": strings.Repeat("x", 8<<20)})
+	got := run(t, env, "read", `{"path":"big"}`)
+	if got.IsError || len(got.Content) > readLineChars+100 || !strings.Contains(got.Content, "…") {
+		t.Fatalf("%d bytes, error %v", len(got.Content), got.IsError)
 	}
 }
