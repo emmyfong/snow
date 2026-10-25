@@ -237,3 +237,28 @@ func assertNoForeignEscapes(t *testing.T, rows []string) {
 		}
 	}
 }
+
+// TestApprovalWaitsWhileTyping: a box that comes while the user types
+// takes no letters and no Enter, so a word with a or y in it never
+// answers it. The keys edit the message instead.
+func TestApprovalWaitsWhileTyping(t *testing.T) {
+	m := waiting(t, 100, 30)
+	m.input = []rune("and ad")
+	m.cursor = len(m.input)
+	if in := m.Key(letter('a')); in != nil {
+		t.Fatalf("a sent %+v", in)
+	}
+	if in := m.Key(letter('y')); in != nil {
+		t.Fatalf("y sent %+v", in)
+	}
+	in := m.Key(key(tea.KeyEnter, 0, ""))
+	if in == nil || in.Kind != api.InputMessage || in.Text != "and aday" {
+		t.Fatalf("Enter sent %+v, want the message", in)
+	}
+	if m.pending() == nil {
+		t.Fatal("the box is gone")
+	}
+	if in := m.Key(letter('y')); in == nil || in.Kind != api.InputAnswer || in.Decision != api.DecisionYes {
+		t.Fatalf("y on an empty line sent %+v", in)
+	}
+}

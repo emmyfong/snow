@@ -67,9 +67,10 @@ func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), 
 // Snapshot replaces the transcript with snap, as the server sends it on
 // attach or after this client fell behind. What the user is typing stays.
 func (m *Model) Snapshot(snap *api.ChatSnapshot) {
-	m.snap = *snap
-	m.loaded = true
-	m.invalidate()
+	m.keepPlace(func() {
+		m.snap = *snap
+		m.loaded = true
+	})
 	if snap.Running && m.started.IsZero() {
 		m.started = m.now()
 	}
@@ -80,14 +81,29 @@ func (m *Model) Snapshot(snap *api.ChatSnapshot) {
 
 // Event applies one change from the server.
 func (m *Model) Event(e *api.ChatEvent) {
-	m.snap.Apply(e)
-	m.invalidate()
+	m.keepPlace(func() { m.snap.Apply(e) })
 	switch e.Kind {
 	case api.EventTurnStarted:
 		m.started = m.now()
 	case api.EventTurnEnded:
 		m.started = time.Time{}
 	}
+}
+
+// keepPlace runs change, which changes the transcript. While the user is
+// scrolled up, the rows it adds or removes move the scroll offset too, so
+// the rows the user reads stay where they are.
+func (m *Model) keepPlace(change func()) {
+	if m.scroll == 0 {
+		change()
+		m.invalidate()
+		return
+	}
+	before := len(m.transcriptRows())
+	change()
+	m.invalidate()
+	m.scroll += len(m.transcriptRows()) - before
+	m.Scroll(0)
 }
 
 // Chat returns the transcript as this pane knows it.

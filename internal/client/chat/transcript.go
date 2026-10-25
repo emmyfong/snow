@@ -133,9 +133,11 @@ func (m *Model) draw() {
 // visible returns the index in the whole transcript of the first row
 // shown, and how many rows show.
 func (m *Model) visible() (start, n int) {
-	all := len(m.transcriptRows())
-	end := max(all-m.scroll, 0)
-	start = max(end-m.transcriptHeight(), 0)
+	all, h := len(m.transcriptRows()), m.transcriptHeight()
+	// A resize can leave scroll past the oldest row; never show less
+	// than a full pane for it.
+	end := all - min(m.scroll, max(all-h, 0))
+	start = max(end-h, 0)
 	return start, end - start
 }
 

@@ -237,3 +237,36 @@ func TestChatGolden(t *testing.T) {
 		}
 	}
 }
+
+// TestScrolledViewStays: while the user reads older text, new text does
+// not move the rows they read.
+func TestScrolledViewStays(t *testing.T) {
+	m, _ := newChat(60, 12)
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+	for i := range 30 {
+		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+	}
+	m.Scroll(8)
+	before := screen(m)
+	for i := 30; i < 36; i++ {
+		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+	}
+	if after := screen(m); after != before {
+		t.Fatalf("the view moved:\nBEFORE\n%s\nAFTER\n%s", before, after)
+	}
+}
+
+// TestScrollFillsPaneAfterGrow: a pane that grows while scrolled to the
+// top still shows a full pane of rows.
+func TestScrollFillsPaneAfterGrow(t *testing.T) {
+	m, _ := newChat(60, 12)
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+	for i := range 20 {
+		m.Event(ev(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n", i)}))
+	}
+	m.Scroll(1000)
+	m.SetSize(60, 40)
+	if s := screen(m); !strings.Contains(s, "line 19") {
+		t.Fatalf("the pane shows less than it can:\n%s", s)
+	}
+}

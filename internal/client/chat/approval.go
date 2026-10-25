@@ -132,6 +132,11 @@ func (m *Model) approvalKey(p *api.ChatApproval, k tea.Key) (*api.ChatInput, boo
 		return nil, true
 	}
 	n := len(m.boxOptions(p, m.width).Choices)
+	if len(m.input) > 0 && k.Code != tea.KeyTab {
+		// A box that comes while the user types must not take the next
+		// letter or Enter as an answer.
+		return nil, false
+	}
 	switch {
 	case k.Code == tea.KeyLeft || (k.Code == tea.KeyTab && k.Mod == tea.ModShift):
 		m.box.choice = (m.box.choice + n - 1) % n
