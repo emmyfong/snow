@@ -60,7 +60,7 @@ func TopBar(th theme.Theme, o TopBarOptions) string {
 		}
 	}
 	rhs := strings.Join(right, "  ")
-	if ansi.StringWidth(rhs) > o.Width-2 {
+	if ansi.StringWidth(rhs) > o.Width-3 {
 		// Only the model is left, and it does not fit.
 		cut := " " + ansi.Truncate(rhs, o.Width-1, "")
 		return cut + strings.Repeat(" ", max(o.Width-ansi.StringWidth(cut), 0))

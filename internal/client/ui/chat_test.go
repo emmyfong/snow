@@ -158,3 +158,23 @@ func TestTopBarDropsInOrder(t *testing.T) {
 		}
 	}
 }
+
+// TestTopBarFitsEveryWidth: the bar is exactly Width cells wide at every
+// width, with and without the optional parts.
+func TestTopBarFitsEveryWidth(t *testing.T) {
+	th := theme.Default()
+	sets := []TopBarOptions{
+		{Title: "Fix the rename bug", Gauge: "ctx 31%", Cost: "$0.42 est.", Model: "anthropic/claude-sonnet-5-5 high", Mode: "mode: ask"},
+		{Model: "anthropic/claude-sonnet-5-5"},
+		{Model: "no model", Mode: "mode: ask"},
+		{Title: "修正する", Model: "模型/名前 high"},
+	}
+	for i, o := range sets {
+		for w := 1; w <= 130; w++ {
+			o.Width = w
+			if got := ansi.StringWidth(TopBar(th, o)); got != w {
+				t.Fatalf("set %d, width %d: bar is %d wide", i, w, got)
+			}
+		}
+	}
+}
