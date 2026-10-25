@@ -26,8 +26,12 @@ type Event struct {
 type Body interface{ body() }
 
 // TurnStarted opens a turn. Turns count from 1 in each run of the
-// conversation.
-type TurnStarted struct{ Turn int }
+// conversation. Text is the user's message that starts it; a retry that
+// sends no new message has none.
+type TurnStarted struct {
+	Turn int
+	Text string
+}
 
 // EndReason says how a turn ended.
 type EndReason string

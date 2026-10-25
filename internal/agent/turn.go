@@ -32,15 +32,25 @@ func (r reply) calls() []*provider.ToolUse {
 
 // runTurn runs one turn from the user's message until the model ends it,
 // the user interrupts it, or it fails. Every record is saved before the
-// next step depends on it.
-func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
-	c.emit(&TurnStarted{Turn: n})
-	if err := c.w.Append(&convstore.User{At: c.now(), Text: text}); err != nil {
-		// Nothing goes to the provider that could not be saved.
-		c.end(n, EndFailed, saveFailure(err))
-		return
+// next step depends on it. A retry sends no new message when the history
+// already ends with the user's side, and else the last message again.
+func (c *Conversation) runTurn(ctx context.Context, n int, text string, retry bool) {
+	if retry {
+		if len(c.history) > 0 && c.history[len(c.history)-1].Role == provider.RoleUser {
+			text = ""
+		} else {
+			text = lastUserText(c.history)
+		}
 	}
-	c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
+	c.emit(&TurnStarted{Turn: n, Text: text})
+	if text != "" {
+		if err := c.w.Append(&convstore.User{At: c.now(), Text: text}); err != nil {
+			// Nothing goes to the provider that could not be saved.
+			c.end(n, EndFailed, saveFailure(err))
+			return
+		}
+		c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
+	}
 	for {
 		c.emit(&StateChanged{State: StateStreaming})
 		r, err := c.stream(ctx)
@@ -70,6 +80,21 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 		}
 		c.history = appendMessage(c.history, provider.RoleUser, results...)
 	}
+}
+
+// lastUserText returns the text of the user's last typed message.
+func lastUserText(h []provider.Message) string {
+	for i := len(h) - 1; i >= 0; i-- {
+		if h[i].Role != provider.RoleUser {
+			continue
+		}
+		for j := len(h[i].Content) - 1; j >= 0; j-- {
+			if t, ok := h[i].Content[j].(*provider.Text); ok {
+				return t.Text
+			}
+		}
+	}
+	return ""
 }
 
 // stop ends a turn that err cut short. An interrupt and a failure both

@@ -46,6 +46,8 @@ var (
 	// ErrInvalid is the cause of a call with a mode, a decision, or a model
 	// name this version does not know.
 	ErrInvalid = errors.New("invalid argument")
+	// ErrBusy is the cause of a Retry while a turn runs or messages wait.
+	ErrBusy = errors.New("a turn is running")
 	// ErrFolderMismatch is the cause of a Resume whose folder is not the one
 	// saved in the conversation file: its tools would work elsewhere.
 	ErrFolderMismatch = errors.New("folder differs from the conversation's folder")
@@ -208,6 +210,18 @@ func (c *Conversation) Pending() *ApprovalRequest {
 	res := make(chan *ApprovalRequest, 1)
 	if c.post(pendingCmd{res}) != nil {
 		return nil
+	}
+	return <-res
+}
+
+// Retry runs the last turn again, after it failed or was interrupted:
+// with no new message when the conversation ends with the user's side,
+// and else with the user's last message sent again. It returns ErrBusy
+// while a turn runs or messages wait.
+func (c *Conversation) Retry() error {
+	res := make(chan error, 1)
+	if err := c.post(retryCmd{res}); err != nil {
+		return err
 	}
 	return <-res
 }

@@ -22,6 +22,7 @@ type (
 		res chan<- error
 	}
 	pendingCmd   struct{ res chan<- *ApprovalRequest }
+	retryCmd     struct{ res chan<- error }
 	interruptCmd struct{}
 	closeCmd     struct{}
 	savedCmd     struct{ err error } // the save in flight is done
@@ -120,6 +121,13 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		} else {
 			cmd.res <- nil
 		}
+	case retryCmd:
+		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 {
+			cmd.res <- ErrBusy
+			return
+		}
+		c.begin(l, "", true)
+		cmd.res <- nil
 	case interruptCmd:
 		if l.cancel != nil {
 			l.cancel()
@@ -163,11 +171,16 @@ func (c *Conversation) next(l *loopState) {
 		l.shown = len(l.queue) > 0
 		c.emit(&QueueChanged{Messages: append([]string(nil), l.queue...)})
 	}
+	c.begin(l, text, false)
+}
+
+// begin starts a turn on its own goroutine.
+func (c *Conversation) begin(l *loopState, text string, retry bool) {
 	l.turn++
 	ctx, cancel := context.WithCancel(context.Background())
 	l.cancel = cancel
 	go func(n int) {
-		c.runTurn(ctx, n, text)
+		c.runTurn(ctx, n, text, retry)
 		l.ended <- struct{}{}
 	}(l.turn)
 }
