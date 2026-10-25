@@ -124,3 +124,20 @@ func TestToolCellExpand(t *testing.T) {
 }
 
 func stripped(s string) string { return ansi.Strip(s) }
+
+// TestToolAndErrorTextCleaned: escape sequences in a tool's input and
+// result, and in a vendor's error message, do not reach the screen.
+func TestToolAndErrorTextCleaned(t *testing.T) {
+	const bad = "a\x1b[2Jb\x1b]52;c;QUJD\x07\x1b_Gx\x1b\\\x1bPq\x1b\\\rc\x08"
+	m, _ := newChat(80, 40)
+	in, _ := json.Marshal(map[string]string{"path": bad, "k" + bad: "v"})
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "read"}))
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, IsError: true, Result: bad + "\n" + bad}}))
+	m.expanded["t1"] = true
+	m.invalidate()
+	assertNoForeignEscapes(t, m.View())
+
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed, Error: &api.ChatError{Code: api.ChatErrOther, Message: bad}}))
+	assertNoForeignEscapes(t, m.View())
+}

@@ -3,7 +3,6 @@ package ui
 import (
 	"image/color"
 	"strings"
-	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -61,7 +60,7 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 		if i > 0 {
 			rows = append(rows, "")
 		}
-		text := plainText(e.Text)
+		text := PlainText(e.Text)
 		style := lipgloss.NewStyle()
 		label := ""
 		switch e.Kind {
@@ -132,17 +131,4 @@ func wrapText(text string, width int) []string {
 		width = 1
 	}
 	return strings.Split(ansi.Wrap(text, width, ""), "\n")
-}
-
-// plainText drops escape sequences and control characters other than line
-// breaks, and turns tabs into spaces.
-func plainText(s string) string {
-	s = ansi.Strip(strings.ReplaceAll(s, "\r\n", "\n"))
-	s = strings.ReplaceAll(s, "\t", "    ")
-	return strings.Map(func(r rune) rune {
-		if r != '\n' && unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, s)
 }

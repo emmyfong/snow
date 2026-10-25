@@ -49,11 +49,11 @@ func ToolCell(th theme.Theme, o ToolCellOptions) string {
 	if o.Expanded {
 		glyph = th.Glyphs.Expanded
 	}
-	head := glyph + " " + plainLine(o.Name)
+	head := glyph + " " + PlainLine(o.Name)
 	if o.Subject != "" {
-		head += " " + plainLine(o.Subject)
+		head += " " + PlainLine(o.Subject)
 	}
-	summary := plainLine(o.Summary)
+	summary := PlainLine(o.Summary)
 	switch o.State {
 	case ToolRunning:
 		summary = "running"

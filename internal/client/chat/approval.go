@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -19,7 +20,7 @@ type approval struct {
 	choice int    // the highlighted choice
 	reason bool   // the reason field for a "no" shows
 	text   string // the reason typed so far
-	diff   bool   // the diff shows
+	all    bool   // the whole input and the diff show
 }
 
 // The box's choices, in order.
@@ -30,7 +31,10 @@ const (
 	choiceDiff
 )
 
-const maxBoxDiffRows = 20
+const (
+	maxBoxDiffRows  = 20
+	maxBoxInputRows = 12 // rows of input before the box says how much is hidden
+)
 
 // pending returns the request that waits, with the box's state reset when
 // the request is new, or nil.
@@ -45,26 +49,29 @@ func (m *Model) pending() *api.ChatApproval {
 	return p
 }
 
-// choices are the box's button labels.
-func choices(p *api.ChatApproval, diffShown bool) []string {
+// choices are the box's button labels. The fourth shows what the box
+// leaves out: the diff, or the rest of a long input.
+func choices(p *api.ChatApproval, more, all bool) []string {
 	out := []string{"Yes", "Always for " + p.Tool, "No"}
 	switch {
-	case p.Diff == nil:
-	case diffShown:
+	case all && p.Diff != nil:
 		out = append(out, "Hide diff")
-	default:
+	case all:
+		out = append(out, "Show less")
+	case p.Diff != nil:
 		out = append(out, "View diff")
+	case more:
+		out = append(out, "Show all")
 	}
 	return out
 }
 
-// boxOptions are what the box shows for p at width.
+// boxOptions are what the box shows for p at width. It lists the whole
+// input the user approves, wrapped, never cut without saying so: past
+// maxBoxInputRows it counts the hidden rows until the user shows all.
 func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
-	head := p.Tool
+	head := ui.PlainLine(p.Tool)
 	t := &api.ChatTool{Name: p.Tool, Input: p.Input, Diff: p.Diff}
-	if s := subject(t); s != "" {
-		head += " " + s
-	}
 	diff := diffOf(t)
 	if diff != nil {
 		a, r := textdiff.Counts(diff)
@@ -72,10 +79,29 @@ func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 			lipgloss.NewStyle().Foreground(m.th.Removed).Render("-"+strconv.Itoa(r))
 	}
 	body := []string{" " + head}
-	if len(p.Outside) > 0 {
-		body = append(body, " "+lipgloss.NewStyle().Foreground(m.th.Removed).Render("Outside the folder: "+strings.Join(p.Outside, ", ")))
+	var skip []string
+	if diff != nil {
+		skip = changeKeys
 	}
-	if m.box.diff && diff != nil {
+	const indent = "   "
+	rows := inputRows(p.Input, skip, width-2-len(indent)-1)
+	more := len(rows) > maxBoxInputRows
+	if more && !m.box.all {
+		hidden := len(rows) - (maxBoxInputRows - 1)
+		rows = append(rows[:maxBoxInputRows-1:maxBoxInputRows-1],
+			lipgloss.NewStyle().Foreground(m.th.Muted).Render(fmt.Sprintf("... %d more lines; d shows all", hidden)))
+	}
+	for _, r := range rows {
+		body = append(body, " "+indent+r)
+	}
+	if len(p.Outside) > 0 {
+		outside := make([]string, len(p.Outside))
+		for i, o := range p.Outside {
+			outside[i] = ui.PlainLine(o)
+		}
+		body = append(body, " "+lipgloss.NewStyle().Foreground(m.th.Removed).Render("Outside the folder: "+strings.Join(outside, ", ")))
+	}
+	if m.box.all && diff != nil {
 		view := ui.DiffView(m.th, ui.DiffOptions{Width: width - 3, Lines: uiDiff(diff), Context: diffContext, MaxRows: maxBoxDiffRows})
 		for _, r := range strings.Split(view, "\n") {
 			body = append(body, " "+r)
@@ -83,7 +109,7 @@ func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 	}
 	return ui.ChoiceOptions{
 		Width: width, Title: "Allow " + p.Tool + "?", Body: body,
-		Choices: choices(p, m.box.diff), Selected: m.box.choice,
+		Choices: choices(p, more, m.box.all), Selected: m.box.choice,
 		Reason: m.box.reason, ReasonValue: m.box.text,
 	}
 }
@@ -105,7 +131,7 @@ func (m *Model) approvalKey(p *api.ChatApproval, k tea.Key) (*api.ChatInput, boo
 		}
 		return nil, true
 	}
-	n := len(choices(p, m.box.diff))
+	n := len(m.boxOptions(p, m.width).Choices)
 	switch {
 	case k.Code == tea.KeyLeft || (k.Code == tea.KeyTab && k.Mod == tea.ModShift):
 		m.box.choice = (m.box.choice + n - 1) % n
@@ -138,8 +164,8 @@ func (m *Model) choose(p *api.ChatApproval, i int) *api.ChatInput {
 	case choiceNo:
 		m.box.reason = true
 	case choiceDiff:
-		if p.Diff != nil {
-			m.box.diff = !m.box.diff
+		if len(m.boxOptions(p, m.width).Choices) > choiceDiff {
+			m.box.all = !m.box.all
 		}
 	}
 	m.invalidate()

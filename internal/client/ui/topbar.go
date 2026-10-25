@@ -41,9 +41,9 @@ func TopBar(th theme.Theme, o TopBarOptions) string {
 		{text: o.Model, style: lipgloss.NewStyle().Foreground(th.Accent).Bold(true)},
 		{text: o.Mode, style: muted},
 	}
-	title := &barPart{text: plainLine(o.Title), style: lipgloss.NewStyle().Bold(true)}
+	title := &barPart{text: PlainLine(o.Title), style: lipgloss.NewStyle().Bold(true)}
 	for _, p := range parts {
-		p.text = plainLine(p.text)
+		p.text = PlainLine(p.text)
 	}
 	// The order parts go when the row is short.
 	drop := []*barPart{parts[1], parts[0], parts[3], title}

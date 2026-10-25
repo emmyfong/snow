@@ -3,6 +3,7 @@ package chat
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -11,6 +12,9 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/pkg/api"
 )
+
+// sgr matches the style sequences Snow itself draws.
+var sgr = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 var writeCall = api.ChatTool{ID: "w1", Name: "write", Input: json.RawMessage(`{"path":"internal/rename/rename.go","content":"x"}`)}
 
@@ -162,6 +166,74 @@ func TestApprovalBoxGolden(t *testing.T) {
 				state(m)
 				golden.RequireEqual(t, strings.Join(m.View(), "\n"))
 			})
+		}
+	}
+}
+
+// runWaiting returns a chat whose turn waits for an answer about a run
+// of command.
+func runWaiting(t *testing.T, w, h int, command string) *Model {
+	t.Helper()
+	m, _ := newChat(w, h)
+	in, _ := json.Marshal(map[string]string{"command": command})
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "clean up"}))
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
+	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in}}))
+	return m
+}
+
+// TestApprovalShowsWholeCommand: every line of the command the user
+// approves shows, a long line wraps instead of being cut, and a command
+// too long for the box says how much is hidden until d shows it all.
+func TestApprovalShowsWholeCommand(t *testing.T) {
+	m := runWaiting(t, 80, 30, "echo hello\nrm -rf ~/important")
+	s := screen(m)
+	if !strings.Contains(s, "echo hello") || !strings.Contains(s, "rm -rf ~/important") {
+		t.Fatalf("a line of the command is hidden:\n%s", s)
+	}
+	if !strings.Contains(s, "(+1 line)") {
+		t.Fatalf("the cell does not mark the hidden line:\n%s", s)
+	}
+
+	long := "find . -name '*.tmp' -newer stamp -exec rm -- {} + && echo removed-every-temporary-file-under-the-folder END"
+	s = screen(runWaiting(t, 60, 30, long))
+	if !strings.Contains(strings.ReplaceAll(strings.ReplaceAll(s, "│", ""), " ", ""), "END") {
+		t.Fatalf("the end of a long command is cut:\n%s", s)
+	}
+
+	var lines []string
+	for i := range 30 {
+		lines = append(lines, fmt.Sprintf("step %d", i))
+	}
+	m = runWaiting(t, 80, 60, strings.Join(lines, "\n"))
+	s = screen(m)
+	if strings.Contains(s, "step 29") || !strings.Contains(s, "more lines") {
+		t.Fatalf("a long command shows no marker:\n%s", s)
+	}
+	m.Key(letter('d'))
+	if s = screen(m); !strings.Contains(s, "step 29") {
+		t.Fatalf("d did not show the whole command:\n%s", s)
+	}
+}
+
+// TestApprovalBoxCleansText: escape sequences in the input and in paths
+// outside the folder do not reach the screen.
+func TestApprovalBoxCleansText(t *testing.T) {
+	m := runWaiting(t, 80, 30, "echo a\x1b[2Jb\x1b]52;c;QUJD\x07\x1b_Gx\x1b\\\x1bPq\x1b\\\rc")
+	a := *m.snap.Pending
+	a.ID, a.Outside = "r2", []string{"/etc/\x1b[8mpass\x1b[0mwd"}
+	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
+	assertNoForeignEscapes(t, m.View())
+}
+
+// assertNoForeignEscapes fails when a row holds an escape sequence other
+// than the SGR styles Snow draws with.
+func assertNoForeignEscapes(t *testing.T, rows []string) {
+	t.Helper()
+	for _, r := range rows {
+		rest := sgr.ReplaceAllString(r, "")
+		if strings.ContainsAny(rest, "\x1b\x07\r\x08") {
+			t.Fatalf("row holds a foreign control sequence: %q", r)
 		}
 	}
 }

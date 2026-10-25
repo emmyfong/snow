@@ -27,12 +27,12 @@ func TextArea(th theme.Theme, o TextAreaOptions) string {
 	if o.Width <= 0 {
 		return ""
 	}
-	prompt := ansi.Truncate(plainText(o.Prompt), o.Width, "")
+	prompt := ansi.Truncate(PlainText(o.Prompt), o.Width, "")
 	pw := ansi.StringWidth(prompt)
 	lead := lipgloss.NewStyle().Foreground(th.Accent).Render(prompt)
 	pad := func(s string) string { return s + strings.Repeat(" ", max(o.Width-ansi.StringWidth(s), 0)) }
 	if o.Value == "" {
-		ph := ansi.Truncate(plainText(o.Placeholder), max(o.Width-pw, 0), "")
+		ph := ansi.Truncate(PlainText(o.Placeholder), max(o.Width-pw, 0), "")
 		return pad(lead + lipgloss.NewStyle().Foreground(th.Muted).Render(ph))
 	}
 	rows, _, first := textRows(o)
@@ -51,7 +51,7 @@ func TextArea(th theme.Theme, o TextAreaOptions) string {
 // TextAreaCursor returns the cell of the cursor in what TextArea draws
 // for o, counted from its top-left corner.
 func TextAreaCursor(o TextAreaOptions) (x, y int) {
-	pw := ansi.StringWidth(ansi.Truncate(plainText(o.Prompt), max(o.Width, 0), ""))
+	pw := ansi.StringWidth(ansi.Truncate(PlainText(o.Prompt), max(o.Width, 0), ""))
 	if o.Value == "" {
 		return min(pw, max(o.Width-1, 0)), 0
 	}
@@ -86,7 +86,7 @@ func (o TextAreaOptions) clampCursor() int {
 // inside words, so each rune keeps one place. It returns the rows, the row
 // of the cursor, and the first row to show.
 func textRows(o TextAreaOptions) (rows []textRow, at, first int) {
-	room := max(o.Width-ansi.StringWidth(ansi.Truncate(plainText(o.Prompt), o.Width, "")), 1)
+	room := max(o.Width-ansi.StringWidth(ansi.Truncate(PlainText(o.Prompt), o.Width, "")), 1)
 	runes := []rune(o.Value)
 	cur := o.clampCursor()
 	var b strings.Builder
@@ -101,7 +101,7 @@ func textRows(o TextAreaOptions) (rows []textRow, at, first int) {
 			flush(i + 1)
 			continue
 		}
-		s := plainText(string(r))
+		s := PlainText(string(r))
 		w := ansi.StringWidth(s)
 		if width+w > room {
 			flush(i)

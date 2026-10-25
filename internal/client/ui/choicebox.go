@@ -51,7 +51,7 @@ func ChoiceBox(th theme.Theme, o ChoiceOptions) string {
 		rows = append(rows, buttonRows(th, o)...)
 	}
 	fg, bg := boxColors(th, o)
-	title := lipgloss.NewStyle().Foreground(fg).Background(bg).Render(" " + plainLine(o.Title) + " ")
+	title := lipgloss.NewStyle().Foreground(fg).Background(bg).Render(" " + PlainLine(o.Title) + " ")
 	return frameIn(th, bg, title, rows, o.Width)
 }
 
@@ -100,7 +100,7 @@ func ChoiceButtons(o ChoiceOptions) []ButtonSpan {
 func buttonLabels(choices []string) []string {
 	out := make([]string, len(choices))
 	for i, c := range choices {
-		out[i] = " " + plainLine(c) + " "
+		out[i] = " " + PlainLine(c) + " "
 	}
 	return out
 }

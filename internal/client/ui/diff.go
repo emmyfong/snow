@@ -73,13 +73,8 @@ func DiffView(th theme.Theme, o DiffOptions) string {
 			rows = append(rows, muted.Render(ansi.Truncate(fmt.Sprintf("  ... %d more lines", len(o.Lines)-shown), o.Width, "")))
 			break
 		}
-		rows = append(rows, styles[l.Op].Render(ansi.Truncate(signs[l.Op]+" "+plainLine(l.Text), o.Width, "")))
+		rows = append(rows, styles[l.Op].Render(ansi.Truncate(signs[l.Op]+" "+PlainLine(l.Text), o.Width, "")))
 		shown++
 	}
 	return strings.Join(rows, "\n")
-}
-
-// plainLine is plainText for one line: line breaks become spaces too.
-func plainLine(s string) string {
-	return strings.ReplaceAll(plainText(s), "\n", " ")
 }

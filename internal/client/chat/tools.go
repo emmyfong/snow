@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/textdiff"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
@@ -63,10 +64,57 @@ func uiDiff(lines []textdiff.Line) []ui.DiffLine {
 	return out
 }
 
-// subject is what the call works on.
+// subject is what the call works on, on one row; hidden lines are
+// counted, so a multi-line command never looks like its first line.
 func subject(t *api.ChatTool) string {
 	s, _ := toolInput(t.Input)[subjectKeys[t.Name]].(string)
-	return firstLine(s)
+	return inputValue(s)
+}
+
+// inputRows lists every field of a tool call's input, but those in skip,
+// with its whole value: cleaned of escape sequences and wrapped to width.
+// Input that is not a JSON object shows as its text.
+func inputRows(raw json.RawMessage, skip []string, width int) []string {
+	width = max(width, 1)
+	in := toolInput(raw)
+	if in == nil {
+		return wrapRows(ui.PlainText(string(raw)), width)
+	}
+	keys := make([]string, 0, len(in))
+	for k := range in {
+		if !slices.Contains(skip, k) {
+			keys = append(keys, k)
+		}
+	}
+	slices.Sort(keys)
+	var rows []string
+	for _, k := range keys {
+		v, ok := in[k].(string)
+		if !ok {
+			b, _ := json.Marshal(in[k])
+			v = string(b)
+		}
+		label := ui.PlainLine(k) + ": "
+		pad := strings.Repeat(" ", min(ansi.StringWidth(label), width/2))
+		for i, r := range wrapRows(ui.PlainText(v), max(width-len(pad), 1)) {
+			if i == 0 {
+				rows = append(rows, label+r)
+			} else {
+				rows = append(rows, pad+r)
+			}
+		}
+	}
+	return rows
+}
+
+// wrapRows splits s into rows of at most width cells, at line breaks and
+// wherever a line is too long.
+func wrapRows(s string, width int) []string {
+	var rows []string
+	for _, l := range strings.Split(s, "\n") {
+		rows = append(rows, strings.Split(ansi.Wrap(l, width, ""), "\n")...)
+	}
+	return rows
 }
 
 // summary says what came of a finished call.
@@ -125,7 +173,7 @@ func (m *Model) toolDetails(t *api.ChatTool, diff []textdiff.Line, width int) []
 	}
 	slices.Sort(keys)
 	for _, k := range keys {
-		rows = append(rows, muted.Render(k+": "+inputValue(in[k])))
+		rows = append(rows, muted.Render(ui.PlainLine(k)+": "+inputValue(in[k])))
 	}
 	if diff != nil {
 		rows = append(rows, strings.Split(ui.DiffView(m.th, ui.DiffOptions{Width: width, Lines: uiDiff(diff), Context: diffContext, MaxRows: maxDiffRows}), "\n")...)
@@ -154,15 +202,17 @@ func inputValue(v any) string {
 		if n := len(lines(v)); n > 1 {
 			return fmt.Sprintf("%s (+%s)", firstLine(v), plural(n-1, "line"))
 		}
-		return v
+		return ui.PlainLine(v)
 	default:
 		b, _ := json.Marshal(v)
 		return string(b)
 	}
 }
 
+// lines splits text from a model or a tool into rows, cleaned of escape
+// sequences and control characters.
 func lines(s string) []string {
-	s = strings.TrimSuffix(strings.ReplaceAll(s, "\r\n", "\n"), "\n")
+	s = strings.TrimSuffix(ui.PlainText(s), "\n")
 	if s == "" {
 		return nil
 	}

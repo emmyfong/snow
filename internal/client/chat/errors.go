@@ -91,7 +91,7 @@ func (m *Model) errorBox(e *api.ChatError, live bool, width int) (string, ui.Cho
 	}
 	muted := lipgloss.NewStyle().Foreground(m.th.Muted)
 	var body []string
-	for _, l := range strings.Split(ansi.Wrap(e.Message, max(width-4, 1), ""), "\n") {
+	for _, l := range strings.Split(ansi.Wrap(ui.PlainLine(e.Message), max(width-4, 1), ""), "\n") {
 		body = append(body, " "+l)
 	}
 	if e.RetryAfter > 0 {
