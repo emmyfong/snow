@@ -19,6 +19,8 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/skills", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "server-side package; the server owns conversation files; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "server-side package; agents run in the server; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/tool", desc: "server-side package; tools run in the server; use pkg/api" }
         convstore-keeps-its-own-format:
           files: ["**/internal/convstore/**", "!$test"]
           deny:
@@ -41,6 +43,21 @@ linters:
           files: ["**/internal/term/**", "**/internal/layout/**", "**/internal/shell/**", "**/internal/config/**", "!$test"]
           deny:
             - { pkg: "github.com/emmyfong/snow", desc: "term, layout, shell, and config are leaf packages and import no other Snow package" }
+        agent-sits-below-server:
+          files: ["**/internal/agent/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "the server runs agents; agents never call back into it" }
+            - { pkg: "github.com/emmyfong/snow/internal/client", desc: "agents report through events; the server forwards them" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "agents never read keys; providers get them through KeySource" }
+            - { pkg: "github.com/emmyfong/snow/internal/signin", desc: "sign-in belongs to the server and snow auth" }
+        tools-know-only-shell:
+          files: ["**/internal/tool/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "the agent calls tools; tools never call back into it" }
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "tools get what they need through tool.Env" }
+            - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "the agent saves results; tools only return them" }
+            - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "tools do not talk to models" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "tools never see keys" }
 
 formatters:
   enable:

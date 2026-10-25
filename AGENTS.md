@@ -17,9 +17,8 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore,
-                     later: agent, tool, skills, gate, editor,
-                     worktree
+                     convstore, agent, tool,
+                     later: skills, gate, editor, worktree
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -34,12 +33,16 @@ Import direction. depguard fails CI on a wrong import.
 ```
 cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore
    │           │                       │
+   │           │                       ├──► agent ──► provider, convstore, tool ──► shell
+   │           │                       │    (the server runs agents; agents never import server,
+   │           │                       │     client, credential, or signin; tools never import
+   │           │                       │     agent, server, convstore, provider, or credential)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;
                │                       │     keys reach it through KeySource;
                │                       │     convstore never imports provider)
-               │                       └──► term, layout   (leaf packages)
+               │                       └──► term, layout, shell   (leaf packages)
                └──────────► config ◄───┘    (leaf; read by client and server)
 ```
 
@@ -112,6 +115,11 @@ folder, without edits across the codebase.
 - Real-shell tests wait for the prompt before typing: shells discard input
   that arrives while they start. Match only screen text that cannot wrap;
   widen the pane or shorten the expected text.
+- Timing tests warm up first: Windows antivirus scans each new file on its
+  first open (about 1.5 s per 1000 files), so the first pass is not the
+  speed you measure. Timing limits skip under `-race`: a `raceDetector`
+  constant from a `race_on_test.go` / `race_off_test.go` build-tag pair
+  (see `internal/convstore`) tells the test.
 - Locally, run only: `go build ./...`, then `go vet` and `go test` on the
   packages you touched. Do not run the full suite. CI runs everything on
   Linux, macOS, and Windows and gates the merge.

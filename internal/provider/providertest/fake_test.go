@@ -6,6 +6,7 @@ import (
 	"io"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/provider"
 )
@@ -77,5 +78,33 @@ func TestStreamError(t *testing.T) {
 	}
 	if _, err := f.Stream(context.Background(), provider.Request{}); !errors.Is(err, boom) {
 		t.Fatalf("start error = %v, want the scripted one", err)
+	}
+}
+
+// TestFakeWait: a waiting reply yields its events, then ends only when its
+// context does.
+func TestFakeWait(t *testing.T) {
+	f := New("fake", Reply{Events: []provider.Event{&provider.TextDelta{Text: "hi"}}, Wait: true})
+	ctx, cancel := context.WithCancel(context.Background())
+	s, err := f.Stream(ctx, provider.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev, err := s.Next(); err != nil || ev.(*provider.TextDelta).Text != "hi" {
+		t.Fatalf("first event %v, %v", ev, err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		_, err := s.Next()
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		t.Fatalf("Next returned %v before the cancel", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatalf("after cancel: %v", err)
 	}
 }

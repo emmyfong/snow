@@ -21,6 +21,7 @@ const (
 	TypeToolResult   Type = "tool_result"
 	TypeApproval     Type = "approval"
 	TypeModelSwitch  Type = "model_switch"
+	TypeMode         Type = "mode"
 	TypeInterruption Type = "interruption"
 	TypePartial      Type = "partial"
 	TypeRename       Type = "rename"
@@ -149,6 +150,13 @@ type ModelSwitch struct {
 	Effort string    `json:"effort,omitempty"`
 }
 
+// Mode records a change of the approval mode. The last one in the file
+// is the conversation's mode; with none, the mode is the default.
+type Mode struct {
+	At   time.Time `json:"at"`
+	Mode string    `json:"mode"` // for example "ask" or "auto"
+}
+
 // Interruption records a turn that stopped before it ended.
 type Interruption struct {
 	At     time.Time `json:"at"`
@@ -202,6 +210,9 @@ func (*Approval) Type() Type { return TypeApproval }
 
 // Type implements Record.
 func (*ModelSwitch) Type() Type { return TypeModelSwitch }
+
+// Type implements Record.
+func (*Mode) Type() Type { return TypeMode }
 
 // Type implements Record.
 func (*Interruption) Type() Type { return TypeInterruption }
