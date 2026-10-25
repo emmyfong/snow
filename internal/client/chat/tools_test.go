@@ -141,3 +141,29 @@ func TestToolAndErrorTextCleaned(t *testing.T) {
 	m.Event(ev(api.ChatEvent{Kind: api.EventTurnEnded, Turn: 1, Reason: api.EndFailed, Error: &api.ChatError{Code: api.ChatErrOther, Message: bad}}))
 	assertNoForeignEscapes(t, m.View())
 }
+
+// TestDiffWorkedOutOnce: the diff of a call is computed once, not on each
+// frame, and again only when the call changes.
+func TestDiffWorkedOutOnce(t *testing.T) {
+	m, _ := newChat(80, 30)
+	in, _ := json.Marshal(map[string]string{"path": "a.go", "old": "a\nb\n", "new": "a\nc\n"})
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "edit"}))
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "e1", Name: "edit", Input: in}}))
+	m.View()
+	call := m.snap.Entries[len(m.snap.Entries)-1].Tool
+	first := m.diffs.of(call)
+	if first == nil {
+		t.Fatal("no diff for an edit")
+	}
+	m.Tick()
+	m.invalidate()
+	m.View()
+	if m.diffs.of(call) != first {
+		t.Fatal("the diff was worked out again for the same call")
+	}
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "e1", Done: true, Result: "ok"}}))
+	m.View()
+	if len(m.diffs.byTool) != 1 {
+		t.Fatalf("cache holds %d diffs, want only the one shown", len(m.diffs.byTool))
+	}
+}

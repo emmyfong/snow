@@ -59,7 +59,14 @@ func diffOf(t *api.ChatTool) []textdiff.Line {
 func uiDiff(lines []textdiff.Line) []ui.DiffLine {
 	out := make([]ui.DiffLine, len(lines))
 	for i, l := range lines {
-		out[i] = ui.DiffLine{Op: map[textdiff.Op]ui.DiffOp{textdiff.Keep: ui.DiffKeep, textdiff.Add: ui.DiffAdd, textdiff.Remove: ui.DiffRemove}[l.Op], Text: l.Text}
+		op := ui.DiffKeep
+		switch l.Op {
+		case textdiff.Add:
+			op = ui.DiffAdd
+		case textdiff.Remove:
+			op = ui.DiffRemove
+		}
+		out[i] = ui.DiffLine{Op: op, Text: l.Text}
 	}
 	return out
 }
@@ -148,25 +155,25 @@ func (m *Model) toolCell(t *api.ChatTool, width int) string {
 	default:
 		o.State = ui.ToolDone
 	}
-	diff := diffOf(t)
-	if diff != nil {
-		o.Added, o.Removed = textdiff.Counts(diff)
+	d := m.diffs.of(t)
+	if d != nil {
+		o.Added, o.Removed = d.added, d.removed
 	}
 	if o.Expanded {
-		o.Details = m.toolDetails(t, diff, width-2)
+		o.Details = m.toolDetails(t, d, width-2)
 	}
 	return ui.ToolCell(m.th, o)
 }
 
 // toolDetails are the rows of an expanded cell: the input, the diff, and
 // the result.
-func (m *Model) toolDetails(t *api.ChatTool, diff []textdiff.Line, width int) []string {
+func (m *Model) toolDetails(t *api.ChatTool, d *toolDiff, width int) []string {
 	muted := lipgloss.NewStyle().Foreground(m.th.Muted)
 	var rows []string
 	in := toolInput(t.Input)
 	keys := make([]string, 0, len(in))
 	for k := range in {
-		if diff != nil && slices.Contains(changeKeys, k) {
+		if d != nil && slices.Contains(changeKeys, k) {
 			continue
 		}
 		keys = append(keys, k)
@@ -175,8 +182,8 @@ func (m *Model) toolDetails(t *api.ChatTool, diff []textdiff.Line, width int) []
 	for _, k := range keys {
 		rows = append(rows, muted.Render(ui.PlainLine(k)+": "+inputValue(in[k])))
 	}
-	if diff != nil {
-		rows = append(rows, strings.Split(ui.DiffView(m.th, ui.DiffOptions{Width: width, Lines: uiDiff(diff), Context: diffContext, MaxRows: maxDiffRows}), "\n")...)
+	if d != nil {
+		rows = append(rows, strings.Split(ui.DiffView(m.th, ui.DiffOptions{Width: width, Lines: d.lines, Context: diffContext, MaxRows: maxDiffRows}), "\n")...)
 	}
 	if t.Done && t.Result != "" {
 		style := lipgloss.NewStyle()

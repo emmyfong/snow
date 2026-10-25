@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
-	"github.com/emmyfong/snow/internal/client/textdiff"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -73,15 +72,14 @@ func choices(p *api.ChatApproval, more, all bool) []string {
 func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 	head := ui.PlainLine(p.Tool)
 	t := &api.ChatTool{Name: p.Tool, Input: p.Input, Diff: p.Diff}
-	diff := diffOf(t)
-	if diff != nil {
-		a, r := textdiff.Counts(diff)
-		head += "  " + lipgloss.NewStyle().Foreground(m.th.Added).Render("+"+strconv.Itoa(a)) + " " +
-			lipgloss.NewStyle().Foreground(m.th.Removed).Render("-"+strconv.Itoa(r))
+	d := m.diffs.ofApproval(p, t)
+	if d != nil {
+		head += "  " + lipgloss.NewStyle().Foreground(m.th.Added).Render("+"+strconv.Itoa(d.added)) + " " +
+			lipgloss.NewStyle().Foreground(m.th.Removed).Render("-"+strconv.Itoa(d.removed))
 	}
 	body := []string{" " + head}
 	var skip []string
-	if diff != nil {
+	if d != nil {
 		skip = changeKeys
 	}
 	const indent = "   "
@@ -102,8 +100,8 @@ func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 		}
 		body = append(body, " "+lipgloss.NewStyle().Foreground(m.th.Removed).Render("Outside the folder: "+strings.Join(outside, ", ")))
 	}
-	if m.box.all && diff != nil {
-		view := ui.DiffView(m.th, ui.DiffOptions{Width: width - 3, Lines: uiDiff(diff), Context: diffContext, MaxRows: maxBoxDiffRows})
+	if m.box.all && d != nil {
+		view := ui.DiffView(m.th, ui.DiffOptions{Width: width - 3, Lines: d.lines, Context: diffContext, MaxRows: maxBoxDiffRows})
 		for _, r := range strings.Split(view, "\n") {
 			body = append(body, " "+r)
 		}

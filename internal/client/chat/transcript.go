@@ -45,6 +45,8 @@ func (m *Model) draw() {
 	if m.width <= 0 || !m.loaded {
 		return
 	}
+	m.diffs.startDraw()
+	defer m.diffs.endDraw()
 	indent := ui.TranscriptIndent(m.width)
 	lead := strings.Repeat(" ", indent)
 	prevTool := false
