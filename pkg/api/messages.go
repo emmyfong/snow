@@ -32,6 +32,9 @@ const (
 	TypeKillSession
 	TypeRenameSession
 	TypeShutdown
+	TypeChatSnapshot
+	TypeChatEvent
+	TypeChatInput
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -87,6 +90,12 @@ func newMessage(t MsgType) Message {
 		return &RenameSession{}
 	case TypeShutdown:
 		return &Shutdown{}
+	case TypeChatSnapshot:
+		return &ChatSnapshot{}
+	case TypeChatEvent:
+		return &ChatEvent{}
+	case TypeChatInput:
+		return &ChatInput{}
 	}
 	return nil
 }
@@ -186,6 +195,7 @@ type WindowInfo struct {
 // PaneInfo is one pane's place on screen.
 type PaneInfo struct {
 	ID      int    `json:"id"`
+	Kind    string `json:"kind"` // PaneTerminal or PaneChat
 	Rect    Rect   `json:"rect"`
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it

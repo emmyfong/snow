@@ -24,7 +24,7 @@ func everyMessage() []Message {
 		&Mouse{Pane: 1, X: 4, Y: 2, Button: "left", Action: "press"},
 		&Resize{Cols: 80, Rows: 24},
 		&Command{Op: "split", Target: 2, Args: map[string]string{"dir": "right"}},
-		&Layout{Session: "api", Active: 0, Windows: []WindowInfo{{Index: 0, Name: "dev", Panes: []PaneInfo{{ID: 1, Rect: Rect{W: 80, H: 23}, Profile: "Ubuntu", Focused: true}}}}},
+		&Layout{Session: "api", Active: 0, Windows: []WindowInfo{{Index: 0, Name: "dev", Panes: []PaneInfo{{ID: 1, Kind: PaneTerminal, Rect: Rect{W: 80, H: 23}, Profile: "Ubuntu", Focused: true}, {ID: 2, Kind: PaneChat}}}}},
 		&PaneUpdate{Pane: 1, Lines: []LineUpdate{{Row: 0, Text: "\x1b[31mred\x1b[0m"}}, Cursor: &Cursor{X: 3, Y: 0, Visible: true}},
 		&SessionList{Sessions: []SessionInfo{{Name: "api", Windows: 2, Attached: 1, State: StateRunning, LastUsed: time.Date(2026, 10, 9, 9, 14, 0, 0, time.UTC)}}},
 		&Bell{Pane: 2},

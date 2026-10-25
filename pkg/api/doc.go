@@ -16,16 +16,20 @@
 //     Version 3 added Errors that leave the session running (bad-command,
 //     command-failed), which older clients treated as fatal. Version 6
 //     sends SessionList to attached clients too; before, only clients that
-//     had not attached got it.
+//     had not attached got it. Version 7 adds chat panes: PaneInfo.Kind,
+//     and ChatSnapshot, ChatEvent, and ChatInput. An older client would
+//     draw a chat pane as an empty terminal.
 //   - The frame header, Hello, Welcome, Error, and Shutdown never change
 //     shape, so peers of any version can always detect a mismatch, and a
 //     newer client can always ask an older server to stop.
 //   - Message types never change number once released.
 //   - Arrays are never null; an empty array is [].
+//   - A ChatEvent kind a receiver does not know is ignored, so adding an
+//     event kind keeps ProtocolVersion.
 //   - Pane IDs start at 1; 0 means none. Window indexes start at 0, as in
 //     tmux.
 package api
 
 // ProtocolVersion changes when a client and server of different versions can
 // no longer understand each other.
-const ProtocolVersion = 6
+const ProtocolVersion = 7
