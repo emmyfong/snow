@@ -1,6 +1,8 @@
 package session
 
 import (
+	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -202,4 +204,64 @@ func TestChatPaneByKind(t *testing.T) {
 	if s := ansi.Strip(content(m)); !strings.Contains(s, "fake/model-1") {
 		t.Fatalf("screen:\n%s", s)
 	}
+}
+
+// longChat fills the chat with a turn of numbered lines.
+func longChat(m *Model) {
+	m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "count"}))
+	for i := range 60 {
+		m.Update(chatEvent(api.ChatEvent{Kind: api.EventText, Text: fmt.Sprintf("line %d\n\n", i)}))
+	}
+}
+
+// TestSessionChatMouse: the wheel scrolls the chat under it, a click on a
+// choice of the approval box answers with pane-relative coordinates, and a
+// click on an unfocused chat focuses it and then reaches it.
+func TestSessionChatMouse(t *testing.T) {
+	t.Run("wheel", func(t *testing.T) {
+		m, _ := chatScreen(t, 100, 30)
+		longChat(m)
+		bottom := ansi.Strip(content(m))
+		if !strings.Contains(bottom, "line 59") {
+			t.Fatalf("the chat does not follow new text:\n%s", bottom)
+		}
+		m.Update(tea.MouseWheelMsg(tea.Mouse{X: 80, Y: 5, Button: tea.MouseWheelUp}))
+		up := ansi.Strip(content(m))
+		if up == bottom || strings.Contains(up, "line 59") {
+			t.Fatalf("wheel up did not scroll the chat:\n%s", up)
+		}
+		m.Update(tea.MouseWheelMsg(tea.Mouse{X: 80, Y: 5, Button: tea.MouseWheelDown}))
+		if got := ansi.Strip(content(m)); got != bottom {
+			t.Fatalf("wheel down did not return to the latest text:\n%s", got)
+		}
+	})
+	t.Run("approval choice", func(t *testing.T) {
+		m, r := chatScreen(t, 100, 30)
+		in := json.RawMessage(`{"path":"a.go","content":"x"}`)
+		m.Update(chatEvent(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "write it"}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "w1", Name: "write", Input: in}}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "w1", Tool: "write", Input: in}}))
+		m.Update(chatEvent(api.ChatEvent{Kind: api.EventState, State: api.ChatStateApproval}))
+		clickLabel(t, m, " Yes ", leftClick)
+		got := lastChatInput(r)
+		if got == nil || got.Kind != api.InputAnswer || got.ID != "w1" || got.Decision != api.DecisionYes {
+			t.Fatalf("sent %+v", got)
+		}
+	})
+	t.Run("unfocused", func(t *testing.T) {
+		m, r := chatScreen(t, 100, 30)
+		m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Panes: []api.PaneInfo{
+			{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: 50, H: 29}, Profile: "sh", Focused: true},
+			{ID: 2, Kind: api.PaneChat, Rect: api.Rect{X: 51, W: 49, H: 29}, Profile: "sh"},
+		}}}})
+		m.Update(click(80, 10))
+		if c := lastCommand(t, r); c.Op != api.OpFocus || c.Target != 2 {
+			t.Fatalf("sent %+v, want focus on the chat", c)
+		}
+		for _, s := range r.sent {
+			if mo, ok := s.(*api.Mouse); ok {
+				t.Fatalf("a click on a chat reached a terminal: %+v", mo)
+			}
+		}
+	})
 }
