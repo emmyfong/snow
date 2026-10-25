@@ -1,13 +1,10 @@
 package server
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/store"
 )
 
@@ -179,62 +176,12 @@ func contentVersion(sess *session) uint64 {
 	var v uint64
 	for _, w := range sess.windows {
 		for _, p := range w.panes {
-			v += p.term.Version()
+			if p.term != nil {
+				v += p.term.Version()
+			}
 		}
 	}
 	return v
-}
-
-// snapshot describes sess for the store: its windows, each one's layout
-// and focus, and each pane's profile, folder, and last lines.
-func (st *state) snapshot(sess *session) store.Snapshot {
-	snap := store.Snapshot{Name: sess.name, Active: sess.active}
-	for _, w := range sess.windows {
-		sw := store.Window{Index: w.index, Name: w.name, Focused: w.focused}
-		if tree, err := json.Marshal(w.tree); err == nil {
-			sw.Layout = tree
-		} else {
-			st.srv.log.Warn("save layout failed", "session", sess.name, "err", err)
-		}
-		for _, id := range w.tree.Panes() {
-			p := w.panes[int(id)]
-			if p == nil {
-				continue
-			}
-			sw.Panes = append(sw.Panes, store.Pane{
-				ID: p.id, Profile: p.profile, Folder: p.folder(), Scrollback: lastLines(p, st.srv.savedLines()),
-			})
-		}
-		snap.Windows = append(snap.Windows, sw)
-	}
-	return snap
-}
-
-// savedLines is how many lines of each pane a snapshot keeps.
-func (s *Server) savedLines() int {
-	switch n := s.opts.SavedLines; {
-	case n < 0:
-		return 0
-	case n == 0 || n > store.MaxScrollback:
-		return store.MaxScrollback
-	default:
-		return n
-	}
-}
-
-// lastLines returns the last n lines of p's history, without the empty rows
-// below the screen's last text.
-func lastLines(p *pane, n int) []string {
-	if n <= 0 {
-		return nil
-	}
-	_, total, _ := p.term.History(0, 0)
-	lines, _, _ := p.term.History(max(total-n, 0), n)
-	end := len(lines)
-	for end > 0 && strings.TrimSpace(ansi.Strip(lines[end-1])) == "" {
-		end--
-	}
-	return lines[:end]
 }
 
 // savedInfos returns the sessions saved when the server started, by name.

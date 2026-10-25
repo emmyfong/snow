@@ -47,7 +47,11 @@ func TestWireFormat(t *testing.T) {
 		{&SearchResult{Pane: 1, Query: "x", Matches: []Match{{Line: 3, Col: 4, Len: 1}}, Truncated: true}, `{"pane":1,"query":"x","matches":[{"line":3,"col":4,"len":1}],"truncated":true}`},
 		{&ProfileList{}, `{"profiles":[],"default":""}`},
 		{&ProfileList{Profiles: []string{"pwsh", "Ubuntu"}, Default: "pwsh"}, `{"profiles":["pwsh","Ubuntu"],"default":"pwsh"}`},
-		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
+		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"kind":"","rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
+		{&ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "x", Model: "a/b", Mode: "ask", State: ChatStateIdle}, `{"pane":2,"agent":"c1","conversation":"x","model":"a/b","mode":"ask","state":"idle","entries":[],"queue":[]}`},
+		{&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventText, Text: "hi"}, `{"pane":2,"agent":"c1","kind":"text","text":"hi"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputMessage, Text: "go"}, `{"pane":2,"agent":"c1","kind":"message","text":"go"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputAnswer, ID: "t1", Decision: ChatDecisionNo, Text: "why"}, `{"pane":2,"agent":"c1","kind":"answer","text":"why","id":"t1","decision":"no"}`},
 		{&Error{Code: CodeBadHandshake, Message: "expected hello"}, `{"code":"bad-handshake","message":"expected hello"}`},
 	}
 	for _, tt := range tests {

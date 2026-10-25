@@ -39,6 +39,9 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 	fix(&t.CurrentFG, t.CurrentBG)
 	fix(&t.SelectedFG, t.SelectedBG)
 	fix(&t.SelectionFG, t.Selection)
+	fix(&t.UserFG, t.UserBG)
+	fix(&t.AgentFG, t.AgentBG)
+	fix(&t.ActivityFG, t.ActivityBG)
 	return t
 }
 

@@ -27,7 +27,11 @@ type Provider struct {
 	Name   string // the provider's part of a model name, for example "anthropic"
 	Title  string // the name to show, for example "Anthropic (Claude)"
 	KeyURL string // the vendor's page where the user creates a key
-	check  func(ctx context.Context, key string) error
+	// DefaultModel is the model a new chat uses, as "provider/model", when
+	// the user chose none.
+	DefaultModel string
+	check        func(ctx context.Context, key string) error
+	open         func(keys provider.KeySource) provider.Provider
 }
 
 // ErrUnknownProvider means no provider has the name given.
@@ -50,25 +54,62 @@ func ProvidersAt(urls BaseURLs) []Provider {
 	return []Provider{
 		{
 			Name: anthropic.Name, Title: "Anthropic (Claude)", KeyURL: "https://platform.claude.com/settings/keys",
+			DefaultModel: anthropic.Name + "/claude-sonnet-5-5",
 			check: func(ctx context.Context, key string) error {
-				var opts []anthropic.Option
-				if urls.Anthropic != "" {
-					opts = append(opts, anthropic.WithBaseURL(urls.Anthropic))
-				}
-				return anthropic.New(fixedKey(key), opts...).CheckKey(ctx)
+				return anthropic.New(fixedKey(key), anthropicOpts(urls)...).CheckKey(ctx)
 			},
+			open: func(keys provider.KeySource) provider.Provider { return anthropic.New(keys, anthropicOpts(urls)...) },
 		},
 		{
 			Name: openai.Name, Title: "OpenAI", KeyURL: "https://platform.openai.com/api-keys",
+			DefaultModel: openai.Name + "/gpt-6.1-sol",
 			check: func(ctx context.Context, key string) error {
-				var opts []openai.Option
-				if urls.OpenAI != "" {
-					opts = append(opts, openai.WithBaseURL(urls.OpenAI))
-				}
-				return openai.New(fixedKey(key), opts...).CheckKey(ctx)
+				return openai.New(fixedKey(key), openaiOpts(urls)...).CheckKey(ctx)
 			},
+			open: func(keys provider.KeySource) provider.Provider { return openai.New(keys, openaiOpts(urls)...) },
 		},
 	}
+}
+
+func anthropicOpts(urls BaseURLs) []anthropic.Option {
+	if urls.Anthropic == "" {
+		return nil
+	}
+	return []anthropic.Option{anthropic.WithBaseURL(urls.Anthropic)}
+}
+
+func openaiOpts(urls BaseURLs) []openai.Option {
+	if urls.OpenAI == "" {
+		return nil
+	}
+	return []openai.Option{openai.WithBaseURL(urls.OpenAI)}
+}
+
+// Registry returns the providers of ps, ready to stream, with their keys
+// read from keys when a request needs one.
+func Registry(ps []Provider, keys provider.KeySource) (*provider.Registry, error) {
+	reg := provider.NewRegistry()
+	for _, p := range ps {
+		if err := reg.Register(p.open(keys)); err != nil {
+			return nil, fmt.Errorf("connect %s: %w", p.Name, err)
+		}
+	}
+	return reg, nil
+}
+
+// DefaultModel returns the default model of the first provider in ps with
+// a key in s, or of the first provider when none has one: its first turn
+// then asks the user to connect it.
+func DefaultModel(ps []Provider, s Store) string {
+	for _, st := range Statuses(ps, s) {
+		if st.Connected() {
+			return st.Provider.DefaultModel
+		}
+	}
+	if len(ps) == 0 {
+		return ""
+	}
+	return ps[0].DefaultModel
 }
 
 // Find returns the provider in ps called name.

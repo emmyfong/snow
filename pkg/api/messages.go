@@ -32,6 +32,9 @@ const (
 	TypeKillSession
 	TypeRenameSession
 	TypeShutdown
+	TypeChatSnapshot
+	TypeChatEvent
+	TypeChatInput
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -87,6 +90,12 @@ func newMessage(t MsgType) Message {
 		return &RenameSession{}
 	case TypeShutdown:
 		return &Shutdown{}
+	case TypeChatSnapshot:
+		return &ChatSnapshot{}
+	case TypeChatEvent:
+		return &ChatEvent{}
+	case TypeChatInput:
+		return &ChatInput{}
 	}
 	return nil
 }
@@ -186,6 +195,7 @@ type WindowInfo struct {
 // PaneInfo is one pane's place on screen.
 type PaneInfo struct {
 	ID      int    `json:"id"`
+	Kind    string `json:"kind"` // PaneTerminal or PaneChat
 	Rect    Rect   `json:"rect"`
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it
@@ -273,6 +283,9 @@ const (
 	// CodeCommandFailed means a valid Command could not be applied, for
 	// example a split that would leave a pane too small. Nothing changed.
 	CodeCommandFailed = "command-failed"
+	// CodeNotTerminal means a scrollback or search request named a chat
+	// pane, which has no terminal history.
+	CodeNotTerminal = "not-terminal"
 	// CodeSessionEnded tells a client that its attached session ended. The
 	// connection stays open: the client is detached, as after Detach, and a
 	// SessionList follows. A close without a reason means the connection

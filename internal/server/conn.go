@@ -22,7 +22,10 @@ type client struct {
 	session    string           // attached session; empty until Attach
 	last       map[int][]string // pane ID → rows last sent
 	seen       map[int]uint64   // pane ID → pane Version last sent
-	dropped    bool
+	// chatLive holds the chat panes c is in step with: it got their
+	// snapshot and every event since. Others get a snapshot next.
+	chatLive map[int]bool
+	dropped  bool
 }
 
 // serveConn handles one connection until it closes.
@@ -39,7 +42,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		_ = raw.Close()
 		return
 	}
-	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox)}
+	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}}
 	// A bad size is not fatal: the client gets the default size until it
 	// sends a valid Resize.
 	if err := hello.Validate(); err == nil {
@@ -103,6 +106,8 @@ func (s *Server) read(c *client) {
 			s.scrollback(c, m)
 		case *api.SearchRequest:
 			s.search(c, m)
+		case *api.ChatInput:
+			s.chatInput(c, m)
 		case *api.Detach:
 			s.call(func(st *state) { st.detach(c) })
 		case *api.KillSession:

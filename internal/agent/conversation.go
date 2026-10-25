@@ -31,7 +31,7 @@ type Config struct {
 	// get: the variables that hold provider keys. The server fills it, as
 	// the agent does not read keys.
 	HideEnv []string
-	System  string // the system prompt
+	System  string // the system prompt; empty means DefaultSystem
 	// Events receives every event, in order, from one goroutine of the
 	// Conversation's own. A slow receiver delays later events, never the
 	// turn. It must not call Close, which waits for that goroutine.
@@ -46,6 +46,8 @@ var (
 	// ErrInvalid is the cause of a call with a mode, a decision, or a model
 	// name this version does not know.
 	ErrInvalid = errors.New("invalid argument")
+	// ErrBusy is the cause of a Retry while a turn runs or messages wait.
+	ErrBusy = errors.New("a turn is running")
 	// ErrFolderMismatch is the cause of a Resume whose folder is not the one
 	// saved in the conversation file: its tools would work elsewhere.
 	ErrFolderMismatch = errors.New("folder differs from the conversation's folder")
@@ -69,6 +71,7 @@ type Conversation struct {
 	model   string // "provider/model"
 	effort  provider.Effort
 	grants  map[string]bool // tools the user said yes to for this conversation
+	unsaved string          // the user's message whose save failed; a retry sends it
 
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }
@@ -139,6 +142,9 @@ func newConversation(cfg Config, w *convstore.Writer) *Conversation {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
 	}
+	if cfg.System == "" {
+		cfg.System = DefaultSystem(cfg.Folder, cfg.Shell)
+	}
 	if cfg.Events == nil {
 		cfg.Events = func(Event) {}
 	}
@@ -208,6 +214,18 @@ func (c *Conversation) Pending() *ApprovalRequest {
 	res := make(chan *ApprovalRequest, 1)
 	if c.post(pendingCmd{res}) != nil {
 		return nil
+	}
+	return <-res
+}
+
+// Retry runs the last turn again, after it failed or was interrupted:
+// with no new message when the conversation ends with the user's side,
+// and else with the user's last message sent again. It returns ErrBusy
+// while a turn runs or messages wait.
+func (c *Conversation) Retry() error {
+	res := make(chan error, 1)
+	if err := c.post(retryCmd{res}); err != nil {
+		return err
 	}
 	return <-res
 }

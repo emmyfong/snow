@@ -100,6 +100,7 @@ func TestMenuByKeyboard(t *testing.T) {
 	m.Update(rightClick(50, 3))
 	m.Update(press(tea.KeyDown, 0, ""))
 	m.Update(press(tea.KeyDown, 0, ""))
+	m.Update(press(tea.KeyDown, 0, ""))
 	m.Update(enter)
 	if c := lastCommand(t, r); c.Op != api.OpZoom {
 		t.Fatalf("sent %+v, want zoom", c)

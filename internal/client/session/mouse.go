@@ -47,7 +47,7 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 		m.endPrefix()
 		// A release can be lost, so every press starts clean.
 		m.drag, m.grab, m.dragFrom = nil, nil, nil
-		m.mousePress(ev)
+		return m.mousePress(ev)
 	case tea.MouseMotionMsg:
 		if m.dragFrom != nil && ev.Button == tea.MouseLeft {
 			return m.dragToCopy(ev)
@@ -75,7 +75,7 @@ func (m *Model) hit(x, y int) mouse.Hit {
 	return mouse.HitTest(panes, tabs, x, y, m.cols, m.rows)
 }
 
-func (m *Model) mousePress(ev tea.Mouse) {
+func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 	h := m.hit(ev.X, ev.Y)
 	switch h.Kind {
 	case mouse.Tab:
@@ -92,10 +92,19 @@ func (m *Model) mousePress(ev tea.Mouse) {
 	case mouse.Pane:
 		p := m.paneByID(h.Pane)
 		if p == nil {
-			return
+			return nil
 		}
 		if (ev.Button == tea.MouseLeft || ev.Button == tea.MouseRight) && !p.Focused {
 			m.send(&api.Command{Op: api.OpFocus, Target: p.ID})
+		}
+		if o := m.own[p.ID]; o != nil {
+			switch ev.Button {
+			case tea.MouseLeft:
+				return m.ownResult(o.Click(h.X, h.Y))
+			case tea.MouseRight:
+				m.openMenu(ev.X, ev.Y)
+			}
+			return nil
 		}
 		st := m.panes[p.ID]
 		wantsMouse := st != nil && st.mouse
@@ -103,7 +112,7 @@ func (m *Model) mousePress(ev tea.Mouse) {
 		// the menu reachable inside it.
 		if ev.Button == tea.MouseRight && (!wantsMouse || ev.Mod.Contains(tea.ModCtrl)) {
 			m.openMenu(ev.X, ev.Y)
-			return
+			return nil
 		}
 		if ev.Button == tea.MouseLeft && !wantsMouse {
 			m.startPaneDrag(p.ID, h.X, h.Y)
@@ -115,6 +124,7 @@ func (m *Model) mousePress(ev tea.Mouse) {
 			}
 		}
 	}
+	return nil
 }
 
 func (m *Model) mouseMotion(ev tea.Mouse) {
@@ -160,6 +170,14 @@ func (m *Model) mouseWheel(ev tea.Mouse) tea.Cmd {
 	st := m.panes[h.Pane]
 	b := apiButton(ev.Button)
 	if st == nil || (b != api.ButtonWheelUp && b != api.ButtonWheelDown) {
+		return nil
+	}
+	if c := m.own[h.Pane]; c != nil {
+		if b == api.ButtonWheelUp {
+			c.Scroll(wheelRows)
+		} else {
+			c.Scroll(-wheelRows)
+		}
 		return nil
 	}
 	if st.mouse {

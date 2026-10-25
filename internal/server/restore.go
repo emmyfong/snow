@@ -73,7 +73,7 @@ func (st *state) restore(snap *store.Snapshot, cols, rows int) (*session, error)
 		sess.windows = append(sess.windows, w)
 	}
 	if len(sess.windows) == 0 {
-		if _, err := st.newWindow(sess, "", ""); err != nil {
+		if _, err := st.newWindow(sess, api.PaneTerminal, "", ""); err != nil {
 			return nil, fmt.Errorf("restore %s: %w", snap.Name, err)
 		}
 	}

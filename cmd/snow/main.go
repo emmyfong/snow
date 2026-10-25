@@ -223,9 +223,14 @@ func serve(stderr io.Writer) int {
 	if savedLines == 0 {
 		savedLines = -1 // the config's 0 is "no lines", the server's is "default"
 	}
+	// Without chat options, terminal panes still work; a chat says why not.
+	chat, err := chatOptions(cfg, log)
+	if err != nil {
+		log.Warn("chat panes are off", "err", err)
+	}
 	if err := server.Run(ctx, server.Options{
 		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
-		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default,
+		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default, Chat: chat,
 	}, path); err != nil {
 		log.Error("server stopped", "err", err)
 		_, _ = fmt.Fprintln(stderr, "snow:", err)

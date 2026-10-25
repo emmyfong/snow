@@ -45,6 +45,13 @@ func palette(name, border, focus, markBG, markFG, currentBG, currentFG, promptBG
 		MatchFG: c(promptFG), MatchBG: c(promptBG),
 		CurrentFG: c(currentFG), CurrentBG: c(currentBG),
 		SelectedFG: ink(colorprofile.TrueColor, c(selection)), SelectedBG: c(selection),
+		// In a chat, the user's label is the list selection and the agent's
+		// is the accent, like the status bar; the running turn's line
+		// looks like copy mode's marker.
+		UserFG: ink(colorprofile.TrueColor, c(selection)), UserBG: c(selection),
+		AgentFG: onAccent, AgentBG: c(accent), Queued: c(muted),
+		ActivityFG: c(markFG), ActivityBG: c(markBG),
+		Added: c(success), Removed: c(errColor),
 		Glyphs: defaultGlyphs(),
 	}
 }

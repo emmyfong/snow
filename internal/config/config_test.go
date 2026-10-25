@@ -343,3 +343,40 @@ func TestSessionLinesBounds(t *testing.T) {
 		}
 	}
 }
+
+// TestChatModel: the chat model must have the provider/model form; empty
+// keeps the default.
+func TestChatModel(t *testing.T) {
+	for body, ok := range map[string]bool{
+		"[chat]\nmodel = \"anthropic/claude-sonnet-5-5\"\neffort = \"high\"\n": true,
+		"[chat]\nmodel = \"\"\n":                  true,
+		"[chat]\nmodel = \"claude-sonnet-5-5\"\n": false,
+		"[chat]\nmodel = \"anthropic/\"\n":        false,
+	} {
+		cfg, err := Load(writeConfig(t, body))
+		if (err == nil) != ok {
+			t.Errorf("%q: Load error = %v, want ok=%v", body, err, ok)
+		}
+		if err == nil && strings.Contains(body, "high") && (cfg.Chat.Model != "anthropic/claude-sonnet-5-5" || cfg.Chat.Effort != "high") {
+			t.Errorf("chat %+v", cfg.Chat)
+		}
+	}
+}
+
+// TestConfigHidesGaugeAndCost: the gauge and cost show unless
+// [chat] usage is false.
+func TestConfigHidesGaugeAndCost(t *testing.T) {
+	if !Defaults().Chat.Usage {
+		t.Fatal("usage hidden by default")
+	}
+	for body, want := range map[string]bool{
+		"[chat]\nmodel = \"anthropic/claude-sonnet-5-5\"\n": true,
+		"[chat]\nusage = false\n":                           false,
+		"[chat]\nusage = true\n":                            true,
+	} {
+		cfg, err := Load(writeConfig(t, body))
+		if err != nil || cfg.Chat.Usage != want {
+			t.Errorf("%q: usage %v, err %v; want %v", body, cfg.Chat.Usage, err, want)
+		}
+	}
+}

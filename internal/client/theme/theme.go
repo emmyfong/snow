@@ -37,6 +37,15 @@ type Theme struct {
 	CurrentBG   color.Color
 	SelectedFG  color.Color // text selected for copying
 	SelectedBG  color.Color
+	UserFG      color.Color // the "you" label of a chat message
+	UserBG      color.Color
+	AgentFG     color.Color // the "snow" label of a reply
+	AgentBG     color.Color
+	Queued      color.Color // messages that wait for the running turn; on the terminal's background
+	ActivityFG  color.Color // the line that says a turn is running
+	ActivityBG  color.Color
+	Added       color.Color // lines a change adds; on the terminal's background
+	Removed     color.Color // lines a change removes; on the terminal's background
 	Glyphs      Glyphs
 }
 
@@ -50,6 +59,12 @@ type Glyphs struct {
 	Pointer                                    string // marks the selected item in a list
 	Caret                                      string // ends text being typed
 	TopLeft, TopRight, BottomLeft, BottomRight string
+	// Spinner holds the frames, one character each, that turn while an
+	// agent works.
+	Spinner string
+	// Collapsed and Expanded mark a tool call whose details are hidden
+	// or shown.
+	Collapsed, Expanded string
 }
 
 // Default returns the default theme, Frost.
@@ -65,6 +80,8 @@ func defaultGlyphs() Glyphs {
 		SessionLeft: "[", SessionRight: "]",
 		Pointer: "> ", Caret: "_",
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
+		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+		Collapsed: "▸", Expanded: "▾",
 	}
 }
 
@@ -100,6 +117,15 @@ func (t Theme) Resolve() Theme {
 	fill(&t.CurrentBG, d.CurrentBG)
 	fill(&t.SelectedFG, d.SelectedFG)
 	fill(&t.SelectedBG, d.SelectedBG)
+	fill(&t.UserFG, d.UserFG)
+	fill(&t.UserBG, d.UserBG)
+	fill(&t.AgentFG, d.AgentFG)
+	fill(&t.AgentBG, d.AgentBG)
+	fill(&t.Queued, d.Queued)
+	fill(&t.ActivityFG, d.ActivityFG)
+	fill(&t.ActivityBG, d.ActivityBG)
+	fill(&t.Added, d.Added)
+	fill(&t.Removed, d.Removed)
 	if t.Glyphs == (Glyphs{}) {
 		t.Glyphs = d.Glyphs
 	}
@@ -115,6 +141,9 @@ func (t Theme) colors() map[string]color.Color {
 		"Selection": t.Selection, "SelectionFG": t.SelectionFG, "IndicatorFG": t.IndicatorFG, "IndicatorBG": t.IndicatorBG,
 		"MatchFG": t.MatchFG, "MatchBG": t.MatchBG, "CurrentFG": t.CurrentFG, "CurrentBG": t.CurrentBG,
 		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
+		"UserFG": t.UserFG, "UserBG": t.UserBG, "AgentFG": t.AgentFG, "AgentBG": t.AgentBG,
+		"Queued": t.Queued, "ActivityFG": t.ActivityFG, "ActivityBG": t.ActivityBG,
+		"Added": t.Added, "Removed": t.Removed,
 	}
 }
 

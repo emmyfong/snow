@@ -10,14 +10,14 @@ import (
 // operations take a window index, which counts from 0 as in tmux. Each
 // operation's arguments are listed with it.
 const (
-	OpSplit        = "split"         // dir; optional profile, folder
+	OpSplit        = "split"         // dir; optional profile, folder, kind
 	OpClose        = "close"         // close pane Target
 	OpResize       = "resize"        // dir, cells: move Target's edge on side dir
 	OpZoom         = "zoom"          // toggle zoom on Target
 	OpSwap         = "swap"          // dir: swap Target with its neighbor
 	OpFocus        = "focus"         // optional dir: focus Target, or its neighbor
 	OpEven         = "even"          // even out the row or column holding Target
-	OpNewWindow    = "new-window"    // optional profile, folder
+	OpNewWindow    = "new-window"    // optional profile, folder, kind
 	OpRenameWindow = "rename-window" // name
 	OpSelectWindow = "select-window" // show window Target
 	OpNextWindow   = "next-window"
@@ -32,6 +32,7 @@ const (
 	ArgFolder  = "folder"  // empty means the target pane's folder
 	ArgCells   = "cells"   // a positive whole number
 	ArgName    = "name"
+	ArgKind    = "kind" // PaneTerminal or PaneChat; empty means PaneTerminal
 )
 
 // Directions for ArgDir.
@@ -70,6 +71,9 @@ func (c *Command) Validate() error {
 			return nil
 		}
 		return fmt.Errorf("%w: %s needs a dir of left, right, up, or down", ErrInvalidCommand, c.Op)
+	}
+	if k, ok := c.Args[ArgKind]; ok && k != PaneTerminal && k != PaneChat {
+		return fmt.Errorf("%w: unknown pane kind %q", ErrInvalidCommand, k)
 	}
 	switch c.Op {
 	case OpSplit, OpSwap:

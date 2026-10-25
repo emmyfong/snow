@@ -23,6 +23,21 @@ type Config struct {
 	Profile    Profile    `toml:"profile"`
 	Theme      Theme      `toml:"theme"`
 	Sessions   Sessions   `toml:"sessions"`
+	Chat       Chat       `toml:"chat"`
+}
+
+// Chat sets how chat panes start.
+type Chat struct {
+	// Model is the model a new chat starts with, as "provider/model", for
+	// example "anthropic/claude-sonnet-5-5". Empty means the default model
+	// of the first provider with a saved key.
+	Model string `toml:"model"`
+	// Effort is the reasoning effort for Model, for example "high". Empty
+	// lets the provider choose.
+	Effort string `toml:"effort"`
+	// Usage shows the context gauge and the estimated cost in a chat's
+	// top bar. The model always shows.
+	Usage bool `toml:"usage"`
 }
 
 // MaxSessionLines is the most lines of each pane a saved session keeps. It
@@ -82,6 +97,7 @@ func Defaults() Config {
 		Scrollback: Scrollback{Lines: 2000},
 		Theme:      Theme{Name: "default"},
 		Sessions:   Sessions{Save: true, Lines: MaxSessionLines},
+		Chat:       Chat{Usage: true},
 	}
 }
 
@@ -159,8 +175,17 @@ func (c Config) validate() *Error {
 		return &Error{Key: "theme.name", Msg: "must not be empty"}
 	case c.Sessions.Lines < 0 || c.Sessions.Lines > MaxSessionLines:
 		return &Error{Key: "sessions.lines", Msg: fmt.Sprintf("must be from 0 to %d, got %d", MaxSessionLines, c.Sessions.Lines)}
+	case c.Chat.Model != "" && !modelName(c.Chat.Model):
+		return &Error{Key: "chat.model", Msg: fmt.Sprintf("must be provider/model, for example anthropic/claude-sonnet-5-5, got %q", c.Chat.Model)}
 	}
 	return nil
+}
+
+// modelName reports whether s has the "provider/model" form. Whether the
+// provider and the model exist is for the server to find out.
+func modelName(s string) bool {
+	p, m, ok := strings.Cut(s, "/")
+	return ok && p != "" && m != ""
 }
 
 // UnbindAction is the action that removes a key's binding.

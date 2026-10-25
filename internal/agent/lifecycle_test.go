@@ -2,6 +2,7 @@ package agent
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/convstore"
@@ -80,5 +81,16 @@ func TestCloseFinishesSaves(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("the mode change was lost")
+	}
+}
+
+// TestDefaultSystem: with no system prompt set, requests carry one that
+// names the folder.
+func TestDefaultSystem(t *testing.T) {
+	h := newHarness(t, nil, text("x"))
+	_ = h.conv.Send("hi")
+	next[*TurnEnded](t, h)
+	if reqs := h.fake.Requests(); len(reqs) != 1 || !strings.Contains(reqs[0].System, h.folder) {
+		t.Fatalf("system prompt %q", h.fake.Requests()[0].System)
 	}
 }

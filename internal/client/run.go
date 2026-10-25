@@ -89,7 +89,7 @@ func Run(opts Options) (Result, error) {
 		// here only loses that convenience.
 		dir, _ = os.Getwd()
 	}
-	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table))
+	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
 	if opts.ConfigPath != "" {
 		a.saveTheme = func(name string) error { return config.SetTheme(opts.ConfigPath, name) }
 		a.configPath = opts.ConfigPath

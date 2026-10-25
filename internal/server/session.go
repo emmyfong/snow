@@ -54,7 +54,7 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 		cols, rows = defaultCols, defaultRows
 	}
 	sess := &session{name: name, lastUsed: time.Now(), cols: cols, rows: rows}
-	w, err := st.newWindow(sess, "", dir)
+	w, err := st.newWindow(sess, api.PaneTerminal, "", dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
@@ -174,8 +174,10 @@ func (st *state) closeAll() {
 	}
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
+			// The model goroutine is stopping, so a chat's last events,
+			// which go through it, are dropped and Close does not wait.
 			for _, p := range w.panes {
-				if err := p.term.Close(); err != nil {
+				if err := p.close(); err != nil {
 					st.srv.log.Warn("pane close", "pane", p.id, "err", err)
 				}
 			}

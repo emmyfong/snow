@@ -17,6 +17,7 @@ func TestDefaultBindings(t *testing.T) {
 		action string
 	}{
 		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"},
+		{"a", "new-chat"},
 		{"n", "next-window"}, {"p", "prev-window"},
 		{"0", "select-window-0"}, {"1", "select-window-1"}, {"2", "select-window-2"},
 		{"3", "select-window-3"}, {"4", "select-window-4"}, {"5", "select-window-5"},

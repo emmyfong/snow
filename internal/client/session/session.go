@@ -59,6 +59,10 @@ type Model struct {
 	copy       *copymode.Model           // copy mode over a pane, when open
 	setClip    func(text string) tea.Cmd // puts text on the system clipboard
 	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
+	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
+	// ownTicking is set while a tick for animating panes is pending.
+	ownTicking bool
+	hideUsage  bool // chats leave out the context gauge and the cost
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
@@ -88,7 +92,7 @@ type clockMsg struct{}
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
 	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
-		panes: map[int]*paneState{}, setClip: clipboard.Set}
+		panes: map[int]*paneState{}, own: map[int]ownPane{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
 	}
@@ -109,11 +113,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
+	case *api.ChatSnapshot, *api.ChatEvent, ownTickMsg:
+		return m.ownMsg(msg)
 	case tea.ColorProfileMsg:
 		// The terminal's color depth is known only now; text that would
 		// vanish when colors are reduced switches to black or white.
 		m.profile = &msg.Profile
 		m.theme = m.base.For(msg.Profile)
+		for _, p := range m.own {
+			p.SetTheme(m.theme)
+		}
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.SessionList:
@@ -146,7 +155,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.MouseMsg:
 		return m.mouseMsg(msg)
 	case tea.PasteMsg:
-		if !m.modal() {
+		switch c := m.focusedOwn(); {
+		case m.modal():
+		case c != nil:
+			c.Paste(msg.Content)
+		default:
 			m.input(api.Input{Paste: msg.Content})
 		}
 	}
@@ -213,6 +226,7 @@ func (m *Model) applyLayout(l *api.Layout) {
 	m.layout = l
 	defer m.syncCopy()
 	defer m.syncDrag()
+	defer m.syncPanes()
 	present := map[int]bool{}
 	for _, w := range l.Windows {
 		for _, p := range w.Panes {

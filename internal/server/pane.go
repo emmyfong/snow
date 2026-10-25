@@ -7,13 +7,15 @@ import (
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
-// pane is one running program in a window.
+// pane is one running program, or one chat, in a window.
 type pane struct {
 	id      int
 	profile string
-	term    *term.Pane
+	term    *term.Pane  // nil for a chat pane
+	chat    *chatPane   // nil for a terminal pane
 	ended   bool        // its WSL distribution stopped; it waits for r to restart
 	dir     string      // the folder it was asked to start in, for a shell that never reports one
 	closed  atomic.Bool // Snow closed it; set before its program is ended
@@ -66,8 +68,36 @@ func usableDir(dir string) string {
 // folder returns the pane's folder: the one its shell last reported, or the
 // one it started in.
 func (p *pane) folder() string {
+	if p.chat != nil {
+		return p.dir
+	}
 	if f := p.term.Folder(); f != "" {
 		return f
 	}
 	return p.dir
+}
+
+// kind returns api.PaneTerminal or api.PaneChat.
+func (p *pane) kind() string {
+	if p.chat != nil {
+		return api.PaneChat
+	}
+	return api.PaneTerminal
+}
+
+// name is what a window that p opens is called.
+func (p *pane) name() string {
+	if p.chat != nil {
+		return "chat"
+	}
+	return p.profile
+}
+
+// close ends p's program, or its chat: the running turn stops and what
+// arrived is saved. It waits, so it never runs on the model goroutine.
+func (p *pane) close() error {
+	if p.chat != nil {
+		return p.chat.conv.Close()
+	}
+	return p.term.Close()
 }

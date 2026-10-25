@@ -108,3 +108,31 @@ func TestFakeWait(t *testing.T) {
 		t.Fatalf("after cancel: %v", err)
 	}
 }
+
+// TestStreamHold: a held reply gives its first event, waits for Hold, then
+// gives the rest.
+func TestStreamHold(t *testing.T) {
+	hold := make(chan struct{})
+	f := New("fake", Reply{Events: []provider.Event{&provider.TextDelta{Text: "a"}, &provider.TextDelta{Text: "b"}}, Hold: hold})
+	s, err := f.Stream(context.Background(), provider.Request{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ev, err := s.Next(); err != nil || ev.(*provider.TextDelta).Text != "a" {
+		t.Fatalf("first: %v %v", ev, err)
+	}
+	got := make(chan provider.Event, 1)
+	go func() {
+		ev, _ := s.Next()
+		got <- ev
+	}()
+	select {
+	case ev := <-got:
+		t.Fatalf("got %v before the hold ended", ev)
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(hold)
+	if ev := <-got; ev.(*provider.TextDelta).Text != "b" {
+		t.Fatalf("second: %v", ev)
+	}
+}
