@@ -52,7 +52,7 @@ func TestBuiltinTools(t *testing.T) {
 	}
 }
 
-func TestRead(t *testing.T) {
+func TestReadRange(t *testing.T) {
 	var long strings.Builder
 	for i := 1; i <= 3000; i++ {
 		fmt.Fprintf(&long, "line %d\n", i)
@@ -84,12 +84,6 @@ func TestRead(t *testing.T) {
 			}
 		})
 	}
-	t.Run("default limit", func(t *testing.T) {
-		got := run(t, env, "read", `{"path":"long.txt"}`)
-		if !strings.HasSuffix(got.Content, "  2000\tline 2000\n[cut: showing lines 1-2000 of 3000; read more with offset 2001]\n") {
-			t.Fatalf("ends with %q", got.Content[len(got.Content)-100:])
-		}
-	})
 	t.Run("missing", func(t *testing.T) {
 		if got := run(t, env, "read", `{"path":"nope"}`); !got.IsError || !strings.HasPrefix(got.Content, "read nope: ") {
 			t.Fatalf("got %+v", got)
@@ -97,7 +91,21 @@ func TestRead(t *testing.T) {
 	})
 }
 
-func TestList(t *testing.T) {
+// TestReadCap: a file longer than the default limit ends with a notice
+// that says how to read on.
+func TestReadCap(t *testing.T) {
+	var long strings.Builder
+	for i := 1; i <= 3000; i++ {
+		fmt.Fprintf(&long, "line %d\n", i)
+	}
+	env := tree(t, map[string]string{"long.txt": long.String()})
+	got := run(t, env, "read", `{"path":"long.txt"}`)
+	if !strings.HasSuffix(got.Content, "  2000\tline 2000\n[cut: showing lines 1-2000 of 3000; read more with offset 2001]\n") {
+		t.Fatalf("ends with %q", got.Content[len(got.Content)-100:])
+	}
+}
+
+func TestListGitignore(t *testing.T) {
 	env := tree(t, map[string]string{
 		".gitignore":     "*.log\nbuild/\n",
 		"main.go":        "",

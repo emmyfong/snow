@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -99,24 +100,44 @@ func TestRunNoShell(t *testing.T) {
 // TestRunWSL runs a command in a WSL folder through a detected distro. It
 // runs only on Windows with WSL.
 func TestRunWSL(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("WSL runs only on Windows")
-	}
-	var wsl *shell.Profile
-	for _, p := range shell.Detect() {
-		if p.Kind == shell.KindWSL {
-			wsl = &p
-			break
-		}
-	}
-	if wsl == nil {
-		t.Skip("no WSL distro")
-	}
-	env := Env{Folder: Folder{Path: "/tmp", Distro: wsl.Distro}, Shell: *wsl}
+	wsl := wslProfile(t)
+	env := Env{Folder: Folder{Path: "/tmp", Distro: wsl.Distro}, Shell: wsl}
 	got := run(t, env, "run", `{"command":"pwd && uname -s"}`)
 	if got.IsError || strings.Join(strings.Fields(got.Content), " ") != "/tmp Linux [exit code 0]" {
 		t.Fatalf("got %+v", got)
 	}
+}
+
+// TestReadWSL reads a file in a real distro through its Windows path. It
+// runs only on Windows with WSL. The file is a plain one the test makes:
+// Windows cannot follow a WSL symlink through \\wsl.localhost.
+func TestReadWSL(t *testing.T) {
+	wsl := wslProfile(t)
+	dir := fmt.Sprintf("/tmp/snow-read-wsl-%d", os.Getpid())
+	env := Env{Folder: Folder{Path: "/tmp", Distro: wsl.Distro}, Shell: wsl}
+	if got := run(t, env, "run", `{"command":"mkdir -p `+dir+` && printf 'one\\ntwo\\n' > `+dir+`/a.txt"}`); got.IsError {
+		t.Fatalf("make the file: %+v", got)
+	}
+	t.Cleanup(func() { run(t, env, "run", `{"command":"rm -rf `+dir+`"}`) })
+	env.Folder.Path = dir
+	if got := run(t, env, "read", `{"path":"a.txt"}`); got.IsError || got.Content != "     1\tone\n     2\ttwo\n" {
+		t.Fatalf("got %+v", got)
+	}
+}
+
+// wslProfile returns a detected WSL profile, or skips the test.
+func wslProfile(t *testing.T) shell.Profile {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skip("WSL runs only on Windows")
+	}
+	for _, p := range shell.Detect() {
+		if p.Kind == shell.KindWSL {
+			return p
+		}
+	}
+	t.Skip("no WSL distro")
+	return shell.Profile{}
 }
 
 func TestHeadTail(t *testing.T) {

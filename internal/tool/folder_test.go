@@ -49,7 +49,7 @@ func TestResolveWSL(t *testing.T) {
 	}
 }
 
-func TestWSLPaths(t *testing.T) {
+func TestWSLFolderPath(t *testing.T) {
 	if got := WSLToUNC("Ubuntu", "/home/u"); got != `\\wsl.localhost\Ubuntu\home\u` {
 		t.Errorf("WSLToUNC = %s", got)
 	}
