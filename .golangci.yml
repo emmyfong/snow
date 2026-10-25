@@ -43,6 +43,13 @@ linters:
           files: ["**/internal/term/**", "**/internal/layout/**", "**/internal/shell/**", "**/internal/config/**", "!$test"]
           deny:
             - { pkg: "github.com/emmyfong/snow", desc: "term, layout, shell, and config are leaf packages and import no other Snow package" }
+        agent-sits-below-server:
+          files: ["**/internal/agent/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "the server runs agents; agents never call back into it" }
+            - { pkg: "github.com/emmyfong/snow/internal/client", desc: "agents report through events; the server forwards them" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "agents never read keys; providers get them through KeySource" }
+            - { pkg: "github.com/emmyfong/snow/internal/signin", desc: "sign-in belongs to the server and snow auth" }
         tools-know-only-shell:
           files: ["**/internal/tool/**", "!$test"]
           deny:

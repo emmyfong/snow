@@ -34,7 +34,8 @@ Import direction. depguard fails CI on a wrong import.
 cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore
    │           │                       │
    │           │                       ├──► agent ──► provider, convstore, tool ──► shell
-   │           │                       │    (the server runs agents; tools never import
+   │           │                       │    (the server runs agents; agents never import server,
+   │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
