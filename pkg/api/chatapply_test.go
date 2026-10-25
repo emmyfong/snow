@@ -129,8 +129,8 @@ func TestReportedMatches(t *testing.T) {
 		{"openai/gpt-6.1", "gpt-6.1-sol", false},
 	}
 	for _, tt := range tests {
-		if got := ReportedMatches(tt.requested, tt.reported); got != tt.want {
-			t.Errorf("ReportedMatches(%q, %q) = %v", tt.requested, tt.reported, got)
+		if got := reportedMatches(tt.requested, tt.reported); got != tt.want {
+			t.Errorf("reportedMatches(%q, %q) = %v", tt.requested, tt.reported, got)
 		}
 	}
 }

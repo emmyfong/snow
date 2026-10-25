@@ -109,7 +109,7 @@ func (s *ChatSnapshot) cutReply(turn int) {
 // noteReported adds an EntryReported when the vendor reported another
 // model than u asked for, once per turn and model.
 func (s *ChatSnapshot) noteReported(u *ChatUsage) {
-	if ReportedMatches(u.Requested, u.Reported) {
+	if reportedMatches(u.Requested, u.Reported) {
 		return
 	}
 	for i := len(s.Entries) - 1; i >= 0 && s.Entries[i].Turn == s.Turn; i-- {
@@ -120,11 +120,11 @@ func (s *ChatSnapshot) noteReported(u *ChatUsage) {
 	s.Entries = append(s.Entries, ChatEntry{Kind: EntryReported, Turn: s.Turn, Text: u.Reported, Requested: u.Requested})
 }
 
-// ReportedMatches reports whether reported, the model ID a vendor says it
+// reportedMatches reports whether reported, the model ID a vendor says it
 // used, is the model requested ("provider/model"): the same ID, or that ID
 // with a dated snapshot suffix such as "-20261001" or "-2026-10-01". An
 // empty reported ID matches, as the vendor did not say.
-func ReportedMatches(requested, reported string) bool {
+func reportedMatches(requested, reported string) bool {
 	if reported == "" {
 		return true
 	}
