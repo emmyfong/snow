@@ -60,8 +60,10 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 	c.session = sess.name
 	c.last = map[int][]string{}
 	c.seen = map[int]uint64{}
+	c.chatLive = map[int]bool{}
 	sess.lastUsed = time.Now()
 	st.enqueue(c, st.layout(sess))
+	st.syncChats(c)
 	st.enqueue(c, st.profileList())
 	st.fitSession(sess)
 	st.sessionsChanged()
@@ -97,7 +99,7 @@ func (s *Server) input(c *client, in *api.Input) {
 			return
 		}
 		if p := st.paneOf(c, in.Pane); p != nil {
-			tp = p.term
+			tp = p.term // nil for a chat pane: its keys go in ChatInput
 		}
 	})
 	if tp == nil {
@@ -133,7 +135,7 @@ func (s *Server) mouse(c *client, m *api.Mouse) {
 			tp = p.term
 		}
 	})
-	if tp == nil {
+	if tp == nil { // no pane, or a chat pane
 		return
 	}
 	tp.SendMouse(term.Mouse{X: m.X, Y: m.Y, Button: mouseButtons[m.Button], Action: mouseActions[m.Action]})

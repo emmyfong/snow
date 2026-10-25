@@ -41,6 +41,9 @@ type Options struct {
 	// means store.MaxScrollback, and less than 0 none, only the layout and
 	// folders.
 	SavedLines int
+	// Chat is what chat panes need. Nil means the server cannot open them:
+	// a split or a new window of kind chat fails with ErrNoChat.
+	Chat *ChatOptions
 
 	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 
@@ -63,6 +66,9 @@ type launcher struct {
 	profiles func() []string
 	// distro returns the WSL distribution profile runs, for WSL profiles.
 	distro func(profile string) (string, bool)
+	// shell returns the detected profile called name, the default for an
+	// empty name. It is nil when Options.Spec is set.
+	shell func(name string) (shell.Profile, bool)
 }
 
 // newLauncher returns the launcher for opts. It detects shell profiles once:
@@ -124,6 +130,14 @@ func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
 	}
 	return launcher{
 		profiles: func() []string { return names },
+		shell: func(name string) (shell.Profile, bool) {
+			for _, p := range detected {
+				if name == "" || p.Name == name {
+					return p, true
+				}
+			}
+			return shell.Profile{}, false
+		},
 		distro: func(profile string) (string, bool) {
 			for _, p := range detected {
 				if p.Name == profile && p.Kind == shell.KindWSL {

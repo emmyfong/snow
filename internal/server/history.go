@@ -8,16 +8,24 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// findPane returns the terminal of pane id in c's session, or nil. The
-// model goroutine only looks the pane up; callers read it outside, so a
-// large read never stalls the other clients.
-func (s *Server) findPane(c *client, id int) *term.Pane {
+// findTerm returns the terminal of pane id in c's session. The model
+// goroutine only looks the pane up; callers read it outside, so a large
+// read never stalls the other clients. It refuses the request for a pane
+// that does not exist or is not a terminal, and then returns nil.
+func (s *Server) findTerm(c *client, id int) *term.Pane {
 	var tp *term.Pane
+	var found bool
 	s.call(func(st *state) {
 		if p := st.paneOf(c, id); p != nil {
-			tp = p.term
+			tp, found = p.term, true
 		}
 	})
+	switch {
+	case !found:
+		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", id))
+	case tp == nil:
+		s.refuse(c, api.CodeNotTerminal, fmt.Errorf("pane %d: %w", id, ErrNotTerminal))
+	}
 	return tp
 }
 
@@ -38,9 +46,8 @@ func (s *Server) scrollback(c *client, r *api.ScrollbackRequest) {
 		s.refuse(c, api.CodeBadCommand, err)
 		return
 	}
-	tp := s.findPane(c, r.Pane)
+	tp := s.findTerm(c, r.Pane)
 	if tp == nil {
-		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", r.Pane))
 		return
 	}
 	lines, total, dropped := tp.History(r.From, r.Count)
@@ -76,9 +83,8 @@ func (s *Server) search(c *client, r *api.SearchRequest) {
 		s.refuse(c, api.CodeBadCommand, err)
 		return
 	}
-	tp := s.findPane(c, r.Pane)
+	tp := s.findTerm(c, r.Pane)
 	if tp == nil {
-		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no pane %d", r.Pane))
 		return
 	}
 	found, truncated, dropped := tp.Search(r.Query)

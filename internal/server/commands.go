@@ -49,7 +49,7 @@ func (st *state) apply(sess *session, cmd *api.Command) error {
 	switch cmd.Op {
 	case api.OpNewWindow:
 		profile, dir := st.newPaneArgs(sess, cmd, 0)
-		_, err := st.newWindow(sess, profile, dir)
+		_, err := st.newWindow(sess, cmd.Args[api.ArgKind], profile, dir)
 		return err
 	case api.OpRenameWindow, api.OpSelectWindow, api.OpCloseWindow:
 		w := sess.window(cmd.Target)
@@ -93,7 +93,7 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 	switch cmd.Op {
 	case api.OpSplit:
 		profile, folder := st.newPaneArgs(sess, cmd, p.id)
-		return st.splitPane(sess, w, p.id, dir, profile, folder)
+		return st.splitPane(sess, w, p.id, dir, cmd.Args[api.ArgKind], profile, folder)
 	case api.OpClose:
 		st.removePane(sess, w, p.id)
 		return nil
@@ -163,7 +163,7 @@ func (st *state) newPaneArgs(sess *session, cmd *api.Command, from int) (profile
 			profile = p.profile
 		}
 		if folder == "" {
-			folder = p.term.Folder()
+			folder = p.folder()
 		}
 	}
 	return profile, folder

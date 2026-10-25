@@ -5,6 +5,7 @@ import (
 	"slices"
 
 	"github.com/emmyfong/snow/internal/layout"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // statusRows is the height of the status bar the client draws below the
@@ -58,19 +59,28 @@ func (sess *session) findPane(id int) (*window, *pane) {
 	return nil, nil
 }
 
-// newWindow starts a window with one pane running profile in dir, adds it
-// to sess at the lowest free index, and shows it.
-func (st *state) newWindow(sess *session, profile, dir string) (*window, error) {
+// openPane starts a new pane of kind: a terminal running profile in dir,
+// or a chat in dir opened from a pane running profile.
+func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane, error) {
+	if kind == api.PaneChat {
+		return st.srv.startChat(id, profile, dir)
+	}
+	return st.srv.startPane(id, cols, rows, profile, dir, "")
+}
+
+// newWindow starts a window with one pane of kind, as openPane does, adds
+// it to sess at the lowest free index, and shows it.
+func (st *state) newWindow(sess *session, kind, profile, dir string) (*window, error) {
 	cols, rows := sess.area()
 	id := st.nextPane
-	p, err := st.srv.startPane(id, cols, rows, profile, dir, "")
+	p, err := st.openPane(id, cols, rows, kind, profile, dir)
 	if err != nil {
 		return nil, err
 	}
 	st.nextPane++
 	w := &window{
 		index:   sess.freeIndex(),
-		name:    p.profile,
+		name:    p.name(),
 		tree:    layout.New(layout.PaneID(id)),
 		panes:   map[int]*pane{id: p},
 		focused: id,
@@ -81,10 +91,11 @@ func (st *state) newWindow(sess *session, profile, dir string) (*window, error) 
 	return w, nil
 }
 
-// splitPane splits pane target of w on side d and starts profile in dir in
-// the new pane, which gets the focus. A split that would make a pane too
-// small, or a program that fails to start, leaves the window unchanged.
-func (st *state) splitPane(sess *session, w *window, target int, d layout.Direction, profile, dir string) error {
+// splitPane splits pane target of w on side d and opens a pane of kind in
+// it, as openPane does; the new pane gets the focus. A split that would
+// make a pane too small, or a pane that fails to start, leaves the window
+// unchanged.
+func (st *state) splitPane(sess *session, w *window, target int, d layout.Direction, kind, profile, dir string) error {
 	cols, rows := sess.area()
 	id := st.nextPane
 	zoomed := w.tree.Zoomed // Split unzooms; a failed start puts it back
@@ -92,7 +103,7 @@ func (st *state) splitPane(sess *session, w *window, target int, d layout.Direct
 		return err
 	}
 	r := layout.Rects(w.tree, cols, rows).Panes[layout.PaneID(id)]
-	p, err := st.srv.startPane(id, r.W, r.H, profile, dir, "")
+	p, err := st.openPane(id, r.W, r.H, kind, profile, dir)
 	if err != nil {
 		// The split succeeded on a tree with more than one pane, so closing
 		// the new pane cannot fail.
@@ -143,17 +154,19 @@ func (st *state) removeWindow(sess *session, w *window) {
 	}
 }
 
-// closePane stops p's program without blocking the model goroutine (ADR
-// 0007): Close waits for the program and the pane's goroutines. The pane is
-// already gone from the state, and its exit notice then finds nothing.
-// Server.Close waits for these closes.
+// closePane stops p's program, or interrupts its chat's turn, without
+// blocking the model goroutine (ADR 0007): Close waits for the program and
+// the pane's goroutines, and a chat's Close waits for its events, which
+// go through the model goroutine. The pane is already gone from the state,
+// and its exit notice and events then find nothing. A chat's conversation
+// file stays. Server.Close waits for these closes.
 func (st *state) closePane(p *pane) {
 	p.closed.Store(true)
 	st.srv.closing.Add(1)
 	log := st.srv.log
 	go func() {
 		defer st.srv.closing.Done()
-		if err := p.term.Close(); err != nil {
+		if err := p.close(); err != nil {
 			log.Warn("pane close", "pane", p.id, "err", err)
 		}
 	}()
@@ -166,6 +179,9 @@ func (st *state) relayout(sess *session) {
 	for _, w := range sess.windows {
 		for id, r := range layout.Rects(w.tree, cols, rows).Panes {
 			p := w.panes[int(id)]
+			if p.term == nil {
+				continue // a chat pane draws to any size on the client
+			}
 			if c, r2 := p.term.Size(); c == max(r.W, 1) && r2 == max(r.H, 1) {
 				continue
 			}

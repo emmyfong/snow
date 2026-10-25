@@ -3,6 +3,7 @@ package apitest
 import (
 	"errors"
 	"net"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -27,10 +28,13 @@ type Client struct {
 	conn     *api.Conn
 	incoming chan received
 	rows     map[int]string
+	chats    map[int]*api.ChatSnapshot // pane ID → rebuilt chat
 
 	// Updates counts PaneUpdates received; LastLen is the number of rows
 	// in the most recent one.
 	Updates, LastLen int
+	// Snapshots counts ChatSnapshots received.
+	Snapshots int
 }
 
 type received struct {
@@ -48,7 +52,7 @@ func New(t testing.TB, raw net.Conn, cols, rows int) *Client {
 	if _, err := api.ClientHandshake(conn, hello); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
-	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}}
+	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}, chats: map[int]*api.ChatSnapshot{}}
 	go func() {
 		for {
 			m, err := conn.Receive()
@@ -88,16 +92,26 @@ func (c *Client) Send(m api.Message) {
 	}
 }
 
-// Next receives one message, applying a PaneUpdate to the screen. It
-// returns ErrTimeout if nothing arrives within timeout.
+// Next receives one message, applying a PaneUpdate to the screen and a
+// ChatSnapshot or ChatEvent to its chat. It returns ErrTimeout if nothing
+// arrives within timeout.
 func (c *Client) Next(timeout time.Duration) (api.Message, error) {
 	select {
 	case r := <-c.incoming:
-		if u, ok := r.m.(*api.PaneUpdate); ok {
+		switch m := r.m.(type) {
+		case *api.PaneUpdate:
 			c.Updates++
-			c.LastLen = len(u.Lines)
-			for _, l := range u.Lines {
+			c.LastLen = len(m.Lines)
+			for _, l := range m.Lines {
 				c.rows[l.Row] = l.Text
+			}
+		case *api.ChatSnapshot:
+			snap := *m
+			c.chats[m.Pane] = &snap
+			c.Snapshots++
+		case *api.ChatEvent:
+			if s, ok := c.chats[m.Pane]; ok {
+				s.Apply(m)
 			}
 		}
 		return r.m, r.err
@@ -158,6 +172,58 @@ func (c *Client) WaitScreen(want string) {
 		}
 	}
 	c.t.Fatalf("screen never showed %q:\n%s", want, c.Screen())
+}
+
+// Chat returns the rebuilt chat of pane, or nil before its first
+// snapshot.
+func (c *Client) Chat(pane int) *api.ChatSnapshot { return c.chats[pane] }
+
+// Chats returns the IDs of the chat panes with a snapshot.
+func (c *Client) Chats() []int {
+	ids := make([]int, 0, len(c.chats))
+	for id := range c.chats {
+		ids = append(ids, id)
+	}
+	slices.Sort(ids)
+	return ids
+}
+
+// WaitChat reads messages until ok reports true for pane's chat, and
+// returns the chat.
+func (c *Client) WaitChat(pane int, ok func(*api.ChatSnapshot) bool) *api.ChatSnapshot {
+	c.t.Helper()
+	deadline := time.Now().Add(Wait)
+	for time.Now().Before(deadline) {
+		if s := c.chats[pane]; s != nil && ok(s) {
+			return s
+		}
+		if _, err := c.Next(100 * time.Millisecond); err != nil && !errors.Is(err, ErrTimeout) {
+			c.t.Fatalf("waiting for chat %d: %v", pane, err)
+		}
+	}
+	c.t.Fatalf("chat %d never got there: %+v", pane, c.chats[pane])
+	return nil
+}
+
+// ChatText returns the text of pane's transcript, one entry per line, as
+// kind: text, for matching in tests.
+func (c *Client) ChatText(pane int) string {
+	s := c.chats[pane]
+	if s == nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, e := range s.Entries {
+		b.WriteString(e.Kind + ": " + e.Text)
+		if e.Tool != nil {
+			b.WriteString(e.Tool.Name + " " + e.Tool.Result)
+		}
+		if e.Error != nil {
+			b.WriteString(e.Error.Code)
+		}
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
 
 // Drain reads messages until none arrives for quiet.

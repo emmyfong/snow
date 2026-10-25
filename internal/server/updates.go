@@ -67,11 +67,16 @@ func (st *state) layout(sess *session) *api.Layout {
 				continue
 			}
 			p := w.panes[int(id)]
+			folder := p.dir // a chat's folder
+			if p.term != nil {
+				folder = p.term.Folder()
+			}
 			info.Panes = append(info.Panes, api.PaneInfo{
 				ID:      int(id),
+				Kind:    p.kind(),
 				Rect:    api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
 				Profile: p.profile,
-				Folder:  p.term.Folder(),
+				Folder:  folder,
 				Focused: int(id) == w.focused,
 			})
 		}
@@ -93,6 +98,7 @@ func (st *state) flush() {
 		if !ok {
 			continue
 		}
+		st.syncChats(c)
 		w := sess.shown()
 		if w == nil {
 			continue
@@ -109,7 +115,7 @@ func (st *state) flush() {
 // with a half-full outbox is skipped; c.last stays as it was, so the next
 // update it gets carries every row changed in between.
 func (st *state) flushPane(c *client, p *pane) {
-	if c.dropped || len(c.out) >= cap(c.out)/2 {
+	if c.dropped || len(c.out) >= cap(c.out)/2 || p.term == nil {
 		return
 	}
 	v := p.term.Version()
