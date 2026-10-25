@@ -343,3 +343,22 @@ func TestSessionLinesBounds(t *testing.T) {
 		}
 	}
 }
+
+// TestChatModel: the chat model must have the provider/model form; empty
+// keeps the default.
+func TestChatModel(t *testing.T) {
+	for body, ok := range map[string]bool{
+		"[chat]\nmodel = \"anthropic/claude-sonnet-5-5\"\neffort = \"high\"\n": true,
+		"[chat]\nmodel = \"\"\n":                  true,
+		"[chat]\nmodel = \"claude-sonnet-5-5\"\n": false,
+		"[chat]\nmodel = \"anthropic/\"\n":        false,
+	} {
+		cfg, err := Load(writeConfig(t, body))
+		if (err == nil) != ok {
+			t.Errorf("%q: Load error = %v, want ok=%v", body, err, ok)
+		}
+		if err == nil && strings.Contains(body, "high") && (cfg.Chat.Model != "anthropic/claude-sonnet-5-5" || cfg.Chat.Effort != "high") {
+			t.Errorf("chat %+v", cfg.Chat)
+		}
+	}
+}

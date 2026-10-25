@@ -191,3 +191,50 @@ func TestFind(t *testing.T) {
 		t.Errorf("Find(gemini) = %v", err)
 	}
 }
+
+// TestDefaultModel: a new chat uses the default model of the first
+// provider with a key, or the first provider's when none has one.
+func TestDefaultModel(t *testing.T) {
+	ps, store, _ := testSetup(t)
+	if got := DefaultModel(ps, store); got != ps[0].DefaultModel {
+		t.Fatalf("no keys: %q", got)
+	}
+	t.Setenv("OPENAI_API_KEY", goodKey)
+	if got := DefaultModel(ps, store); got != "openai/gpt-6.1-sol" {
+		t.Fatalf("openai key: %q", got)
+	}
+	if _, err := ps[0].Login(context.Background(), store, key(t, goodKey)); err != nil {
+		t.Fatal(err)
+	}
+	if got := DefaultModel(ps, store); got != "anthropic/claude-sonnet-5-5" {
+		t.Fatalf("both keys: %q", got)
+	}
+	for _, p := range ps {
+		if _, ok := provider.LookupPrice(mustName(t, p.DefaultModel)); !ok {
+			t.Errorf("%s: default model %s has no price", p.Name, p.DefaultModel)
+		}
+	}
+}
+
+func mustName(t *testing.T, s string) provider.ModelName {
+	t.Helper()
+	n, err := provider.ParseModelName(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return n
+}
+
+// TestRegistry: every provider is registered under its name.
+func TestRegistry(t *testing.T) {
+	ps, store, _ := testSetup(t)
+	reg, err := Registry(ps, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range ps {
+		if got, ok := reg.Get(p.Name); !ok || got.Name() != p.Name {
+			t.Fatalf("%s: %v %v", p.Name, got, ok)
+		}
+	}
+}

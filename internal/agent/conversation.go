@@ -31,7 +31,7 @@ type Config struct {
 	// get: the variables that hold provider keys. The server fills it, as
 	// the agent does not read keys.
 	HideEnv []string
-	System  string // the system prompt
+	System  string // the system prompt; empty means DefaultSystem
 	// Events receives every event, in order, from one goroutine of the
 	// Conversation's own. A slow receiver delays later events, never the
 	// turn. It must not call Close, which waits for that goroutine.
@@ -140,6 +140,9 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 func newConversation(cfg Config, w *convstore.Writer) *Conversation {
 	if cfg.Now == nil {
 		cfg.Now = time.Now
+	}
+	if cfg.System == "" {
+		cfg.System = DefaultSystem(cfg.Folder, cfg.Shell)
 	}
 	if cfg.Events == nil {
 		cfg.Events = func(Event) {}
