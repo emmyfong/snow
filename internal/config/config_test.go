@@ -362,3 +362,21 @@ func TestChatModel(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigHidesGaugeAndCost: the gauge and cost show unless
+// [chat] usage is false.
+func TestConfigHidesGaugeAndCost(t *testing.T) {
+	if !Defaults().Chat.Usage {
+		t.Fatal("usage hidden by default")
+	}
+	for body, want := range map[string]bool{
+		"[chat]\nmodel = \"anthropic/claude-sonnet-5-5\"\n": true,
+		"[chat]\nusage = false\n":                           false,
+		"[chat]\nusage = true\n":                            true,
+	} {
+		cfg, err := Load(writeConfig(t, body))
+		if err != nil || cfg.Chat.Usage != want {
+			t.Errorf("%q: usage %v, err %v; want %v", body, cfg.Chat.Usage, err, want)
+		}
+	}
+}

@@ -113,3 +113,47 @@ func TestChatApply(t *testing.T) {
 		})
 	}
 }
+
+func TestReportedMatches(t *testing.T) {
+	tests := []struct {
+		requested, reported string
+		want                bool
+	}{
+		{"anthropic/claude-sonnet-5-5", "", true},
+		{"anthropic/claude-sonnet-5-5", "claude-sonnet-5-5", true},
+		{"anthropic/claude-sonnet-5-5", "claude-sonnet-5-5-20261001", true},
+		{"openai/gpt-6.1-sol", "gpt-6.1-sol-2026-09-01", true},
+		{"anthropic/claude-sonnet-5-5", "claude-haiku-5-5", false},
+		{"anthropic/claude-sonnet-5-5", "claude-sonnet-5-5-mini", false},
+		{"anthropic/claude-sonnet-5-5", "claude-sonnet-5", false},
+		{"openai/gpt-6.1", "gpt-6.1-sol", false},
+	}
+	for _, tt := range tests {
+		if got := ReportedMatches(tt.requested, tt.reported); got != tt.want {
+			t.Errorf("ReportedMatches(%q, %q) = %v", tt.requested, tt.reported, got)
+		}
+	}
+}
+
+// TestModelMismatchShowsBoth: a reply from another model than requested
+// adds one entry that names both, once per turn.
+func TestModelMismatchShowsBoth(t *testing.T) {
+	s := ChatSnapshot{Pane: 1}
+	u := &ChatUsage{Requested: "anthropic/claude-sonnet-5-5", Reported: "claude-haiku-5-5"}
+	s.Apply(&ChatEvent{Pane: 1, Kind: EventTurnStarted, Turn: 1, Text: "hi"})
+	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: u})
+	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: u})
+	var got []ChatEntry
+	for _, e := range s.Entries {
+		if e.Kind == EntryReported {
+			got = append(got, e)
+		}
+	}
+	if len(got) != 1 || got[0].Text != "claude-haiku-5-5" || got[0].Requested != "anthropic/claude-sonnet-5-5" {
+		t.Fatalf("entries %+v", s.Entries)
+	}
+	s.Apply(&ChatEvent{Pane: 1, Kind: EventUsage, Usage: &ChatUsage{Requested: u.Requested, Reported: "claude-sonnet-5-5-20261001"}})
+	if n := len(s.Entries); s.Entries[n-1].Kind != EntryReported || n != 2 {
+		t.Fatalf("a dated ID added an entry: %+v", s.Entries)
+	}
+}

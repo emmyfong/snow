@@ -1,5 +1,7 @@
 package api
 
+import "strings"
+
 // Apply changes s by e, the way the server changed its own copy. Server
 // and client fold the same events with it, so they agree on the
 // transcript. It ignores an event for another pane and a kind it does not
@@ -63,6 +65,7 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 			if u.Priced {
 				s.Cost += u.Cost
 			}
+			s.noteReported(&u)
 		}
 	case EventModel:
 		if e.Error != nil {
@@ -102,6 +105,47 @@ func (s *ChatSnapshot) cutReply(turn int) {
 			last.Cut = true
 		}
 	}
+}
+
+// noteReported adds an EntryReported when the vendor reported another
+// model than u asked for, once per turn and model.
+func (s *ChatSnapshot) noteReported(u *ChatUsage) {
+	if ReportedMatches(u.Requested, u.Reported) {
+		return
+	}
+	for i := len(s.Entries) - 1; i >= 0 && s.Entries[i].Turn == s.Turn; i-- {
+		if e := s.Entries[i]; e.Kind == EntryReported && e.Text == u.Reported && e.Requested == u.Requested {
+			return
+		}
+	}
+	s.Entries = append(s.Entries, ChatEntry{Kind: EntryReported, Turn: s.Turn, Text: u.Reported, Requested: u.Requested})
+}
+
+// ReportedMatches reports whether reported, the model ID a vendor says it
+// used, is the model requested ("provider/model"): the same ID, or that ID
+// with a dated snapshot suffix such as "-20261001" or "-2026-10-01". An
+// empty reported ID matches, as the vendor did not say.
+func ReportedMatches(requested, reported string) bool {
+	if reported == "" {
+		return true
+	}
+	_, model, ok := strings.Cut(requested, "/")
+	if !ok {
+		model = requested
+	}
+	if reported == model {
+		return true
+	}
+	rest, ok := strings.CutPrefix(reported, model+"-")
+	if !ok || len(rest) < 8 {
+		return false
+	}
+	for _, r := range rest {
+		if (r < '0' || r > '9') && r != '-' {
+			return false
+		}
+	}
+	return true
 }
 
 // tool returns the call with id, the latest first, or nil.

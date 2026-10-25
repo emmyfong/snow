@@ -27,6 +27,7 @@ func (m *Model) chatMsg(msg tea.Msg) tea.Cmd {
 			c.Snapshot(msg)
 		} else {
 			c = chat.New(msg, m.theme, m.now)
+			c.SetUsage(!m.hideUsage)
 			m.chats[msg.Pane] = c
 			m.sizeChats()
 		}

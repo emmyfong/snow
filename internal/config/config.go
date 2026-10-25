@@ -35,6 +35,9 @@ type Chat struct {
 	// Effort is the reasoning effort for Model, for example "high". Empty
 	// lets the provider choose.
 	Effort string `toml:"effort"`
+	// Usage shows the context gauge and the estimated cost in a chat's
+	// top bar. The model always shows.
+	Usage bool `toml:"usage"`
 }
 
 // MaxSessionLines is the most lines of each pane a saved session keeps. It
@@ -94,6 +97,7 @@ func Defaults() Config {
 		Scrollback: Scrollback{Lines: 2000},
 		Theme:      Theme{Name: "default"},
 		Sessions:   Sessions{Save: true, Lines: MaxSessionLines},
+		Chat:       Chat{Usage: true},
 	}
 }
 

@@ -98,6 +98,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `%` | Split right |
 | `"` | Split down |
 | `c` | New window |
+| `a` | New chat with the agent, beside the pane |
 | `n`, `p` | Next and previous window |
 | `0` to `9` | Go to window 0 to 9 |
 | `,` | Rename the window |
@@ -110,7 +111,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
 | `s` | Switch to another session from a list |
-| `:` | Command list: `new`, `switch`, `rename`, `kill`, `theme` for this session |
+| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat`, `theme` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
@@ -133,6 +134,22 @@ across it, opens copy mode too.
 | `v` | Start a selection |
 | `y`, `Enter` | Copy the selection and leave |
 | `q`, `Esc` | Leave |
+
+### Chat
+
+A chat pane talks to Snow's agent in the pane's folder. It sits in the same
+windows and layouts as terminal panes. The top bar shows the model, which
+is always visible, and the approval mode. It also shows how full the
+context is and the estimated cost.
+
+| Key | Does |
+|---|---|
+| `Enter` | Send the message; during a turn it waits in the queue |
+| `Shift+Enter`, `Alt+Enter`, `Ctrl+J` | New line |
+| `Esc` | Stop the running turn |
+| `PgUp` `PgDn`, arrows, wheel | Scroll; `End` or typing returns to the latest text |
+| `Tab`, `Shift+Tab` | Select a tool call; `Enter` or a click shows its details |
+| `y` `a` `n` `d` | When a tool asks: yes, always for this tool, no (with a reason), view the diff |
 
 ### Mouse
 
@@ -170,9 +187,15 @@ name = "default"      # or Frost, Campbell, One Half Dark, Dark+, Solarized Dark
 [sessions]
 save = true           # false saves nothing
 lines = 2000          # output lines saved per pane, 0 to 2000
+
+[chat]
+model = ""            # "provider/model"; empty: the default of the first
+                      # provider with a saved key
+effort = ""           # for example "high"; empty: the provider's choice
+usage = true          # false hides the context gauge and the cost
 ```
 
-Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
+Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`, `new-chat`,
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),

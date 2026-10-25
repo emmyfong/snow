@@ -115,3 +115,46 @@ func TestTextArea(t *testing.T) {
 		})
 	}
 }
+
+// TestTopBarDropsInOrder: as the row narrows, the cost goes first, then
+// the gauge, the mode, and the title; the model always stays.
+func TestTopBarDropsInOrder(t *testing.T) {
+	th := theme.Default()
+	o := TopBarOptions{Title: "Fix the rename bug", Gauge: "ctx 31%", Cost: "$0.42 est.", Model: "anthropic/claude-sonnet-5-5 high", Mode: "mode: ask"}
+	steps := []struct {
+		width int
+		has   []string
+		not   []string
+	}{
+		{120, []string{"Fix the rename bug", "ctx 31%", "$0.42 est.", "claude-sonnet-5-5 high", "mode: ask"}, nil},
+		{80, []string{"Fix the rename bug", "ctx 31%", "claude-sonnet-5-5 high", "mode: ask"}, []string{"$0.42"}},
+		{70, []string{"Fix the rename bug", "claude-sonnet-5-5 high", "mode: ask"}, []string{"$0.42", "ctx"}},
+		{55, []string{"Fix the rename bug", "claude-sonnet-5-5 high"}, []string{"$0.42", "ctx", "mode"}},
+		{40, []string{"anthropic/claude-sonnet-5-5 high"}, []string{"$0.42", "ctx", "mode", "Fix"}},
+		{20, []string{"anthropic/claude"}, []string{"Fix"}},
+	}
+	for _, s := range steps {
+		o.Width = s.width
+		out := TopBar(th, o)
+		if w := ansi.StringWidth(out); w != s.width {
+			t.Fatalf("width %d: bar is %d wide", s.width, w)
+		}
+		text := ansi.Strip(out)
+		for _, want := range s.has {
+			if !strings.Contains(text, want) {
+				t.Errorf("width %d: no %q in %q", s.width, want, text)
+			}
+		}
+		for _, gone := range s.not {
+			if strings.Contains(text, gone) {
+				t.Errorf("width %d: %q kept in %q", s.width, gone, text)
+			}
+		}
+	}
+	for _, w := range []int{1, 2, 3} {
+		o.Width = w
+		if got := ansi.StringWidth(TopBar(th, o)); got != w {
+			t.Fatalf("width %d: %d", w, got)
+		}
+	}
+}

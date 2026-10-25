@@ -53,8 +53,12 @@ type ChatEntry struct {
 	Kind string `json:"kind"` // one of the Entry* values
 	Turn int    `json:"turn,omitempty"`
 	// Text is the message for EntryUser, the reply so far for
-	// EntryAssistant and EntryThinking, and the new model for EntryModel.
+	// EntryAssistant and EntryThinking, the new model for EntryModel, and
+	// the model ID the vendor reported for EntryReported.
 	Text string `json:"text,omitempty"`
+	// Requested is the "provider/model" a turn asked for, for
+	// EntryReported.
+	Requested string `json:"requested,omitempty"`
 	// Cut marks an EntryAssistant reply that stopped before the model
 	// finished it.
 	Cut   bool       `json:"cut,omitempty"`
@@ -71,6 +75,9 @@ const (
 	EntryModel       = "model"       // the model changed from the next turn on
 	EntryInterrupted = "interrupted" // the user stopped the turn
 	EntryError       = "error"       // a turn, or a change, failed
+	// EntryReported says the vendor reported another model than the one
+	// the turn asked for.
+	EntryReported = "reported"
 )
 
 // ChatTool is one tool call and what came of it.

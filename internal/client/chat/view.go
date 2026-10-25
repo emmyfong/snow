@@ -21,7 +21,7 @@ const (
 )
 
 // View draws the pane in exactly its height in rows, each at most its
-// width: the transcript, then a row that is a divider or, during a turn,
+// width: the top bar, the transcript, then a row that is a divider or, during a turn,
 // the activity line, then the message being typed.
 func (m *Model) View() []string {
 	if m.width <= 0 || m.height <= 0 {
@@ -29,6 +29,9 @@ func (m *Model) View() []string {
 	}
 	input := m.inputRows()
 	rows := make([]string, 0, m.height)
+	if m.hasBar() {
+		rows = append(rows, ui.TopBar(m.th, m.barOptions()))
+	}
 	start, n := m.visible()
 	shown := m.transcriptRows()[start : start+n]
 	for range m.transcriptHeight() - n {
@@ -70,7 +73,15 @@ func (m *Model) inputRows() []string {
 
 // transcriptHeight is how many rows the transcript gets.
 func (m *Model) transcriptHeight() int {
-	return max(m.height-ui.TextAreaRows(m.inputOptions())-1, 0)
+	return max(m.height-ui.TextAreaRows(m.inputOptions())-1-m.barRows(), 0)
+}
+
+// barRows is the rows the top bar takes.
+func (m *Model) barRows() int {
+	if m.hasBar() {
+		return 1
+	}
+	return 0
 }
 
 // middleRow is the divider between the transcript and the input, or the

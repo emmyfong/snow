@@ -28,6 +28,7 @@ type Model struct {
 	expanded      map[string]bool
 	box           approval
 	drawn         rendered
+	usage         bool // the top bar shows the context gauge and the cost
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -36,13 +37,17 @@ func New(snap *api.ChatSnapshot, th theme.Theme, now func() time.Time) *Model {
 	if now == nil {
 		now = time.Now
 	}
-	m := &Model{th: th, now: now, expanded: map[string]bool{}}
+	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true}
 	m.Snapshot(snap)
 	return m
 }
 
 // SetTheme sets the colors.
 func (m *Model) SetTheme(th theme.Theme) { m.th = th; m.invalidate() }
+
+// SetUsage shows or hides the context gauge and the cost in the top bar,
+// from the [chat] usage setting. The model always shows.
+func (m *Model) SetUsage(show bool) { m.usage = show }
 
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), max(height, 0) }

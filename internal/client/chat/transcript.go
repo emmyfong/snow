@@ -92,6 +92,8 @@ func (m *Model) draw() {
 			text(ui.EntryNote, "switched to "+e.Text, false)
 		case api.EntryInterrupted:
 			text(ui.EntryNote, "interrupted", false)
+		case api.EntryReported:
+			text(ui.EntryModel, "Asked for "+e.Requested+", but the API reported "+e.Text+".", false)
 		case api.EntryError:
 			msg := "failed"
 			if e.Error != nil {
@@ -126,6 +128,11 @@ func (m *Model) visible() (start, n int) {
 // picks that choice. A click anywhere returns to the latest text unless it
 // lands in the transcript. It returns what to send, or nil.
 func (m *Model) Click(x, y int) *api.ChatInput {
+	if y < m.barRows() {
+		// TODO(#113): a click on the model or the mode opens their picker.
+		return nil
+	}
+	y -= m.barRows()
 	start, n := m.visible()
 	row := y - (m.transcriptHeight() - n)
 	if row < 0 || row >= n || y >= m.transcriptHeight() {

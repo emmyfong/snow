@@ -21,6 +21,7 @@ const (
 	EntryNote                      // a note on the conversation, muted, such as a model switch
 	EntryError                     // a failure, under the "error" label
 	EntryQueued                    // a message that waits for the running turn
+	EntryModel                     // a reply from another model than asked for, under the "model" label
 )
 
 // TranscriptEntry is one entry of a chat transcript, as plain text.
@@ -70,6 +71,8 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 			label = badge(" snow", th.AgentFG, th.AgentBG)
 		case EntryError:
 			label = badge(" error", th.ErrorFG, th.Error)
+		case EntryModel:
+			label = badge(" model", th.ErrorFG, th.Error)
 		case EntryThinking:
 			style = muted.Italic(true)
 		case EntryNote:

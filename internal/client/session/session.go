@@ -63,6 +63,7 @@ type Model struct {
 	chats      map[int]*chat.Model       // pane ID → chat, for chat panes
 	// chatTicking is set while a spinner tick is pending.
 	chatTicking bool
+	hideUsage   bool // chats leave out the context gauge and the cost
 }
 
 // paneState is what the screen knows of one pane: its rows and its cursor.
