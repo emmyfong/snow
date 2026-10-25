@@ -138,4 +138,6 @@ func (c *Conversation) wait(ctx context.Context, req *ApprovalRequest) (Answer, 
 }
 
 // env is what the conversation's tools get.
-func (c *Conversation) env() tool.Env { return tool.Env{Folder: c.cfg.Folder, Shell: c.cfg.Shell} }
+func (c *Conversation) env() tool.Env {
+	return tool.Env{Folder: c.cfg.Folder, Shell: c.cfg.Shell, HideEnv: c.cfg.HideEnv}
+}

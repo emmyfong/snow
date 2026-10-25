@@ -112,3 +112,17 @@ func TestModelNotFoundKeepsRecord(t *testing.T) {
 		t.Fatalf("meta model %s", c.Meta.Model)
 	}
 }
+
+// TestSwitchThenSendUsesNewModel: a message sent right after a switch
+// waits until the switch is saved, then uses the new model.
+func TestSwitchThenSendUsesNewModel(t *testing.T) {
+	h := newHarness(t, nil, text("x"))
+	if err := h.conv.SwitchModel("fake/model-9", ""); err != nil {
+		t.Fatal(err)
+	}
+	_ = h.conv.Send("hi")
+	next[*TurnEnded](t, h)
+	if reqs := h.fake.Requests(); len(reqs) != 1 || reqs[0].Model != "model-9" {
+		t.Fatalf("requests %+v", reqs)
+	}
+}

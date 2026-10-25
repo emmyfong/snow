@@ -37,4 +37,7 @@ type Env struct {
 	// Shell is the profile saved with the conversation. The run tool runs
 	// commands through it.
 	Shell shell.Profile
+	// HideEnv names environment variables that commands do not get, such
+	// as the variables that hold provider keys.
+	HideEnv []string
 }

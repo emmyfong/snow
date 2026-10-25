@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,8 +23,9 @@ import (
 // conversation, then kill it with no chance to clean up. The child reads
 // what to do from these variables.
 const (
-	crashModeEnv = "SNOW_CRASH_MODE" // "stream" or "tool"
-	crashDirEnv  = "SNOW_CRASH_DIR"  // the conversation folder of the store
+	crashModeEnv   = "SNOW_CRASH_MODE"   // "stream" or "tool"
+	crashDirEnv    = "SNOW_CRASH_DIR"    // the folder of the store
+	crashFolderEnv = "SNOW_CRASH_FOLDER" // the conversation folder
 )
 
 // TestCrashChild is the child of the crash tests. It does nothing in a
@@ -56,32 +59,60 @@ func TestCrashChild(t *testing.T) {
 	if err := providers.Register(providertest.New("fake", reply)); err != nil {
 		t.Fatal(err)
 	}
-	c, err := Start(Config{Store: store, Providers: providers, Tools: tools, Folder: tool.Folder{Path: t.TempDir()}}, convstore.Meta{Model: testModel})
+	c, err := Start(Config{Store: store, Providers: providers, Tools: tools, Folder: tool.Folder{Path: os.Getenv(crashFolderEnv)}}, convstore.Meta{Model: testModel})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Send("hello"); err != nil {
 		t.Fatal(err)
 	}
-	// A sleeping goroutine keeps the runtime from calling the blocked
-	// conversation a deadlock and exiting before the kill.
-	time.Sleep(time.Hour)
+	// The child waits for the kill. If the parent dies first, its end of
+	// stdin closes and the child exits, so it never lingers. The read also
+	// keeps the runtime from calling the blocked conversation a deadlock.
+	_, _ = io.Copy(io.Discard, os.Stdin)
+	os.Exit(0)
+}
+
+// lockedBuffer collects the child's output; exec writes it from its own
+// goroutine while a failing test reads it.
+type lockedBuffer struct {
+	mu sync.Mutex
+	b  strings.Builder
+}
+
+func (l *lockedBuffer) Write(p []byte) (int, error) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.Write(p)
+}
+
+func (l *lockedBuffer) String() string {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.b.String()
 }
 
 // crash runs the child in mode, waits until a record of type want reaches
-// the file, kills the child, and returns the store and conversation ID.
-func crash(t *testing.T, mode string, want convstore.Type) (*convstore.Store, string) {
+// the file, kills the child, and returns the store, the conversation ID,
+// and the conversation folder.
+func crash(t *testing.T, mode string, want convstore.Type) (*convstore.Store, string, string) {
 	t.Helper()
 	dir := filepath.Join(t.TempDir(), "conversations")
+	folder := t.TempDir()
 	// os.Args[0] may be a bare name, which exec looks up in PATH.
 	self, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(self, "-test.run=^TestCrashChild$", "-test.count=1")
-	cmd.Env = append(os.Environ(), crashModeEnv+"="+mode, crashDirEnv+"="+dir)
-	var out strings.Builder
+	cmd.Env = append(os.Environ(), crashModeEnv+"="+mode, crashDirEnv+"="+dir, crashFolderEnv+"="+folder)
+	var out lockedBuffer
 	cmd.Stdout, cmd.Stderr = &out, &out
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = stdin.Close() }()
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -104,12 +135,12 @@ func crash(t *testing.T, mode string, want convstore.Type) (*convstore.Store, st
 	if err != nil {
 		t.Fatal(err)
 	}
-	return store, id
+	return store, id, folder
 }
 
 // waitRecord polls dir until its one conversation file holds a line of
 // type want, and returns the conversation ID.
-func waitRecord(t *testing.T, dir string, want convstore.Type, out *strings.Builder) string {
+func waitRecord(t *testing.T, dir string, want convstore.Type, out *lockedBuffer) string {
 	t.Helper()
 	tag := `{"type":"` + string(want) + `"`
 	for deadline := time.Now().Add(20 * time.Second); time.Now().Before(deadline); time.Sleep(20 * time.Millisecond) {
@@ -127,7 +158,7 @@ func waitRecord(t *testing.T, dir string, want convstore.Type, out *strings.Buil
 }
 
 func TestCrashMidStream(t *testing.T) {
-	store, id := crash(t, "stream", convstore.TypePartial)
+	store, id, _ := crash(t, "stream", convstore.TypePartial)
 	c, err := store.Load(id)
 	if err != nil {
 		t.Fatal(err)
@@ -142,7 +173,7 @@ func TestCrashMidStream(t *testing.T) {
 }
 
 func TestCrashMidTool(t *testing.T) {
-	store, id := crash(t, "tool", convstore.TypeAssistant)
+	store, id, folder := crash(t, "tool", convstore.TypeAssistant)
 	c, err := store.Load(id)
 	if err != nil {
 		t.Fatal(err)
@@ -164,7 +195,7 @@ func TestCrashMidTool(t *testing.T) {
 	if err := providers.Register(fake); err != nil {
 		t.Fatal(err)
 	}
-	conv, _, err := Resume(Config{Store: store, Providers: providers, Tools: tool.NewRegistry(), Folder: tool.Folder{Path: t.TempDir()}}, id)
+	conv, _, err := Resume(Config{Store: store, Providers: providers, Tools: tool.NewRegistry(), Folder: tool.Folder{Path: folder}}, id)
 	if err != nil {
 		t.Fatal(err)
 	}

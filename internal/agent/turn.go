@@ -37,7 +37,7 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 	c.emit(&TurnStarted{Turn: n})
 	if err := c.w.Append(&convstore.User{At: c.now(), Text: text}); err != nil {
 		// Nothing goes to the provider that could not be saved.
-		c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
+		c.end(n, EndFailed, saveFailure(err))
 		return
 	}
 	c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
@@ -49,7 +49,7 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 			return
 		}
 		if err := c.w.Append(assistantRecord(c.now(), r)); err != nil {
-			c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
+			c.end(n, EndFailed, saveFailure(err))
 			return
 		}
 		c.history = appendMessage(c.history, provider.RoleAssistant, r.blocks...)
@@ -78,7 +78,7 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 func (c *Conversation) stop(ctx context.Context, n int, err error) {
 	var we *convstore.WriteError
 	if errors.As(err, &we) {
-		c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
+		c.end(n, EndFailed, saveFailure(err))
 		return
 	}
 	reason, end, f := "interrupted by the user", EndInterrupted, (*Failure)(nil)
@@ -87,7 +87,7 @@ func (c *Conversation) stop(ctx context.Context, n int, err error) {
 		reason, end = "failed: "+f.Message, EndFailed
 	}
 	if err := c.w.Append(&convstore.Interruption{At: c.now(), Reason: reason}); err != nil {
-		c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
+		c.end(n, EndFailed, saveFailure(err))
 		return
 	}
 	c.end(n, end, f)

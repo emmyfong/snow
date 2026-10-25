@@ -55,7 +55,9 @@ func (runTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, e
 	runCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 	out := newHeadTail(runBytes)
-	code, err := env.Shell.Command(env.Folder.Path, in.Command).Run(runCtx, out)
+	l := env.Shell.Command(env.Folder.Path, in.Command)
+	l.Hide = env.HideEnv
+	code, err := l.Run(runCtx, out)
 	switch {
 	case ctx.Err() != nil:
 		return "", ctx.Err()

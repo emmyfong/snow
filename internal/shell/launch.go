@@ -65,6 +65,9 @@ type Launch struct {
 	// CmdLine, when set, is the whole command line on Windows, passed as it
 	// is instead of joined from Path and Args. cmd needs it.
 	CmdLine string
+	// Hide names inherited variables Run leaves out, such as the ones that
+	// hold keys. Names match without regard to case on Windows.
+	Hide []string
 }
 
 // Launch returns the command that starts p in dir with the folder hook from

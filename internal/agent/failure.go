@@ -43,6 +43,12 @@ type Failure struct {
 	Choices    []Choice
 }
 
+// saveFailure describes a write to the conversation file that failed.
+// Retrying may work once the disk has room or the file is reachable again.
+func saveFailure(err error) *Failure {
+	return &Failure{Kind: FailSave, Message: err.Error(), Choices: []Choice{ChoiceRetry}}
+}
+
 // failure describes a provider error for the user, with what the user can
 // do about it. The agent itself never retries and never changes the model.
 func failure(err error) *Failure {

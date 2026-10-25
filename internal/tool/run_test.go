@@ -152,3 +152,18 @@ func TestHeadTail(t *testing.T) {
 		t.Fatalf("empty: %q", got)
 	}
 }
+
+// TestRunHidesKeys: variables in Env.HideEnv do not reach the command.
+func TestRunHidesKeys(t *testing.T) {
+	t.Setenv("SNOW_TEST_API_KEY", "sk-secret")
+	env := withShell(tree(t, nil))
+	env.HideEnv = []string{"SNOW_TEST_API_KEY"}
+	cmd := `echo "[$SNOW_TEST_API_KEY]"`
+	if runtime.GOOS == "windows" {
+		cmd = `echo [%SNOW_TEST_API_KEY%]`
+	}
+	in, _ := json.Marshal(map[string]string{"command": cmd})
+	if got := run(t, env, "run", string(in)); got.IsError || strings.Contains(got.Content, "sk-secret") {
+		t.Fatalf("got %+v", got)
+	}
+}

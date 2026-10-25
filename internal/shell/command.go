@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"slices"
+	"strings"
 	"time"
 )
 
@@ -48,7 +50,7 @@ const waitDelay = 2 * time.Second
 func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
 	cmd := exec.CommandContext(ctx, l.Path, l.Args...)
 	cmd.Dir = l.Dir
-	cmd.Env = append(os.Environ(), l.Env...)
+	cmd.Env = append(hideVars(os.Environ(), l.Hide), l.Env...)
 	cmd.Stdout, cmd.Stderr = out, out
 	cmd.WaitDelay = waitDelay
 	tree, err := newTree(cmd, l.CmdLine)
@@ -78,4 +80,28 @@ func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
 		return -1, fmt.Errorf("run %s: %w", l.Path, err)
 	}
 	return 0, nil
+}
+
+// hideVars returns env without the variables named in hide.
+func hideVars(env, hide []string) []string {
+	if len(hide) == 0 {
+		return env
+	}
+	out := make([]string, 0, len(env))
+	for _, kv := range env {
+		name, _, _ := strings.Cut(kv, "=")
+		if !slices.ContainsFunc(hide, func(h string) bool { return sameVar(h, name) }) {
+			out = append(out, kv)
+		}
+	}
+	return out
+}
+
+// sameVar reports whether two variable names are the same variable.
+// Windows names ignore case.
+func sameVar(a, b string) bool {
+	if runtime.GOOS == "windows" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }

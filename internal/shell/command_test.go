@@ -125,3 +125,70 @@ func size(file string) int64 {
 	}
 	return info.Size()
 }
+
+// TestRunHidesVars: a hidden variable does not reach the command; others
+// do.
+func TestRunHidesVars(t *testing.T) {
+	t.Setenv("SNOW_TEST_SECRET_KEY", "hunter2")
+	t.Setenv("SNOW_TEST_PLAIN", "visible")
+	line := `echo "[$SNOW_TEST_SECRET_KEY][$SNOW_TEST_PLAIN]"`
+	if runtime.GOOS == "windows" {
+		line = `echo [%SNOW_TEST_SECRET_KEY%][%SNOW_TEST_PLAIN%]`
+	}
+	l := local(t).Command(t.TempDir(), line)
+	l.Hide = []string{"SNOW_TEST_SECRET_KEY"}
+	var out bytes.Buffer
+	if _, err := l.Run(context.Background(), &out); err != nil {
+		t.Fatal(err)
+	}
+	got := strings.TrimSpace(out.String())
+	if strings.Contains(got, "hunter2") || !strings.Contains(got, "visible") {
+		t.Fatalf("output %q", got)
+	}
+}
+
+// TestRunKillsLeftovers: a process the command leaves running is killed
+// when the command exits, its exit code is kept, and Run does not wait for
+// the leftover past waitDelay.
+func TestRunKillsLeftovers(t *testing.T) {
+	dir := t.TempDir()
+	out := filepath.Join(dir, "out")
+	line := `(while true; do echo tick; sleep 0.2; done > ` + out + `) & exit 5`
+	if runtime.GOOS == "windows" {
+		line = `start /b cmd /c "ping -n 60 127.0.0.1 > "` + out + `"" & exit 5`
+	}
+	start := time.Now()
+	code, err := local(t).Command(dir, line).Run(context.Background(), &bytes.Buffer{})
+	if err != nil || code != 5 {
+		t.Fatalf("code %d, err %v", code, err)
+	}
+	if d := time.Since(start); d > waitDelay+5*time.Second {
+		t.Fatalf("Run took %s", d)
+	}
+	waitGrow(t, out, 0)
+	before := size(out)
+	time.Sleep(2500 * time.Millisecond)
+	if after := size(out); after != before {
+		t.Fatalf("the leftover still writes: %d bytes, then %d", before, after)
+	}
+}
+
+// TestRunPwsh runs a quoted command through a real PowerShell, when one
+// is installed.
+func TestRunPwsh(t *testing.T) {
+	var pwsh *Profile
+	for _, p := range Detect() {
+		if p.Kind == KindPwsh {
+			pwsh = &p
+			break
+		}
+	}
+	if pwsh == nil {
+		t.Skip("no PowerShell")
+	}
+	var out bytes.Buffer
+	code, err := pwsh.Command(t.TempDir(), `Write-Output "a  b"; exit 3`).Run(context.Background(), &out)
+	if err != nil || code != 3 || strings.TrimSpace(out.String()) != "a  b" {
+		t.Fatalf("code %d, err %v, output %q", code, err, out.String())
+	}
+}

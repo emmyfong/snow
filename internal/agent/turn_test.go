@@ -58,6 +58,7 @@ func TestEventsCarryAgentID(t *testing.T) {
 	bodies := []Body{
 		&TurnStarted{}, &TurnEnded{}, &TextDelta{}, &ThinkingDelta{}, &ToolCall{}, &ToolResult{},
 		&ApprovalRequest{}, &Question{}, &TasksChanged{}, &Usage{}, &StateChanged{}, &QueueChanged{},
+		&ModelChanged{}, &ModeChanged{},
 	}
 	for _, b := range bodies {
 		h.conv.emit(b)
@@ -167,7 +168,7 @@ func TestSaveFailureStopsBeforeSend(t *testing.T) {
 		t.Fatal(err)
 	}
 	end := next[*TurnEnded](t, h)
-	if end.Reason != EndFailed || end.Failure == nil || end.Failure.Kind != FailSave || !strings.Contains(end.Failure.Message, path) {
+	if end.Reason != EndFailed || end.Failure == nil || end.Failure.Kind != FailSave || !strings.Contains(end.Failure.Message, path) || len(end.Failure.Choices) == 0 {
 		t.Fatalf("turn ended %+v (%+v)", end, end.Failure)
 	}
 	if n := len(h.fake.Requests()); n != 0 {

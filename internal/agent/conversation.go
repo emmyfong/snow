@@ -5,7 +5,6 @@
 package agent
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync/atomic"
@@ -25,19 +24,32 @@ type Config struct {
 	// Folder is the conversation folder. For a new conversation it is also
 	// saved in the meta record.
 	Folder tool.Folder
-	// Shell is the profile saved with the conversation; the run tool uses
-	// it.
-	Shell  shell.Profile
-	System string // the system prompt
+	// Shell is the profile the run tool uses. A new conversation saves its
+	// name in the meta record.
+	Shell shell.Profile
+	// HideEnv names environment variables the run tool's commands do not
+	// get: the variables that hold provider keys. The server fills it, as
+	// the agent does not read keys.
+	HideEnv []string
+	System  string // the system prompt
 	// Events receives every event, in order, from one goroutine of the
 	// Conversation's own. A slow receiver delays later events, never the
-	// turn.
+	// turn. It must not call Close, which waits for that goroutine.
 	Events func(Event)
 	Now    func() time.Time // the clock; nil means time.Now
 }
 
-// errClosed is the cause of a call to a closed Conversation.
-var errClosed = errors.New("conversation is closed")
+// Errors a Conversation returns. Match them with errors.Is.
+var (
+	// ErrClosed is the cause of a call to a closed Conversation.
+	ErrClosed = errors.New("conversation is closed")
+	// ErrInvalid is the cause of a call with a mode, a decision, or a model
+	// name this version does not know.
+	ErrInvalid = errors.New("invalid argument")
+	// ErrFolderMismatch is the cause of a Resume whose folder is not the one
+	// saved in the conversation file: its tools would work elsewhere.
+	ErrFolderMismatch = errors.New("folder differs from the conversation's folder")
+)
 
 // Conversation is one conversation with its main agent. One goroutine owns
 // its state; the methods only post commands to it, so they are safe to
@@ -61,29 +73,14 @@ type Conversation struct {
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }
 
-// Commands posted to the loop.
-type (
-	sendCmd   struct{ text string }
-	switchCmd struct{ sw *convstore.ModelSwitch }
-	modeCmd   struct{ mode Mode }
-	waitCmd   struct {
-		req   *ApprovalRequest
-		reply chan<- Answer
-	}
-	answerCmd struct {
-		a   Answer
-		res chan<- error
-	}
-	pendingCmd   struct{ res chan<- *ApprovalRequest }
-	interruptCmd struct{}
-	closeCmd     struct{}
-)
-
 // Start creates a new conversation with meta, saves its meta record, and
-// starts its goroutine. Meta.Folder is taken from cfg.Folder, and an unset
-// Meta.Created is now.
+// starts its goroutine. Meta.Folder is taken from cfg.Folder; an unset
+// Meta.Profile is cfg.Shell's name, and an unset Meta.Created is now.
 func Start(cfg Config, meta convstore.Meta) (*Conversation, error) {
 	meta.Folder = cfg.Folder.Path
+	if meta.Profile == "" {
+		meta.Profile = cfg.Shell.Name
+	}
 	if meta.Created.IsZero() {
 		meta.Created = now(cfg)
 	}
@@ -99,36 +96,41 @@ func Start(cfg Config, meta convstore.Meta) (*Conversation, error) {
 
 // Resume loads the conversation id, ends a turn that a crash left open,
 // and starts its goroutine. It returns what was loaded, for the caller to
-// show. The conversation goes on with the model saved in its file.
+// show. The conversation goes on with the model and the mode saved in its
+// file. cfg.Folder must be the folder saved in the file, or Resume returns
+// an error wrapping ErrFolderMismatch.
 func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, error) {
 	loaded, err := cfg.Store.Load(id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
 	}
+	if loaded.Meta.Folder != cfg.Folder.Path {
+		return nil, nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
+	}
 	w, err := cfg.Store.Writer(id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
 	}
-	c := newConversation(cfg, w)
-	c.model, c.effort = loaded.Meta.Model, provider.Effort(loaded.Meta.Effort)
-	for _, r := range loaded.Records {
-		if s, ok := r.(*convstore.ModelSwitch); ok {
-			c.model, c.effort = s.Model, provider.Effort(s.Effort)
-		}
-	}
-	c.history = history(loaded.Records)
-	for _, r := range loaded.Records {
-		if m, ok := r.(*convstore.Mode); ok && Mode(m.Mode).valid() {
-			c.mode.Store(Mode(m.Mode))
-		}
-	}
 	if loaded.MidTurn {
 		// The turn that was running when Snow stopped is over; record it, so
 		// the next load does not see it open.
-		if err := w.Append(&convstore.Interruption{At: c.now(), Reason: "Snow stopped"}); err != nil {
+		if err := w.Append(&convstore.Interruption{At: now(cfg), Reason: "Snow stopped"}); err != nil {
 			return nil, nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
 		}
 	}
+	c := newConversation(cfg, w)
+	c.model, c.effort = loaded.Meta.Model, provider.Effort(loaded.Meta.Effort)
+	for _, r := range loaded.Records {
+		switch r := r.(type) {
+		case *convstore.ModelSwitch:
+			c.model, c.effort = r.Model, provider.Effort(r.Effort)
+		case *convstore.Mode:
+			if Mode(r.Mode).valid() {
+				c.mode.Store(Mode(r.Mode))
+			}
+		}
+	}
+	c.history = history(loaded.Records)
 	go c.loop()
 	return c, loaded, nil
 }
@@ -167,7 +169,7 @@ func (c *Conversation) Send(text string) error { return c.post(sendCmd{text}) }
 // it, or why it could not be saved.
 func (c *Conversation) SwitchModel(model, effort string) error {
 	if _, err := provider.ParseModelName(model); err != nil {
-		return fmt.Errorf("switch model: %w", err)
+		return fmt.Errorf("switch model: %w: %w", ErrInvalid, err)
 	}
 	return c.post(switchCmd{&convstore.ModelSwitch{Model: model, Effort: effort}})
 }
@@ -180,7 +182,7 @@ func (c *Conversation) Mode() Mode { return c.mode.Load().(Mode) }
 // ModeChanged event reports it, or why it could not be saved.
 func (c *Conversation) SetMode(m Mode) error {
 	if !m.valid() {
-		return fmt.Errorf("set mode: unknown mode %q", m)
+		return fmt.Errorf("set mode %q: %w", m, ErrInvalid)
 	}
 	return c.post(modeCmd{m})
 }
@@ -191,7 +193,7 @@ func (c *Conversation) Answer(a Answer) error {
 	switch a.Decision {
 	case DecisionYes, DecisionAlways, DecisionNo:
 	default:
-		return fmt.Errorf("answer: unknown decision %q", a.Decision)
+		return fmt.Errorf("answer with decision %q: %w", a.Decision, ErrInvalid)
 	}
 	res := make(chan error, 1)
 	if err := c.post(answerCmd{a, res}); err != nil {
@@ -215,8 +217,9 @@ func (c *Conversation) Pending() *ApprovalRequest {
 // stay queued and start the next turn.
 func (c *Conversation) Interrupt() error { return c.post(interruptCmd{}) }
 
-// Close stops the running turn, as Interrupt does, waits for it, delivers
-// the events still queued, and closes the file.
+// Close stops the running turn, as Interrupt does, waits for it and for
+// the mode and model changes still to be saved, delivers the events still
+// queued, and closes the file. Queued messages are dropped.
 func (c *Conversation) Close() error {
 	if err := c.post(closeCmd{}); err != nil {
 		return nil
@@ -231,7 +234,7 @@ func (c *Conversation) post(cmd any) error {
 	case c.cmds <- cmd:
 		return nil
 	case <-c.done:
-		return errClosed
+		return ErrClosed
 	}
 }
 
@@ -248,120 +251,4 @@ func now(cfg Config) time.Time {
 // emit sends an event about the main agent.
 func (c *Conversation) emit(b Body) {
 	c.ev.emit(Event{Agent: c.agent, Conversation: c.id, At: c.now(), Body: b})
-}
-
-// loop owns the queue and starts turns one at a time.
-func (c *Conversation) loop() {
-	defer close(c.done)
-	var (
-		queue   []string
-		pending *convstore.ModelSwitch // applies when the running turn ends
-		waiting *waitCmd               // the approval the turn waits for
-		cancel  context.CancelFunc     // of the running turn; nil when idle
-		ended   = make(chan struct{})
-		turn    int
-		closing bool
-	)
-	start := func(text string) {
-		turn++
-		var ctx context.Context
-		ctx, cancel = context.WithCancel(context.Background())
-		go func(n int) {
-			c.runTurn(ctx, n, text)
-			ended <- struct{}{}
-		}(turn)
-	}
-	for {
-		select {
-		case cmd := <-c.cmds:
-			switch cmd := cmd.(type) {
-			case sendCmd:
-				if cancel == nil {
-					start(cmd.text)
-				} else {
-					queue = append(queue, cmd.text)
-					c.emit(&QueueChanged{Messages: append([]string(nil), queue...)})
-				}
-			case switchCmd:
-				if cancel == nil {
-					c.applySwitch(cmd.sw)
-				} else {
-					pending = cmd.sw
-				}
-			case modeCmd:
-				c.applyMode(cmd.mode)
-			case waitCmd:
-				waiting = &cmd
-			case answerCmd:
-				if waiting == nil || waiting.req.ID != cmd.a.ID {
-					cmd.res <- fmt.Errorf("answer %q: %w", cmd.a.ID, ErrNoApproval)
-					continue
-				}
-				waiting.reply <- cmd.a
-				waiting = nil
-				cmd.res <- nil
-			case pendingCmd:
-				if waiting != nil {
-					cmd.res <- waiting.req
-				} else {
-					cmd.res <- nil
-				}
-			case interruptCmd:
-				if cancel != nil {
-					cancel()
-				}
-				// The turn stops waiting; an answer that comes later is refused.
-				waiting = nil
-			case closeCmd:
-				if cancel == nil {
-					return
-				}
-				closing = true
-				cancel()
-				waiting = nil
-			}
-		case <-ended:
-			cancel()
-			cancel = nil
-			waiting = nil
-			if closing {
-				return
-			}
-			if pending != nil {
-				c.applySwitch(pending)
-				pending = nil
-			}
-			if len(queue) == 0 {
-				c.emit(&StateChanged{State: StateIdle})
-				continue
-			}
-			next := queue[0]
-			queue = queue[1:]
-			c.emit(&QueueChanged{Messages: append([]string(nil), queue...)})
-			start(next)
-		}
-	}
-}
-
-// applySwitch saves sw and makes it the model of the next turn. It runs
-// only between turns, so no turn reads the model while it changes.
-func (c *Conversation) applySwitch(sw *convstore.ModelSwitch) {
-	sw.At = c.now()
-	if err := c.w.Append(sw); err != nil {
-		c.emit(&ModelChanged{Model: c.model, Effort: string(c.effort), Failure: &Failure{Kind: FailSave, Message: err.Error()}})
-		return
-	}
-	c.model, c.effort = sw.Model, provider.Effort(sw.Effort)
-	c.emit(&ModelChanged{Model: c.model, Effort: sw.Effort})
-}
-
-// applyMode saves m and puts it in force. The file write may race a turn's
-// writes; the Writer orders them.
-func (c *Conversation) applyMode(m Mode) {
-	if err := c.w.Append(&convstore.Mode{At: c.now(), Mode: string(m)}); err != nil {
-		c.emit(&ModeChanged{Mode: c.Mode(), Failure: &Failure{Kind: FailSave, Message: err.Error()}})
-		return
-	}
-	c.mode.Store(m)
-	c.emit(&ModeChanged{Mode: m})
 }
