@@ -149,7 +149,10 @@ context is and the estimated cost.
 | `Esc` | Stop the running turn |
 | `PgUp` `PgDn`, arrows, wheel | Scroll; `End` or typing returns to the latest text |
 | `Tab`, `Shift+Tab` | Select a tool call; `Enter` or a click shows its details |
-| `y` `a` `n` `d` | When a tool asks: yes, always for this tool, no (with a reason), view the diff |
+| `y` `a` `n` `d` | When a tool asks and the message line is empty: yes, always for this tool, no (with a reason), show the diff or the rest of a long input |
+
+The approval box lists the whole input of the call. A message holds at most
+16 KiB, and at most four messages wait while a turn runs.
 
 ### Mouse
 
