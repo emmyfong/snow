@@ -29,6 +29,7 @@ internal/client/
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
+  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, the message being typed, scrolling
 ```
 
 - A screen or popup is a package that implements `Screen` (or a popup
@@ -82,6 +83,9 @@ Each entry: name, exact signature, one line of use, and notable options.
 | List | `List(th theme.Theme, o ListOptions) string` | Rows of `ListItem` cells with aligned columns, `Selected` marked with the pointer glyph and highlighted; `Height` shows a window scrolled to the selection. |
 | KeyHints | `KeyHints(th theme.Theme, hints []Hint, width int) string` | One row of `Hint`s (key in accent, description muted); hints that do not fit whole are dropped from the end. |
 | Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, bold in the terminal's own text color (`WordmarkWidth` columns); nothing when too narrow. |
+| Transcript | `Transcript(th theme.Theme, o TranscriptOptions) string` | A chat transcript at most `Width` wide: `TranscriptEntry` rows (`Kind`: user, agent, thinking, note, error, queued) with a blank row between them. User, agent, and error entries start with a 6-cell badge (`UserFG`/`UserBG`, `AgentFG`/`AgentBG`, `ErrorFG`/`Error`); wrapped lines line up after it. `Cut` adds "(cut off)". Escape sequences and control characters in the text are dropped. Below 15 cells the badge takes its own row. |
+| Activity | `Activity(th theme.Theme, o ActivityOptions) string` | One row of exactly `Width` cells in `ActivityFG`/`ActivityBG`: a spinner frame (`Glyphs.Spinner`, by `Frame`), `Text`, and `Hint` right-aligned; the hint is dropped first when short. |
+| TextArea | `TextArea(th theme.Theme, o TextAreaOptions) string` | A multi-line text field, each row exactly `Width` wide: `Prompt` then `Value`, hard-wrapped by cell width, or a muted `Placeholder`. At most `Height` rows, scrolled to `Cursor` (a rune index). `TextAreaCursor(o)` gives the cursor cell and `TextAreaRows(o)` the row count. |
 
 ## Theme tokens
 
@@ -97,11 +101,12 @@ not be used).
   `ErrorFG`, `PromptFG`, `PromptBG`, `Selection` with `SelectionFG` (black
   or white for contrast), and copy mode's
   `IndicatorFG`/`IndicatorBG`, `MatchFG`/`MatchBG`, `CurrentFG`/`CurrentBG`,
-  `SelectedFG`/`SelectedBG`. A built-in theme sets the copy mode marker and
+  `SelectedFG`/`SelectedBG`, and the chat's `UserFG`/`UserBG`,
+  `AgentFG`/`AgentBG`, `Queued`, and `ActivityFG`/`ActivityBG`. A built-in theme sets the copy mode marker and
   current-match pairs itself; matches reuse the prompt colors and the
   selection reuses the list selection.
 - `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
-  mark, the session brackets, the list pointer, the text caret.
+  mark, the session brackets, the list pointer, the text caret, the spinner frames.
 - `Named(name)` reads `[theme] name` from the config: a built-in name,
   ignoring case, or `default`.
 - The terminal may be light or dark. Text on the terminal's own background

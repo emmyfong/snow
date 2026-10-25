@@ -84,6 +84,9 @@ func TestTokensDownsample(t *testing.T) {
 				"current":    {th.CurrentFG, th.CurrentBG},
 				"selected":   {th.SelectedFG, th.SelectedBG},
 				"list row":   {th.SelectionFG, th.Selection},
+				"you label":  {th.UserFG, th.UserBG},
+				"snow label": {th.AgentFG, th.AgentBG},
+				"activity":   {th.ActivityFG, th.ActivityBG},
 			}
 			for what, pair := range pairs {
 				if r := contrast(p.Convert(pair[0]), p.Convert(pair[1])); r < minContrast {

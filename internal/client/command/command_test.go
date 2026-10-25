@@ -49,7 +49,7 @@ func TestMatchFiltersByPlace(t *testing.T) {
 		t.Errorf("home commands %v, want %v", home, want)
 	}
 	inSession := names(Match("", InSession))
-	if want := []string{"new", "switch", "rename", "kill", "theme"}; !slices.Equal(inSession, want) {
+	if want := []string{"new", "switch", "rename", "kill", "chat", "theme"}; !slices.Equal(inSession, want) {
 		t.Errorf("session commands %v, want %v", inSession, want)
 	}
 }

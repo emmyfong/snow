@@ -97,6 +97,15 @@ func (m *Model) mousePress(ev tea.Mouse) {
 		if (ev.Button == tea.MouseLeft || ev.Button == tea.MouseRight) && !p.Focused {
 			m.send(&api.Command{Op: api.OpFocus, Target: p.ID})
 		}
+		if c := m.chats[p.ID]; c != nil {
+			switch ev.Button {
+			case tea.MouseLeft:
+				c.Follow() // a click returns to the latest text
+			case tea.MouseRight:
+				m.openMenu(ev.X, ev.Y)
+			}
+			return
+		}
 		st := m.panes[p.ID]
 		wantsMouse := st != nil && st.mouse
 		// A program that uses the mouse gets the right click too; Ctrl keeps
@@ -160,6 +169,14 @@ func (m *Model) mouseWheel(ev tea.Mouse) tea.Cmd {
 	st := m.panes[h.Pane]
 	b := apiButton(ev.Button)
 	if st == nil || (b != api.ButtonWheelUp && b != api.ButtonWheelDown) {
+		return nil
+	}
+	if c := m.chats[h.Pane]; c != nil {
+		if b == api.ButtonWheelUp {
+			c.Scroll(wheelRows)
+		} else {
+			c.Scroll(-wheelRows)
+		}
 		return nil
 	}
 	if st.mouse {

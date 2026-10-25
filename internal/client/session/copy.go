@@ -24,7 +24,8 @@ func (m *Model) enterCopyOn(id int) bool {
 		return m.copy.Pane() == id
 	}
 	p := m.paneByID(id)
-	if p == nil {
+	if p == nil || m.chats[id] != nil {
+		// A chat has no terminal history; it scrolls by itself.
 		return false
 	}
 	o := copymode.Options{Pane: p.ID, Cols: p.Rect.W, Rows: p.Rect.H, Send: m.send, Copy: m.setClip}

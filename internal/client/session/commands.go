@@ -17,6 +17,14 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 	"rename": (*Model).cmdRename,
 	"kill":   (*Model).cmdKill,
 	"theme":  (*Model).cmdTheme,
+	"chat":   (*Model).cmdChat,
+}
+
+// cmdChat opens a chat beside the focused pane.
+func (m *Model) cmdChat(string) tea.Cmd {
+	m.prompt = nil
+	m.newChat()
+	return nil
 }
 
 // current is the name of the session on screen, or "" before the first

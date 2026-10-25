@@ -45,8 +45,15 @@ func buildHandlers() map[string]handler {
 		"detach":         func(*Model, tea.Key) tea.Cmd { return func() tea.Msg { return DetachMsg{} } },
 		"sessions":       func(m *Model, _ tea.Key) tea.Cmd { return m.openSessions() },
 		"command-prompt": func(m *Model, _ tea.Key) tea.Cmd { return m.openPrompt() },
-		"copy-mode":      func(m *Model, _ tea.Key) tea.Cmd { m.enterCopy(); return nil },
-		keys.SendPrefix:  func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
+		"copy-mode": func(m *Model, _ tea.Key) tea.Cmd {
+			if m.focusedChat() != nil {
+				return m.ShowError("Copy mode works in terminal panes. Scroll a chat with the wheel or PgUp.")
+			}
+			m.enterCopy()
+			return nil
+		},
+		"new-chat":      func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
+		keys.SendPrefix: func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
 	}
 	for i := range 10 {
 		h["select-window-"+strconv.Itoa(i)] = func(m *Model, _ tea.Key) tea.Cmd {
