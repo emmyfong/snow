@@ -53,10 +53,7 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 	if o.Width <= 0 || len(o.Entries) == 0 {
 		return ""
 	}
-	indent := labelWidth + labelGap
-	if o.Width < indent+8 {
-		indent = 0 // too narrow for a label column; labels go on their own row
-	}
+	indent := TranscriptIndent(o.Width)
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	var rows []string
 	for i, e := range o.Entries {
@@ -105,6 +102,16 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 		}
 	}
 	return strings.Join(rows, "\n")
+}
+
+// TranscriptIndent is the column where Transcript starts text at width:
+// after the label column, or 0 when too narrow for one, where labels take
+// their own row. Rows drawn beside a transcript line up with it.
+func TranscriptIndent(width int) int {
+	if width < labelWidth+labelGap+8 {
+		return 0
+	}
+	return labelWidth + labelGap
 }
 
 // badge draws a label padded to labelWidth in fg on bg.

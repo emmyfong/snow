@@ -14,8 +14,32 @@ import (
 // Alt+Enter, and Ctrl+J add a line, since some terminals cannot tell
 // Shift+Enter from Enter. Esc interrupts a running turn. PgUp, PgDn, Up,
 // and Down scroll the transcript; any key that edits returns to the
-// latest text.
+// latest text. Tab and Shift+Tab select a tool cell, and Enter then
+// expands or collapses it. While an approval waits, its box takes the
+// keys first.
 func (m *Model) Key(k tea.Key) *api.ChatInput {
+	if p := m.pending(); p != nil {
+		if in, ok := m.approvalKey(p, k); ok {
+			return in
+		}
+	}
+	switch {
+	case m.selected != "" && k.Code == tea.KeyEnter && k.Mod == 0:
+		m.expanded[m.selected] = !m.expanded[m.selected]
+		m.invalidate()
+		m.reveal(m.selected)
+		return nil
+	case m.selected != "" && k.Code == tea.KeyEscape:
+		m.selected = ""
+		m.invalidate()
+		return nil
+	case k.Code == tea.KeyTab && k.Mod == tea.ModShift:
+		m.selectTool(1)
+		return nil
+	case k.Code == tea.KeyTab:
+		m.selectTool(-1)
+		return nil
+	}
 	switch {
 	case k.Code == tea.KeyEnter && k.Mod&(tea.ModShift|tea.ModAlt) != 0, k.Code == 'j' && k.Mod == tea.ModCtrl:
 		m.insert("\n")
@@ -43,6 +67,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 		m.cursor = len(m.input)
 		m.Follow()
 	case k.Code == tea.KeyBackspace:
+		m.unselect()
 		if m.cursor > 0 {
 			m.input = slices.Delete(m.input, m.cursor-1, m.cursor)
 			m.cursor--
@@ -73,6 +98,7 @@ func (m *Model) Paste(text string) {
 func (m *Model) Retry() *api.ChatInput { return m.chatInput(api.InputRetry, "") }
 
 func (m *Model) insert(text string) {
+	m.unselect()
 	r := []rune(text)
 	m.input = slices.Insert(m.input, m.cursor, r...)
 	m.cursor += len(r)
@@ -99,6 +125,14 @@ func (m *Model) chatInput(kind, text string) *api.ChatInput {
 // is positive. It stops at the first and the latest row.
 func (m *Model) Scroll(rows int) {
 	m.scroll = min(max(m.scroll+rows, 0), max(len(m.transcriptRows())-m.transcriptHeight(), 0))
+}
+
+// unselect gives the keyboard back to the message being typed.
+func (m *Model) unselect() {
+	if m.selected != "" {
+		m.selected = ""
+		m.invalidate()
+	}
 }
 
 // Follow returns to the latest text, and keeps to it as new text comes.

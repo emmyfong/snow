@@ -44,6 +44,8 @@ type Theme struct {
 	Queued      color.Color // messages that wait for the running turn; on the terminal's background
 	ActivityFG  color.Color // the line that says a turn is running
 	ActivityBG  color.Color
+	Added       color.Color // lines a change adds; on the terminal's background
+	Removed     color.Color // lines a change removes; on the terminal's background
 	Glyphs      Glyphs
 }
 
@@ -60,6 +62,9 @@ type Glyphs struct {
 	// Spinner holds the frames, one character each, that turn while an
 	// agent works.
 	Spinner string
+	// Collapsed and Expanded mark a tool call whose details are hidden
+	// or shown.
+	Collapsed, Expanded string
 }
 
 // Default returns the default theme, Frost.
@@ -75,7 +80,8 @@ func defaultGlyphs() Glyphs {
 		SessionLeft: "[", SessionRight: "]",
 		Pointer: "> ", Caret: "_",
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
-		Spinner: "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
+		Collapsed: "▸", Expanded: "▾",
 	}
 }
 
@@ -118,6 +124,8 @@ func (t Theme) Resolve() Theme {
 	fill(&t.Queued, d.Queued)
 	fill(&t.ActivityFG, d.ActivityFG)
 	fill(&t.ActivityBG, d.ActivityBG)
+	fill(&t.Added, d.Added)
+	fill(&t.Removed, d.Removed)
 	if t.Glyphs == (Glyphs{}) {
 		t.Glyphs = d.Glyphs
 	}
@@ -135,6 +143,7 @@ func (t Theme) colors() map[string]color.Color {
 		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
 		"UserFG": t.UserFG, "UserBG": t.UserBG, "AgentFG": t.AgentFG, "AgentBG": t.AgentBG,
 		"Queued": t.Queued, "ActivityFG": t.ActivityFG, "ActivityBG": t.ActivityBG,
+		"Added": t.Added, "Removed": t.Removed,
 	}
 }
 

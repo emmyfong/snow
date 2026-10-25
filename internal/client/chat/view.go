@@ -29,12 +29,9 @@ func (m *Model) View() []string {
 	}
 	input := m.inputRows()
 	rows := make([]string, 0, m.height)
-	all := m.transcriptRows()
-	area := m.transcriptHeight()
-	end := max(len(all)-m.scroll, 0)
-	start := max(end-area, 0)
-	shown := all[start:end]
-	for range area - len(shown) {
+	start, n := m.visible()
+	shown := m.transcriptRows()[start : start+n]
+	for range m.transcriptHeight() - n {
 		rows = append(rows, "")
 	}
 	rows = append(rows, shown...)
@@ -49,9 +46,10 @@ func (m *Model) View() []string {
 }
 
 // Cursor returns where the terminal's cursor goes in the pane: in the
-// message being typed.
+// message being typed. While an approval waits, its box takes the keys
+// and draws its own cursor, so there is none.
 func (m *Model) Cursor() (x, y int, ok bool) {
-	if m.width <= 0 || m.height <= 0 {
+	if m.width <= 0 || m.height <= 0 || m.snap.Pending != nil {
 		return 0, 0, false
 	}
 	o := m.inputOptions()
@@ -111,52 +109,4 @@ func elapsed(d time.Duration) string {
 		return fmt.Sprintf("%ds", s)
 	}
 	return fmt.Sprintf("%dm %02ds", s/60, s%60)
-}
-
-// transcriptRows draws the whole transcript at the pane's width.
-func (m *Model) transcriptRows() []string {
-	out := ui.Transcript(m.th, ui.TranscriptOptions{Width: m.width, Entries: m.entries()})
-	if out == "" {
-		return nil
-	}
-	return strings.Split(out, "\n")
-}
-
-// entries turns the snapshot into what the transcript draws.
-func (m *Model) entries() []ui.TranscriptEntry {
-	var out []ui.TranscriptEntry
-	if m.snap.Earlier > 0 {
-		out = append(out, ui.TranscriptEntry{Kind: ui.EntryNote, Text: fmt.Sprintf("%d earlier entries are not shown", m.snap.Earlier)})
-	}
-	if len(m.snap.Entries) == 0 && len(m.snap.Queue) == 0 {
-		return append(out, ui.TranscriptEntry{Kind: ui.EntryNote, Text: "No messages yet. Model: " + m.snap.Model})
-	}
-	for _, e := range m.snap.Entries {
-		switch e.Kind {
-		case api.EntryUser:
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryUser, Text: e.Text})
-		case api.EntryAssistant:
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryAgent, Text: e.Text, Cut: e.Cut})
-		case api.EntryThinking:
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryThinking, Text: e.Text})
-		case api.EntryTool:
-			if e.Tool != nil {
-				out = append(out, ui.TranscriptEntry{Kind: ui.EntryNote, Text: "tool: " + e.Tool.Name})
-			}
-		case api.EntryModel:
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryNote, Text: "switched to " + e.Text})
-		case api.EntryInterrupted:
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryNote, Text: "interrupted"})
-		case api.EntryError:
-			msg := "failed"
-			if e.Error != nil {
-				msg = e.Error.Message
-			}
-			out = append(out, ui.TranscriptEntry{Kind: ui.EntryError, Text: msg})
-		}
-	}
-	for _, q := range m.snap.Queue {
-		out = append(out, ui.TranscriptEntry{Kind: ui.EntryQueued, Text: "queued: " + q})
-	}
-	return out
 }

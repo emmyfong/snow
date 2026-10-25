@@ -100,7 +100,9 @@ func (m *Model) mousePress(ev tea.Mouse) {
 		if c := m.chats[p.ID]; c != nil {
 			switch ev.Button {
 			case tea.MouseLeft:
-				c.Follow() // a click returns to the latest text
+				if in := c.Click(h.X, h.Y); in != nil {
+					m.send(in)
+				}
 			case tea.MouseRight:
 				m.openMenu(ev.X, ev.Y)
 			}

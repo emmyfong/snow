@@ -51,6 +51,7 @@ func palette(name, border, focus, markBG, markFG, currentBG, currentFG, promptBG
 		UserFG: ink(colorprofile.TrueColor, c(selection)), UserBG: c(selection),
 		AgentFG: onAccent, AgentBG: c(accent), Queued: c(muted),
 		ActivityFG: c(markFG), ActivityBG: c(markBG),
+		Added: c(success), Removed: c(errColor),
 		Glyphs: defaultGlyphs(),
 	}
 }

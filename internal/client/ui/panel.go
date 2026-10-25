@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"image/color"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -32,8 +33,13 @@ func Panel(th theme.Theme, o PanelOptions) string {
 // frame draws rows inside a border of total width w, title in the top edge.
 // Rows are cut or padded to the inside width.
 func frame(th theme.Theme, title string, rows []string, w int) string {
+	return frameIn(th, th.FocusBorder, title, rows, w)
+}
+
+// frameIn is frame with the border in edgeColor.
+func frameIn(th theme.Theme, edgeColor color.Color, title string, rows []string, w int) string {
 	g := th.Glyphs
-	edge := lipgloss.NewStyle().Foreground(th.FocusBorder)
+	edge := lipgloss.NewStyle().Foreground(edgeColor)
 	inner := w - 2
 	title = ansi.Truncate(title, max(inner-2, 0), "")
 	top := g.TopLeft + g.Horizontal
