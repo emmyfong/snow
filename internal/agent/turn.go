@@ -40,7 +40,7 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 		c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
 		return
 	}
-	c.history = append(c.history, provider.Message{Role: provider.RoleUser, Content: []provider.Block{&provider.Text{Text: text}}})
+	c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
 	for {
 		c.emit(&StateChanged{State: StateStreaming})
 		r, err := c.stream(ctx)
@@ -52,9 +52,14 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 			c.end(n, EndFailed, &Failure{Kind: FailSave, Message: err.Error()})
 			return
 		}
-		c.history = append(c.history, provider.Message{Role: provider.RoleAssistant, Content: r.blocks})
+		c.history = appendMessage(c.history, provider.RoleAssistant, r.blocks...)
 		calls := r.calls()
 		if r.stop != provider.StopToolUse || len(calls) == 0 {
+			if len(calls) > 0 {
+				// A reply cut off by its token limit can still hold whole
+				// calls that will not run. The file answers them as lost.
+				c.resync()
+			}
 			c.end(n, EndDone, nil)
 			return
 		}
@@ -63,7 +68,7 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string) {
 			c.stop(ctx, n, err)
 			return
 		}
-		c.history = append(c.history, provider.Message{Role: provider.RoleUser, Content: results})
+		c.history = appendMessage(c.history, provider.RoleUser, results...)
 	}
 }
 
@@ -88,8 +93,26 @@ func (c *Conversation) stop(ctx context.Context, n int, err error) {
 	c.end(n, end, f)
 }
 
+// end closes the turn. A turn that did not finish leaves the live history
+// short of what the file holds: calls with no results, or text that was
+// cut off. The history is then rebuilt from the file, so the next request
+// is the one a resume would send.
 func (c *Conversation) end(n int, reason EndReason, f *Failure) {
+	if reason != EndDone {
+		c.resync()
+	}
 	c.emit(&TurnEnded{Turn: n, Reason: reason, Failure: f})
+}
+
+// resync rebuilds the live history from the conversation file. If the
+// file cannot be read, the history stays as it is; the next request then
+// fails with a provider error the user can act on.
+func (c *Conversation) resync() {
+	loaded, err := c.cfg.Store.Load(c.id)
+	if err != nil {
+		return
+	}
+	c.history = history(loaded.Records)
 }
 
 // stream sends the conversation to the model and collects the reply. Text
@@ -184,11 +207,15 @@ func (c *Conversation) runTools(ctx context.Context, calls []*provider.ToolUse) 
 	var results []provider.Block
 	for _, call := range calls {
 		var res tool.Result
-		if ctx.Err() == nil {
+		started := ctx.Err() == nil
+		if started {
 			c.emit(&StateChanged{State: StateTool})
 			res = c.cfg.Tools.Call(ctx, env, call.Name, call.Input, c.approver(call.ID))
 		}
-		if ctx.Err() != nil {
+		// A call that finished despite the interrupt keeps its result: a
+		// write that happened must be reported as done. One that never
+		// started, or stopped with an error, was interrupted.
+		if ctx.Err() != nil && (!started || res.IsError) {
 			res = tool.Result{Content: "interrupted by the user", IsError: true}
 		}
 		if err := c.w.Append(&convstore.ToolResult{At: c.now(), ToolUseID: call.ID, Content: res.Content, IsError: res.IsError}); err != nil {

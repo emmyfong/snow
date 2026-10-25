@@ -125,6 +125,11 @@ func (c *Conversation) wait(ctx context.Context, req *ApprovalRequest) (Answer, 
 	c.emit(&StateChanged{State: StateApproval})
 	select {
 	case a := <-reply:
+		// An answer and an interrupt can be ready together; the interrupt
+		// wins, so nothing runs after the user pressed Esc.
+		if ctx.Err() != nil {
+			return Answer{}, false
+		}
 		c.emit(&StateChanged{State: StateTool})
 		return a, true
 	case <-ctx.Done():

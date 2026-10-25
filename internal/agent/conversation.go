@@ -310,12 +310,15 @@ func (c *Conversation) loop() {
 				if cancel != nil {
 					cancel()
 				}
+				// The turn stops waiting; an answer that comes later is refused.
+				waiting = nil
 			case closeCmd:
 				if cancel == nil {
 					return
 				}
 				closing = true
 				cancel()
+				waiting = nil
 			}
 		case <-ended:
 			cancel()

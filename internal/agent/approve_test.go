@@ -248,3 +248,44 @@ func TestApprovalShowsDiff(t *testing.T) {
 	_ = h.conv.Answer(Answer{ID: "t1", Decision: DecisionYes})
 	next[*TurnEnded](t, h)
 }
+
+// TestFinishedCallKeepsResult: a tool that finishes its work after an
+// interrupt, as write and edit do, reports what it did, not "interrupted".
+func TestFinishedCallKeepsResult(t *testing.T) {
+	started := make(chan struct{})
+	stubborn := fnTool{tool.Def{Name: "stubborn"}, func(ctx context.Context) (string, error) {
+		close(started)
+		<-ctx.Done() // the interrupt lands while the work goes on
+		return "wrote it", nil
+	}}
+	h := newHarness(t, []tool.Tool{stubborn}, call("t1", "stubborn"))
+	_ = h.conv.Send("go")
+	<-started
+	_ = h.conv.Interrupt()
+	if r := next[*ToolResult](t, h); r.IsError || r.Content != "wrote it" {
+		t.Fatalf("result %+v", r)
+	}
+	if end := next[*TurnEnded](t, h); end.Reason != EndInterrupted {
+		t.Fatalf("turn ended %+v", end)
+	}
+}
+
+// TestAnswerAfterInterrupt: once a turn is interrupted, its approval no
+// longer waits: an answer is refused and Pending is empty.
+func TestAnswerAfterInterrupt(t *testing.T) {
+	ran := make(chan struct{}, 1)
+	h := newHarness(t, []tool.Tool{changer(ran)}, call("t1", "change"))
+	_ = h.conv.Send("go")
+	next[*ApprovalRequest](t, h)
+	_ = h.conv.Interrupt()
+	if p := h.conv.Pending(); p != nil {
+		t.Fatalf("pending after interrupt: %+v", p)
+	}
+	if err := h.conv.Answer(Answer{ID: "t1", Decision: DecisionYes}); !errors.Is(err, ErrNoApproval) {
+		t.Fatalf("answer after interrupt: %v", err)
+	}
+	next[*TurnEnded](t, h)
+	if len(ran) != 0 {
+		t.Fatal("the tool ran")
+	}
+}

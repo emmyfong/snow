@@ -13,13 +13,7 @@ import (
 // alternate.
 func history(recs []convstore.Record) []provider.Message {
 	var msgs []provider.Message
-	add := func(role provider.Role, blocks ...provider.Block) {
-		if n := len(msgs); n > 0 && msgs[n-1].Role == role {
-			msgs[n-1].Content = append(msgs[n-1].Content, blocks...)
-			return
-		}
-		msgs = append(msgs, provider.Message{Role: role, Content: blocks})
-	}
+	add := func(role provider.Role, blocks ...provider.Block) { msgs = appendMessage(msgs, role, blocks...) }
 	for _, r := range recs {
 		switch r := r.(type) {
 		case *convstore.User:
@@ -33,6 +27,17 @@ func history(recs []convstore.Record) []provider.Message {
 		}
 	}
 	return msgs
+}
+
+// appendMessage adds blocks to msgs as a message of role, joined to the
+// last message when it has the same role.
+func appendMessage(msgs []provider.Message, role provider.Role, blocks ...provider.Block) []provider.Message {
+	if n := len(msgs); n > 0 && msgs[n-1].Role == role {
+		last := &msgs[n-1]
+		last.Content = append(last.Content[:len(last.Content):len(last.Content)], blocks...)
+		return msgs
+	}
+	return append(msgs, provider.Message{Role: role, Content: blocks})
 }
 
 // toProvider turns saved blocks into provider blocks.
