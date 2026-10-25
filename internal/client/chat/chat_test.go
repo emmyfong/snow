@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
@@ -296,4 +297,84 @@ func TestChatRefusesWhatServerWould(t *testing.T) {
 	if m.Note() != "" {
 		t.Fatal("a note shows twice")
 	}
+}
+
+// TestChatSendsWhileRunning: Enter during a turn sends the text as a
+// message, which the server queues; it is not a block and not an interrupt.
+func TestChatSendsWhileRunning(t *testing.T) {
+	m, _ := newChat(60, 12)
+	m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "run the tests"}))
+	typeText(m, "then run go vet")
+	in := m.Key(key(tea.KeyEnter, 0, ""))
+	if in == nil || in.Kind != api.InputMessage || in.Text != "then run go vet" || in.Validate() != nil {
+		t.Fatalf("sent %+v", in)
+	}
+	if len(m.input) != 0 {
+		t.Fatalf("input kept %q", string(m.input))
+	}
+	m.Event(ev(api.ChatEvent{Kind: api.EventQueue, Queue: []string{"then run go vet"}}))
+	if s := screen(m); !strings.Contains(s, "queued: then run go vet") {
+		t.Fatalf("the message does not show as queued:\n%s", s)
+	}
+}
+
+// TestBoxesFitEverySize: the approval box, every failure box, and an
+// expanded cell with wide characters keep to the pane at every size, with
+// the right row count and the cursor inside.
+func TestBoxesFitEverySize(t *testing.T) {
+	states := map[string]func(m *Model){
+		"approval": func(m *Model) {
+			in, _ := json.Marshal(map[string]string{"command": "go test ./... 名前を直して\nrm -rf 'a b'"})
+			m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "r1", Name: "run", Input: in}}))
+			m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &api.ChatApproval{ID: "r1", Tool: "run", Input: in, Outside: []string{"/etc/名前"}}}))
+		},
+		"diff": func(m *Model) {
+			waitingDiff(m)
+			m.box.all = true
+		},
+		"reason": func(m *Model) {
+			waitingDiff(m)
+			m.box.reason, m.box.text = true, "名前が違う"
+		},
+		"expanded": func(m *Model) {
+			in, _ := json.Marshal(map[string]string{"path": "名前.go"})
+			m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &api.ChatTool{ID: "t1", Name: "read", Input: in}}))
+			m.Event(ev(api.ChatEvent{Kind: api.EventToolResult, Tool: &api.ChatTool{ID: "t1", Done: true, Result: "名前\n名前"}}))
+			m.expanded["t1"] = true
+		},
+	}
+	for name, e := range failures {
+		states["failure-"+name] = func(m *Model) { failTurn(m, e) }
+	}
+	for name, state := range states {
+		t.Run(name, func(t *testing.T) {
+			m, _ := newChat(80, 24)
+			m.Event(ev(api.ChatEvent{Kind: api.EventTurnStarted, Turn: 1, Text: "go"}))
+			state(m)
+			for _, size := range [][2]int{{80, 24}, {40, 12}, {25, 10}, {15, 8}, {9, 5}, {5, 3}, {1, 1}} {
+				m.SetSize(size[0], size[1])
+				rows := m.View()
+				if len(rows) != size[1] {
+					t.Fatalf("%dx%d: %d rows", size[0], size[1], len(rows))
+				}
+				for i, r := range rows {
+					if w := ansi.StringWidth(r); w > size[0] {
+						t.Fatalf("%dx%d: row %d is %d wide", size[0], size[1], i, w)
+					}
+				}
+				assertNoForeignEscapes(t, rows)
+				if x, y, ok := m.Cursor(); ok && (x < 0 || x >= size[0] || y < 0 || y >= size[1]) {
+					t.Fatalf("%dx%d: cursor %d,%d", size[0], size[1], x, y)
+				}
+			}
+		})
+	}
+}
+
+// waitingDiff makes the turn wait for an answer about a write with a diff.
+func waitingDiff(m *Model) {
+	call := writeCall
+	m.Event(ev(api.ChatEvent{Kind: api.EventToolCall, Tool: &call}))
+	a := writeApproval
+	m.Event(ev(api.ChatEvent{Kind: api.EventApproval, Approval: &a}))
 }

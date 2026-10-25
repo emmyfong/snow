@@ -48,6 +48,10 @@ func TestWireFormat(t *testing.T) {
 		{&ProfileList{}, `{"profiles":[],"default":""}`},
 		{&ProfileList{Profiles: []string{"pwsh", "Ubuntu"}, Default: "pwsh"}, `{"profiles":["pwsh","Ubuntu"],"default":"pwsh"}`},
 		{&Layout{Session: "api", Active: 1, Windows: []WindowInfo{{Index: 1, Name: "dev", Panes: []PaneInfo{{ID: 2, Profile: "sh", Folder: "/src"}}}}}, `{"session":"api","active":1,"windows":[{"index":1,"name":"dev","panes":[{"id":2,"kind":"","rect":{"x":0,"y":0,"w":0,"h":0},"profile":"sh","folder":"/src"}]}]}`},
+		{&ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "x", Model: "a/b", Mode: "ask", State: ChatStateIdle}, `{"pane":2,"agent":"c1","conversation":"x","model":"a/b","mode":"ask","state":"idle","entries":[],"queue":[]}`},
+		{&ChatEvent{Pane: 2, Agent: "c1", Kind: EventText, Text: "hi"}, `{"pane":2,"agent":"c1","kind":"text","text":"hi"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: InputMessage, Text: "go"}, `{"pane":2,"agent":"c1","kind":"message","text":"go"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: InputAnswer, ID: "t1", Decision: DecisionNo, Text: "why"}, `{"pane":2,"agent":"c1","kind":"answer","text":"why","id":"t1","decision":"no"}`},
 		{&Error{Code: CodeBadHandshake, Message: "expected hello"}, `{"code":"bad-handshake","message":"expected hello"}`},
 	}
 	for _, tt := range tests {

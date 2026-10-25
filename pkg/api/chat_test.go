@@ -136,3 +136,16 @@ func TestHandshakeRejectsVersionSix(t *testing.T) {
 		}
 	}
 }
+
+// TestChatMessageNumbers pins the numbers of the chat messages: a released
+// type is never renumbered, or old clients read the wrong message.
+func TestChatMessageNumbers(t *testing.T) {
+	for _, tt := range []struct {
+		got  MsgType
+		want MsgType
+	}{{TypeChatSnapshot, 22}, {TypeChatEvent, 23}, {TypeChatInput, 24}} {
+		if tt.got != tt.want {
+			t.Errorf("type is %d, want %d", tt.got, tt.want)
+		}
+	}
+}

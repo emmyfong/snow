@@ -2,7 +2,10 @@ package agent
 
 import (
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/internal/provider/providertest"
@@ -101,5 +104,26 @@ func TestRetryAfterUserSaveFailure(t *testing.T) {
 	}
 	if n := len(h.fake.Requests()); n != 0 {
 		t.Fatalf("the provider got %d requests", n)
+	}
+}
+
+// TestFailureMakesNoSecondRequest: after a failed request the agent waits
+// for the user. It does not retry, and it does not move to another model.
+func TestFailureMakesNoSecondRequest(t *testing.T) {
+	for _, kind := range []provider.Kind{provider.KindRateLimited, provider.KindOverloaded, provider.KindNetwork, provider.KindModelNotFound} {
+		t.Run(fmt.Sprint(kind), func(t *testing.T) {
+			h := newHarness(t, nil, providertest.Reply{StartErr: &provider.Error{Kind: kind}}, text("must not be asked"))
+			_ = h.conv.Send("hi")
+			if end := next[*TurnEnded](t, h); end.Reason != EndFailed {
+				t.Fatalf("ended %+v", end)
+			}
+			time.Sleep(100 * time.Millisecond) // a retry would be quick; nothing should come
+			if n := len(h.fake.Requests()); n != 1 {
+				t.Fatalf("%d requests after a failure, want 1", n)
+			}
+			if got, want := h.fake.Requests()[0].Model, strings.TrimPrefix(h.conv.model, "fake/"); got != want {
+				t.Fatalf("model changed from %q to %q", h.conv.model, got)
+			}
+		})
 	}
 }
