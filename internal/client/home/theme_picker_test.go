@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/command"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -32,8 +34,8 @@ func TestThemePickerPreviews(t *testing.T) {
 	enter(m)
 	m.Update(press(tea.KeyDown))
 	m.Update(press(tea.KeyDown))
-	if got := enter(m); got != (ThemeMsg{Name: "One Half Dark"}) {
-		t.Fatalf("Enter gave %#v, want ThemeMsg{One Half Dark}", got)
+	if got := enter(m); got != (command.ThemeMsg{Name: "One Half Dark"}) {
+		t.Fatalf("Enter gave %#v, want command.ThemeMsg{One Half Dark}", got)
 	}
 	if m.theme.Name != "One Half Dark" {
 		t.Fatalf("theme %q after Enter, want One Half Dark kept", m.theme.Name)
@@ -43,7 +45,7 @@ func TestThemePickerPreviews(t *testing.T) {
 func TestThemeByName(t *testing.T) {
 	m := screen(80, 24)
 	typeText(m, "/theme tokyo night")
-	if got := enter(m); got != (ThemeMsg{Name: "Tokyo Night"}) {
+	if got := enter(m); got != (command.ThemeMsg{Name: "Tokyo Night"}) {
 		t.Fatalf("/theme tokyo night gave %#v", got)
 	}
 	m = screen(80, 24)

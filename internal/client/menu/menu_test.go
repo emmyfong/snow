@@ -34,6 +34,8 @@ func TestPaneMenuItems(t *testing.T) {
 		{"Rename window", "Ctrl+b ,", "rename-window"},
 		{"Close pane", "Ctrl+b x", "close-pane"},
 		{"Close window", "Ctrl+b &", "close-window"},
+		{"Switch session", "Ctrl+b s", "sessions"},
+		{"Command prompt", "Ctrl+b :", "command-prompt"},
 		{"Detach", "Ctrl+b d", "detach"},
 	}
 	if len(items) != len(want) {
@@ -100,8 +102,9 @@ func TestPlacementStartsAtTheClick(t *testing.T) {
 	m = New(PaneItems(keys.Default()), 79, 22)
 	box, x, y := m.View(theme.Default(), 80, 23)
 	w := ansi.StringWidth(strings.SplitN(box, "\n", 2)[0])
-	if x != 80-w || y != 23-11 {
-		t.Fatalf("clamped to %d,%d, want %d,%d", x, y, 80-w, 23-8)
+	h := len(PaneItems(keys.Default())) + 2
+	if x != 80-w || y != 23-h {
+		t.Fatalf("clamped to %d,%d, want %d,%d", x, y, 80-w, 23-h)
 	}
 }
 

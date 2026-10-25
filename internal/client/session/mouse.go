@@ -28,6 +28,12 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.menu != nil {
 		return m.menuMouse(msg)
 	}
+	if m.switcher != nil {
+		return m.switcherMouse(msg)
+	}
+	if m.prompt != nil {
+		return m.promptMouse(msg)
+	}
 	if m.confirm != nil {
 		m.confirmMouse(msg)
 		return nil

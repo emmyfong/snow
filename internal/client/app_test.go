@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/emmyfong/snow/internal/client/command"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
 
@@ -58,7 +60,7 @@ func TestUnknownSizeNotSent(t *testing.T) {
 // pane exits, the client shows the home page with a note instead of quitting.
 func TestSessionEndShowsHome(t *testing.T) {
 	send := func(api.Message) {}
-	a := &app{screen: session.New(send), send: send, back: "work"}
+	a := &app{screen: session.New(send), send: send}
 	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	a.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
 	_, cmd := a.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
@@ -71,20 +73,8 @@ func TestSessionEndShowsHome(t *testing.T) {
 	if !strings.Contains(a.View().Content, "session work ended") {
 		t.Fatal("the home page should say the session ended")
 	}
-	if a.back != "" || a.result.Session != "" || a.View().WindowTitle != "snow" {
-		t.Fatalf("back %q, session %q, title %q: the ended session should be forgotten", a.back, a.result.Session, a.View().WindowTitle)
-	}
-}
-
-// TestSessionEndKeepsOtherBack: Esc on the home page still returns to a
-// running session left with Ctrl+b s, when a session opened since ends.
-func TestSessionEndKeepsOtherBack(t *testing.T) {
-	send := func(api.Message) {}
-	a := &app{screen: session.New(send), send: send, back: "api"}
-	a.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 24}}}}}})
-	a.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
-	if a.back != "api" {
-		t.Fatalf("back = %q, want api, which still runs", a.back)
+	if a.result.Session != "" || a.View().WindowTitle != "snow" {
+		t.Fatalf("session %q, title %q: the ended session should be forgotten", a.result.Session, a.View().WindowTitle)
 	}
 }
 
@@ -105,8 +95,7 @@ func TestLateSessionEndIgnored(t *testing.T) {
 
 	opening := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
 	opening.Update(layout)
-	opening.Update(session.SwitchMsg{})
-	opening.Update(home.OpenMsg{Session: "api"})
+	opening.Update(session.SwitchMsg{Session: "api"})
 	before = opening.screen
 	opening.Update(ended)
 	if opening.screen != before || !opening.opening {
@@ -226,30 +215,6 @@ func TestDetachShowsHome(t *testing.T) {
 	}
 }
 
-// TestHomeKeyKeepsSession: Ctrl+b s shows the home page without ending the
-// session, and Esc goes back to it.
-func TestHomeKeyKeepsSession(t *testing.T) {
-	var sent []api.Message
-	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
-	openSession(t, a, "api")
-	a.Update(session.SwitchMsg{})
-	if _, ok := sent[len(sent)-1].(*api.Detach); !ok {
-		t.Fatalf("sent %#v, want Detach", sent[len(sent)-1])
-	}
-	if _, ok := a.screen.(*home.Model); !ok {
-		t.Fatalf("screen is %T after Ctrl+b s, want the home page", a.screen)
-	}
-	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	run(a, cmd)
-	at, ok := sent[len(sent)-1].(*api.Attach)
-	if !ok || at.Session != "api" || at.Create {
-		t.Fatalf("sent %#v, want Attach{api} back to the session", sent[len(sent)-1])
-	}
-	if _, ok := a.screen.(*session.Model); !ok {
-		t.Fatalf("screen is %T after Esc, want the session screen", a.screen)
-	}
-}
-
 // TestNewScreensGetTheColorProfile: the terminal reports its colors once;
 // a screen opened later must still adapt to them.
 func TestNewScreensGetTheColorProfile(t *testing.T) {
@@ -293,37 +258,146 @@ func TestRefusedOpenReturnsHome(t *testing.T) {
 	}
 }
 
-// TestSwitchKeepsBackWithAnOldList: the list the app saw before attaching
-// does not have the session created since; Ctrl+b s must still go back.
-func TestSwitchKeepsBackWithAnOldList(t *testing.T) {
-	var sent []api.Message
-	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
-	a.Update(&api.SessionList{}) // before "api" existed
-	openSession(t, a, "api")
-	a.Update(session.SwitchMsg{})
-	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	run(a, cmd)
-	if at, ok := sent[len(sent)-1].(*api.Attach); !ok || at.Session != "api" {
-		t.Fatalf("sent %#v, want Attach{api}: Esc lost the way back", sent[len(sent)-1])
-	}
-}
-
 // TestThemeIsAppliedAndSaved: a theme picked on the home page is used by
 // screens opened after it and saved; a failed save says so on the page.
 func TestThemeIsAppliedAndSaved(t *testing.T) {
 	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
 	var saved []string
 	a.saveTheme = func(name string) error { saved = append(saved, name); return nil }
-	_, cmd := a.Update(home.ThemeMsg{Name: "Nord"})
+	_, cmd := a.Update(command.ThemeMsg{Name: "Nord"})
 	run(a, cmd)
 	if a.theme.Name != "Nord" || len(saved) != 1 || saved[0] != "Nord" {
 		t.Fatalf("theme %q, saved %v; want Nord used and saved", a.theme.Name, saved)
 	}
 	a.saveTheme = func(string) error { return errors.New("disk full") }
 	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	_, cmd = a.Update(home.ThemeMsg{Name: "Dracula"})
+	_, cmd = a.Update(command.ThemeMsg{Name: "Dracula"})
 	run(a, cmd)
 	if !strings.Contains(a.View().Content, "disk full") {
 		t.Fatal("a failed save is not on the home page")
+	}
+}
+
+// TestSwitchAttachesOtherSession: a session chosen in the session list
+// detaches from this one, which keeps running, and attaches to the other.
+func TestSwitchAttachesOtherSession(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/src", theme.Default())
+	openSession(t, a, "api")
+	old := a.screen
+	n := len(sent)
+	a.Update(session.SwitchMsg{Session: "web"})
+	if len(sent) != n+2 {
+		t.Fatalf("sent %v, want Detach then Attach", sent[n:])
+	}
+	if _, ok := sent[n].(*api.Detach); !ok {
+		t.Fatalf("first sent %#v, want Detach", sent[n])
+	}
+	at, ok := sent[n+1].(*api.Attach)
+	if !ok || at.Session != "web" || at.Create || at.Dir != "/src" {
+		t.Fatalf("then sent %#v, want Attach{web, /src}", sent[n+1])
+	}
+	if _, ok := a.screen.(*session.Model); !ok || a.screen == old || !a.opening || a.result.Detached {
+		t.Fatalf("screen %T (new %v), opening %v, detached %v; want a new session screen opening web", a.screen, a.screen != old, a.opening, a.result.Detached)
+	}
+	a.Update(&api.Layout{Session: "web", Windows: []api.WindowInfo{{Panes: []api.PaneInfo{{ID: 4, Focused: true, Rect: api.Rect{W: 80, H: 23}}}}}})
+	if a.View().WindowTitle != "snow: web" {
+		t.Fatalf("title %q, want snow: web", a.View().WindowTitle)
+	}
+}
+
+// TestSwitchRefusedShowsHome: a session that ended between the list and the
+// choice leaves the client detached, on the home page with the reason.
+func TestSwitchRefusedShowsHome(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	a.Update(session.SwitchMsg{Session: "web"})
+	_, cmd := a.Update(&api.Error{Code: api.CodeNoSession, Message: "no session named web"})
+	if cmd != nil || a.result.Err != nil {
+		t.Fatalf("a refused switch quit Snow: result %+v", a.result)
+	}
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T, want the home page", a.screen)
+	}
+	if !strings.Contains(a.View().Content, "no session named web") {
+		t.Fatal("the home page should say why")
+	}
+}
+
+// TestSessionListReachesTheSessionScreen: the list the server sends an
+// attached client reaches the session screen, which shows it in the list.
+func TestSessionListReachesTheSessionScreen(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	a.Update(&api.SessionList{Sessions: []api.SessionInfo{{Name: "api", State: api.StateRunning}, {Name: "web", State: api.StateRunning}}})
+	a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	a.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	if !strings.Contains(a.View().Content, "web") {
+		t.Fatal("the session list does not show web")
+	}
+}
+
+// TestSessionThemeAppliesAndSaves: a theme picked inside a session colors
+// the session at once and is saved; a failed save shows in the status bar.
+func TestSessionThemeAppliesAndSaves(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	var saved []string
+	a.saveTheme = func(name string) error { saved = append(saved, name); return nil }
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	before := a.View().Content
+	_, cmd := a.Update(command.ThemeMsg{Name: "Nord"})
+	run(a, cmd)
+	if a.theme.Name != "Nord" || len(saved) != 1 || saved[0] != "Nord" {
+		t.Fatalf("theme %q, saved %v; want Nord used and saved", a.theme.Name, saved)
+	}
+	if a.View().Content == before {
+		t.Fatal("the session screen still draws with the old theme")
+	}
+	a.saveTheme = func(string) error { return errors.New("disk full") }
+	_, cmd = a.Update(command.ThemeMsg{Name: "Dracula"})
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "disk full") {
+		t.Fatal("a failed save is not in the status bar")
+	}
+}
+
+// TestStaleLayoutDuringSwitch: a Layout of the old session, queued before
+// the switch, must not end the switch; a refused attach then still shows
+// the home page instead of quitting Snow.
+func TestStaleLayoutDuringSwitch(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	a.Update(session.SwitchMsg{Session: "web"})
+	stale := &api.Layout{Session: "api", Windows: []api.WindowInfo{{Panes: []api.PaneInfo{{ID: 1, Focused: true, Rect: api.Rect{W: 80, H: 23}}}}}}
+	a.Update(stale)
+	if !a.opening || a.result.Session != "api" {
+		t.Fatalf("opening %v, session %q after the stale layout; want still opening web", a.opening, a.result.Session)
+	}
+	_, cmd := a.Update(&api.Error{Code: api.CodeNoSession, Message: "no session named web"})
+	if cmd != nil || a.result.Err != nil {
+		t.Fatalf("the refused switch quit Snow: result %+v", a.result)
+	}
+	if _, ok := a.screen.(*home.Model); !ok {
+		t.Fatalf("screen is %T, want the home page", a.screen)
+	}
+}
+
+// TestStaleLayoutDuringNewNumbered: while a new numbered session opens, a
+// Layout of the old session is dropped; the new one's Layout ends opening.
+func TestStaleLayoutDuringNewNumbered(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	openSession(t, a, "api")
+	a.Update(session.SwitchMsg{Create: true})
+	a.Update(&api.Layout{Session: "api"})
+	if !a.opening {
+		t.Fatal("a layout of the old session ended the opening")
+	}
+	a.Update(&api.Layout{Session: "3"})
+	if a.opening || a.result.Session != "3" {
+		t.Fatalf("opening %v, session %q; want 3 open", a.opening, a.result.Session)
 	}
 }

@@ -156,14 +156,11 @@ func (st *state) sessionList() []api.SessionInfo {
 	return out
 }
 
-// sessionsChanged sends the session list to every client that has not
-// attached, such as the home page, so it always shows what runs now.
+// sessionsChanged sends the session list to every client: the home page
+// and the session screen's list both show what runs now.
 func (st *state) sessionsChanged() {
 	var list *api.SessionList
 	for c := range st.clients {
-		if c.session != "" {
-			continue
-		}
 		if list == nil {
 			list = &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()}
 		}

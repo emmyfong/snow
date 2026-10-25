@@ -10,10 +10,11 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// confirmation is a popup that guards a command.
+// confirmation is a popup that guards a request: a command, or the end of
+// a session.
 type confirmation struct {
 	popup *confirm.Model
-	cmd   api.Command
+	msg   api.Message
 }
 
 // confirmClosePane asks before closing the focused pane, as tmux does:
@@ -37,7 +38,7 @@ func (m *Model) confirmClosePane() {
 	}
 	m.confirm = &confirmation{
 		popup: confirm.New("Close pane", fmt.Sprintf("Close this pane (%s%d of %d)?", what, place, len(w.Panes)), "Close"),
-		cmd:   api.Command{Op: api.OpClose, Target: p.ID},
+		msg:   &api.Command{Op: api.OpClose, Target: p.ID},
 	}
 }
 
@@ -67,9 +68,17 @@ func (m *Model) confirmCloseWindowAt(index int) {
 		}
 		m.confirm = &confirmation{
 			popup: confirm.New("Close window", fmt.Sprintf("Close window %d%s and its %s?", w.Index, name, panes), "Close"),
-			cmd:   api.Command{Op: api.OpCloseWindow, Target: w.Index},
+			msg:   &api.Command{Op: api.OpCloseWindow, Target: w.Index},
 		}
 		return
+	}
+}
+
+// confirmKill asks before it ends session name and its programs.
+func (m *Model) confirmKill(name string) {
+	m.confirm = &confirmation{
+		popup: confirm.New("Kill session", fmt.Sprintf("Kill session %s and its programs?", name), "Kill"),
+		msg:   &api.KillSession{Session: name},
 	}
 }
 
@@ -91,7 +100,7 @@ func (m *Model) confirmResult(r confirm.Result) {
 	switch r {
 	case confirm.Yes:
 		m.confirm = nil
-		m.send(&c.cmd)
+		m.send(c.msg)
 	case confirm.No:
 		m.confirm = nil
 	}

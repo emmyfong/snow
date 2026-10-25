@@ -109,7 +109,8 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Ctrl` + arrows | Resize the pane by 1 cell |
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
-| `s` | Home page to switch sessions; Esc comes back |
+| `s` | Switch to another session from a list |
+| `:` | Command list: `new`, `switch`, `rename`, `kill`, `theme` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
@@ -175,12 +176,12 @@ Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),
-`resize-left-5` and the others (by 5), `copy-mode`, `sessions`, `detach`,
-`send-prefix`.
+`resize-left-5` and the others (by 5), `copy-mode`, `sessions`,
+`command-prompt`, `detach`, `send-prefix`.
 
 A mistake in the file stops Snow with the line and the setting at fault.
-`/theme` on the home page changes `[theme] name` for you, and every open
-Snow window follows within two seconds.
+`/theme` on the home page, or `theme` in `Ctrl+b :`, changes `[theme] name`
+for you, and every open Snow window follows within two seconds.
 
 ## Saved sessions
 

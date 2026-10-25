@@ -13,6 +13,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/menu"
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -20,10 +21,6 @@ import (
 // DetachMsg asks the client to detach from the session and show the home
 // page.
 type DetachMsg struct{}
-
-// SwitchMsg asks the client to show the home page to pick another session,
-// keeping a way back to this one.
-type SwitchMsg struct{}
 
 // Model is the session screen. Send queues a message for the server; it must
 // keep order.
@@ -37,6 +34,7 @@ type Model struct {
 	layout     *api.Layout
 	panes      map[int]*paneState
 	profiles   api.ProfileList
+	sessions   []api.SessionInfo // the server's last session list
 	cols, rows int
 	prefixed   bool    // the prefix key was pressed; the next key is a command
 	prefixKey  tea.Key // the key that started the prefix, for send-prefix
@@ -50,6 +48,8 @@ type Model struct {
 	noticeAt   time.Time
 	ticking    bool // the clock tick is running
 	picker     *picker.Model
+	switcher   *sessionlist.Model        // the session list, when open
+	prompt     *prompting                // the command popup, when open
 	confirm    *confirmation             // a question waiting for y or n
 	rename     *renaming                 // the window name being typed
 	menu       *menu.Model               // the right-click menu
@@ -116,14 +116,19 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.theme = m.base.For(msg.Profile)
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.SessionList:
+		m.sessions = msg.Sessions
+		if m.switcher != nil {
+			m.switcher.SetSessions(msg.Sessions)
+		}
 	case *api.Scrollback:
 		return m.copyReceive(msg)
 	case *api.SearchResult:
 		return m.copyReceive(msg)
 	case clipboard.ErrMsg:
-		return m.refuse(msg.Error())
+		return m.ShowError(msg.Error())
 	case *api.Error:
-		return m.refuse(msg.Message)
+		return m.ShowError(msg.Message)
 	case clearMessageMsg:
 		if msg.at.Equal(m.messageAt) {
 			m.message = ""
@@ -148,8 +153,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	return nil
 }
 
-// refuse shows why a request failed in the status bar for a moment.
-func (m *Model) refuse(text string) tea.Cmd {
+// ShowError shows text in the status bar for a moment: why a request was
+// refused, or why something the user asked for cannot happen.
+func (m *Model) ShowError(text string) tea.Cmd {
 	m.message, m.messageAt = text, m.now()
 	at := m.messageAt
 	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
@@ -265,5 +271,5 @@ func resize(lines []string, rows int) []string {
 
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
+	return m.picker != nil || m.switcher != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

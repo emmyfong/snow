@@ -1,12 +1,12 @@
 package home
 
 import (
-	"errors"
 	"fmt"
 	"slices"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -15,44 +15,16 @@ import (
 // end or rename a session. The home page itself holds no connection.
 type SendMsg struct{ Msg api.Message }
 
-// command is one slash command. A command with session set acts on a
-// session, which the user can pick from the list.
-type command struct {
-	name, args, desc string
-	session          bool
-	run              func(m *Model, rest string) tea.Cmd
-}
-
-// commands lists the slash commands in the order the list shows them.
-var commands = []command{
-	{name: "new", args: "[name]", desc: "Start or open a session", run: (*Model).cmdNew},
-	{name: "sessions", args: "", desc: "Show the sessions", run: (*Model).cmdSessions},
-	{name: "rename", args: "[session] <name>", desc: "Rename a session", session: true, run: (*Model).cmdRename},
-	{name: "kill", args: "[session]", desc: "End a session and its programs", session: true, run: (*Model).cmdKill},
-	{name: "theme", args: "[name]", desc: "Pick the colors", run: (*Model).cmdTheme},
-	{name: "help", args: "", desc: "Show commands and keys", run: (*Model).cmdHelp},
-	{name: "quit", args: "", desc: "Leave Snow; sessions keep running", run: (*Model).cmdQuit},
-}
-
-// matchCommands returns the commands whose names fuzzy-match query, best
-// first; equal scores keep the table order.
-func matchCommands(query string) []command {
-	type scored struct {
-		c     command
-		score int
-	}
-	var found []scored
-	for _, c := range commands {
-		if s, ok := fuzzyScore(query, c.name); ok {
-			found = append(found, scored{c, s})
-		}
-	}
-	slices.SortStableFunc(found, func(a, b scored) int { return b.score - a.score })
-	out := make([]command, len(found))
-	for i, f := range found {
-		out[i] = f.c
-	}
-	return out
+// runs maps each home command in internal/client/command to what it does
+// on this page.
+var runs = map[string]func(m *Model, rest string) tea.Cmd{
+	"new":      (*Model).cmdNew,
+	"sessions": (*Model).cmdSessions,
+	"rename":   (*Model).cmdRename,
+	"kill":     (*Model).cmdKill,
+	"theme":    (*Model).cmdTheme,
+	"help":     (*Model).cmdHelp,
+	"quit":     (*Model).cmdQuit,
 }
 
 // commanding reports whether the input is a slash command.
@@ -65,9 +37,9 @@ func (m *Model) commandWord() (word, rest string) {
 }
 
 // matches returns the commands that match what is typed so far.
-func (m *Model) matches() []command {
+func (m *Model) matches() []command.Command {
 	word, _ := m.commandWord()
-	return matchCommands(word)
+	return command.Match(word, command.Home)
 }
 
 // pickingSession reports whether the arrows pick a session: the typed word
@@ -75,8 +47,8 @@ func (m *Model) matches() []command {
 // move in the command list.
 func (m *Model) pickingSession() bool {
 	word, _ := m.commandWord()
-	i := slices.IndexFunc(commands, func(c command) bool { return c.name == word })
-	return i >= 0 && commands[i].session && len(m.sessions) > 0
+	c, ok := command.Find(word, command.Home)
+	return ok && c.Session && len(m.sessions) > 0
 }
 
 // pickSession moves the command's session by delta, from the first one when
@@ -122,9 +94,9 @@ func (m *Model) move(delta int) {
 }
 
 // complete puts command c in the input, ready for its argument.
-func (m *Model) complete(c command) {
-	m.input = "/" + c.name
-	if c.args != "" {
+func (m *Model) complete(c command.Command) {
+	m.input = "/" + c.Name
+	if c.Args != "" {
 		m.input += " "
 	}
 	m.cmdSel = 0
@@ -134,20 +106,15 @@ func (m *Model) complete(c command) {
 // highlighted match.
 func (m *Model) runCommand() tea.Cmd {
 	word, rest := m.commandWord()
-	var c *command
-	for i := range commands {
-		if commands[i].name == word {
-			c = &commands[i]
-		}
+	c, ok := command.Find(word, command.Home)
+	if ms := m.matches(); !ok && m.cmdSel < len(ms) {
+		c, ok = ms[m.cmdSel], true
 	}
-	if ms := m.matches(); c == nil && m.cmdSel < len(ms) {
-		c = &ms[m.cmdSel]
-	}
-	if c == nil {
+	if !ok {
 		m.notice = "Unknown command /" + word + ". Type / to see the commands."
 		return nil
 	}
-	return c.run(m, rest)
+	return runs[c.Name](m, rest)
 }
 
 // done clears the input after a command that worked.
@@ -197,13 +164,10 @@ func (m *Model) cmdRename(rest string) tea.Cmd {
 		return nil
 	}
 	if err := api.ValidSessionName(name); err != nil {
-		m.notice = "/rename: " + reason(err)
+		m.notice = "/rename: " + command.Reason(err)
 		return nil
 	}
 	m.done()
-	if session == m.back {
-		m.back = name
-	}
 	return sendCmd(&api.RenameSession{Session: session, Name: name})
 }
 
@@ -249,15 +213,6 @@ func (m *Model) confirmResult(r confirm.Result) tea.Cmd {
 		return sendCmd(&api.KillSession{Session: name})
 	}
 	return nil
-}
-
-// reason returns err's message without the protocol's error prefix.
-func reason(err error) string {
-	msg := err.Error()
-	if p := api.ErrInvalidSessionRequest.Error() + ": "; errors.Is(err, api.ErrInvalidSessionRequest) {
-		msg = strings.TrimPrefix(msg, p)
-	}
-	return msg
 }
 
 func sendCmd(msg api.Message) tea.Cmd { return func() tea.Msg { return SendMsg{Msg: msg} } }

@@ -4,6 +4,8 @@ import (
 	"errors"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/command"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/session"
@@ -39,10 +41,10 @@ type app struct {
 	configPath string    // the config file to watch for a new theme; "" watches nothing
 	configMod  time.Time // when the config file last changed, as last seen
 	profile    *tea.ColorProfileMsg
-	sessions   *api.SessionList // the last list, for a home page opened later
-	back       string           // the session the home page's Esc returns to
-	opening    bool             // the home page opened a session; its Layout has not come
-	openName   string           // the session it opened
+	sessions   *api.SessionList // the last list, for a screen opened later
+	opening    bool             // a session is being opened; its Layout has not come
+	openName   string           // the session being opened; "" for a new numbered one
+	leftName   string           // the session shown when the opening began
 	cols, rows int
 }
 
@@ -93,26 +95,51 @@ func (a *app) show(s Screen) {
 }
 
 // leave detaches from the session, which keeps running, and shows the home
-// page. With back set, Esc there returns to that session.
-func (a *app) leave(back string) {
+// page.
+func (a *app) leave() {
 	a.send(&api.Detach{})
-	a.back = back
 	// The list from before attaching is old; the server sends a new one
 	// for the Detach.
 	a.sessions = nil
 	a.showHome("")
 }
 
-// showHome shows a new home page with the last session list, the back
-// session, and notice, if any.
+// showHome shows a new home page with the last session list and notice, if
+// any.
 func (a *app) showHome(notice string) {
 	h := home.New(a.version, a.theme)
-	h.SetBack(a.back)
 	h.SetNotice(notice)
 	a.show(h)
 	if a.sessions != nil {
 		h.Update(a.sessions)
 	}
+}
+
+// open attaches to session, creating it when create is set, and shows a
+// new session screen for it.
+func (a *app) open(session string, create bool) {
+	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir})
+	a.opening, a.openName, a.leftName = true, session, a.result.Session
+	a.result.Detached = false
+	s := a.newSession()
+	a.show(s)
+	if a.sessions != nil {
+		s.Update(a.sessions)
+	}
+}
+
+// staleLayout reports whether l belongs to another session than the one
+// being opened: a Layout of the session left, sent before the server saw
+// the Detach. Taking it would end the opening early, so a refused attach
+// would no longer be recognized.
+func (a *app) staleLayout(l *api.Layout) bool {
+	if !a.opening {
+		return false
+	}
+	if a.openName != "" {
+		return l.Session != a.openName
+	}
+	return a.leftName != "" && l.Session == a.leftName
 }
 
 // refusedOpen reports whether e refuses the attach the home page asked for.
@@ -149,15 +176,15 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case *api.SessionList:
 		a.sessions = msg
 	case *api.Layout:
+		if a.staleLayout(msg) {
+			return a, nil
+		}
 		a.result.Session = msg.Session
 		a.opening = false
 	case *api.Error:
 		if a.refusedOpen(msg) {
 			// The session ended, or the name was refused, between the
 			// list and the click: go back to choosing.
-			if a.openName == a.back {
-				a.back = ""
-			}
 			a.opening = false
 			a.showHome(msg.Message)
 			return a, nil
@@ -171,9 +198,6 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// The server keeps the connection, detached; the session and
 			// the list naming it are gone.
-			if a.back == a.result.Session {
-				a.back = ""
-			}
 			a.result, a.sessions = Result{}, nil
 			a.showHome(msg.Message)
 			return a, nil
@@ -190,15 +214,17 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Quit
 	case home.OpenMsg:
-		a.send(&api.Attach{Session: msg.Session, Create: msg.Create, Dir: a.dir})
-		a.opening, a.openName = true, msg.Session
-		a.result.Detached = false
-		a.show(a.newSession())
+		a.open(msg.Session, msg.Create)
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)
 		return a, nil
-	case home.ThemeMsg:
+	case command.ThemeMsg:
+		// The open screen draws with it at once; screens opened later
+		// get it from useTheme.
+		if th, err := theme.Named(msg.Name); err == nil {
+			a.applyTheme(th)
+		}
 		return a, a.useTheme(msg.Name)
 	case configCheckedMsg:
 		a.configMod = msg.mod
@@ -210,18 +236,25 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, watchTheme(a.configPath, a.configMod)
 	case themeSaveFailedMsg:
-		if h, ok := a.screen.(*home.Model); ok {
-			h.SetNotice("The theme is in use but was not saved: " + msg.err.Error())
+		text := "The theme is in use but was not saved: " + msg.err.Error()
+		switch s := a.screen.(type) {
+		case *home.Model:
+			s.SetNotice(text)
+		case *session.Model:
+			return a, s.ShowError(text)
 		}
 		return a, nil
 	case home.QuitMsg:
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
-		a.leave("")
+		a.leave()
 		return a, nil
 	case session.SwitchMsg:
-		a.leave(a.result.Session)
+		// Detach first: if the attach is refused, the client is left
+		// attached to nothing, which matches the home page it then shows.
+		a.send(&api.Detach{})
+		a.open(msg.Session, msg.Create)
 		return a, nil
 	}
 	return a, a.screen.Update(msg)

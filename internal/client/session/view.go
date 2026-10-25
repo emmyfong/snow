@@ -25,14 +25,14 @@ func (m *Model) View() tea.View {
 		}
 	}
 	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
-	content = m.overlayConfirm(m.overlayMenu(m.overlayHint(m.overlayPicker(content, area), area), area), area)
+	content = m.overlayConfirm(m.overlayMenu(m.overlayHint(m.overlayPrompt(m.overlaySwitcher(m.overlayPicker(content, area), area)), area), area), area)
 	bar := ui.StatusBar(m.theme, m.statusOptions())
 	if content != "" {
 		content += "\n"
 	}
 	v := tea.NewView(content + bar)
 	v.MouseMode = tea.MouseModeCellMotion
-	if p := m.focused(); p != nil && m.picker == nil {
+	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.prompt == nil {
 		if x, y, ok := m.copyCursor(p.ID); ok {
 			v.Cursor = tea.NewCursor(p.Rect.X+x, p.Rect.Y+y)
 		} else if st := m.panes[p.ID]; st != nil && st.cursor.Visible && st.cursor.X < p.Rect.W && st.cursor.Y < p.Rect.H {

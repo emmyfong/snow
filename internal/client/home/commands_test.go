@@ -1,7 +1,6 @@
 package home
 
 import (
-	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -9,41 +8,18 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-func TestFuzzyMatch(t *testing.T) {
-	tests := []struct {
-		query string
-		first string
-	}{
-		{"ses", "sessions"},
-		{"re", "rename"},
-		{"k", "kill"},
-		{"q", "quit"},
-		{"nw", "new"},
-		{"", "new"}, // no query keeps the table order
-	}
-	for _, tt := range tests {
-		got := matchCommands(tt.query)
-		if len(got) == 0 || got[0].name != tt.first {
-			t.Errorf("matchCommands(%q) ranks %v first, want %s", tt.query, names(got), tt.first)
+// TestEveryHomeCommandHasHandler: each command the registry lists for the
+// home page does something here.
+func TestEveryHomeCommandHasHandler(t *testing.T) {
+	for _, c := range command.In(command.Home) {
+		if runs[c.Name] == nil {
+			t.Errorf("no handler for /%s", c.Name)
 		}
 	}
-	if got := names(matchCommands("exit")); slices.Contains(got, "exit") {
-		t.Errorf("matchCommands(exit) = %v; /exit is gone, /quit quits", got)
-	}
-	if got := matchCommands("xyz"); len(got) != 0 {
-		t.Errorf("matchCommands(xyz) = %v, want nothing", names(got))
-	}
-}
-
-func names(cs []command) []string {
-	out := make([]string, len(cs))
-	for i, c := range cs {
-		out[i] = c.name
-	}
-	return out
 }
 
 // msgOf runs cmd and returns its message, or nil.
@@ -216,23 +192,6 @@ func TestBadNamesAreRefused(t *testing.T) {
 		if !strings.Contains(m.notice, "longer than") {
 			t.Errorf("notice %q, want the reason", m.notice)
 		}
-	}
-}
-
-// TestBackFollowsRenameAndKill: Esc goes back to the session Ctrl+b s came
-// from, under its new name after /rename, and quits once it is gone.
-func TestBackFollowsRenameAndKill(t *testing.T) {
-	m := screen(80, 24, session("api", time.Minute, 0))
-	m.SetBack("api")
-	typeText(m, "/rename api backend")
-	enter(m)
-	m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("backend", time.Minute, 0)}})
-	if got := msgOf(m.Update(press(tea.KeyEscape))); got != (OpenMsg{Session: "backend"}) {
-		t.Fatalf("Esc after the rename gave %#v, want to open backend", got)
-	}
-	m.Update(&api.SessionList{}) // backend was killed
-	if _, ok := msgOf(m.Update(press(tea.KeyEscape))).(QuitMsg); !ok {
-		t.Fatal("Esc with the back session gone should quit")
 	}
 }
 

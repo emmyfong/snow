@@ -148,24 +148,6 @@ func TestHomeThreeSessions120x40(t *testing.T)  { goldenWith(t, 120, 40, 3) }
 func TestHomeTwentySessions80x24(t *testing.T)  { goldenWith(t, 80, 24, 20) }
 func TestHomeTwentySessions120x40(t *testing.T) { goldenWith(t, 120, 40, 20) }
 
-func TestAgo(t *testing.T) {
-	tests := []struct {
-		d    time.Duration
-		want string
-	}{
-		{10 * time.Second, "just now"},
-		{5 * time.Minute, "5m ago"},
-		{3 * time.Hour, "3h ago"},
-		{30 * time.Hour, "yesterday"},
-		{100 * time.Hour, "4 days ago"},
-	}
-	for _, tt := range tests {
-		if got := ago(tt.d); got != tt.want {
-			t.Errorf("ago(%v) = %q, want %q", tt.d, got, tt.want)
-		}
-	}
-}
-
 // TestSelectionFollowsTheSession: a new list re-sorts by last use; the
 // highlight stays on the same session, not the same row.
 func TestSelectionFollowsTheSession(t *testing.T) {

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"testing"
 	"time"
 
@@ -8,20 +9,26 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// nextSessionList reads until a SessionList that satisfies ok arrives.
+// nextSessionList reads until a SessionList that satisfies ok arrives. A
+// closed connection ends the wait at once.
 func nextSessionList(t *testing.T, c *apitest.Client, ok func(*api.SessionList) bool) *api.SessionList {
 	t.Helper()
 	deadline := time.Now().Add(apitest.Wait)
+	var last error
 	for time.Now().Before(deadline) {
 		m, err := c.Next(time.Second)
-		if err != nil {
+		if errors.Is(err, apitest.ErrTimeout) {
+			last = err
 			continue
+		}
+		if err != nil {
+			t.Fatalf("no matching SessionList: %v", err)
 		}
 		if l, is := m.(*api.SessionList); is && ok(l) {
 			return l
 		}
 	}
-	t.Fatal("no matching SessionList")
+	t.Fatalf("no matching SessionList (last error: %v)", last)
 	return nil
 }
 
@@ -44,4 +51,23 @@ func TestHomeClientSeesSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	nextSessionList(t, home, func(l *api.SessionList) bool { return len(l.Sessions) == 0 })
+}
+
+// TestAttachedClientSeesSessions: an attached client, whose session screen
+// can open the session list, also gets the list whenever it changes (#88).
+func TestAttachedClientSeesSessions(t *testing.T) {
+	s := newTestServer(t)
+	worker := connect(t, s, 80, 24)
+	worker.Send(&api.Attach{Session: "work", Create: true})
+	nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 1 && l.Sessions[0].Attached == 1 })
+
+	other := connect(t, s, 80, 24)
+	other.Send(&api.Attach{Session: "api", Create: true})
+	nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 2 })
+
+	other.Send(&api.RenameSession{Session: "api", Name: "backend"})
+	l := nextSessionList(t, worker, func(l *api.SessionList) bool { return len(l.Sessions) == 2 && l.Sessions[0].Name == "backend" })
+	if l.Sessions[1].Name != "work" {
+		t.Fatalf("sessions %+v, want backend and work", l.Sessions)
+	}
 }
