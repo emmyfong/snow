@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/emmyfong/snow/internal/store"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -240,7 +241,17 @@ func TestChatSlowClientResyncs(t *testing.T) {
 	watch := connect(t, s, 100, 30)
 	id := openChat(t, watch)
 	slow := silentClient(t, s, "work")
-	time.Sleep(200 * time.Millisecond) // the slow client attaches
+	eventually(t, "the slow client to attach", func() bool {
+		n := 0
+		s.call(func(st *state) {
+			for c := range st.clients {
+				if c.session == "work" {
+					n++
+				}
+			}
+		})
+		return n == 2
+	})
 	say(watch, id, "go")
 	watch.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == want.String() && idle(s) })
 	if n := s.clientCount(); n != 2 {
@@ -336,12 +347,11 @@ func TestChatSessionSavesWithoutError(t *testing.T) {
 	nextLayout(t, c, func(*api.Layout) bool { return true })
 	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneChat}})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
-	var problem string
-	var windows, terminals int
+	var windows, terminals, active int
 	s.call(func(st *state) {
 		sess := st.sessions["work"]
 		snap := st.snapshot(sess)
-		windows = len(snap.Windows)
+		windows, active = len(snap.Windows), sess.active
 		for _, w := range snap.Windows {
 			terminals += len(w.Panes)
 		}
@@ -350,11 +360,44 @@ func TestChatSessionSavesWithoutError(t *testing.T) {
 	if windows != 1 || terminals != 1 {
 		t.Fatalf("saved %d windows with %d panes, want 1 with 1", windows, terminals)
 	}
-	time.Sleep(300 * time.Millisecond)
+	// The active window is the chat-only one the file leaves out; the
+	// session must still load and restore.
+	var saved store.Snapshot
+	eventually(t, "the session file", func() bool {
+		var err error
+		saved, err = openStore(t, opts.SessionsDir).Load("work")
+		return err == nil
+	})
+	if len(saved.Windows) != 1 || saved.Active != active || saved.Windows[0].Index == active {
+		t.Fatalf("file has %d windows, active %d (session's %d)", len(saved.Windows), saved.Active, active)
+	}
+	var problem string
 	s.call(func(st *state) { problem = st.saveProblem })
 	if problem != "" {
 		t.Fatalf("save problem: %s", problem)
 	}
+	var restored, restoredActive int
+	s.call(func(st *state) {
+		sess, err := st.restore(&saved, 100, 30)
+		if err != nil {
+			t.Errorf("restore: %v", err)
+			return
+		}
+		restored, restoredActive = len(sess.windows), sess.active
+		st.closeSession(sess)
+	})
+	if restored != 1 || restoredActive != saved.Windows[0].Index {
+		t.Fatalf("restored %d windows, active %d", restored, restoredActive)
+	}
+}
+
+func openStore(t *testing.T, dir string) *store.Store {
+	t.Helper()
+	st, err := store.Open(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return st
 }
 
 // TestChatInputRefused: input for another agent, or an answer to no
