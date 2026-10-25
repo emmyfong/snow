@@ -23,7 +23,7 @@ func chatScreen(t *testing.T, cols, rows int) (*Model, *recorder) {
 		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: left, H: rows - 1}, Profile: "sh"},
 		{ID: 2, Kind: api.PaneChat, Rect: api.Rect{X: left + 1, W: cols - left - 1, H: rows - 1}, Profile: "sh", Focused: true},
 	}}}})
-	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ go test ./..."}, {Row: 1, Text: "ok  	snow/internal/server"}}})
+	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ go test ./..."}, {Row: 1, Text: "ok    snow/internal/server"}}})
 	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", Model: "anthropic/claude-sonnet-5-5", Mode: "ask", State: api.ChatStateIdle})
 	return m, r
 }
