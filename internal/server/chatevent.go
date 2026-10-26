@@ -55,6 +55,8 @@ func chatEvent(id int, e agent.Event) *api.ChatEvent {
 		}
 	case *agent.ModelChanged:
 		out.Kind, out.Model, out.Effort, out.Error = api.ChatEventModel, b.Model, b.Effort, chatError(b.Failure)
+	case *agent.TitleChanged:
+		out.Kind, out.Text, out.Error = api.ChatEventTitle, b.Title, chatError(b.Failure)
 	case *agent.ModeChanged:
 		out.Kind, out.Mode, out.Error = api.ChatEventMode, string(b.Mode), chatError(b.Failure)
 	default:

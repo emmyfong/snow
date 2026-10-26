@@ -52,6 +52,10 @@ func TestWireFormat(t *testing.T) {
 		{&ChatEvent{Pane: 2, Agent: "c1", Kind: ChatEventText, Text: "hi"}, `{"pane":2,"agent":"c1","kind":"text","text":"hi"}`},
 		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputMessage, Text: "go"}, `{"pane":2,"agent":"c1","kind":"message","text":"go"}`},
 		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputAnswer, ID: "t1", Decision: ChatDecisionNo, Text: "why"}, `{"pane":2,"agent":"c1","kind":"answer","text":"why","id":"t1","decision":"no"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputResume, Conversation: "c9"}, `{"pane":2,"agent":"c1","kind":"resume","conversation":"c9"}`},
+		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputMode, Mode: ChatModeAuto}, `{"pane":2,"agent":"c1","kind":"mode","mode":"auto"}`},
+		{&ConversationListRequest{Pane: 2, All: true}, `{"pane":2,"all":true}`},
+		{&ConversationList{Pane: 2}, `{"pane":2,"items":[]}`},
 		{&Error{Code: CodeBadHandshake, Message: "expected hello"}, `{"code":"bad-handshake","message":"expected hello"}`},
 	}
 	for _, tt := range tests {

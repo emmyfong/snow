@@ -43,6 +43,8 @@ const (
 	TypeLogin
 	TypeLogoutRequest
 	TypeLogout
+	TypeConversationListRequest
+	TypeConversationList
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -120,6 +122,10 @@ func newMessage(t MsgType) Message {
 		return &LogoutRequest{}
 	case TypeLogout:
 		return &Logout{}
+	case TypeConversationListRequest:
+		return &ConversationListRequest{}
+	case TypeConversationList:
+		return &ConversationList{}
 	}
 	return nil
 }

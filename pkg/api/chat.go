@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
+	"unicode/utf8"
 )
 
 // Pane kinds, in PaneInfo.Kind.
@@ -239,7 +241,21 @@ type ChatInput struct {
 	// SaveDefault also saves the model and effort as the default for new
 	// chats.
 	SaveDefault bool `json:"saveDefault,omitempty"`
+	// Conversation is the ID of the conversation ChatInputResume opens.
+	Conversation string `json:"conversation,omitempty"`
+	// Mode is the approval mode for ChatInputMode: ChatModeAsk or
+	// ChatModeAuto.
+	Mode string `json:"mode,omitempty"`
 }
+
+// Approval modes a chat takes.
+const (
+	ChatModeAsk  = "ask"  // ask before each tool that changes things
+	ChatModeAuto = "auto" // run changes inside the folder without asking
+)
+
+// MaxChatTitle bounds a conversation's title, in characters.
+const MaxChatTitle = 120
 
 // Kinds of ChatInput.
 const (
@@ -248,6 +264,11 @@ const (
 	ChatInputInterrupt = "interrupt" // stop the running turn
 	ChatInputRetry     = "retry"     // run the last turn again after a failure
 	ChatInputModel     = "model"     // make the next turn use Model with Effort
+	ChatInputNew       = "new"       // start a new conversation in this pane
+	ChatInputResume    = "resume"    // open the past conversation Conversation in this pane
+	ChatInputRename    = "rename"    // give the conversation the title Text
+	ChatInputMode      = "mode"      // set the approval mode to Mode
+	ChatInputEffort    = "effort"    // make the next turn use Effort; empty lets the provider choose
 )
 
 // Answers to an approval request.
@@ -294,7 +315,26 @@ func (in *ChatInput) Validate() error {
 		if in.Effort != "" && !slices.Contains(EffortLevels[:], in.Effort) {
 			return fmt.Errorf("%w: unknown effort %q", ErrInvalidChatInput, in.Effort)
 		}
-	case ChatInputInterrupt, ChatInputRetry:
+	case ChatInputResume:
+		if in.Conversation == "" {
+			return fmt.Errorf("%w: resume names no conversation", ErrInvalidChatInput)
+		}
+	case ChatInputRename:
+		switch n := utf8.RuneCountInString(strings.TrimSpace(in.Text)); {
+		case n == 0:
+			return fmt.Errorf("%w: the title is blank", ErrInvalidChatInput)
+		case n > MaxChatTitle:
+			return fmt.Errorf("%w: the title is over %d characters", ErrInvalidChatInput, MaxChatTitle)
+		}
+	case ChatInputMode:
+		if in.Mode != ChatModeAsk && in.Mode != ChatModeAuto {
+			return fmt.Errorf("%w: unknown mode %q", ErrInvalidChatInput, in.Mode)
+		}
+	case ChatInputEffort:
+		if in.Effort != "" && !slices.Contains(EffortLevels[:], in.Effort) {
+			return fmt.Errorf("%w: unknown effort %q", ErrInvalidChatInput, in.Effort)
+		}
+	case ChatInputInterrupt, ChatInputRetry, ChatInputNew:
 	default:
 		return fmt.Errorf("%w: unknown kind %q", ErrInvalidChatInput, in.Kind)
 	}

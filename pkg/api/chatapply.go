@@ -80,6 +80,10 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		}
 		s.Mode = e.Mode
 	case ChatEventTitle:
+		if e.Error != nil {
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryError, Error: e.Error})
+			return
+		}
 		s.Title = e.Text
 	}
 }

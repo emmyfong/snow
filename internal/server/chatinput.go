@@ -53,20 +53,15 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	case api.ChatInputRetry:
 		err = conv.Retry()
 	case api.ChatInputModel:
-		err = conv.SwitchModel(in.Model, in.Effort)
-		if err == nil {
-			// The agent's event confirms this a moment later. Setting it
-			// now closes the gap: a message sent right after the switch
-			// must not see the old model, or none.
-			s.call(func(st *state) {
-				if p := st.paneOf(c, in.Pane); p != nil && p.chat != nil {
-					p.chat.snap.Model, p.chat.snap.Effort = in.Model, in.Effort
-				}
-			})
-			if in.SaveDefault {
-				s.saveDefault(c, in, oldModel, oldEffort)
-			}
+		if err = s.switchModel(c, in.Pane, conv, in.Model, in.Effort); err == nil && in.SaveDefault {
+			s.saveDefault(c, in, oldModel, oldEffort)
 		}
+	case api.ChatInputEffort:
+		err = s.setEffort(c, in.Pane, conv, snapModel, in.Effort)
+	case api.ChatInputRename:
+		err = conv.Rename(in.Text)
+	case api.ChatInputMode:
+		err = conv.SetMode(agent.Mode(in.Mode))
 	}
 	// A pane closed meanwhile has nothing to report to.
 	if err != nil && !errors.Is(err, agent.ErrClosed) {
