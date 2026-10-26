@@ -212,3 +212,68 @@ func TestAskReplyRefused(t *testing.T) {
 	}
 	next[*TurnEnded](t, h)
 }
+
+// TestLoadReportsOpenQuestion: a file that ends while a question waits
+// loads with the question open and the turn interrupted. The answer
+// starts a new turn that gives the model the question and the answer.
+func TestLoadReportsOpenQuestion(t *testing.T) {
+	h := newHarness(t, []tool.Tool{askTool(t)}, askCall("q1", false), text("using B"))
+	_ = h.conv.Send("pick a store")
+	next[*Question](t, h)
+	loaded := closeAndLoad(t, h)
+	if q := loaded.OpenQuestion; q == nil || q.ToolUseID != "q1" {
+		t.Fatalf("loaded open question %+v", q)
+	}
+
+	c, again, err := ResumeLoaded(h.config(t), loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if again.MidTurn {
+		t.Fatal("the resumed file still ends mid-turn")
+	}
+	if n := len(again.Records); again.Records[n-1].Type() != convstore.TypeInterruption {
+		t.Fatalf("records %v; the turn that asked is not interrupted", types(again.Records))
+	}
+	q := c.Question()
+	if q == nil || q.ID != "q1" || q.Text != "Which store?" || len(q.Options) != 3 || q.Options[0].Preview != "a code" {
+		t.Fatalf("Question() = %+v after the resume", q)
+	}
+	if err := c.Reply(QuestionReply{ID: "q1", Picked: []string{"B"}}); err != nil {
+		t.Fatal(err)
+	}
+	if s := next[*TurnStarted](t, h); s.Text != "You asked: Which store?\nMy answer: B" {
+		t.Fatalf("turn text %q", s.Text)
+	}
+	next[*TurnEnded](t, h)
+	reqs := h.fake.Requests()
+	msgs := reqs[len(reqs)-1].Messages
+	if last := msgs[len(msgs)-1].Content; last[len(last)-1].(*provider.Text).Text != "You asked: Which store?\nMy answer: B" {
+		t.Fatalf("the model got %+v", last)
+	}
+	if c.Question() != nil {
+		t.Fatal("the question is still open")
+	}
+}
+
+// TestAnsweredQuestionNotOpen: a file with the answer loads with no open
+// question.
+func TestAnsweredQuestionNotOpen(t *testing.T) {
+	h, _ := askAndReply(t, false, QuestionReply{Picked: []string{"A"}})
+	loaded := closeAndLoad(t, h)
+	if loaded.OpenQuestion != nil {
+		t.Fatalf("open question %+v", loaded.OpenQuestion)
+	}
+	c, _, err := ResumeLoaded(h.config(t), loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if q := c.Question(); q != nil {
+		t.Fatalf("Question() = %+v", q)
+	}
+	if err := c.Reply(QuestionReply{ID: "q1", Picked: []string{"A"}}); !errors.Is(err, ErrNoQuestion) {
+		t.Fatalf("reply: %v, want ErrNoQuestion", err)
+	}
+}
