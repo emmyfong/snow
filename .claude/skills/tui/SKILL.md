@@ -21,6 +21,12 @@ internal/client/
   home/          the home page (one screen)
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
+  listpick/      the list popup (rows, keys, click mapping) that the mode and resume pickers share
+  modepick/      the approval mode picker (`/mode`)
+  resumepick/    the past-conversation picker (`/resume`; `Ctrl+a` toggles every folder)
+  modelpick/     the model and effort picker (`/model`)
+  authpick/      the provider key picker (`/login`)
+  helppanel/     the help panel that home and chat share; each screen passes its commands and keys
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
   sessionlist/   session rows (name, state, last used) for the home page, and the session list popup (Ctrl+b s)
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
