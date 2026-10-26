@@ -23,6 +23,15 @@ func chatInputOf(c *apitest.Client, id int, kind string, set func(*api.ChatInput
 	c.Send(in)
 }
 
+// wantRefused waits for an api.Error and checks it is a refusal of the
+// input, not a crash.
+func wantRefused(t *testing.T, c *apitest.Client) {
+	t.Helper()
+	if e := nextError(t, c); e.Code != api.CodeBadCommand && e.Code != api.CodeCommandFailed {
+		t.Fatalf("error %+v is not a refusal", e)
+	}
+}
+
 // conversationRecords loads the records of conversation id, without meta.
 func conversationRecords(t *testing.T, store *convstore.Store, id string) []convstore.Record {
 	t.Helper()
@@ -65,7 +74,7 @@ func TestRenameAppendsRecord(t *testing.T) {
 		t.Fatalf("last record %#v", recs[len(recs)-1])
 	}
 	chatInputOf(c, id, api.ChatInputRename, func(in *api.ChatInput) { in.Text = "   " })
-	nextError(t, c)
+	wantRefused(t, c)
 }
 
 // TestModeCommand: ask and auto change the mode of the pane now; a word
@@ -87,7 +96,7 @@ func TestModeCommand(t *testing.T) {
 			c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Mode == api.ChatModeAuto })
 			chatInputOf(c, id, api.ChatInputMode, func(in *api.ChatInput) { in.Mode = tt.mode })
 			if tt.refused {
-				nextError(t, c)
+				wantRefused(t, c)
 				if got := c.Chat(id).Mode; got != api.ChatModeAuto {
 					t.Fatalf("a refused word changed the mode to %q", got)
 				}
@@ -203,7 +212,7 @@ func TestListConversations(t *testing.T) {
 	}
 
 	c.Send(&api.ConversationListRequest{Pane: 999})
-	nextError(t, c)
+	wantRefused(t, c)
 }
 
 // openSecondChat splits the focused pane of the shown window with another
@@ -256,7 +265,7 @@ func TestNewCommand(t *testing.T) {
 		t.Fatal("/new changed the old conversation's file")
 	}
 	c.Send(&api.ChatInput{Pane: id, Agent: old.Agent, Kind: api.ChatInputInterrupt})
-	nextError(t, c)
+	wantRefused(t, c)
 }
 
 // TestNewAndResumeRefusedWhileRunning: while a turn runs, /new and /resume
@@ -357,6 +366,6 @@ func TestResumeOpenElsewhere(t *testing.T) {
 	// A bad id and a missing file are refused.
 	for _, bad := range []string{"../escape", "no-such-conversation"} {
 		chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = bad })
-		nextError(t, c)
+		wantRefused(t, c)
 	}
 }
