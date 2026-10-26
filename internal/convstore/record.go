@@ -27,6 +27,7 @@ const (
 	TypeRename       Type = "rename"
 	TypeQuestion     Type = "question"
 	TypeAnswer       Type = "answer"
+	TypeTasks        Type = "tasks"
 	TypeDamaged      Type = "damaged" // made by Load, never in a file
 )
 
@@ -208,6 +209,19 @@ type Answer struct {
 	Other     string    `json:"other,omitempty"`
 }
 
+// Tasks records the agent's whole task list after a change. The last one
+// in the file is the list now.
+type Tasks struct {
+	At    time.Time  `json:"at"`
+	Tasks []TaskItem `json:"tasks"`
+}
+
+// TaskItem is one item of a task list.
+type TaskItem struct {
+	Text  string `json:"text"`
+	State string `json:"state"` // for example "pending", "in_progress", or "done"
+}
+
 // Unknown is a record whose type this version does not know. Raw is the
 // whole line, kept unchanged.
 type Unknown struct {
@@ -260,6 +274,9 @@ func (*Question) Type() Type { return TypeQuestion }
 
 // Type implements Record.
 func (*Answer) Type() Type { return TypeAnswer }
+
+// Type implements Record.
+func (*Tasks) Type() Type { return TypeTasks }
 
 // Type implements Record.
 func (u *Unknown) Type() Type { return u.Kind }

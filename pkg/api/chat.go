@@ -39,8 +39,10 @@ type ChatSnapshot struct {
 	// Question is the open question, or nil. A running turn may wait for
 	// it; after an interrupt or a restart, an answer starts a new turn.
 	Question *ChatQuestion `json:"question,omitempty"`
-	Queue    []string      `json:"queue"`           // messages that wait for the running turn to end
-	Usage    *ChatUsage    `json:"usage,omitempty"` // of the last reply
+	// Tasks is the agent's task list, in order; absent means none.
+	Tasks []ChatTask `json:"tasks,omitempty"`
+	Queue []string   `json:"queue"`           // messages that wait for the running turn to end
+	Usage *ChatUsage `json:"usage,omitempty"` // of the last reply
 	// Cost is the estimated cost of the conversation's priced replies, in
 	// US dollars.
 	Cost float64 `json:"cost,omitempty"`
@@ -140,6 +142,19 @@ type ChatOption struct {
 	Preview     string `json:"preview,omitempty"` // shown while the option is highlighted
 }
 
+// ChatTask is one item of the agent's task list.
+type ChatTask struct {
+	Text  string `json:"text"`
+	State string `json:"state"` // one of the ChatTask* values; show another as pending
+}
+
+// States of a ChatTask.
+const (
+	ChatTaskPending    = "pending"
+	ChatTaskInProgress = "in_progress"
+	ChatTaskDone       = "done"
+)
+
 // Bounds on a ChatInputReply, which match what a question can offer.
 const (
 	MaxChatPicked = 9  // options picked
@@ -217,6 +232,7 @@ type ChatEvent struct {
 	// Question is the question for ChatEventQuestion, and holds only the
 	// ID of the question answered for ChatEventAnswered.
 	Question *ChatQuestion `json:"question,omitempty"`
+	Tasks    []ChatTask    `json:"tasks,omitempty"`  // for ChatEventTasks: the whole list; absent means empty
 	State    string        `json:"state,omitempty"`  // for ChatEventState
 	Queue    []string      `json:"queue,omitempty"`  // for ChatEventQueue; absent means empty
 	Usage    *ChatUsage    `json:"usage,omitempty"`  // for ChatEventUsage
@@ -239,6 +255,7 @@ const (
 	ChatEventApproval    = "approval"
 	ChatEventQuestion    = "question" // the agent asks; the turn waits
 	ChatEventAnswered    = "answered" // the question was answered; the turn goes on
+	ChatEventTasks       = "tasks"    // the agent's task list changed
 	ChatEventState       = "state"
 	ChatEventQueue       = "queue"
 	ChatEventUsage       = "usage"

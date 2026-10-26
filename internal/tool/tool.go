@@ -40,7 +40,7 @@ type Env struct {
 	// HideEnv names environment variables that commands do not get, such
 	// as the variables that hold provider keys.
 	HideEnv []string
-	// User is who the ask tool talks to; nil means nobody, and that
-	// tool fails with ErrNoUser.
+	// User is who the ask and tasks tools talk to; nil means nobody,
+	// and those tools fail with ErrNoUser.
 	User User
 }

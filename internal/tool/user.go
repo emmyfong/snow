@@ -11,6 +11,9 @@ type User interface {
 	// Ask shows q and waits, with no timeout, for the answer. It returns
 	// an error when ctx ends first or the question cannot be shown.
 	Ask(ctx context.Context, q Question) (Reply, error)
+	// SetTasks replaces the task list the user sees. It returns an error
+	// when the list could not be saved.
+	SetTasks(tasks []Task) error
 }
 
 // ErrNoUser is the cause of an error from a tool that needs a User when
@@ -38,3 +41,16 @@ type Reply struct {
 	Picked []string
 	Other  string
 }
+
+// Task is one item of the agent's task list.
+type Task struct {
+	Text  string
+	State string // one of the Task* values
+}
+
+// The states of a Task.
+const (
+	TaskPending    = "pending"
+	TaskInProgress = "in_progress"
+	TaskDone       = "done"
+)

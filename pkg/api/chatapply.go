@@ -43,6 +43,8 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		if e.Question != nil && s.Question != nil && s.Question.ID == e.Question.ID {
 			s.Question = nil
 		}
+	case ChatEventTasks:
+		s.Tasks = append([]ChatTask(nil), e.Tasks...)
 	case ChatEventToolResult:
 		if e.Tool == nil {
 			return

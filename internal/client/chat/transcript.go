@@ -155,8 +155,9 @@ func (m *Model) visible() (start, n int) {
 }
 
 // Click handles a left click at x, y in the pane: on a tool cell it
-// expands or collapses the cell, and on a choice of the approval box it
-// picks that choice. A click anywhere returns to the latest text unless it
+// expands or collapses the cell, on a choice of the approval box or the
+// question box it picks that choice, and on the task list it opens or
+// closes the list. A click anywhere returns to the latest text unless it
 // lands in the transcript. It returns what to send, or nil.
 func (m *Model) Click(x, y int) *api.ChatInput {
 	if y < m.barRows() {
@@ -175,6 +176,10 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		}
 	}
 	y -= m.barRows()
+	if th := m.transcriptHeight(); y >= th && y < th+len(m.taskRows()) {
+		m.toggleTasks()
+		return nil
+	}
 	start, n := m.visible()
 	row := y - (m.transcriptHeight() - n)
 	if row < 0 || row >= n || y >= m.transcriptHeight() {

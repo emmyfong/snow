@@ -30,6 +30,7 @@ var everyRecord = []Record{
 	}},
 	&Answer{At: at, ToolUseID: "call_2", Picked: []string{"A", "B"}},
 	&Answer{At: at, ToolUseID: "call_3", Other: "neither"},
+	&Tasks{At: at, Tasks: []TaskItem{{Text: "read code", State: "done"}, {Text: "fix it", State: "in_progress"}}},
 }
 
 func TestEncodeDecode(t *testing.T) {

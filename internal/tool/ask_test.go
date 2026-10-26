@@ -8,12 +8,18 @@ import (
 	"testing"
 )
 
-// fakeUser answers every question with its reply and keeps what it was
-// asked.
+// fakeUser answers every question with its reply, and keeps what it was
+// asked and each task list it got.
 type fakeUser struct {
 	reply Reply
 	err   error
 	asked []Question
+	tasks [][]Task
+}
+
+func (u *fakeUser) SetTasks(tasks []Task) error {
+	u.tasks = append(u.tasks, tasks)
+	return u.err
 }
 
 func (u *fakeUser) Ask(_ context.Context, q Question) (Reply, error) {

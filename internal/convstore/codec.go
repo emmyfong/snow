@@ -35,6 +35,8 @@ func newRecord(t Type) Record {
 		return &Question{}
 	case TypeAnswer:
 		return &Answer{}
+	case TypeTasks:
+		return &Tasks{}
 	}
 	return nil
 }

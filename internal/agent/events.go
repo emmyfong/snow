@@ -118,7 +118,7 @@ type TasksChanged struct{ Tasks []Task }
 // Task is one item of an agent's task list.
 type Task struct {
 	Text  string
-	State string // for example "pending", "doing", "done"
+	State string // "pending", "in_progress", or "done"
 }
 
 // Usage counts the tokens of one reply, with its estimated cost.

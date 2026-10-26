@@ -70,6 +70,22 @@ func TestChatApply(t *testing.T) {
 				Question: &ChatQuestion{ID: "q", Text: "Which?"}},
 		},
 		{
+			name: "task list replaces the last",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskPending}}}),
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskDone}, {Text: "b", State: ChatTaskInProgress}}}),
+			},
+			want: ChatSnapshot{Tasks: []ChatTask{{Text: "a", State: ChatTaskDone}, {Text: "b", State: ChatTaskInProgress}}},
+		},
+		{
+			name: "empty task list clears it",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskPending}}}),
+				ev(ChatEvent{Kind: ChatEventTasks}),
+			},
+			want: ChatSnapshot{},
+		},
+		{
 			name: "result clears the approval",
 			events: []*ChatEvent{
 				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),

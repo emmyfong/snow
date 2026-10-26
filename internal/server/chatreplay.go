@@ -56,6 +56,12 @@ func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversa
 			play(&agent.Question{ID: r.ToolUseID, Text: r.Text, Multi: r.Multi, Options: replayOptions(r.Options)})
 		case *convstore.Answer:
 			play(&agent.QuestionAnswered{ID: r.ToolUseID})
+		case *convstore.Tasks:
+			tasks := make([]agent.Task, len(r.Tasks))
+			for i, t := range r.Tasks {
+				tasks[i] = agent.Task{Text: t.Text, State: t.State}
+			}
+			play(&agent.TasksChanged{Tasks: tasks})
 		case *convstore.ModelSwitch:
 			cur = r.Model
 			play(&agent.ModelChanged{Model: r.Model, Effort: r.Effort})
