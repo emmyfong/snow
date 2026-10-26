@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -148,4 +149,59 @@ func TestEffortCommand(t *testing.T) {
 	}
 	chatInputOf(c, id, api.ChatInputEffort, nil) // the provider's own choice
 	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Effort == "" && s.Model == "fake/plain" })
+}
+
+// waitConversations waits for a ConversationList that ok accepts.
+func waitConversations(t *testing.T, c *apitest.Client, ok func(*api.ConversationList) bool) *api.ConversationList {
+	t.Helper()
+	deadline := time.Now().Add(apitest.Wait)
+	for time.Now().Before(deadline) {
+		m, _ := c.Next(100 * time.Millisecond)
+		if l, isList := m.(*api.ConversationList); isList && ok(l) {
+			return l
+		}
+	}
+	t.Fatal("no matching ConversationList")
+	return nil
+}
+
+// TestListConversations: the list holds the pane's folder, newest first,
+// with the title, the turns, and which ones a pane shows; All adds the
+// other folders.
+func TestListConversations(t *testing.T) {
+	s, _, store := newChatServer(t, reply("ok"), reply("ok"))
+	c := connect(t, s, 100, 30)
+	first := openChat(t, c)
+	say(c, first, "explain the rename command")
+	c.WaitChat(first, func(s *api.ChatSnapshot) bool { return idle(s) && lastReply(s) == "ok" })
+	own := c.Chat(first).Conversation
+
+	entries, err := store.ListAll()
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("entries %v, %v", entries, err)
+	}
+	w, err := store.Create(convstore.Meta{Folder: "/elsewhere", Profile: entries[0].Profile, Model: chatModel, Created: time.Now().Add(time.Hour)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := w.ID()
+	_ = w.Close()
+
+	c.Send(&api.ConversationListRequest{Pane: first})
+	l := waitConversations(t, c, func(l *api.ConversationList) bool { return l.Pane == first })
+	if len(l.Items) != 1 || l.All {
+		t.Fatalf("this folder: %+v", l)
+	}
+	if it := l.Items[0]; it.ID != own || !it.Open || it.Turns != 1 || !strings.Contains(it.Title, "rename") || it.Model != chatModel {
+		t.Fatalf("item %+v", it)
+	}
+
+	c.Send(&api.ConversationListRequest{Pane: first, All: true})
+	l = waitConversations(t, c, func(l *api.ConversationList) bool { return l.All })
+	if len(l.Items) != 2 || l.Items[0].ID != other || l.Items[0].Open {
+		t.Fatalf("all folders: %+v", l.Items)
+	}
+
+	c.Send(&api.ConversationListRequest{Pane: 999})
+	nextError(t, c)
 }

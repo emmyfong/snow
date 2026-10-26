@@ -97,6 +97,10 @@ func (o *ChatOptions) now() time.Time {
 type chatPane struct {
 	conv *agent.Conversation
 	snap api.ChatSnapshot
+	// folder and profile are where the conversation works, as its file
+	// records them: the history list shows the conversations of the same
+	// folder and profile.
+	folder, profile string
 }
 
 // startChat starts a conversation in dir for a new chat pane id, opened
@@ -130,7 +134,7 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 	if err != nil {
 		return nil, fmt.Errorf("start chat: %w", err)
 	}
-	p := &pane{id: id, profile: profile, dir: folder.Path, chat: &chatPane{conv: conv}}
+	p := &pane{id: id, profile: profile, dir: folder.Path, chat: &chatPane{conv: conv, folder: folder.Path, profile: sh.Name}}
 	p.chat.snap = api.ChatSnapshot{
 		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
 		Model: model, Effort: effort, Mode: string(conv.Mode()), State: api.ChatStateIdle,

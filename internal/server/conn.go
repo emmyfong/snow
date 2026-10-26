@@ -113,6 +113,8 @@ func (s *Server) read(c *client) {
 			s.chatInput(c, m)
 		case *api.ModelListRequest:
 			s.modelList(c, m)
+		case *api.ConversationListRequest:
+			s.conversations(c, m)
 		case *api.AuthListRequest:
 			s.authList(c)
 		case *api.LoginRequest:
