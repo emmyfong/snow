@@ -175,6 +175,9 @@ func TestLogout(t *testing.T) {
 
 	c.Send(&api.LoginRequest{Provider: "anthropic", Key: authKey})
 	waitAuth(t, c, "the login result", func(m api.Message) bool { return m.Type() == api.TypeLogin })
+	// The login's own key list follows its result. Logging out before it
+	// arrives would make the two read and delete the key store at once.
+	waitAuth(t, c, "the list after login", func(m api.Message) bool { return m.Type() == api.TypeAuthList })
 	c.Send(&api.LogoutRequest{Provider: "anthropic"})
 	m := waitAuth(t, c, "the logout result", func(m api.Message) bool { return m.Type() == api.TypeLogout })
 	if out := m.(*api.Logout); out.Provider != "anthropic" {
