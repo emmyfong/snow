@@ -78,6 +78,7 @@ func TestModelCommandRejectsBadInput(t *testing.T) {
 func TestNoModelRefusesTheMessage(t *testing.T) {
 	m, _ := newChat(80, 24)
 	m.snap.Model = ""
+	m.SetProviderReady(true)
 	typeText(m, "hello")
 	if in := m.Key(key(tea.KeyEnter, 0, "")); in != nil {
 		t.Fatalf("a message without a model sent %+v", in)

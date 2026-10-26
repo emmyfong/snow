@@ -64,7 +64,7 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
-		pick = m.maybePickModel(msg.Pane)
+		pick = m.maybeStartChat(msg.Pane)
 	case *api.ChatEvent:
 		m.feed(api.PaneChat, msg.Pane, msg)
 	case ownTickMsg:
@@ -120,6 +120,9 @@ func (m *Model) syncPanes() {
 			if m.own[p.ID] == nil {
 				if o := m.newOwnPane(p.Kind, p.ID); o != nil {
 					m.own[p.ID] = o
+					if r, ok := o.(providerReady); ok {
+						r.SetProviderReady(anyConnected(m.authList))
+					}
 				}
 			}
 			if o := m.own[p.ID]; o != nil {
@@ -133,7 +136,18 @@ func (m *Model) syncPanes() {
 	for id := range m.own {
 		if !listed[id] {
 			delete(m.own, id)
-			delete(m.modelAsked, id)
+			delete(m.firstRun, id)
+			delete(m.authWait, id)
+			delete(m.authAfter, id)
+			if m.authPick != nil && m.authPane == id {
+				m.authPick, m.authPane = nil, 0
+			}
+			if m.logoutPane == id {
+				m.logoutPane = 0
+			}
+			if m.loginPane == id {
+				m.loginPane = 0
+			}
 		}
 	}
 }
@@ -166,6 +180,10 @@ func (m *Model) ownKey(k tea.Key) tea.Cmd {
 // the model picker.
 type asker interface{ Asked() string }
 
+// providerReady is an own pane that says whether any provider has a key,
+// such as a chat's empty state.
+type providerReady interface{ SetProviderReady(bool) }
+
 // ownResult sends what pane id returned, opens the overlay it asked for, and
 // shows its note.
 func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.Cmd {
@@ -177,8 +195,9 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 		case chat.AskPickModel:
 			return m.openModelPicker(id)
 		case chat.AskLogin:
-			// TODO(#114): open the login picker.
-			note = "Run snow auth in a terminal to save a key, then retry."
+			return m.openLoginPicker(id)
+		case chat.AskLogout:
+			return m.askLogout(id)
 		}
 	}
 	if note != "" {

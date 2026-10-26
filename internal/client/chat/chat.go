@@ -31,6 +31,7 @@ type Model struct {
 	box           approval
 	drawn         rendered
 	usage         bool   // the top bar shows the context gauge and the cost
+	providerReady bool   // at least one provider has a key
 	errAt         int    // the entry of the failure whose choices take keys
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
@@ -74,6 +75,16 @@ func (m *Model) SetTheme(th theme.Theme) { m.th = th; m.invalidate() }
 // SetUsage shows or hides the context gauge and the cost in the top bar,
 // from the [chat] usage setting. The model always shows.
 func (m *Model) SetUsage(show bool) { m.usage = show }
+
+// SetProviderReady says whether any provider has a saved key. It changes
+// what an empty chat without a model says.
+func (m *Model) SetProviderReady(ready bool) {
+	if m.providerReady == ready {
+		return
+	}
+	m.providerReady = ready
+	m.invalidate()
+}
 
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), max(height, 0) }

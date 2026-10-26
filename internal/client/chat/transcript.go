@@ -80,11 +80,13 @@ func (m *Model) draw() {
 	}
 	switch {
 	case len(m.snap.Entries) > 0 || len(m.snap.Queue) > 0:
-	case m.snap.Model == "":
+	case m.snap.Model == "" && !m.providerReady:
 		// No provider has a saved key, so the chat has no model to start with.
 		box := ui.ChoiceBox(m.th, ui.ChoiceOptions{Width: m.width - indent, Title: "Connect a provider", Selected: -1, Alert: true,
-			Body: []string{" No provider has a saved key.", " Run snow auth in a terminal, then open a new chat."}})
+			Body: []string{" No provider has a saved key.", " Type /login to save one."}})
 		add(indented(box), hit{}, false)
+	case m.snap.Model == "":
+		text(ui.EntryNote, "No messages yet. Type /model to choose one.", false)
 	default:
 		text(ui.EntryNote, "No messages yet. Model: "+m.snap.Model, false)
 	}

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -15,9 +14,10 @@ import (
 
 // chatOptions builds what the server's chat panes need: the conversation
 // store, the providers with the saved keys, the built-in tools, the model
-// new chats start with, and how the model picker learns which providers
-// have a key and saves a new default.
-func chatOptions(cfg config.Config, log *slog.Logger) (*server.ChatOptions, error) {
+// new chats start with, how the model picker learns which providers have a
+// key and saves a new default, and how /login and /logout read and change
+// their keys.
+func chatOptions(cfg config.Config) (*server.ChatOptions, error) {
 	dir, err := convstore.DefaultDir()
 	if err != nil {
 		return nil, fmt.Errorf("chat: %w", err)
@@ -30,8 +30,9 @@ func chatOptions(cfg config.Config, log *slog.Logger) (*server.ChatOptions, erro
 	if err != nil {
 		return nil, fmt.Errorf("chat: %w", err)
 	}
-	keys := credential.New(credDir, func(msg string) { log.Info(msg) })
 	ps := signin.Providers()
+	auth := signin.NewAuth(ps, credDir)
+	keys := auth.Keys()
 	reg, err := signin.Registry(ps, keys)
 	if err != nil {
 		return nil, fmt.Errorf("chat: %w", err)
@@ -48,6 +49,7 @@ func chatOptions(cfg config.Config, log *slog.Logger) (*server.ChatOptions, erro
 	return &server.ChatOptions{
 		Store: store, Providers: reg, Tools: tool.Builtin(), HideEnv: hide,
 		DefaultModel: model, DefaultEffort: cfg.Chat.Effort,
+		Auth: auth,
 		ProviderStatuses: func() []api.ProviderModels {
 			statuses := signin.Statuses(ps, keys)
 			out := make([]api.ProviderModels, len(statuses))

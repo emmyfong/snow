@@ -129,6 +129,9 @@ func (m *Model) submit() *api.ChatInput {
 	switch {
 	case strings.TrimSpace(text) == "":
 		return nil
+	case m.snap.Model == "" && !m.providerReady:
+		m.note = "Connect a provider first. Type /login to save a key."
+		return nil
 	case m.snap.Model == "":
 		m.note = "Choose a model first. Type /model, or /model provider/model."
 		return nil

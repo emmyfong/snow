@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log/slog"
 	"path/filepath"
 	"slices"
 	"testing"
@@ -15,9 +14,8 @@ import (
 // learns which providers have a key and can save a new default.
 func TestChatOptions(t *testing.T) {
 	dir := authTest(t)
-	log := slog.New(slog.DiscardHandler)
 	cfg := config.Defaults()
-	o, err := chatOptions(cfg, log)
+	o, err := chatOptions(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -27,7 +25,7 @@ func TestChatOptions(t *testing.T) {
 	if !slices.Contains(o.HideEnv, "ANTHROPIC_API_KEY") || !slices.Contains(o.HideEnv, "OPENAI_API_KEY") {
 		t.Fatalf("hidden %v", o.HideEnv)
 	}
-	if _, ok := o.Providers.Get("openai"); !ok || o.Tools == nil || o.Store == nil {
+	if _, ok := o.Providers.Get("openai"); !ok || o.Tools == nil || o.Store == nil || o.Auth == nil {
 		t.Fatalf("options %+v", o)
 	}
 	connected := func(o *server.ChatOptions) map[string]bool {
@@ -41,7 +39,7 @@ func TestChatOptions(t *testing.T) {
 		t.Fatalf("no keys: %v", got)
 	}
 	t.Setenv("OPENAI_API_KEY", goodKey)
-	if o, err = chatOptions(cfg, log); err != nil {
+	if o, err = chatOptions(cfg); err != nil {
 		t.Fatal(err)
 	}
 	if o.DefaultModel != "" {
@@ -51,7 +49,7 @@ func TestChatOptions(t *testing.T) {
 		t.Fatalf("openai key: %v", got)
 	}
 	cfg.Chat = config.Chat{Model: "anthropic/claude-opus-5-5", Effort: "high"}
-	if o, err = chatOptions(cfg, log); err != nil {
+	if o, err = chatOptions(cfg); err != nil {
 		t.Fatal(err)
 	}
 	if o.DefaultModel != "anthropic/claude-opus-5-5" || o.DefaultEffort != "high" {

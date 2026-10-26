@@ -31,6 +31,9 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.switcher != nil {
 		return m.switcherMouse(msg)
 	}
+	if m.authPick != nil {
+		return m.authMouse(msg)
+	}
 	if m.modelPick != nil {
 		return m.modelMouse(msg)
 	}

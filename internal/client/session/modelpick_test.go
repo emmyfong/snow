@@ -65,6 +65,16 @@ func sentListRequest(r *recorder) bool {
 	return false
 }
 
+// sentAuthListRequest reports whether the session asked for the key state.
+func sentAuthListRequest(r *recorder) bool {
+	for _, msg := range r.sent {
+		if _, ok := msg.(*api.AuthListRequest); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // TestModelCommandOpensThePicker: /model opens the picker over the chat and
 // asks the server for the provider lists.
 func TestModelCommandOpensThePicker(t *testing.T) {
@@ -130,13 +140,18 @@ func TestModelPickCancelSendsNothing(t *testing.T) {
 	}
 }
 
-// TestFirstChatWithoutModelOpensThePicker: a chat with no model opens the
-// picker before the first message, once. Cancel leaves it empty, and its
-// next message says why it did not send.
+// TestFirstChatWithoutModelOpensThePicker: a chat with no model asks for
+// the key state first, then opens the picker before the first message,
+// once. Cancel leaves it empty, and its next message says why it did not
+// send.
 func TestFirstChatWithoutModelOpensThePicker(t *testing.T) {
 	m, r := modelScreen(t, 100, 30, "")
+	if m.modelPick != nil || !sentAuthListRequest(r) {
+		t.Fatal("a chat without a model did not ask for the key state")
+	}
+	m.Update(&api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Connected: true, Source: "OS credential store"}}})
 	if m.modelPick == nil || !sentListRequest(r) {
-		t.Fatal("a chat without a model did not open the picker")
+		t.Fatal("a chat with a key did not open the model picker")
 	}
 	m.Update(press(tea.KeyEscape, 0, ""))
 	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", Mode: "ask", State: api.ChatStateIdle})

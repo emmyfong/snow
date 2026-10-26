@@ -9,6 +9,8 @@ import (
 // key for the pane.
 func (m *Model) key(k tea.Key) tea.Cmd {
 	switch {
+	case m.authPick != nil:
+		return m.authKey(k)
 	case m.modelPick != nil:
 		return m.modelKey(k)
 	case m.picker != nil:
