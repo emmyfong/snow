@@ -1,6 +1,7 @@
 package command
 
 import (
+	"errors"
 	"slices"
 	"testing"
 
@@ -13,6 +14,61 @@ func names(cs []Command) []string {
 		out[i] = c.Name
 	}
 	return out
+}
+
+// TestMatchCommands: the rank order for a query is the order the home page
+// showed before the registry existed.
+func TestMatchCommands(t *testing.T) {
+	tests := []struct {
+		query string
+		want  []string
+	}{
+		{"", []string{"new", "sessions", "rename", "kill", "theme", "help", "quit"}},
+		{"n", []string{"new", "rename", "sessions"}},
+		{"re", []string{"rename"}},
+		{"s", []string{"sessions"}},
+		{"t", []string{"theme", "quit"}},
+		{"xyz", nil},
+	}
+	for _, tt := range tests {
+		if got := names(Match(tt.query, Home)); !slices.Equal(got, tt.want) {
+			t.Errorf("Match(%q) = %v, want %v", tt.query, got, tt.want)
+		}
+	}
+}
+
+func TestRegistryRegister(t *testing.T) {
+	r := NewRegistry()
+	c := Command{Name: "fake", Args: "<name>", Desc: "A fake command", Group: GroupConversation, Where: Chat}
+	if err := r.Register(c); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	if got := names(r.Match("", Chat)); !slices.Equal(got, []string{"fake"}) {
+		t.Fatalf("Match = %v, want the registered command", got)
+	}
+	err := r.Register(c)
+	var dup *DuplicateError
+	if !errors.As(err, &dup) || !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("second Register = %v, want a *DuplicateError", err)
+	}
+	if dup.Name != "fake" || dup.Place != Chat {
+		t.Fatalf("DuplicateError = %+v", dup)
+	}
+}
+
+// TestRegistryPlaces: one name may run in two places when the entries do
+// not overlap.
+func TestRegistryPlaces(t *testing.T) {
+	r := NewRegistry()
+	if err := r.Register(Command{Name: "rename", Where: Home}); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Register(Command{Name: "rename", Where: Chat}); err != nil {
+		t.Fatalf("rename in chat: %v", err)
+	}
+	if err := r.Register(Command{Name: "rename", Where: Home | Chat}); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("overlapping Register = %v, want ErrDuplicate", err)
+	}
 }
 
 func TestFuzzyMatch(t *testing.T) {
@@ -51,6 +107,9 @@ func TestMatchFiltersByPlace(t *testing.T) {
 	inSession := names(Match("", InSession))
 	if want := []string{"new", "switch", "rename", "kill", "chat", "theme"}; !slices.Equal(inSession, want) {
 		t.Errorf("session commands %v, want %v", inSession, want)
+	}
+	if chat := Match("", Chat); len(chat) != 0 {
+		t.Errorf("chat commands %v, want none before the feature packages add them", names(chat))
 	}
 }
 

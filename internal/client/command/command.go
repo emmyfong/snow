@@ -1,8 +1,9 @@
 // Package command is the command registry for the home page (typed after
-// "/") and the session screen (Ctrl+b :): command names, arguments, and
-// matching, but no screen behavior. Each screen maps a name to what it does
-// there, so the registry imports no screen and other command lists can
-// reuse it.
+// "/"), the session screen (Ctrl+b :), and the chat input. It holds command
+// names, arguments, groups, and matching, but no screen behavior. Each
+// screen maps a name to what it does there, so the registry imports no
+// screen and feature packages can add their commands without editing the
+// screens.
 package command
 
 import (
@@ -20,13 +21,43 @@ type Place uint8
 const (
 	Home      Place = 1 << iota // the home page
 	InSession                   // the session screen's command list
+	Chat                        // the chat input's slash command list
 )
+
+// String names a place for an error.
+func (p Place) String() string {
+	switch p {
+	case Home:
+		return "home page"
+	case InSession:
+		return "session screen"
+	case Chat:
+		return "chat input"
+	default:
+		return "unknown place"
+	}
+}
+
+// Group is the section a command list shows a command under.
+type Group string
+
+// Groups, in the order the command list shows them.
+const (
+	GroupModel        Group = "Model"
+	GroupConversation Group = "Conversation"
+	GroupWorkspace    Group = "Workspace"
+	GroupSnow         Group = "Snow"
+)
+
+// groups orders the sections of a command list.
+var groups = []Group{GroupModel, GroupConversation, GroupWorkspace, GroupSnow}
 
 // Command is one command.
 type Command struct {
 	Name    string
 	Args    string // the arguments, written for people: "[name]" is optional, "<name>" required
 	Desc    string
+	Group   Group // the section a grouped list shows it under
 	Session bool  // acts on a session the user can pick from the home page's list
 	Where   Place // where it runs
 }
@@ -34,59 +65,17 @@ type Command struct {
 // Line is the command with its arguments, as a list shows it.
 func (c Command) Line() string { return strings.TrimSpace(c.Name + " " + c.Args) }
 
-// commands lists every command in the order lists show them. A name may
-// appear once per place, with arguments that fit that place.
-var commands = []Command{
-	{Name: "new", Args: "[name]", Desc: "Start or open a session", Where: Home | InSession},
-	{Name: "sessions", Desc: "Show the sessions", Where: Home},
-	{Name: "switch", Args: "[session]", Desc: "Switch to another session", Where: InSession},
-	{Name: "rename", Args: "[session] <name>", Desc: "Rename a session", Session: true, Where: Home},
-	{Name: "rename", Args: "[name]", Desc: "Rename this session", Where: InSession},
-	{Name: "kill", Args: "[session]", Desc: "End a session and its programs", Session: true, Where: Home | InSession},
-	{Name: "chat", Desc: "Open a chat with the agent beside this pane", Where: InSession},
-	{Name: "theme", Args: "[name]", Desc: "Pick the colors", Where: Home | InSession},
-	{Name: "help", Desc: "Show commands and keys", Where: Home},
-	{Name: "quit", Desc: "Leave Snow; sessions keep running", Where: Home},
-}
-
-// In returns the commands that run in where, in table order.
-func In(where Place) []Command {
-	var out []Command
-	for _, c := range commands {
-		if c.Where&where != 0 {
-			out = append(out, c)
+// Grouped sorts cmds by group, in the order a list shows them. The order
+// within a group stays as it was.
+func Grouped(cmds []Command) []Command {
+	out := slices.Clone(cmds)
+	rank := func(g Group) int {
+		if i := slices.Index(groups, g); i >= 0 {
+			return i
 		}
+		return len(groups)
 	}
-	return out
-}
-
-// Find returns the command called name that runs in where.
-func Find(name string, where Place) (Command, bool) {
-	cs := In(where)
-	if i := slices.IndexFunc(cs, func(c Command) bool { return c.Name == name }); i >= 0 {
-		return cs[i], true
-	}
-	return Command{}, false
-}
-
-// Match returns the commands in where whose names fuzzy-match query, best
-// first; equal scores keep the table order.
-func Match(query string, where Place) []Command {
-	type scored struct {
-		c     Command
-		score int
-	}
-	var found []scored
-	for _, c := range In(where) {
-		if s, ok := fuzzyScore(query, c.Name); ok {
-			found = append(found, scored{c, s})
-		}
-	}
-	slices.SortStableFunc(found, func(a, b scored) int { return b.score - a.score })
-	out := make([]Command, len(found))
-	for i, f := range found {
-		out[i] = f.c
-	}
+	slices.SortStableFunc(out, func(a, b Command) int { return rank(a.Group) - rank(b.Group) })
 	return out
 }
 

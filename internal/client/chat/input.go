@@ -22,6 +22,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	if !m.loaded {
 		return nil
 	}
+	defer m.syncCommands()
 	if p := m.pending(); p != nil {
 		if in, ok := m.approvalKey(p, k); ok {
 			return in
@@ -29,6 +30,12 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	}
 	if in, ok := m.errorKey(k); ok {
 		return in
+	}
+	m.syncCommands()
+	if m.cmdOpen {
+		if in, ok := m.commandKey(k); ok {
+			return in
+		}
 	}
 	switch {
 	case m.selected != "" && k.Code == tea.KeyEnter && k.Mod == 0:
@@ -115,6 +122,9 @@ func (m *Model) insert(text string) {
 // submit sends the typed message, unless it is blank. During a turn the
 // server queues it.
 func (m *Model) submit() *api.ChatInput {
+	if m.commanding() {
+		return m.runCommand()
+	}
 	text := string(m.input)
 	switch {
 	case strings.TrimSpace(text) == "":

@@ -1,0 +1,24 @@
+ [38;2;59;74;90m───────────────────────────────────────[m [1;38;2;127;184;230manthropic/claude-sonnet-5-5[m  [38;2;107;124;140mmode: ask[m 
+
+
+
+
+
+
+
+
+
+
+
+
+       [38;2;107;124;140mNo messages yet. Model: anthropic/claude-sonnet-5-5[m
+[38;2;59;74;90m────────────────────────────────────────────────────────────────────────────────[m
+  [38;2;107;124;140mModel[m                                                                         
+[1;38;2;255;255;255;48;2;45;74;102m> /model [id]        Pick a model                                               [m
+  /effort [level]    Set reasoning effort                                       
+  /login             Save a provider key                                        
+  [38;2;107;124;140mConversation[m                                                                  
+  /new               Start a new conversation                                   
+  /resume            Return to a past conversation                              
+  /rename [title]    Rename this conversation                                   
+[38;2;127;184;230m> [m/                                                                             

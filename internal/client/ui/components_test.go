@@ -72,6 +72,45 @@ func TestListAlignsColumnsAndMarksSelection(t *testing.T) {
 	}
 }
 
+func TestListHeadingsAndRows(t *testing.T) {
+	th := theme.Default()
+	items := []ListItem{
+		{Heading: "Model"},
+		{Cols: []string{"/model"}},
+		{Heading: "Snow"},
+		{Cols: []string{"/help"}},
+	}
+	out, rows := ListRows(th, ListOptions{Items: items, Selected: 3, Width: 20})
+	lines := strings.Split(ansi.Strip(out), "\n")
+	if len(lines) != 4 || !strings.Contains(lines[0], "Model") || !strings.Contains(lines[2], "Snow") {
+		t.Fatalf("ListRows =\n%s", ansi.Strip(out))
+	}
+	if len(rows) != 4 || rows[0] != 0 || rows[1] != 1 || rows[2] != 2 || rows[3] != 3 {
+		t.Fatalf("rows = %v, want one per item", rows)
+	}
+	if strings.HasPrefix(lines[0], th.Glyphs.Pointer) || strings.HasPrefix(lines[2], th.Glyphs.Pointer) {
+		t.Fatalf("a heading is marked as selected:\n%s", ansi.Strip(out))
+	}
+	if !strings.HasPrefix(lines[3], th.Glyphs.Pointer) {
+		t.Fatalf("the selected item is not marked:\n%s", ansi.Strip(out))
+	}
+}
+
+func TestListWindow(t *testing.T) {
+	tests := []struct{ n, selected, height, first, last int }{
+		{5, 0, 0, 0, 5},
+		{8, 6, 3, 4, 7},
+		{8, 0, 3, 0, 3},
+		{3, 2, 8, 0, 3},
+	}
+	for _, tt := range tests {
+		first, last := ListWindow(tt.n, tt.selected, tt.height)
+		if first != tt.first || last != tt.last {
+			t.Errorf("ListWindow(%d, %d, %d) = %d, %d; want %d, %d", tt.n, tt.selected, tt.height, first, last, tt.first, tt.last)
+		}
+	}
+}
+
 func TestListScrollsToTheSelection(t *testing.T) {
 	th := theme.Default()
 	var items []ListItem

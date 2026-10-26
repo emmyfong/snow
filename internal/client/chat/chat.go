@@ -6,8 +6,10 @@
 package chat
 
 import (
+	"maps"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -35,6 +37,13 @@ type Model struct {
 	loaded        bool   // the first snapshot came
 	note          string // a note for the status bar; see Note
 	diffs         diffCache
+
+	reg      *command.Registry  // the commands that run in a chat
+	runs     map[string]RunFunc // what each chat command does here
+	sent     *api.ChatInput     // what a command asked to send
+	cmdOpen  bool               // the slash command list shows
+	cmdSel   int                // the highlighted command in the list
+	cmdQuery string             // the filter the selection belongs to
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -43,7 +52,10 @@ func New(snap *api.ChatSnapshot, th theme.Theme, now func() time.Time) *Model {
 	if now == nil {
 		now = time.Now
 	}
-	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1}
+	m := &Model{
+		th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1,
+		reg: command.Default(), runs: maps.Clone(chatRuns),
+	}
 	m.Snapshot(snap)
 	return m
 }

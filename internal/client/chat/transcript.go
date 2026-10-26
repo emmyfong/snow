@@ -152,6 +152,12 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		// TODO(#113): a click on the model or the mode opens their picker.
 		return nil
 	}
+	if m.cmdOpen {
+		top := m.commandTop()
+		if y >= top && y < top+m.commandHeight() {
+			return m.commandClick(y)
+		}
+	}
 	y -= m.barRows()
 	start, n := m.visible()
 	row := y - (m.transcriptHeight() - n)
