@@ -31,6 +31,10 @@ func newRecord(t Type) Record {
 		return &Partial{}
 	case TypeRename:
 		return &Rename{}
+	case TypeQuestion:
+		return &Question{}
+	case TypeAnswer:
+		return &Answer{}
 	}
 	return nil
 }

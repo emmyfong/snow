@@ -38,6 +38,9 @@ type Conversation struct {
 	// user message, with no whole reply or interruption after it. The
 	// caller shows the turn as interrupted; Load does not write the file.
 	MidTurn bool
+	// OpenQuestion is the last question with no answer and no user
+	// message after it, or nil. An interrupt or a crash leaves it open.
+	OpenQuestion *Question
 }
 
 // Load reads the conversation id. It never writes, renames, or deletes the
@@ -127,9 +130,16 @@ func (c *Conversation) build(lines []line) {
 		case *ToolResult:
 			calls = remove(calls, r.ToolUseID)
 		case *Approval:
+		case *Question:
+			c.OpenQuestion = r
+		case *Answer:
+			if q := c.OpenQuestion; q != nil && q.ToolUseID == r.ToolUseID {
+				c.OpenQuestion = nil
+			}
 		case *User:
 			settle()
 			open = true
+			c.OpenQuestion = nil
 		case *Interruption:
 			settle()
 			open = false

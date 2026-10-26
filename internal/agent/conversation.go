@@ -74,6 +74,7 @@ type Conversation struct {
 	grants  map[string]bool // tools the user said yes to for this conversation
 	unsaved string          // the user's message whose save failed; a retry sends it
 	turns   int             // turns saved before this run; the loop numbers new ones after them
+	open    *Question       // the question a resumed file left open; the loop takes it
 
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }
@@ -143,6 +144,7 @@ func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, *c
 	c.model, c.effort = model, provider.Effort(effort)
 	c.mode.Store(mode)
 	c.history = history(loaded.Records)
+	c.open = openQuestion(loaded.OpenQuestion)
 	for _, r := range loaded.Records {
 		if _, ok := r.(*convstore.User); ok {
 			c.turns++

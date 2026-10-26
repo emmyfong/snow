@@ -23,7 +23,7 @@ const (
 // after the tool's name.
 var subjectKeys = map[string]string{
 	"read": "path", "write": "path", "edit": "path", "list": "path",
-	"run": "command", "search": "pattern",
+	"run": "command", "search": "pattern", "ask": "question",
 }
 
 // changeKeys are input fields a diff shows better than their text.

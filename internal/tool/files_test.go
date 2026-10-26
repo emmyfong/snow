@@ -39,7 +39,7 @@ func run(t *testing.T, env Env, name, in string) Result {
 }
 
 func TestBuiltinTools(t *testing.T) {
-	changes := map[string]bool{"read": false, "list": false, "search": false, "edit": true, "write": true, "run": true}
+	changes := map[string]bool{"ask": false, "read": false, "list": false, "search": false, "edit": true, "write": true, "run": true}
 	for name, want := range changes {
 		tl, ok := Builtin().Get(name)
 		if !ok {

@@ -121,11 +121,11 @@ func TestLoadUnknownRecord(t *testing.T) {
 	s := openStore(t)
 	fixture(t, s, "unknown.jsonl")
 	c := load(t, s)
-	if got := types(c.Records); !reflect.DeepEqual(got, []Type{TypeUser, "question", TypeAssistant}) {
+	if got := types(c.Records); !reflect.DeepEqual(got, []Type{TypeUser, "poll", TypeAssistant}) {
 		t.Fatalf("records %v", got)
 	}
 	if _, ok := c.Records[1].(*Unknown); !ok {
-		t.Fatalf("question is %#v", c.Records[1])
+		t.Fatalf("poll is %#v", c.Records[1])
 	}
 }
 
@@ -256,7 +256,7 @@ func TestLoadRecordMidTurn(t *testing.T) {
 	result := &ToolResult{At: at, ToolUseID: "t1", Content: "ok"}
 	reply := &Assistant{At: at, Stop: "end_turn", Blocks: []Block{{Kind: BlockText, Text: "whole"}}}
 	partial := &Partial{At: at, Text: "who"}
-	unknown := &Unknown{Kind: "question", Raw: []byte(`{"type":"question"}`)}
+	unknown := &Unknown{Kind: "poll", Raw: []byte(`{"type":"poll"}`)}
 	for _, mid := range []Record{&Rename{At: at, Title: "t"}, &ModelSwitch{At: at, Model: "openai/gpt-6.1-sol"}, unknown} {
 		t.Run(string(mid.Type()), func(t *testing.T) {
 			tests := []struct {
@@ -305,5 +305,38 @@ func TestLoadBadLastLineWithNewline(t *testing.T) {
 	}
 	if len(c.Problems) != 1 || c.Problems[0].Torn {
 		t.Fatalf("problems %v", c.Problems)
+	}
+}
+
+// TestLoadOpenQuestion: a question stays open through an interrupt and a
+// crash, and closes with its answer or the user's next message.
+func TestLoadOpenQuestion(t *testing.T) {
+	call := &Assistant{At: at, Stop: StopToolUse, Blocks: []Block{{Kind: BlockToolUse, ID: "q1", Name: "ask"}}}
+	q := &Question{At: at, ToolUseID: "q1", Text: "Which?", Options: []QuestionOption{{Label: "A"}, {Label: "B"}}}
+	tests := []struct {
+		name string
+		recs []Record
+		open bool
+	}{
+		{"crash while it waits", []Record{&User{At: at}, call, q}, true},
+		{"interrupted", []Record{&User{At: at}, call, q,
+			&ToolResult{At: at, ToolUseID: "q1", Content: "interrupted", IsError: true}, &Interruption{At: at}}, true},
+		{"answered", []Record{&User{At: at}, call, q, &Answer{At: at, ToolUseID: "q1", Picked: []string{"A"}},
+			&ToolResult{At: at, ToolUseID: "q1", Content: "ok"}}, false},
+		{"answer to another question", []Record{&User{At: at}, call, q, &Answer{At: at, ToolUseID: "q0", Other: "x"}}, true},
+		{"the user moved on", []Record{&User{At: at}, call, q, &Interruption{At: at}, &User{At: at, Text: "never mind"}}, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := openStore(t)
+			writeRecords(t, s, tt.recs...)
+			c := load(t, s)
+			if got := c.OpenQuestion != nil; got != tt.open {
+				t.Fatalf("open = %v, want %v", got, tt.open)
+			}
+			if tt.open && !reflect.DeepEqual(c.OpenQuestion, q) {
+				t.Fatalf("open question %#v, want %#v", c.OpenQuestion, q)
+			}
+		})
 	}
 }

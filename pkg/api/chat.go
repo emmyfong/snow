@@ -36,8 +36,11 @@ type ChatSnapshot struct {
 	Entries []ChatEntry `json:"entries"`
 	// Pending is the approval request the turn waits for, or nil.
 	Pending *ChatApproval `json:"pending,omitempty"`
-	Queue   []string      `json:"queue"`           // messages that wait for the running turn to end
-	Usage   *ChatUsage    `json:"usage,omitempty"` // of the last reply
+	// Question is the open question, or nil. A running turn may wait for
+	// it; after an interrupt or a restart, an answer starts a new turn.
+	Question *ChatQuestion `json:"question,omitempty"`
+	Queue    []string      `json:"queue"`           // messages that wait for the running turn to end
+	Usage    *ChatUsage    `json:"usage,omitempty"` // of the last reply
 	// Cost is the estimated cost of the conversation's priced replies, in
 	// US dollars.
 	Cost float64 `json:"cost,omitempty"`
@@ -121,6 +124,28 @@ type ChatApproval struct {
 	Outside []string `json:"outside,omitempty"`
 }
 
+// ChatQuestion is a question the agent asks the user. The user picks
+// among Options, or types another answer.
+type ChatQuestion struct {
+	ID      string       `json:"id"` // the ask tool call's ID
+	Text    string       `json:"text,omitempty"`
+	Options []ChatOption `json:"options,omitempty"`
+	Multi   bool         `json:"multi,omitempty"` // more than one option may be picked
+}
+
+// ChatOption is one answer a ChatQuestion offers.
+type ChatOption struct {
+	Label       string `json:"label"`
+	Description string `json:"description,omitempty"`
+	Preview     string `json:"preview,omitempty"` // shown while the option is highlighted
+}
+
+// Bounds on a ChatInputReply, which match what a question can offer.
+const (
+	MaxChatPicked = 9  // options picked
+	MaxChatLabel  = 60 // characters in a label
+)
+
 // ChatDiff is the change a tool call makes to one file.
 type ChatDiff struct {
 	Path string `json:"path"`
@@ -189,12 +214,15 @@ type ChatEvent struct {
 	Reason   string        `json:"reason,omitempty"`   // for ChatEventTurnEnded: one of the End* values
 	Tool     *ChatTool     `json:"tool,omitempty"`     // for ChatEventToolCall and ChatEventToolResult
 	Approval *ChatApproval `json:"approval,omitempty"` // for ChatEventApproval
-	State    string        `json:"state,omitempty"`    // for ChatEventState
-	Queue    []string      `json:"queue,omitempty"`    // for ChatEventQueue; absent means empty
-	Usage    *ChatUsage    `json:"usage,omitempty"`    // for ChatEventUsage
-	Model    string        `json:"model,omitempty"`    // for ChatEventModel
-	Effort   string        `json:"effort,omitempty"`   // for ChatEventModel
-	Mode     string        `json:"mode,omitempty"`     // for ChatEventMode
+	// Question is the question for ChatEventQuestion, and holds only the
+	// ID of the question answered for ChatEventAnswered.
+	Question *ChatQuestion `json:"question,omitempty"`
+	State    string        `json:"state,omitempty"`  // for ChatEventState
+	Queue    []string      `json:"queue,omitempty"`  // for ChatEventQueue; absent means empty
+	Usage    *ChatUsage    `json:"usage,omitempty"`  // for ChatEventUsage
+	Model    string        `json:"model,omitempty"`  // for ChatEventModel
+	Effort   string        `json:"effort,omitempty"` // for ChatEventModel
+	Mode     string        `json:"mode,omitempty"`   // for ChatEventMode
 	// Error is why ChatEventTurnEnded failed, or why ChatEventModel or ChatEventMode
 	// could not be saved; the model or mode then stays as it was.
 	Error *ChatError `json:"error,omitempty"`
@@ -209,6 +237,8 @@ const (
 	ChatEventToolCall    = "tool-call"
 	ChatEventToolResult  = "tool-result"
 	ChatEventApproval    = "approval"
+	ChatEventQuestion    = "question" // the agent asks; the turn waits
+	ChatEventAnswered    = "answered" // the question was answered; the turn goes on
 	ChatEventState       = "state"
 	ChatEventQueue       = "queue"
 	ChatEventUsage       = "usage"
@@ -229,10 +259,10 @@ type ChatInput struct {
 	Pane  int    `json:"pane"`
 	Agent string `json:"agent"`
 	Kind  string `json:"kind"` // one of the Input* values
-	// Text is the message for ChatInputMessage and the reason for a "no"
-	// ChatInputAnswer.
+	// Text is the message for ChatInputMessage, the reason for a "no"
+	// ChatInputAnswer, and the typed answer for ChatInputReply.
 	Text     string `json:"text,omitempty"`
-	ID       string `json:"id,omitempty"`       // for ChatInputAnswer: the approval request's ID
+	ID       string `json:"id,omitempty"`       // for ChatInputAnswer and ChatInputReply: the request's or question's ID
 	Decision string `json:"decision,omitempty"` // for ChatInputAnswer: one of the Decision* values
 	// Model is the "provider/model" for ChatInputModel. Effort is the
 	// reasoning effort; empty lets the provider choose.
@@ -246,6 +276,9 @@ type ChatInput struct {
 	// Mode is the approval mode for ChatInputMode: ChatModeAsk or
 	// ChatModeAuto.
 	Mode string `json:"mode,omitempty"`
+	// Picked holds the labels picked for ChatInputReply. A reply picks
+	// labels or types Text, not both.
+	Picked []string `json:"picked,omitempty"`
 }
 
 // Approval modes a chat takes.
@@ -261,6 +294,7 @@ const MaxChatTitle = 120
 const (
 	ChatInputMessage   = "message"   // send Text; during a turn it waits in the queue
 	ChatInputAnswer    = "answer"    // answer approval request ID
+	ChatInputReply     = "reply"     // answer question ID with Picked or Text
 	ChatInputInterrupt = "interrupt" // stop the running turn
 	ChatInputRetry     = "retry"     // run the last turn again after a failure
 	ChatInputModel     = "model"     // make the next turn use Model with Effort
@@ -308,6 +342,10 @@ func (in *ChatInput) Validate() error {
 		default:
 			return fmt.Errorf("%w: unknown decision %q", ErrInvalidChatInput, in.Decision)
 		}
+	case ChatInputReply:
+		if err := in.validateReply(); err != nil {
+			return err
+		}
 	case ChatInputModel:
 		if _, _, ok := ParseModelName(in.Model); !ok {
 			return fmt.Errorf("%w: model %q is not provider/model", ErrInvalidChatInput, in.Model)
@@ -340,6 +378,26 @@ func (in *ChatInput) Validate() error {
 	}
 	if in.SaveDefault && in.Kind != ChatInputModel {
 		return fmt.Errorf("%w: only a model can be saved as the default", ErrInvalidChatInput)
+	}
+	return nil
+}
+
+// validateReply checks a ChatInputReply.
+func (in *ChatInput) validateReply() error {
+	switch {
+	case in.ID == "":
+		return fmt.Errorf("%w: reply names no question", ErrInvalidChatInput)
+	case len(in.Picked) > 0 && in.Text != "":
+		return fmt.Errorf("%w: a reply picks options or types an answer, not both", ErrInvalidChatInput)
+	case len(in.Picked) == 0 && strings.TrimSpace(in.Text) == "":
+		return fmt.Errorf("%w: empty reply", ErrInvalidChatInput)
+	case len(in.Picked) > MaxChatPicked:
+		return fmt.Errorf("%w: over %d options picked", ErrInvalidChatInput, MaxChatPicked)
+	}
+	for _, l := range in.Picked {
+		if l == "" || utf8.RuneCountInString(l) > MaxChatLabel {
+			return fmt.Errorf("%w: a picked label is empty or over %d characters", ErrInvalidChatInput, MaxChatLabel)
+		}
 	}
 	return nil
 }

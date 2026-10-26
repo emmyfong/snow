@@ -52,6 +52,8 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		err = conv.Send(in.Text)
 	case api.ChatInputAnswer:
 		err = conv.Answer(agent.Answer{ID: in.ID, Decision: agent.Decision(in.Decision), Reason: in.Text})
+	case api.ChatInputReply:
+		err = conv.Reply(agent.QuestionReply{ID: in.ID, Picked: in.Picked, Other: in.Text})
 	case api.ChatInputInterrupt:
 		err = conv.Interrupt()
 	case api.ChatInputRetry:

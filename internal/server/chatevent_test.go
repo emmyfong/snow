@@ -32,6 +32,10 @@ func TestChatEventMapping(t *testing.T) {
 		{&agent.ApprovalRequest{ID: "t", Tool: "write", Diff: &agent.Diff{Path: "a", New: "b"}, Outside: []string{"/x"}}, api.ChatEventApproval, func(e *api.ChatEvent) bool {
 			return e.Approval.Diff.New == "b" && e.Approval.Outside[0] == "/x"
 		}},
+		{&agent.Question{ID: "q", Text: "Which?", Multi: true, Options: []agent.Option{{Label: "A", Preview: "p"}}}, api.ChatEventQuestion, func(e *api.ChatEvent) bool {
+			return e.Question.ID == "q" && e.Question.Multi && e.Question.Options[0].Preview == "p"
+		}},
+		{&agent.QuestionAnswered{ID: "q"}, api.ChatEventAnswered, func(e *api.ChatEvent) bool { return e.Question.ID == "q" }},
 		{&agent.StateChanged{State: agent.StateTool}, api.ChatEventState, func(e *api.ChatEvent) bool { return e.State == api.ChatStateTool }},
 		{&agent.QueueChanged{Messages: []string{"a"}}, api.ChatEventQueue, func(e *api.ChatEvent) bool { return len(e.Queue) == 1 }},
 		{&agent.Usage{Requested: "anthropic/claude-opus-5-5", Input: 3, Priced: true, Cost: 0.5}, api.ChatEventUsage, func(e *api.ChatEvent) bool {
@@ -50,8 +54,8 @@ func TestChatEventMapping(t *testing.T) {
 			}
 		})
 	}
-	if e := chatEvent(7, agent.Event{Agent: "c1", Body: &agent.Question{ID: "q"}}); e != nil {
-		t.Fatalf("question mapped to %+v; the protocol has no kind for it yet", e)
+	if e := chatEvent(7, agent.Event{Agent: "c1", Body: &agent.TasksChanged{}}); e != nil {
+		t.Fatalf("task list mapped to %+v; the protocol has no kind for it yet", e)
 	}
 }
 

@@ -23,6 +23,12 @@ type ChoiceOptions struct {
 	// Reason replaces the choices with a field for why the answer is no.
 	Reason      bool
 	ReasonValue string
+	// ReasonPrompt, ReasonPlaceholder, and ReasonHints change what the
+	// field says, for a field that takes another answer than a reason.
+	// Empty ones keep " Reason: ", "optional", and the reason's keys.
+	ReasonPrompt      string
+	ReasonPlaceholder string
+	ReasonHints       []Hint
 }
 
 // reasonHints are the keys a reason field takes.
@@ -44,9 +50,16 @@ func ChoiceBox(th theme.Theme, o ChoiceOptions) string {
 		rows = append(rows, "")
 	}
 	if o.Reason {
+		prompt, placeholder, hints := o.ReasonPrompt, o.ReasonPlaceholder, o.ReasonHints
+		if prompt == "" {
+			prompt, placeholder = " Reason: ", "optional"
+		}
+		if hints == nil {
+			hints = reasonHints
+		}
 		rows = append(rows,
-			Input(th, InputOptions{Width: inner, Prompt: " Reason: ", Value: o.ReasonValue, Placeholder: "optional", Focused: true}),
-			" "+KeyHints(th, reasonHints, inner-1))
+			Input(th, InputOptions{Width: inner, Prompt: prompt, Value: o.ReasonValue, Placeholder: placeholder, Focused: true}),
+			" "+KeyHints(th, hints, inner-1))
 	} else if len(o.Choices) > 0 {
 		rows = append(rows, buttonRows(th, o)...)
 	}

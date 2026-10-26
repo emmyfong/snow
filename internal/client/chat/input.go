@@ -17,7 +17,8 @@ import (
 // and Down scroll the transcript; any key that edits returns to the
 // latest text. Tab and Shift+Tab select a tool cell, and Enter then
 // expands or collapses it. While an approval waits, its box takes the
-// keys first, but only Tab and Shift+Tab while the input holds text.
+// keys first, but only Tab and Shift+Tab while the input holds text. An
+// open question's box does the same; see questionKey.
 func (m *Model) Key(k tea.Key) *api.ChatInput {
 	if !m.loaded {
 		return nil
@@ -25,6 +26,10 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	defer m.syncCommands()
 	if p := m.pending(); p != nil {
 		if in, ok := m.approvalKey(p, k); ok {
+			return in
+		}
+	} else if q := m.question(); q != nil {
+		if in, ok := m.questionKey(q, k); ok {
 			return in
 		}
 	}
