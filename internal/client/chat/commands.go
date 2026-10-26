@@ -29,6 +29,11 @@ type Host interface {
 	// SwitchModel asks the server to make model the next turn's model. An
 	// empty effort lets the provider choose.
 	SwitchModel(model, effort string)
+	// SetMode asks the server to set the approval mode now.
+	SetMode(mode string)
+	// SetEffort asks the server to set the effort from the next turn. An
+	// empty level lets the provider choose.
+	SetEffort(level string)
 }
 
 // RunFunc runs one command in a chat pane. rest is what the user typed
@@ -64,6 +69,18 @@ func (h host) Input() string           { return string(h.m.input) }
 func (h host) Model() (string, string) { return h.m.snap.Model, h.m.snap.Effort }
 func (h host) SwitchModel(model, effort string) {
 	h.m.sent = h.m.SwitchModelInput(model, effort, false)
+}
+
+func (h host) SetMode(mode string) {
+	in := h.m.chatInput(api.ChatInputMode, "")
+	in.Mode = mode
+	h.m.sent = in
+}
+
+func (h host) SetEffort(level string) {
+	in := h.m.chatInput(api.ChatInputEffort, "")
+	in.Effort = level
+	h.m.sent = in
 }
 
 // commandQuery returns the text after the slash that filters the list, and

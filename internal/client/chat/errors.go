@@ -19,6 +19,9 @@ const (
 	AskLogin     = "login"      // save a provider key
 	AskLogout    = "logout"     // remove a provider key
 	AskPickModel = "pick-model" // choose another model
+	AskResume    = "resume"     // choose a past conversation
+	AskPickMode  = "pick-mode"  // choose the approval mode
+	AskHelp      = "help"       // show the commands and keys
 )
 
 // errorTitles name each failure in its box's top edge.
