@@ -110,35 +110,57 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
 	}
+	c, err := ResumeLoaded(cfg, loaded)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c, loaded, nil
+}
+
+// ResumeLoaded is Resume for a conversation the caller loaded already, for
+// a caller that needs the file's folder before it builds cfg. cfg.Folder
+// must be the folder saved in the file.
+func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, error) {
+	id := loaded.Meta.ID
 	if loaded.Meta.Folder != cfg.Folder.Path {
-		return nil, nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
+		return nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
 	}
 	w, err := cfg.Store.Writer(id)
 	if err != nil {
-		return nil, nil, fmt.Errorf("resume conversation: %w", err)
+		return nil, fmt.Errorf("resume conversation: %w", err)
 	}
 	if loaded.MidTurn {
 		// The turn that was running when Snow stopped is over; record it, so
 		// the next load does not see it open.
 		if err := w.Append(&convstore.Interruption{At: now(cfg), Reason: "Snow stopped"}); err != nil {
-			return nil, nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
+			return nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
 		}
 	}
 	c := newConversation(cfg, w)
-	c.model, c.effort = loaded.Meta.Model, provider.Effort(loaded.Meta.Effort)
+	model, effort, mode := StateOf(loaded)
+	c.model, c.effort = model, provider.Effort(effort)
+	c.mode.Store(mode)
+	c.history = history(loaded.Records)
+	go c.loop()
+	return c, nil
+}
+
+// StateOf returns the model ("provider/model"), the effort, and the
+// approval mode a loaded conversation ends in: the last of each saved in
+// the file, else the ones it started with.
+func StateOf(loaded *convstore.Conversation) (model, effort string, mode Mode) {
+	model, effort, mode = loaded.Meta.Model, loaded.Meta.Effort, ModeAsk
 	for _, r := range loaded.Records {
 		switch r := r.(type) {
 		case *convstore.ModelSwitch:
-			c.model, c.effort = r.Model, provider.Effort(r.Effort)
+			model, effort = r.Model, r.Effort
 		case *convstore.Mode:
 			if Mode(r.Mode).valid() {
-				c.mode.Store(Mode(r.Mode))
+				mode = Mode(r.Mode)
 			}
 		}
 	}
-	c.history = history(loaded.Records)
-	go c.loop()
-	return c, loaded, nil
+	return model, effort, mode
 }
 
 func newConversation(cfg Config, w *convstore.Writer) *Conversation {

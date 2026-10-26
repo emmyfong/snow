@@ -64,3 +64,30 @@ func TestRenameRefusesBadTitles(t *testing.T) {
 		t.Fatalf("rename after close: %v", err)
 	}
 }
+
+// TestStateOfLoaded: the model, effort, and mode of a loaded file are the
+// last ones saved in it, and ResumeLoaded goes on with them.
+func TestStateOfLoaded(t *testing.T) {
+	h := newHarness(t, nil)
+	_ = h.conv.SwitchModel("fake/model-2", "high")
+	next[*ModelChanged](t, h)
+	_ = h.conv.SetMode(ModeAuto)
+	next[*ModeChanged](t, h)
+	id := h.conv.ID()
+	_ = h.conv.Close()
+	loaded, err := h.store.Load(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if model, effort, mode := StateOf(loaded); model != "fake/model-2" || effort != "high" || mode != ModeAuto {
+		t.Fatalf("StateOf = %q, %q, %q", model, effort, mode)
+	}
+	c, err := ResumeLoaded(h.config(t), loaded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if c.Mode() != ModeAuto || c.ID() != id {
+		t.Fatalf("resumed %s in mode %s", c.ID(), c.Mode())
+	}
+}

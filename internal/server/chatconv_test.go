@@ -205,3 +205,151 @@ func TestListConversations(t *testing.T) {
 	c.Send(&api.ConversationListRequest{Pane: 999})
 	nextError(t, c)
 }
+
+// openSecondChat splits the focused pane of the shown window with another
+// chat and returns its ID once c has its snapshot.
+func openSecondChat(t *testing.T, c *apitest.Client, from int) int {
+	t.Helper()
+	c.Send(&api.Command{Op: api.OpSplit, Target: from, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgKind: api.PaneChat}})
+	l := nextLayout(t, c, func(l *api.Layout) bool {
+		n := 0
+		for _, p := range shownPanes(l) {
+			if p.Kind == api.PaneChat {
+				n++
+			}
+		}
+		return n == 2
+	})
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneChat && p.ID != from {
+			c.WaitChat(p.ID, func(*api.ChatSnapshot) bool { return true })
+			return p.ID
+		}
+	}
+	t.Fatal("no second chat pane")
+	return 0
+}
+
+// TestNewCommand: /new puts a new conversation in the pane, with the same
+// model, an empty transcript, and its own file. The old file does not
+// change, and the old conversation's agent ID no longer works there.
+func TestNewCommand(t *testing.T) {
+	s, _, store := newChatServer(t, reply("ok"))
+	c := connect(t, s, 100, 30)
+	id := openChat(t, c)
+	say(c, id, "hi")
+	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return idle(s) && lastReply(s) == "ok" })
+	old := *c.Chat(id)
+	oldPath, _ := store.Path(old.Conversation)
+	before, _ := os.ReadFile(oldPath)
+
+	chatInputOf(c, id, api.ChatInputNew, nil)
+	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Conversation != old.Conversation })
+	if got.Agent == old.Agent || got.Agent != got.Conversation || len(got.Entries) != 0 || got.Model != old.Model || got.Mode != api.ChatModeAsk || !idle(got) {
+		t.Fatalf("new snapshot %+v", got)
+	}
+	entries, err := store.ListAll()
+	if err != nil || len(entries) != 2 {
+		t.Fatalf("%d conversation files, %v; want 2", len(entries), err)
+	}
+	if after, _ := os.ReadFile(oldPath); !bytes.Equal(after, before) {
+		t.Fatal("/new changed the old conversation's file")
+	}
+	c.Send(&api.ChatInput{Pane: id, Agent: old.Agent, Kind: api.ChatInputInterrupt})
+	nextError(t, c)
+}
+
+// TestNewAndResumeRefusedWhileRunning: while a turn runs, /new and /resume
+// say to stop it first, and the pane keeps its conversation.
+func TestNewAndResumeRefusedWhileRunning(t *testing.T) {
+	hold := make(chan struct{})
+	r := reply("ok")
+	r.Hold = hold
+	s, _, _ := newChatServer(t, r)
+	c := connect(t, s, 100, 30)
+	id := openChat(t, c)
+	conv := c.Chat(id).Conversation
+	say(c, id, "hi")
+	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Running })
+	for _, kind := range []string{api.ChatInputNew, api.ChatInputResume} {
+		chatInputOf(c, id, kind, func(in *api.ChatInput) { in.Conversation = "someone" })
+		if e := nextError(t, c); !strings.Contains(e.Message, "Esc") {
+			t.Fatalf("%s: refusal %q", kind, e.Message)
+		}
+	}
+	close(hold)
+	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return idle(s) })
+	if got.Conversation != conv {
+		t.Fatal("a refused command changed the conversation")
+	}
+}
+
+// TestResumeLoadsConversation: /resume shows the past conversation's
+// transcript and uses the model recorded in its file.
+func TestResumeLoadsConversation(t *testing.T) {
+	s, _, _ := newChatServer(t, reply("first answer"))
+	c := connect(t, s, 100, 30)
+	first := openChat(t, c)
+	chatInputOf(c, first, api.ChatInputModel, func(in *api.ChatInput) { in.Model = "fake/model-2"; in.Effort = "high" })
+	c.WaitChat(first, func(s *api.ChatSnapshot) bool { return s.Model == "fake/model-2" })
+	chatInputOf(c, first, api.ChatInputRename, func(in *api.ChatInput) { in.Text = "Rename work" })
+	chatInputOf(c, first, api.ChatInputMode, func(in *api.ChatInput) { in.Mode = api.ChatModeAuto })
+	say(c, first, "explain the rename command")
+	c.WaitChat(first, func(s *api.ChatSnapshot) bool {
+		return idle(s) && lastReply(s) == "first answer" && s.Title == "Rename work" && s.Mode == api.ChatModeAuto
+	})
+	past := c.Chat(first).Conversation
+
+	second := openSecondChat(t, c, first)
+	c.Send(&api.Command{Op: api.OpClose, Target: first})
+	eventually(t, "the first pane to close", func() bool { return c.Chat(first) == nil || len(c.Chats()) == 1 })
+
+	chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
+	got := c.WaitChat(second, func(s *api.ChatSnapshot) bool { return s.Conversation == past })
+	if got.Model != "fake/model-2" || got.Effort != "high" || got.Title != "Rename work" || got.Mode != api.ChatModeAuto || !idle(got) {
+		t.Fatalf("resumed snapshot %+v", got)
+	}
+	var user, answer bool
+	for _, e := range got.Entries {
+		user = user || (e.Kind == api.ChatEntryUser && e.Text == "explain the rename command")
+		answer = answer || (e.Kind == api.ChatEntryAssistant && e.Text == "first answer")
+	}
+	if !user || !answer {
+		t.Fatalf("the transcript lacks the exchange: %+v", got.Entries)
+	}
+}
+
+// TestResumeOpenElsewhere: a conversation another pane shows moves focus
+// there. This pane keeps its own conversation, and no second writer opens.
+func TestResumeOpenElsewhere(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	first := openChat(t, c)
+	second := openSecondChat(t, c, first)
+	shown := c.Chat(first).Conversation
+	own := c.Chat(second).Conversation
+
+	chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = shown })
+	l := nextLayout(t, c, func(l *api.Layout) bool {
+		for _, p := range shownPanes(l) {
+			if p.ID == first && p.Focused {
+				return true
+			}
+		}
+		return false
+	})
+	if l == nil {
+		t.Fatal("focus did not move")
+	}
+	if got := c.Chat(second).Conversation; got != own {
+		t.Fatalf("the pane changed its conversation to %s", got)
+	}
+	if entries, _ := store.ListAll(); len(entries) != 2 {
+		t.Fatalf("%d conversation files, want 2", len(entries))
+	}
+	// A bad id and a missing file are refused.
+	for _, bad := range []string{"../escape", "no-such-conversation"} {
+		chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = bad })
+		nextError(t, c)
+	}
+}
