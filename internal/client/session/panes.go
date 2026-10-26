@@ -142,6 +142,9 @@ func (m *Model) syncPanes() {
 			if m.authPick != nil && m.authPane == id {
 				m.authPick, m.authPane = nil, 0
 			}
+			if m.over != nil && m.over.pane == id {
+				m.over, m.resume = nil, nil
+			}
 			if m.logoutPane == id {
 				m.logoutPane = 0
 			}
@@ -198,6 +201,12 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 			return m.openLoginPicker(id)
 		case chat.AskLogout:
 			return m.askLogout(id)
+		case chat.AskResume:
+			return m.openResume(id)
+		case chat.AskPickMode:
+			return m.openModePicker(id)
+		case chat.AskHelp:
+			return m.openHelp(id)
 		}
 	}
 	if note != "" {

@@ -32,6 +32,7 @@ func (m *Model) View() tea.View {
 	content = m.overlaySwitcher(content, area)
 	content = m.overlayModelPick(content, area)
 	content = m.overlayAuthPick(content, area)
+	content = m.overlayOver(content, area)
 	content = m.overlayPrompt(content)
 	content = m.overlayHint(content, area)
 	content = m.overlayMenu(content, area)
@@ -42,7 +43,7 @@ func (m *Model) View() tea.View {
 	}
 	v := tea.NewView(content + bar)
 	v.MouseMode = tea.MouseModeCellMotion
-	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.modelPick == nil && m.authPick == nil && m.prompt == nil {
+	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.modelPick == nil && m.authPick == nil && m.over == nil && m.prompt == nil {
 		if x, y, ok := m.copyCursor(p.ID); ok {
 			v.Cursor = tea.NewCursor(p.Rect.X+x, p.Rect.Y+y)
 		} else if c := m.own[p.ID]; c != nil {

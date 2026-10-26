@@ -79,3 +79,28 @@ func TestCommandsAreInTheChatList(t *testing.T) {
 		}
 	}
 }
+
+// TestNewConversationResetsTheView: a snapshot of another conversation
+// starts at the latest row with nothing selected or expanded, while a
+// snapshot of the same conversation keeps the user's place.
+func TestNewConversationResetsTheView(t *testing.T) {
+	m, _ := newChat(100, 12)
+	for i := 0; i < 30; i++ {
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: i + 1, Text: "question"}))
+		m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: i + 1, Reason: api.ChatEndDone}))
+	}
+	m.Scroll(10)
+	m.selected, m.expanded["t1"] = "t1", true
+
+	same := m.snap
+	m.Snapshot(&same)
+	if m.scroll == 0 || m.selected == "" || !m.expanded["t1"] {
+		t.Fatal("a snapshot of the same conversation lost the user's place")
+	}
+
+	next := api.ChatSnapshot{Pane: 2, Agent: "c2", Conversation: "c2", Model: "anthropic/claude-sonnet-5-5", Mode: "ask", State: api.ChatStateIdle}
+	m.Snapshot(&next)
+	if m.scroll != 0 || m.selected != "" || len(m.expanded) != 0 {
+		t.Fatalf("scroll %d, selected %q, expanded %v after a new conversation", m.scroll, m.selected, m.expanded)
+	}
+}

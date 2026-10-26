@@ -60,9 +60,6 @@ func (m *Model) Request() *api.ConversationListRequest {
 	return r
 }
 
-// Pane returns the chat pane the picker serves.
-func (m *Model) Pane() int { return m.pane }
-
 // SetList shows a server reply. A reply for the other scope, such as one
 // that crossed a Ctrl+a, is ignored.
 func (m *Model) SetList(l *api.ConversationList) {

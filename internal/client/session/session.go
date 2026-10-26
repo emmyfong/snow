@@ -15,6 +15,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/modelpick"
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/resumepick"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -66,6 +67,8 @@ type Model struct {
 	modelList  api.ModelList             // the server's last model list
 	modelPane  int                       // the pane modelPick chooses a model for
 	firstRun   map[int]bool              // panes the first-run flow ran for
+	over       *overlay                  // the mode picker, resume picker, or help, when open
+	resume     *resumepick.Model         // the resume picker, when over is it
 	authPick   *authpick.Model           // the login picker, when open
 	authPane   int                       // the pane authPick serves
 	authList   api.AuthList              // the server's last provider key list
@@ -141,6 +144,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.profiles = *msg
 	case *api.ModelList:
 		m.setModelList(msg)
+	case *api.ConversationList:
+		m.setConversationList(msg)
 	case *api.AuthList:
 		return m.setAuthList(msg)
 	case *api.Login:
@@ -318,5 +323,5 @@ func resize(lines []string, rows int) []string {
 
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.switcher != nil || m.modelPick != nil || m.authPick != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
+	return m.picker != nil || m.switcher != nil || m.modelPick != nil || m.authPick != nil || m.over != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

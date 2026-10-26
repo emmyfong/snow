@@ -37,6 +37,9 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.modelPick != nil {
 		return m.modelMouse(msg)
 	}
+	if m.over != nil {
+		return m.overMouse(msg)
+	}
 	if m.prompt != nil {
 		return m.promptMouse(msg)
 	}

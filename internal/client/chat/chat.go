@@ -92,6 +92,12 @@ func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), 
 // Snapshot replaces the transcript with snap, as the server sends it on
 // attach or after this client fell behind. What the user is typing stays.
 func (m *Model) Snapshot(snap *api.ChatSnapshot) {
+	if m.loaded && snap.Agent != m.snap.Agent {
+		// /new or /resume put another conversation in this pane: nothing of
+		// the old view applies to it.
+		m.scroll, m.selected = 0, ""
+		clear(m.expanded)
+	}
 	m.keepPlace(func() {
 		m.snap = *snap
 		m.loaded = true

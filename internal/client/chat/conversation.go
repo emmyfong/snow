@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/emmyfong/snow/internal/client/command"
+	"github.com/emmyfong/snow/internal/client/helppanel"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -73,7 +74,7 @@ func init() {
 		cmd command.Command
 		run RunFunc
 	}{
-		{command.Command{Name: "new", Desc: "Start a new conversation in this pane", Group: command.GroupConversation}, runNew},
+		{command.Command{Name: "new", Desc: "Start a new conversation here", Group: command.GroupConversation}, runNew},
 		{command.Command{Name: "resume", Desc: "Open a past conversation", Group: command.GroupConversation}, runResume},
 		{command.Command{Name: "rename", Args: "[title]", Desc: "Rename this conversation", Group: command.GroupConversation}, runRename},
 		{command.Command{Name: "mode", Args: "[ask|auto]", Desc: "Choose when tools wait for you", Group: command.GroupModel}, runMode},
@@ -84,4 +85,30 @@ func init() {
 			panic(err)
 		}
 	}
+}
+
+// ResumeInput returns the input that puts the saved conversation id in
+// this pane.
+func (m *Model) ResumeInput(conversation string) *api.ChatInput {
+	in := m.chatInput(api.ChatInputResume, "")
+	in.Conversation = conversation
+	return in
+}
+
+// ModeInput returns the input that sets the approval mode to mode.
+func (m *Model) ModeInput(mode string) *api.ChatInput {
+	in := m.chatInput(api.ChatInputMode, "")
+	in.Mode = mode
+	return in
+}
+
+// HelpKeys are the keys the chat's help panel lists after the commands.
+var HelpKeys = []helppanel.Key{
+	{Keys: "Enter", Desc: "send the message"},
+	{Keys: "Shift+Enter", Desc: "add a new line"},
+	{Keys: "Esc", Desc: "stop the running turn"},
+	{Keys: "/", Desc: "type a command; Tab completes"},
+	{Keys: "PgUp, PgDn", Desc: "scroll the conversation"},
+	{Keys: "Ctrl+b :", Desc: "run a command in the session"},
+	{Keys: "Ctrl+b d", Desc: "detach and go home"},
 }
