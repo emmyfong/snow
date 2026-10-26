@@ -2,6 +2,7 @@ package ui
 
 import (
 	"strings"
+	"unicode/utf8"
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -15,6 +16,9 @@ type InputOptions struct {
 	Prompt      string // drawn before the value, in the accent color
 	Width       int
 	Focused     bool // draws a cursor after the value
+	// Mask draws one Mask glyph per character of Value instead of the
+	// value, for a secret. The value is never drawn.
+	Mask bool
 }
 
 // Input draws a one-line text field exactly Width cells wide. A value too long
@@ -39,7 +43,11 @@ func Input(th theme.Theme, o InputOptions) string {
 			cursor = ""
 		}
 	} else {
-		text = ansi.TruncateLeft(o.Value, max(ansi.StringWidth(o.Value)-room, 0), "")
+		shown := o.Value
+		if o.Mask {
+			shown = strings.Repeat(th.Glyphs.Mask, utf8.RuneCountInString(o.Value))
+		}
+		text = ansi.TruncateLeft(shown, max(ansi.StringWidth(shown)-room, 0), "")
 	}
 	if cursor != "" {
 		text += lipgloss.NewStyle().Reverse(true).Render(cursor)

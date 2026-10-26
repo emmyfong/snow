@@ -37,6 +37,12 @@ const (
 	TypeChatInput
 	TypeModelListRequest
 	TypeModelList
+	TypeAuthListRequest
+	TypeAuthList
+	TypeLoginRequest
+	TypeLogin
+	TypeLogoutRequest
+	TypeLogout
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -102,6 +108,18 @@ func newMessage(t MsgType) Message {
 		return &ModelListRequest{}
 	case TypeModelList:
 		return &ModelList{}
+	case TypeAuthListRequest:
+		return &AuthListRequest{}
+	case TypeAuthList:
+		return &AuthList{}
+	case TypeLoginRequest:
+		return &LoginRequest{}
+	case TypeLogin:
+		return &Login{}
+	case TypeLogoutRequest:
+		return &LogoutRequest{}
+	case TypeLogout:
+		return &Logout{}
 	}
 	return nil
 }
@@ -297,6 +315,10 @@ const (
 	// SessionList follows. A close without a reason means the connection
 	// was lost.
 	CodeSessionEnded = "session-ended"
+	// CodeAuthFailed means a login or logout could not be done: the
+	// provider rejected the key, the check could not run, or the key is set
+	// in the environment. The client keeps its picker open for a retry.
+	CodeAuthFailed = "auth-failed"
 )
 
 // Error makes a server's Error message usable as a Go error.

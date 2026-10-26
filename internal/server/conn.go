@@ -113,6 +113,12 @@ func (s *Server) read(c *client) {
 			s.chatInput(c, m)
 		case *api.ModelListRequest:
 			s.modelList(c, m)
+		case *api.AuthListRequest:
+			s.authList(c)
+		case *api.LoginRequest:
+			s.login(c, m)
+		case *api.LogoutRequest:
+			s.logout(c, m)
 		case *api.Detach:
 			s.call(func(st *state) { st.detach(c) })
 		case *api.KillSession:

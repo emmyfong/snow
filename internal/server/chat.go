@@ -42,6 +42,10 @@ type ChatOptions struct {
 	// SaveDefault saves model and effort as the default for new chats. It
 	// runs off the state goroutine. Nil means a default cannot be saved.
 	SaveDefault func(model, effort string) error
+	// Auth lists the providers and saves or removes their keys. Its calls
+	// may read the OS key store, so the server runs them off the state
+	// goroutine. Nil refuses auth requests.
+	Auth Auth
 	// ModelTTL is how long a fetched model list stays fresh. Zero means
 	// DefaultModelTTL.
 	ModelTTL time.Duration

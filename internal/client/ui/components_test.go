@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
 
@@ -52,6 +53,30 @@ func TestInput(t *testing.T) {
 	if !strings.Contains(got, "xyz") {
 		t.Fatalf("long Input = %q, want the end of the value visible", got)
 	}
+}
+
+// TestMaskedInput: a masked value shows one glyph per character and never
+// the value.
+func TestMaskedInput(t *testing.T) {
+	th := theme.Default()
+	const secret = "sk-secret-value"
+	got := ansi.Strip(Input(th, InputOptions{Value: secret, Prompt: "> ", Width: 30, Focused: true, Mask: true}))
+	if strings.Contains(got, "secret") || strings.Contains(got, "sk-") {
+		t.Fatalf("masked Input = %q, leaks the value", got)
+	}
+	if n := strings.Count(got, th.Glyphs.Mask); n != len(secret) {
+		t.Fatalf("masked Input = %q, shows %d glyphs, want %d", got, n, len(secret))
+	}
+	if ansi.StringWidth(got) != 30 {
+		t.Fatalf("masked Input width = %d, want 30", ansi.StringWidth(got))
+	}
+}
+
+// TestMaskedInputGolden draws a masked field, so a change to the glyph or
+// its style shows.
+func TestMaskedInputGolden(t *testing.T) {
+	got := Input(theme.Default(), InputOptions{Value: "sk-ant-example", Prompt: "$ ", Width: 24, Focused: true, Mask: true})
+	golden.RequireEqual(t, got)
 }
 
 func TestListAlignsColumnsAndMarksSelection(t *testing.T) {

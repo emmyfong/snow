@@ -65,6 +65,8 @@ type Glyphs struct {
 	// Collapsed and Expanded mark a tool call whose details are hidden
 	// or shown.
 	Collapsed, Expanded string
+	// Mask is the glyph that hides each character of a secret.
+	Mask string
 }
 
 // Default returns the default theme, Frost.
@@ -82,6 +84,7 @@ func defaultGlyphs() Glyphs {
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
 		Collapsed: "▸", Expanded: "▾",
+		Mask: "•",
 	}
 }
 
