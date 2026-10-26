@@ -37,6 +37,7 @@ func TestRetryAfterStartError(t *testing.T) {
 		t.Fatalf("started %+v", start)
 	}
 	next[*TurnEnded](t, h)
+	h.waitIdle(t)
 	if err := h.conv.Retry(); err != nil {
 		t.Fatal(err)
 	}
@@ -60,6 +61,7 @@ func TestRetryAfterCutReply(t *testing.T) {
 	h := newHarness(t, nil, cut, text("ok"))
 	_ = h.conv.Send("hi")
 	next[*TurnEnded](t, h)
+	h.waitIdle(t)
 	if err := h.conv.Retry(); err != nil {
 		t.Fatal(err)
 	}
@@ -93,6 +95,7 @@ func TestRetryAfterUserSaveFailure(t *testing.T) {
 	}
 	_ = h.conv.Send("hi")
 	next[*TurnEnded](t, h)
+	h.waitIdle(t)
 	if err := h.conv.Retry(); err != nil {
 		t.Fatal(err)
 	}

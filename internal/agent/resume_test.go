@@ -3,7 +3,6 @@ package agent
 import (
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
@@ -110,13 +109,7 @@ func TestIdleCountsAMessageJustSent(t *testing.T) {
 	}
 	close(hold)
 	next[*TurnEnded](t, h)
-	deadline := time.Now().Add(5 * time.Second)
-	for !h.conv.Idle() {
-		if time.Now().After(deadline) {
-			t.Fatal("the conversation never became idle")
-		}
-		time.Sleep(time.Millisecond)
-	}
+	h.waitIdle(t)
 	_ = h.conv.Close()
 	if h.conv.Idle() {
 		t.Fatal("a closed conversation is idle")
