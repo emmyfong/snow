@@ -1,11 +1,30 @@
 package server
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/pkg/api"
 )
+
+// Bounds on a conversation list, so it always fits a frame: a title, folder,
+// or error is cut to maxListText characters, and items stop at listBudget
+// bytes, newest first. A variable so a test can shrink it.
+const (
+	maxListText  = 200
+	maxListModel = 80
+)
+
+var listBudget = snapshotBudget
+
+// cutRunes returns s cut to at most n characters, with an ellipsis.
+func cutRunes(s string, n int) string {
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
+	}
+	return s
+}
 
 // conversations answers a ConversationListRequest with the past
 // conversations of the pane's folder, or of every folder. It runs on c's
@@ -54,15 +73,22 @@ func (s *Server) conversations(c *client, req *api.ConversationListRequest) {
 		return
 	}
 	list := &api.ConversationList{Pane: req.Pane, All: req.All, Items: make([]api.ConversationInfo, 0, len(entries))}
+	size := 0
 	for _, e := range entries {
 		it := api.ConversationInfo{
-			ID: e.ID, Title: e.Title, Folder: e.Folder, Model: e.Model,
-			LastActivity: e.LastActivity, Turns: e.Turns, Open: open[e.ID],
+			ID: e.ID, Title: cutRunes(e.Title, maxListText), Folder: cutRunes(e.Folder, maxListText),
+			Model: cutRunes(e.Model, maxListModel), LastActivity: e.LastActivity, Turns: e.Turns, Open: open[e.ID],
 		}
 		if e.Err != nil {
-			it.Err = e.Err.Error()
+			it.Err = cutRunes(e.Err.Error(), maxListText)
 		}
+		b, err := json.Marshal(it)
+		if err != nil || size+len(b)+1 > listBudget {
+			break
+		}
+		size += len(b) + 1
 		list.Items = append(list.Items, it)
 	}
+	list.Truncated = len(entries) - len(list.Items)
 	s.reply(c, list)
 }

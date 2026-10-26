@@ -4,6 +4,7 @@
 package resumepick
 
 import (
+	"fmt"
 	"path"
 	"strconv"
 	"strings"
@@ -42,15 +43,21 @@ func (m *Model) ask(all bool) {
 	m.all, m.items = all, nil
 	m.list.SetRows(nil)
 	m.list.SetNote("Loading conversations...")
-	m.list.SetTitle(title(all))
+	m.list.SetTitle(title(all, 0))
 	m.pending = &api.ConversationListRequest{Pane: m.pane, All: all}
 }
 
-func title(all bool) string {
+// title names the list and, when the server left conversations out, says
+// how many.
+func title(all bool, left int) string {
+	t := "Resume · this folder"
 	if all {
-		return "Resume · every folder"
+		t = "Resume · every folder"
 	}
-	return "Resume · this folder"
+	if left > 0 {
+		t += fmt.Sprintf(" · %d older not shown", left)
+	}
+	return t
 }
 
 // Request returns the list request the picker wants sent, once, or nil.
@@ -67,6 +74,7 @@ func (m *Model) SetList(l *api.ConversationList) {
 		return
 	}
 	m.items = l.Items
+	m.list.SetTitle(title(m.all, l.Truncated))
 	sel := m.list.Selected()
 	rows := make([][]string, len(l.Items))
 	for i, it := range l.Items {

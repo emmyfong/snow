@@ -325,6 +325,11 @@ const (
 	// provider rejected the key, the check could not run, or the key is set
 	// in the environment. The client keeps its picker open for a retry.
 	CodeAuthFailed = "auth-failed"
+	// CodeNotice is information, not a failure: the server did what was
+	// asked and adds something the user should know, for example that a
+	// resumed conversation starts in another approval mode. The client
+	// shows the message.
+	CodeNotice = "notice"
 )
 
 // Error makes a server's Error message usable as a Go error.

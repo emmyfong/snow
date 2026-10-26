@@ -56,6 +56,7 @@ func TestWireFormat(t *testing.T) {
 		{&ChatInput{Pane: 2, Agent: "c1", Kind: ChatInputMode, Mode: ChatModeAuto}, `{"pane":2,"agent":"c1","kind":"mode","mode":"auto"}`},
 		{&ConversationListRequest{Pane: 2, All: true}, `{"pane":2,"all":true}`},
 		{&ConversationList{Pane: 2}, `{"pane":2,"items":[]}`},
+		{&ConversationList{Pane: 2, Truncated: 3}, `{"pane":2,"items":[],"truncated":3}`},
 		{&Error{Code: CodeBadHandshake, Message: "expected hello"}, `{"code":"bad-handshake","message":"expected hello"}`},
 	}
 	for _, tt := range tests {

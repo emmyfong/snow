@@ -135,6 +135,22 @@ func TestLongTitleStaysInTheBox(t *testing.T) {
 	}
 }
 
+// TestTruncatedListSaysSo: conversations the server left out are counted
+// in the title, and a new request clears the count.
+func TestTruncatedListSaysSo(t *testing.T) {
+	m := New(4, func() time.Time { return now })
+	m.SetList(&api.ConversationList{Pane: 4, Items: items(), Truncated: 12})
+	box, _, _ := m.View(theme.Default(), 100, 24)
+	if !strings.Contains(ansi.Strip(box), "12 older not shown") {
+		t.Fatalf("no count in:\n%s", ansi.Strip(box))
+	}
+	m.Key(tea.Key{Code: 'a', Mod: tea.ModCtrl})
+	box, _, _ = m.View(theme.Default(), 100, 24)
+	if strings.Contains(ansi.Strip(box), "not shown") {
+		t.Fatal("the count stayed after a new request")
+	}
+}
+
 func TestOtherPaneListIsIgnored(t *testing.T) {
 	m := New(4, func() time.Time { return now })
 	m.SetList(&api.ConversationList{Pane: 9, Items: items()})

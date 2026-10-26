@@ -3,7 +3,9 @@ package server
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
+	"path/filepath"
 
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -16,6 +18,7 @@ var errStopTurn = errors.New("a turn is running. Press Esc to stop the turn firs
 // paneFacts is what a swap needs from the model goroutine.
 type paneFacts struct {
 	found, running  bool
+	conv            *agent.Conversation // the pane's conversation now
 	profile, dir    string
 	model, effort   string
 	elsewhere       int    // pane that shows the wanted conversation, 0 if none
@@ -33,7 +36,7 @@ func (s *Server) swapFacts(c *client, pane int, want string) (f paneFacts) {
 			return
 		}
 		f = paneFacts{
-			found: true, running: p.chat.snap.Running, profile: p.profile, dir: p.chat.folder,
+			found: true, running: p.chat.snap.Running, conv: p.chat.conv, profile: p.profile, dir: p.chat.folder,
 			model: p.chat.snap.Model, effort: p.chat.snap.Effort, oldConversation: p.chat.snap.Conversation,
 		}
 		if want == "" {
@@ -52,26 +55,32 @@ func (s *Server) swapFacts(c *client, pane int, want string) (f paneFacts) {
 	return f
 }
 
+// busy returns errStopTurn unless the pane's conversation is idle. It asks
+// the agent: the pane's snapshot trails the agent by the time an event
+// takes, so a message sent a moment ago would not show there yet.
+func (f paneFacts) busy() error {
+	if f.running || !f.conv.Idle() {
+		return errStopTurn
+	}
+	return nil
+}
+
 // newChat puts a new conversation in pane, in the folder and with the model
 // of the one it has now.
 func (s *Server) newChat(c *client, pane int) error {
 	f := s.swapFacts(c, pane, "")
-	switch {
-	case !f.found:
+	if !f.found {
 		return fmt.Errorf("no chat in pane %d", pane)
-	case f.running:
-		return errStopTurn
+	}
+	if err := f.busy(); err != nil {
+		return err
 	}
 	cfg := s.chatConfig(pane, f.profile, f.dir)
 	conv, err := agent.Start(cfg, convstore.Meta{Model: f.model, Effort: f.effort})
 	if err != nil {
 		return fmt.Errorf("start chat: %w", err)
 	}
-	snap := api.ChatSnapshot{
-		Pane: pane, Agent: string(conv.Agent()), Conversation: conv.ID(),
-		Model: f.model, Effort: f.effort, Mode: string(conv.Mode()), State: api.ChatStateIdle,
-	}
-	return s.adopt(c, pane, conv, snap, cfg.Folder.Path)
+	return s.adopt(c, pane, conv, newSnapshot(pane, conv, f.model, f.effort, conv.Mode()), cfg.Folder.Path)
 }
 
 // resumeChat puts the saved conversation id in pane. A conversation that
@@ -82,8 +91,6 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	switch {
 	case !f.found:
 		return fmt.Errorf("no chat in pane %d", pane)
-	case f.running:
-		return errStopTurn
 	case f.own:
 		return nil
 	case f.elsewhere != 0:
@@ -93,25 +100,68 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 		s.post(func(st *state) { st.command(c, &api.Command{Op: api.OpFocus, Target: f.elsewhere}) })
 		return nil
 	}
-	o := s.opts.Chat
-	loaded, err := o.Store.Load(id)
+	if err := f.busy(); err != nil {
+		return err
+	}
+	loaded, err := s.opts.Chat.Store.Load(id)
 	if err != nil {
 		return fmt.Errorf("resume: %w", err)
 	}
 	folder := s.chatFolder(f.profile, loaded.Meta.Folder)
-	if _, err := os.Stat(folder.Path); err != nil && folder.Distro == "" {
-		return fmt.Errorf("resume: the folder %s is gone", loaded.Meta.Folder)
+	if folder.Distro == "" {
+		if err := checkFolder(loaded.Meta.Folder); err != nil {
+			return err
+		}
 	}
 	cfg := s.chatConfig(pane, f.profile, loaded.Meta.Folder)
 	cfg.Folder = folder
-	conv, err := agent.ResumeLoaded(cfg, loaded)
+	conv, loaded, err := agent.ResumeLoaded(cfg, loaded)
 	if errors.Is(err, convstore.ErrInUse) {
-		return errors.New("that conversation is open in another Snow")
+		return errors.New("that conversation is already open")
 	}
 	if err != nil {
 		return err
 	}
-	return s.adopt(c, pane, conv, replaySnapshot(pane, conv, loaded), folder.Path)
+	// A mode that stops all questions comes back only in the folder the user
+	// chose it for: a file from another folder, or one copied in, starts
+	// asking again.
+	model, effort, mode := agent.StateOf(loaded)
+	notice := ""
+	if mode == agent.ModeAuto && loaded.Meta.Folder != f.dir {
+		mode = agent.ModeAsk
+		notice = "Resumed in " + loaded.Meta.Folder + " with the approval mode ask. Type /mode auto to stop the questions."
+		if err := conv.SetMode(mode); err != nil {
+			return errors.Join(err, conv.Close())
+		}
+	}
+	snap := replaySnapshot(pane, conv, loaded, model, effort, mode)
+	if err := s.adopt(c, pane, conv, snap, folder.Path); err != nil {
+		return err
+	}
+	if notice != "" {
+		s.reply(c, &api.Error{Code: api.CodeNotice, Message: notice})
+	}
+	return nil
+}
+
+// checkFolder checks that dir, the folder a conversation was saved in, is a
+// folder it can run in: an absolute path that exists. The chat folder
+// falls back to the home folder for any other, which would put the tools
+// somewhere the conversation never worked.
+func checkFolder(dir string) error {
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("resume: the saved folder %q is not an absolute path", dir)
+	}
+	fi, err := os.Stat(dir)
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return fmt.Errorf("resume: the folder %s is gone", dir)
+	case err != nil:
+		return fmt.Errorf("resume: cannot use the folder %s: %w", dir, err)
+	case !fi.IsDir():
+		return fmt.Errorf("resume: %s is not a folder", dir)
+	}
+	return nil
 }
 
 // adopt makes conv the conversation of pane and sends every client of the

@@ -1,7 +1,6 @@
 package server
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"slices"
@@ -59,23 +58,21 @@ func (s *Server) effortsOf(model string) ([]string, error) {
 	if !ok || o == nil {
 		return nil, fmt.Errorf("%q is not provider/model", model)
 	}
-	find := func() (models []provider.Model, known bool) {
-		s.call(func(st *state) { models, known = st.models.lists[name] })
-		return models, known
-	}
-	models, known := find()
-	if !known {
-		p, ok := o.Providers.Get(name)
-		if !ok {
-			return nil, fmt.Errorf("no provider %s", name)
+	var models []provider.Model
+	var known, loading bool
+	s.call(func(st *state) {
+		models, known = st.models.lists[name]
+		if !known && st.models.fetching[name] {
+			loading = true
+		} else if !known {
+			st.models.fetching[name] = true // one fetch at a time for a provider
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), modelFetchTimeout)
-		fetched, err := p.Models(ctx)
-		cancel()
-		s.send(func(st *state) {
-			st.models.done(name, fetched, err, o.now())
-			st.broadcastModels()
-		})
+	})
+	switch {
+	case loading:
+		return nil, errors.New("the model list is still loading. Try again in a moment")
+	case !known:
+		fetched, err := s.fetchProviderModels(name)
 		if err != nil {
 			return nil, err
 		}

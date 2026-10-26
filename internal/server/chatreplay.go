@@ -1,6 +1,8 @@
 package server
 
 import (
+	"strings"
+
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
@@ -9,13 +11,11 @@ import (
 
 // replaySnapshot builds the snapshot of chat pane id for a resumed
 // conversation: the records play again as the events a live turn made, so
-// the transcript is the one the user saw, and the pane is idle.
-func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversation) api.ChatSnapshot {
-	model, effort, mode := agent.StateOf(loaded)
-	snap := api.ChatSnapshot{
-		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
-		Model: model, Effort: effort, Mode: string(mode), State: api.ChatStateIdle,
-	}
+// the transcript is the one the user saw, and the pane is idle. The model,
+// effort, and mode are the ones the conversation starts with, which may
+// differ from the file's last (see resumeChat).
+func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
+	snap := newSnapshot(id, conv, model, effort, mode)
 	cur := loaded.Meta.Model
 	turn, running := 0, false
 	play := func(b agent.Body) {
@@ -23,16 +23,16 @@ func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversa
 			snap.Apply(e)
 		}
 	}
-	end := func(r agent.EndReason) {
+	end := func(r agent.EndReason, f *agent.Failure) {
 		if running {
-			play(&agent.TurnEnded{Turn: turn, Reason: r})
+			play(&agent.TurnEnded{Turn: turn, Reason: r, Failure: f})
 			running = false
 		}
 	}
 	for _, rec := range loaded.Records {
 		switch r := rec.(type) {
 		case *convstore.User:
-			end(agent.EndInterrupted)
+			end(agent.EndInterrupted, nil)
 			turn++
 			running = true
 			play(&agent.TurnStarted{Turn: turn, Text: r.Text})
@@ -40,20 +40,24 @@ func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversa
 			replayReply(play, r, cur)
 			switch {
 			case r.CutOff:
-				end(agent.EndInterrupted)
+				end(agent.EndInterrupted, nil)
 			case r.Stop != convstore.StopToolUse:
-				end(agent.EndDone)
+				end(agent.EndDone, nil)
 			}
 		case *convstore.ToolResult:
 			play(&agent.ToolResult{ID: r.ToolUseID, Content: r.Content, IsError: r.IsError})
 		case *convstore.Interruption:
-			end(agent.EndInterrupted)
+			if r.Failed {
+				end(agent.EndFailed, &agent.Failure{Kind: agent.FailOther, Message: strings.TrimPrefix(r.Reason, "failed: ")})
+			} else {
+				end(agent.EndInterrupted, nil)
+			}
 		case *convstore.ModelSwitch:
 			cur = r.Model
 			play(&agent.ModelChanged{Model: r.Model, Effort: r.Effort})
 		}
 	}
-	end(agent.EndInterrupted)
+	end(agent.EndInterrupted, nil)
 	snap.Title = loaded.Title()
 	return snap
 }

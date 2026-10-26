@@ -73,6 +73,7 @@ type Conversation struct {
 	effort  provider.Effort
 	grants  map[string]bool // tools the user said yes to for this conversation
 	unsaved string          // the user's message whose save failed; a retry sends it
+	turns   int             // turns saved before this run; the loop numbers new ones after them
 
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }
@@ -108,30 +109,33 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
 	}
-	c, err := ResumeLoaded(cfg, loaded)
-	if err != nil {
-		return nil, nil, err
-	}
-	return c, loaded, nil
+	return ResumeLoaded(cfg, loaded)
 }
 
 // ResumeLoaded is Resume for a conversation the caller loaded already, for
 // a caller that needs the file's folder before it builds cfg. cfg.Folder
-// must be the folder saved in the file.
-func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, error) {
+// must be the folder saved in the file. The writer is claimed first and the
+// file is read again, because the writer of an earlier pane may have saved
+// more records since the caller's read. The returned conversation is that
+// second read, which is the one to show.
+func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, *convstore.Conversation, error) {
 	id := loaded.Meta.ID
 	if loaded.Meta.Folder != cfg.Folder.Path {
-		return nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
+		return nil, nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
 	}
 	w, err := cfg.Store.Writer(id)
 	if err != nil {
-		return nil, fmt.Errorf("resume conversation: %w", err)
+		return nil, nil, fmt.Errorf("resume conversation: %w", err)
+	}
+	loaded, err = cfg.Store.Load(id)
+	if err != nil {
+		return nil, nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
 	}
 	if loaded.MidTurn {
 		// The turn that was running when Snow stopped is over; record it, so
 		// the next load does not see it open.
 		if err := w.Append(&convstore.Interruption{At: now(cfg), Reason: "Snow stopped"}); err != nil {
-			return nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
+			return nil, nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
 		}
 	}
 	c := newConversation(cfg, w)
@@ -139,8 +143,13 @@ func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, er
 	c.model, c.effort = model, provider.Effort(effort)
 	c.mode.Store(mode)
 	c.history = history(loaded.Records)
+	for _, r := range loaded.Records {
+		if _, ok := r.(*convstore.User); ok {
+			c.turns++
+		}
+	}
 	go c.loop()
-	return c, nil
+	return c, loaded, nil
 }
 
 // StateOf returns the model ("provider/model"), the effort, and the
@@ -222,9 +231,9 @@ const MaxTitle = 120
 // Rename gives the conversation a title. Control characters, tabs, and
 // line breaks in title become spaces, and runs of spaces become one. A
 // blank title, or one longer than MaxTitle characters, gives an error
-// wrapping ErrInvalid. The title is saved as a record at the end of the conversation file, which is
-// never rewritten, and a TitleChanged event reports it, or why it could
-// not be saved.
+// wrapping ErrInvalid. The title is saved as a record at the end of the
+// conversation file, which is never rewritten, and a TitleChanged event
+// reports it, or why it could not be saved.
 func (c *Conversation) Rename(title string) error {
 	t := convstore.OneLine(title)
 	switch n := utf8.RuneCountInString(t); {
@@ -257,6 +266,19 @@ func (c *Conversation) Pending() *ApprovalRequest {
 	res := make(chan *ApprovalRequest, 1)
 	if c.post(pendingCmd{res}) != nil {
 		return nil
+	}
+	return <-res
+}
+
+// Idle reports whether nothing is running, waiting, or being saved. The
+// loop answers in order, so a message sent before the call counts: a caller
+// that must not cut a turn short, such as one that replaces the
+// conversation, asks here and not in a copy of the state. A closed
+// conversation is not idle.
+func (c *Conversation) Idle() bool {
+	res := make(chan bool, 1)
+	if c.post(idleCmd{res}) != nil {
+		return false
 	}
 	return <-res
 }

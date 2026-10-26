@@ -116,7 +116,7 @@ func (c *Conversation) stop(ctx context.Context, n int, err error) {
 		f = failure(err)
 		reason, end = "failed: "+f.Message, EndFailed
 	}
-	if err := c.w.Append(&convstore.Interruption{At: c.now(), Reason: reason}); err != nil {
+	if err := c.w.Append(&convstore.Interruption{At: c.now(), Reason: reason, Failed: end == EndFailed}); err != nil {
 		c.end(n, EndFailed, saveFailure(err))
 		return
 	}

@@ -33,6 +33,9 @@ type ConversationList struct {
 	Pane  int                `json:"pane"`
 	All   bool               `json:"all,omitempty"`
 	Items []ConversationInfo `json:"items"`
+	// Truncated counts the older conversations left out so the list fits a
+	// frame. The newest are always kept.
+	Truncated int `json:"truncated,omitempty"`
 }
 
 // ConversationInfo describes one past conversation.

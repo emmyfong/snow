@@ -23,6 +23,7 @@ type (
 		res chan<- error
 	}
 	pendingCmd   struct{ res chan<- *ApprovalRequest }
+	idleCmd      struct{ res chan<- bool }
 	retryCmd     struct{ res chan<- error }
 	interruptCmd struct{}
 	closeCmd     struct{}
@@ -58,7 +59,7 @@ type loopState struct {
 // goroutine, one at a time, in order, and post back when done.
 func (c *Conversation) loop() {
 	defer close(c.done)
-	l := &loopState{ended: make(chan struct{})}
+	l := &loopState{ended: make(chan struct{}), turn: c.turns}
 	for {
 		select {
 		case cmd := <-c.cmds:
@@ -131,6 +132,8 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		} else {
 			cmd.res <- nil
 		}
+	case idleCmd:
+		cmd.res <- l.cancel == nil && len(l.queue) == 0 && !l.holding() && len(l.saves) == 0 && !l.closing
 	case retryCmd:
 		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 {
 			cmd.res <- ErrBusy

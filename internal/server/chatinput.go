@@ -61,15 +61,36 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 			s.saveDefault(c, in, oldModel, oldEffort)
 		}
 	case api.ChatInputEffort:
-		err = s.setEffort(c, in.Pane, conv, snapModel, in.Effort)
+		// The check can wait for a provider's model list. It runs apart from
+		// the reader goroutine, so this client's Esc is not held up behind it.
+		go func() { s.finishInput(c, in, conv, s.setEffort(c, in.Pane, conv, snapModel, in.Effort)) }()
+		return
 	case api.ChatInputRename:
 		err = conv.Rename(in.Text)
 	case api.ChatInputMode:
 		err = conv.SetMode(agent.Mode(in.Mode))
 	}
-	// A pane closed meanwhile has nothing to report to.
-	if err != nil && !errors.Is(err, agent.ErrClosed) {
+	s.finishInput(c, in, conv, err)
+}
+
+// finishInput tells c why an input failed. A conversation that closed
+// because its pane closed has nothing to report to; one that closed because
+// the pane now shows another conversation lost the user's input, and c is
+// told so.
+func (s *Server) finishInput(c *client, in *api.ChatInput, conv *agent.Conversation, err error) {
+	switch {
+	case err == nil:
+	case !errors.Is(err, agent.ErrClosed):
 		s.refuse(c, api.CodeCommandFailed, err)
+	default:
+		replaced := false
+		s.call(func(st *state) {
+			p := st.paneOf(c, in.Pane)
+			replaced = p != nil && p.chat != nil && p.chat.conv != conv
+		})
+		if replaced {
+			s.refuse(c, api.CodeCommandFailed, errors.New("this pane now shows another conversation. Send again"))
+		}
 	}
 }
 

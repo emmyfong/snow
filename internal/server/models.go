@@ -140,8 +140,14 @@ func (st *state) refreshModels(force bool) []string {
 
 // fetchModels asks one provider for its models, off the model goroutine,
 // and reports the result back to it.
-func (st *state) fetchModels(name string) {
-	o := st.srv.opts.Chat
+func (st *state) fetchModels(name string) { _, _ = st.srv.fetchProviderModels(name) }
+
+// fetchProviderModels asks provider name for its models, records the answer
+// in the cache, and tells the clients that asked for the list. It waits for
+// the vendor, so it never runs on the model goroutine, nor on a goroutine
+// whose other work must not wait.
+func (s *Server) fetchProviderModels(name string) ([]provider.Model, error) {
+	o := s.opts.Chat
 	var models []provider.Model
 	var err error
 	if p, ok := o.Providers.Get(name); !ok {
@@ -151,10 +157,11 @@ func (st *state) fetchModels(name string) {
 		models, err = p.Models(ctx)
 		cancel()
 	}
-	st.srv.send(func(st *state) {
+	s.send(func(st *state) {
 		st.models.done(name, models, err, o.now())
 		st.broadcastModels()
 	})
+	return models, err
 }
 
 // broadcastModels sends the current list to every client that asked for

@@ -118,11 +118,17 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 		return nil, fmt.Errorf("start chat: %w", err)
 	}
 	p := &pane{id: id, profile: profile, dir: folder.Path, chat: &chatPane{conv: conv, folder: folder.Path, profile: sh.Name}}
-	p.chat.snap = api.ChatSnapshot{
-		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
-		Model: model, Effort: effort, Mode: string(conv.Mode()), State: api.ChatStateIdle,
-	}
+	p.chat.snap = newSnapshot(id, conv, model, effort, conv.Mode())
 	return p, nil
+}
+
+// newSnapshot is the snapshot of chat pane id showing conv, with no
+// transcript and no turn running.
+func newSnapshot(id int, conv *agent.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
+	return api.ChatSnapshot{
+		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
+		Model: model, Effort: effort, Mode: string(mode), State: api.ChatStateIdle,
+	}
 }
 
 // chatFolder returns the folder a chat opened from a pane running profile

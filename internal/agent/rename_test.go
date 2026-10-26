@@ -82,7 +82,7 @@ func TestStateOfLoaded(t *testing.T) {
 	if model, effort, mode := StateOf(loaded); model != "fake/model-2" || effort != "high" || mode != ModeAuto {
 		t.Fatalf("StateOf = %q, %q, %q", model, effort, mode)
 	}
-	c, err := ResumeLoaded(h.config(t), loaded)
+	c, _, err := ResumeLoaded(h.config(t), loaded)
 	if err != nil {
 		t.Fatal(err)
 	}
