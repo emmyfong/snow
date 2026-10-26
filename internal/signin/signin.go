@@ -27,11 +27,8 @@ type Provider struct {
 	Name   string // the provider's part of a model name, for example "anthropic"
 	Title  string // the name to show, for example "Anthropic (Claude)"
 	KeyURL string // the vendor's page where the user creates a key
-	// DefaultModel is the model a new chat uses, as "provider/model", when
-	// the user chose none.
-	DefaultModel string
-	check        func(ctx context.Context, key string) error
-	open         func(keys provider.KeySource) provider.Provider
+	check  func(ctx context.Context, key string) error
+	open   func(keys provider.KeySource) provider.Provider
 }
 
 // ErrUnknownProvider means no provider has the name given.
@@ -54,7 +51,6 @@ func ProvidersAt(urls BaseURLs) []Provider {
 	return []Provider{
 		{
 			Name: anthropic.Name, Title: "Anthropic (Claude)", KeyURL: "https://platform.claude.com/settings/keys",
-			DefaultModel: anthropic.Name + "/claude-sonnet-5-5",
 			check: func(ctx context.Context, key string) error {
 				return anthropic.New(fixedKey(key), anthropicOpts(urls)...).CheckKey(ctx)
 			},
@@ -62,7 +58,6 @@ func ProvidersAt(urls BaseURLs) []Provider {
 		},
 		{
 			Name: openai.Name, Title: "OpenAI", KeyURL: "https://platform.openai.com/api-keys",
-			DefaultModel: openai.Name + "/gpt-6.1-sol",
 			check: func(ctx context.Context, key string) error {
 				return openai.New(fixedKey(key), openaiOpts(urls)...).CheckKey(ctx)
 			},
@@ -95,21 +90,6 @@ func Registry(ps []Provider, keys provider.KeySource) (*provider.Registry, error
 		}
 	}
 	return reg, nil
-}
-
-// DefaultModel returns the default model of the first provider in ps with
-// a key in s, or of the first provider when none has one: its first turn
-// then asks the user to connect it.
-func DefaultModel(ps []Provider, s Store) string {
-	for _, st := range Statuses(ps, s) {
-		if st.Connected() {
-			return st.Provider.DefaultModel
-		}
-	}
-	if len(ps) == 0 {
-		return ""
-	}
-	return ps[0].DefaultModel
 }
 
 // Find returns the provider in ps called name.

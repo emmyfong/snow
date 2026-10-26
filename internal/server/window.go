@@ -63,7 +63,7 @@ func (sess *session) findPane(id int) (*window, *pane) {
 // or a chat in dir opened from a pane running profile.
 func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane, error) {
 	if kind == api.PaneChat {
-		return st.srv.startChat(id, profile, dir)
+		return st.srv.startChat(id, profile, dir, st.defaultModel, st.defaultEffort)
 	}
 	return st.srv.startPane(id, cols, rows, profile, dir, "")
 }

@@ -31,6 +31,9 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.switcher != nil {
 		return m.switcherMouse(msg)
 	}
+	if m.modelPick != nil {
+		return m.modelMouse(msg)
+	}
 	if m.prompt != nil {
 		return m.promptMouse(msg)
 	}
@@ -100,7 +103,8 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		if o := m.own[p.ID]; o != nil {
 			switch ev.Button {
 			case tea.MouseLeft:
-				return m.ownResult(o.Click(h.X, h.Y))
+				msg, note := o.Click(h.X, h.Y)
+				return m.ownResult(p.ID, o, msg, note)
 			case tea.MouseRight:
 				m.openMenu(ev.X, ev.Y)
 			}

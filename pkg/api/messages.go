@@ -35,6 +35,8 @@ const (
 	TypeChatSnapshot
 	TypeChatEvent
 	TypeChatInput
+	TypeModelListRequest
+	TypeModelList
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -96,6 +98,10 @@ func newMessage(t MsgType) Message {
 		return &ChatEvent{}
 	case TypeChatInput:
 		return &ChatInput{}
+	case TypeModelListRequest:
+		return &ModelListRequest{}
+	case TypeModelList:
+		return &ModelList{}
 	}
 	return nil
 }

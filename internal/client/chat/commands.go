@@ -24,6 +24,11 @@ type Host interface {
 	SetInput(text string)
 	// Input returns the message being typed.
 	Input() string
+	// Model returns the chat's model as "provider/model", and its effort.
+	Model() (model, effort string)
+	// SwitchModel asks the server to make model the next turn's model. An
+	// empty effort lets the provider choose.
+	SwitchModel(model, effort string)
 }
 
 // RunFunc runs one command in a chat pane. rest is what the user typed
@@ -51,11 +56,15 @@ var chatRuns = map[string]RunFunc{}
 // host is a command's narrow view of one chat pane.
 type host struct{ m *Model }
 
-func (h host) Send(kind, text string) { h.m.sent = h.m.chatInput(kind, text) }
-func (h host) Ask(request string)     { h.m.asked = request }
-func (h host) Notice(text string)     { h.m.note = text }
-func (h host) SetInput(text string)   { h.m.setInput(text) }
-func (h host) Input() string          { return string(h.m.input) }
+func (h host) Send(kind, text string)  { h.m.sent = h.m.chatInput(kind, text) }
+func (h host) Ask(request string)      { h.m.asked = request }
+func (h host) Notice(text string)      { h.m.note = text }
+func (h host) SetInput(text string)    { h.m.setInput(text) }
+func (h host) Input() string           { return string(h.m.input) }
+func (h host) Model() (string, string) { return h.m.snap.Model, h.m.snap.Effort }
+func (h host) SwitchModel(model, effort string) {
+	h.m.sent = h.m.SwitchModelInput(model, effort, false)
+}
 
 // commandQuery returns the text after the slash that filters the list, and
 // whether the input is a command name being typed. A space before the

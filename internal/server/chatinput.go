@@ -19,9 +19,12 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	}
 	var conv *agent.Conversation
 	queued := 0
+	snapModel := ""
+	oldModel, oldEffort := "", ""
 	s.call(func(st *state) {
+		oldModel, oldEffort = st.defaultModel, st.defaultEffort
 		if p := st.paneOf(c, in.Pane); p != nil && p.chat != nil && string(p.chat.conv.Agent()) == in.Agent {
-			conv, queued = p.chat.conv, len(p.chat.snap.Queue)
+			conv, queued, snapModel = p.chat.conv, len(p.chat.snap.Queue), p.chat.snap.Model
 		}
 	})
 	if conv == nil {
@@ -31,6 +34,10 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	var err error
 	switch in.Kind {
 	case api.ChatInputMessage:
+		if snapModel == "" {
+			s.refuse(c, api.CodeCommandFailed, errors.New("no model: choose one before sending"))
+			return
+		}
 		// The queue is read from the snapshot, which can trail the agent
 		// by a message or two; the bound still holds the queue near
 		// MaxChatQueue, well inside a frame.
@@ -45,9 +52,48 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		err = conv.Interrupt()
 	case api.ChatInputRetry:
 		err = conv.Retry()
+	case api.ChatInputModel:
+		err = conv.SwitchModel(in.Model, in.Effort)
+		if err == nil {
+			// The agent's event confirms this a moment later. Setting it
+			// now closes the gap: a message sent right after the switch
+			// must not see the old model, or none.
+			s.call(func(st *state) {
+				if p := st.paneOf(c, in.Pane); p != nil && p.chat != nil {
+					p.chat.snap.Model, p.chat.snap.Effort = in.Model, in.Effort
+				}
+			})
+			if in.SaveDefault {
+				s.saveDefault(c, in, oldModel, oldEffort)
+			}
+		}
 	}
 	// A pane closed meanwhile has nothing to report to.
 	if err != nil && !errors.Is(err, agent.ErrClosed) {
 		s.refuse(c, api.CodeCommandFailed, err)
 	}
+}
+
+// saveDefault makes the chosen model the default for new chats and writes
+// it to the config file. The write runs off the model goroutine; when it
+// fails, the default it replaced comes back and c is told why.
+func (s *Server) saveDefault(c *client, in *api.ChatInput, oldModel, oldEffort string) {
+	o := s.opts.Chat
+	if o == nil || o.SaveDefault == nil {
+		s.refuse(c, api.CodeCommandFailed, errors.New("saving a default is not set up"))
+		return
+	}
+	s.call(func(st *state) {
+		st.defaultModel, st.defaultEffort = in.Model, in.Effort
+	})
+	go func() {
+		if err := o.SaveDefault(in.Model, in.Effort); err != nil {
+			s.send(func(st *state) {
+				if st.defaultModel == in.Model && st.defaultEffort == in.Effort {
+					st.defaultModel, st.defaultEffort = oldModel, oldEffort
+				}
+			})
+			s.refuse(c, api.CodeCommandFailed, fmt.Errorf("save the default model: %w", err))
+		}
+	}()
 }

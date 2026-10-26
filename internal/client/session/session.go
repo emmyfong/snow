@@ -11,6 +11,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/copymode"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/menu"
+	"github.com/emmyfong/snow/internal/client/modelpick"
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
@@ -60,6 +61,10 @@ type Model struct {
 	setClip    func(text string) tea.Cmd // puts text on the system clipboard
 	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
 	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
+	modelPick  *modelpick.Model          // the model picker, when open
+	modelList  api.ModelList             // the server's last model list
+	modelPane  int                       // the pane modelPick chooses a model for
+	modelAsked map[int]bool              // panes the first-run model picker opened for
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
@@ -92,7 +97,7 @@ type clockMsg struct{}
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
 	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
-		panes: map[int]*paneState{}, own: map[int]ownPane{}, setClip: clipboard.Set}
+		panes: map[int]*paneState{}, own: map[int]ownPane{}, modelAsked: map[int]bool{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
 	}
@@ -125,6 +130,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.ModelList:
+		m.setModelList(msg)
 	case *api.SessionList:
 		m.sessions = msg.Sessions
 		if m.switcher != nil {
@@ -285,5 +292,5 @@ func resize(lines []string, rows int) []string {
 
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.switcher != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
+	return m.picker != nil || m.switcher != nil || m.modelPick != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

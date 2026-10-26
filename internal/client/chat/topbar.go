@@ -43,34 +43,25 @@ func (m *Model) barOptions() ui.TopBarOptions {
 		pct := int(math.Round(float64(used) * 100 / float64(u.Window)))
 		o.Gauge, o.GaugeHot = fmt.Sprintf("ctx %d%%", pct), pct >= hotGauge
 	} else {
-		o.Gauge = "ctx " + tokens(used) + " tok"
+		o.Gauge = "ctx " + ui.ShortCount(used) + " tok"
 	}
 	switch {
 	case m.snap.Cost > 0 || u.Priced:
 		o.Cost = dollars(m.snap.Cost) + " est."
 	case u.Window > 0:
-		o.Cost = tokens(used) + " tok"
+		o.Cost = ui.ShortCount(used) + " tok"
 	}
 	return o
 }
 
-// tokens shows a token count briefly: 950, 12.3k, 1.2M.
-func tokens(n int) string {
-	switch {
-	case n < 1000:
-		return fmt.Sprint(n)
-	case n < 1_000_000:
-		return trimZero(fmt.Sprintf("%.1f", float64(n)/1000)) + "k"
-	default:
-		return trimZero(fmt.Sprintf("%.1f", float64(n)/1_000_000)) + "M"
+// modelSpanAt reports whether x is on the top bar's model.
+func modelSpanAt(spans []ui.TopBarSpan, x int) bool {
+	for _, s := range spans {
+		if s.Kind == ui.TopBarModel && x >= s.X && x < s.X+s.W {
+			return true
+		}
 	}
-}
-
-func trimZero(s string) string {
-	if len(s) > 2 && s[len(s)-2:] == ".0" {
-		return s[:len(s)-2]
-	}
-	return s
+	return false
 }
 
 // dollars shows a cost in US dollars to the cent; a cost below a cent

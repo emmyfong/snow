@@ -2,6 +2,7 @@ package anthropic
 
 import (
 	"context"
+	"slices"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
 
@@ -20,6 +21,20 @@ var unknownCaps = caps{adaptive: true}
 
 func (c caps) takes(e provider.Effort) bool { return c.efforts == nil || c.efforts[e] }
 
+// supported lists the effort levels the model takes, in AllEfforts order.
+func (c caps) supported() []provider.Effort {
+	if c.efforts == nil {
+		return slices.Clone(provider.AllEfforts[:])
+	}
+	var out []provider.Effort
+	for _, e := range provider.AllEfforts {
+		if c.efforts[e] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
+
 // Models implements provider.Provider. Retired models are left out. It
 // also records what each model takes, for Stream.
 func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
@@ -35,8 +50,8 @@ func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
 		if m.Lifecycle == sdk.ModelInfoLifecycleRetired {
 			continue
 		}
-		out = append(out, provider.Model{ID: m.ID, DisplayName: m.DisplayName, ContextWindow: int(m.MaxInputTokens)})
 		mc := capsOf(m.Capabilities)
+		out = append(out, provider.Model{ID: m.ID, DisplayName: m.DisplayName, ContextWindow: int(m.MaxInputTokens), Efforts: mc.supported()})
 		found[m.ID] = mc
 		// A request may name the model without its snapshot date.
 		if base := provider.Undated(m.ID); base != m.ID {

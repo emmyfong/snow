@@ -4,6 +4,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/chat"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -59,9 +60,11 @@ const wheelRows = 3
 // message from the server, or a tick. A chat message for a pane no layout
 // has listed yet starts its chat pane; the next Layout sizes it.
 func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
+	var pick tea.Cmd
 	switch msg := msg.(type) {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
+		pick = m.maybePickModel(msg.Pane)
 	case *api.ChatEvent:
 		m.feed(api.PaneChat, msg.Pane, msg)
 	case ownTickMsg:
@@ -72,7 +75,7 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 			}
 		}
 	}
-	return m.ownTick()
+	return tea.Batch(pick, m.ownTick())
 }
 
 func (m *Model) feed(kind string, id int, msg api.Message) {
@@ -130,6 +133,7 @@ func (m *Model) syncPanes() {
 	for id := range m.own {
 		if !listed[id] {
 			delete(m.own, id)
+			delete(m.modelAsked, id)
 		}
 	}
 }
@@ -146,12 +150,36 @@ func (m *Model) focusedOwn() ownPane {
 // ownKey gives k to the focused pane, which the client must draw, sends
 // what it returns, and shows its note.
 func (m *Model) ownKey(k tea.Key) tea.Cmd {
-	return m.ownResult(m.focusedOwn().Key(k))
+	p := m.focused()
+	if p == nil {
+		return nil
+	}
+	o := m.own[p.ID]
+	if o == nil {
+		return nil
+	}
+	msg, note := o.Key(k)
+	return m.ownResult(p.ID, o, msg, note)
 }
 
-func (m *Model) ownResult(msg api.Message, note string) tea.Cmd {
+// asker is an own pane that may ask the session to open an overlay, such as
+// the model picker.
+type asker interface{ Asked() string }
+
+// ownResult sends what pane id returned, opens the overlay it asked for, and
+// shows its note.
+func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.Cmd {
 	if msg != nil {
 		m.send(msg)
+	}
+	if a, ok := p.(asker); ok {
+		switch a.Asked() {
+		case chat.AskPickModel:
+			return m.openModelPicker(id)
+		case chat.AskLogin:
+			// TODO(#114): open the login picker.
+			note = "Run snow auth in a terminal to save a key, then retry."
+		}
 	}
 	if note != "" {
 		return m.ShowError(note)

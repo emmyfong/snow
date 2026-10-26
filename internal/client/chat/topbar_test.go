@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -108,8 +109,8 @@ func TestModelMismatchShowsBoth(t *testing.T) {
 
 func TestTokens(t *testing.T) {
 	for n, want := range map[int]string{0: "0", 950: "950", 1000: "1k", 12_345: "12.3k", 2_000_000: "2M", 1_260_000: "1.3M"} {
-		if got := tokens(n); got != want {
-			t.Errorf("tokens(%d) = %q, want %q", n, got, want)
+		if got := ui.ShortCount(n); got != want {
+			t.Errorf("ShortCount(%d) = %q, want %q", n, got, want)
 		}
 	}
 	for c, want := range map[float64]string{0: "$0.00", 0.001: "<$0.01", 0.42: "$0.42", 12.345: "$12.35"} {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -29,9 +30,23 @@ type ChatOptions struct {
 	Store     *convstore.Store
 	Providers *provider.Registry
 	Tools     *tool.Registry
-	// Model returns the model a new chat starts with, as "provider/model",
-	// and its effort.
-	Model  func() (model, effort string)
+	// DefaultModel is the model a new chat starts with, as "provider/model",
+	// and its effort. Empty Model means the client asks the user to choose
+	// before the first message.
+	DefaultModel, DefaultEffort string
+	// ProviderStatuses returns the providers the model picker shows, in
+	// order, with their titles and whether a key is saved. It may read the
+	// OS key store, so callers run it off the state goroutine. Nil lists
+	// the registry's providers as connected.
+	ProviderStatuses func() []api.ProviderModels
+	// SaveDefault saves model and effort as the default for new chats. It
+	// runs off the state goroutine. Nil means a default cannot be saved.
+	SaveDefault func(model, effort string) error
+	// ModelTTL is how long a fetched model list stays fresh. Zero means
+	// DefaultModelTTL.
+	ModelTTL time.Duration
+	// Now returns the current time. Nil means time.Now.
+	Now    func() time.Time
 	System string // the system prompt
 	// HideEnv names the variables the run tool's commands do not get: the
 	// ones that hold provider keys.
@@ -39,6 +54,38 @@ type ChatOptions struct {
 	// Shell, when set, is the profile every chat's run tool uses. Unset,
 	// a chat uses the profile of the pane it opened from.
 	Shell *shell.Profile
+}
+
+// providerStatuses is the provider list the model picker shows.
+func (o *ChatOptions) providerStatuses() []api.ProviderModels {
+	if o.ProviderStatuses != nil {
+		return o.ProviderStatuses()
+	}
+	if o.Providers == nil {
+		return nil
+	}
+	names := o.Providers.Names()
+	out := make([]api.ProviderModels, len(names))
+	for i, name := range names {
+		out[i] = api.ProviderModels{Name: name, Title: name, Connected: true}
+	}
+	return out
+}
+
+// modelTTL is how long a fetched model list stays fresh.
+func (o *ChatOptions) modelTTL() time.Duration {
+	if o.ModelTTL > 0 {
+		return o.ModelTTL
+	}
+	return DefaultModelTTL
+}
+
+// now is the current time.
+func (o *ChatOptions) now() time.Time {
+	if o.Now != nil {
+		return o.Now()
+	}
+	return time.Now()
 }
 
 // chatPane is the conversation a chat pane shows. The model goroutine owns
@@ -49,9 +96,9 @@ type chatPane struct {
 }
 
 // startChat starts a conversation in dir for a new chat pane id, opened
-// from a pane running profile. The conversation reports to the model
-// goroutine in order.
-func (s *Server) startChat(id int, profile, dir string) (*pane, error) {
+// from a pane running profile, with model and effort for its next turn.
+// The conversation reports to the model goroutine in order.
+func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, error) {
 	o := s.opts.Chat
 	if o == nil {
 		return nil, ErrNoChat
@@ -65,10 +112,6 @@ func (s *Server) startChat(id int, profile, dir string) (*pane, error) {
 		sh = *o.Shell
 	} else if s.launch.shell != nil {
 		sh, _ = s.launch.shell(profile)
-	}
-	model, effort := "", ""
-	if o.Model != nil {
-		model, effort = o.Model()
 	}
 	cfg := agent.Config{
 		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: folder, Shell: sh,

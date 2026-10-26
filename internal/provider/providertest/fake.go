@@ -37,6 +37,7 @@ type Fake struct {
 	mu       sync.Mutex
 	replies  []Reply
 	requests []provider.Request
+	modelN   int
 }
 
 // New returns a Fake called name that plays replies, one per Stream call.
@@ -68,7 +69,15 @@ func (f *Fake) Models(ctx context.Context) ([]provider.Model, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.modelN++
 	return append([]provider.Model(nil), f.models...), f.modelsErr
+}
+
+// ModelCalls returns how many times Models was called.
+func (f *Fake) ModelCalls() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.modelN
 }
 
 // Stream implements provider.Provider.

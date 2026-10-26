@@ -19,6 +19,9 @@ const (
 	Open      Result = iota // the picker stays open
 	Accepted                // Choice holds the profile
 	Cancelled               // the user closed the picker
+	// Saved is Accepted, and the choice also becomes the default. A
+	// picker without defaults never returns it.
+	Saved
 )
 
 // Model is one open picker.
@@ -54,11 +57,20 @@ func (m *Model) Key(k tea.Key) Result {
 		return Accepted
 	case n == 0:
 	case k.Code == tea.KeyUp || k.Text == "k":
-		m.selected = (m.selected - 1 + n) % n
+		m.selected = Move(m.selected, -1, n)
 	case k.Code == tea.KeyDown || k.Text == "j":
-		m.selected = (m.selected + 1) % n
+		m.selected = Move(m.selected, 1, n)
 	}
 	return Open
+}
+
+// Move returns i moved by delta in a list of n items, wrapping at either
+// end. It returns 0 for an empty list.
+func Move(i, delta, n int) int {
+	if n <= 0 {
+		return 0
+	}
+	return ((i+delta)%n + n) % n
 }
 
 // Choice returns the selected profile.

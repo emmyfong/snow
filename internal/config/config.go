@@ -29,8 +29,8 @@ type Config struct {
 // Chat sets how chat panes start.
 type Chat struct {
 	// Model is the model a new chat starts with, as "provider/model", for
-	// example "anthropic/claude-sonnet-5-5". Empty means the default model
-	// of the first provider with a saved key.
+	// example "anthropic/claude-sonnet-5-5". Empty means the client asks
+	// the user to choose before the first message.
 	Model string `toml:"model"`
 	// Effort is the reasoning effort for Model, for example "high". Empty
 	// lets the provider choose.

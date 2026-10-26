@@ -1,6 +1,7 @@
 package openai
 
 import (
+	"slices"
 	"strings"
 
 	"github.com/emmyfong/snow/internal/provider"
@@ -14,6 +15,23 @@ type caps struct {
 }
 
 func (c caps) takes(e provider.Effort) bool { return c.efforts == nil || c.efforts[e] }
+
+// supported lists the effort levels the model takes, in AllEfforts order.
+func (c caps) supported() []provider.Effort {
+	if !c.reasoning {
+		return nil
+	}
+	if c.efforts == nil {
+		return slices.Clone(provider.AllEfforts[:])
+	}
+	var out []provider.Effort
+	for _, e := range provider.AllEfforts {
+		if c.efforts[e] {
+			out = append(out, e)
+		}
+	}
+	return out
+}
 
 var (
 	toXHigh = efforts(provider.EffortLow, provider.EffortMedium, provider.EffortHigh, provider.EffortXHigh)

@@ -16,7 +16,8 @@ func TestModels(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []provider.Model{
-		{ID: "claude-opus-5-5", DisplayName: "claude-opus-5-5", ContextWindow: 1000000},
+		{ID: "claude-opus-5-5", DisplayName: "claude-opus-5-5", ContextWindow: 1000000,
+			Efforts: []provider.Effort{provider.EffortLow, provider.EffortMedium, provider.EffortHigh, provider.EffortMax}},
 		{ID: "claude-haiku-4-5-20251001", DisplayName: "claude-haiku-4-5-20251001", ContextWindow: 1000000},
 	}
 	if !reflect.DeepEqual(got, want) {

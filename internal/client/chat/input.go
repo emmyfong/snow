@@ -129,6 +129,9 @@ func (m *Model) submit() *api.ChatInput {
 	switch {
 	case strings.TrimSpace(text) == "":
 		return nil
+	case m.snap.Model == "":
+		m.note = "Choose a model first. Type /model, or /model provider/model."
+		return nil
 	case len(text) > api.MaxChatMessage:
 		m.note = fmt.Sprintf("Message too long: at most %d KiB. Shorten it, or save it to a file and name the file.", api.MaxChatMessage>>10)
 		return nil

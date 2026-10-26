@@ -25,7 +25,10 @@ type client struct {
 	// chatLive holds the chat panes c is in step with: it got their
 	// snapshot and every event since. Others get a snapshot next.
 	chatLive map[int]bool
-	dropped  bool
+	// wantsModels says c asked for the model list and hears when a fetch
+	// finishes.
+	wantsModels bool
+	dropped     bool
 }
 
 // serveConn handles one connection until it closes.
@@ -108,6 +111,8 @@ func (s *Server) read(c *client) {
 			s.search(c, m)
 		case *api.ChatInput:
 			s.chatInput(c, m)
+		case *api.ModelListRequest:
+			s.modelList(c, m)
 		case *api.Detach:
 			s.call(func(st *state) { st.detach(c) })
 		case *api.KillSession:

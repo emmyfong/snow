@@ -45,12 +45,12 @@ func TestViewUsesTwoColumnsWhenShort(t *testing.T) {
 	tab := keys.Default()
 	es := tab.Entries()
 	tall := rows(View(theme.Default(), Options{Prefix: "Ctrl+b", Entries: es, MaxWidth: 100, MaxHeight: 40}))
-	short := rows(View(theme.Default(), Options{Prefix: "Ctrl+b", Entries: es, MaxWidth: 100, MaxHeight: 12}))
+	short := rows(View(theme.Default(), Options{Prefix: "Ctrl+b", Entries: es, MaxWidth: 100, MaxHeight: 13}))
 	if len(tall) != len(es)+2 {
 		t.Errorf("tall popup has %d rows, want one per entry plus the frame (%d)", len(tall), len(es)+2)
 	}
-	if len(short) > 12 || len(short) >= len(tall) {
-		t.Errorf("short popup has %d rows, want fewer than %d and at most 12", len(short), len(tall))
+	if len(short) > 13 || len(short) >= len(tall) {
+		t.Errorf("short popup has %d rows, want fewer than %d and at most 13", len(short), len(tall))
 	}
 	text := strings.Join(short, "\n")
 	for _, e := range es {

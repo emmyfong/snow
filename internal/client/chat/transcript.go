@@ -149,7 +149,12 @@ func (m *Model) visible() (start, n int) {
 // lands in the transcript. It returns what to send, or nil.
 func (m *Model) Click(x, y int) *api.ChatInput {
 	if y < m.barRows() {
-		// TODO(#113): a click on the model or the mode opens their picker.
+		if y == 0 && m.hasBar() {
+			if _, spans := ui.TopBarRow(m.th, m.barOptions()); modelSpanAt(spans, x) {
+				m.asked = AskPickModel
+			}
+		}
+		// TODO(#115): a click on the mode opens its picker.
 		return nil
 	}
 	if m.cmdOpen {

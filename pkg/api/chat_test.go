@@ -78,6 +78,12 @@ func TestChatInputValidate(t *testing.T) {
 		{"answer", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: ChatDecisionAlways}, true},
 		{"interrupt", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputInterrupt}, true},
 		{"retry", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRetry}, true},
+		{"model", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "anthropic/claude-opus-5-5", Effort: "high"}, true},
+		{"model without effort", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol"}, true},
+		{"model saved as default", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol", SaveDefault: true}, true},
+		{"model without a provider", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "opus"}, false},
+		{"unknown effort", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol", Effort: "turbo"}, false},
+		{"default on a message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: "hi", SaveDefault: true}, false},
 		{"no pane", ChatInput{Agent: "a", Kind: ChatInputInterrupt}, false},
 		{"no agent", ChatInput{Pane: 1, Kind: ChatInputInterrupt}, false},
 		{"unknown kind", ChatInput{Pane: 1, Agent: "a", Kind: "dance"}, false},
@@ -143,7 +149,7 @@ func TestChatMessageNumbers(t *testing.T) {
 	for _, tt := range []struct {
 		got  MsgType
 		want MsgType
-	}{{TypeChatSnapshot, 22}, {TypeChatEvent, 23}, {TypeChatInput, 24}} {
+	}{{TypeChatSnapshot, 22}, {TypeChatEvent, 23}, {TypeChatInput, 24}, {TypeModelListRequest, 25}, {TypeModelList, 26}} {
 		if tt.got != tt.want {
 			t.Errorf("type is %d, want %d", tt.got, tt.want)
 		}

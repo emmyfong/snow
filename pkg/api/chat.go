@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 )
 
 // Pane kinds, in PaneInfo.Kind.
@@ -231,6 +232,13 @@ type ChatInput struct {
 	Text     string `json:"text,omitempty"`
 	ID       string `json:"id,omitempty"`       // for ChatInputAnswer: the approval request's ID
 	Decision string `json:"decision,omitempty"` // for ChatInputAnswer: one of the Decision* values
+	// Model is the "provider/model" for ChatInputModel. Effort is the
+	// reasoning effort; empty lets the provider choose.
+	Model  string `json:"model,omitempty"`
+	Effort string `json:"effort,omitempty"`
+	// SaveDefault also saves the model and effort as the default for new
+	// chats.
+	SaveDefault bool `json:"saveDefault,omitempty"`
 }
 
 // Kinds of ChatInput.
@@ -239,6 +247,7 @@ const (
 	ChatInputAnswer    = "answer"    // answer approval request ID
 	ChatInputInterrupt = "interrupt" // stop the running turn
 	ChatInputRetry     = "retry"     // run the last turn again after a failure
+	ChatInputModel     = "model"     // make the next turn use Model with Effort
 )
 
 // Answers to an approval request.
@@ -278,9 +287,19 @@ func (in *ChatInput) Validate() error {
 		default:
 			return fmt.Errorf("%w: unknown decision %q", ErrInvalidChatInput, in.Decision)
 		}
+	case ChatInputModel:
+		if _, _, ok := ParseModelName(in.Model); !ok {
+			return fmt.Errorf("%w: model %q is not provider/model", ErrInvalidChatInput, in.Model)
+		}
+		if in.Effort != "" && !slices.Contains(EffortLevels[:], in.Effort) {
+			return fmt.Errorf("%w: unknown effort %q", ErrInvalidChatInput, in.Effort)
+		}
 	case ChatInputInterrupt, ChatInputRetry:
 	default:
 		return fmt.Errorf("%w: unknown kind %q", ErrInvalidChatInput, in.Kind)
+	}
+	if in.SaveDefault && in.Kind != ChatInputModel {
+		return fmt.Errorf("%w: only a model can be saved as the default", ErrInvalidChatInput)
 	}
 	return nil
 }

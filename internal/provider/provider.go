@@ -45,6 +45,9 @@ type Model struct {
 	ID            string // the vendor's ID, for example "claude-opus-5-5"
 	DisplayName   string
 	ContextWindow int // in tokens; 0 when the vendor does not say
+	// Efforts lists the effort levels the model takes, in AllEfforts order.
+	// Nil means it takes none.
+	Efforts []Effort
 }
 
 // Effort is how hard the model thinks before it answers. Not every model
@@ -60,6 +63,9 @@ const (
 	EffortXHigh  Effort = "xhigh"
 	EffortMax    Effort = "max"
 )
+
+// AllEfforts lists every effort level, from the least to the most thinking.
+var AllEfforts = [...]Effort{EffortLow, EffortMedium, EffortHigh, EffortXHigh, EffortMax}
 
 // Request is one turn sent to a model.
 type Request struct {
