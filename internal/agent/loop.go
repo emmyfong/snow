@@ -13,6 +13,7 @@ type (
 	sendCmd   struct{ text string }
 	switchCmd struct{ sw *convstore.ModelSwitch }
 	modeCmd   struct{ mode Mode }
+	renameCmd struct{ title string }
 	waitCmd   struct {
 		req   *ApprovalRequest
 		reply chan<- Answer
@@ -104,6 +105,15 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 			}
 			c.mode.Store(m)
 			c.emit(&ModeChanged{Mode: m})
+		}})
+	case renameCmd:
+		t := cmd.title
+		c.queueSave(l, save{rec: &convstore.Rename{At: c.now(), Title: t}, done: func(err error) {
+			if err != nil {
+				c.emit(&TitleChanged{Failure: saveFailure(err)})
+				return
+			}
+			c.emit(&TitleChanged{Title: t})
 		}})
 	case waitCmd:
 		l.waiting = &cmd

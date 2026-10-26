@@ -158,6 +158,13 @@ type ModeChanged struct {
 	Failure *Failure
 }
 
+// TitleChanged gives the conversation's title now in force. Failure is set
+// when a rename could not be saved; the title stays as it was.
+type TitleChanged struct {
+	Title   string
+	Failure *Failure
+}
+
 func (*TurnStarted) body()     {}
 func (*TurnEnded) body()       {}
 func (*TextDelta) body()       {}
@@ -172,3 +179,4 @@ func (*StateChanged) body()    {}
 func (*QueueChanged) body()    {}
 func (*ModelChanged) body()    {}
 func (*ModeChanged) body()     {}
+func (*TitleChanged) body()    {}

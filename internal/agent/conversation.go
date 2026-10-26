@@ -7,8 +7,11 @@ package agent
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
@@ -191,6 +194,31 @@ func (c *Conversation) SetMode(m Mode) error {
 		return fmt.Errorf("set mode %q: %w", m, ErrInvalid)
 	}
 	return c.post(modeCmd{m})
+}
+
+// MaxTitle is the longest title Rename takes, in characters.
+const MaxTitle = 120
+
+// Rename gives the conversation a title. Control characters, tabs, and
+// line breaks in title become spaces, and runs of spaces become one. A blank title, or one
+// longer than MaxTitle characters, gives an error wrapping ErrInvalid. The
+// title is saved as a record at the end of the conversation file, which is
+// never rewritten, and a TitleChanged event reports it, or why it could
+// not be saved.
+func (c *Conversation) Rename(title string) error {
+	t := strings.Join(strings.Fields(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return ' '
+		}
+		return r
+	}, title)), " ")
+	switch n := utf8.RuneCountInString(t); {
+	case n == 0:
+		return fmt.Errorf("rename: %w: the title is blank", ErrInvalid)
+	case n > MaxTitle:
+		return fmt.Errorf("rename: %w: the title is %d characters; the limit is %d", ErrInvalid, n, MaxTitle)
+	}
+	return c.post(renameCmd{t})
 }
 
 // Answer answers a waiting approval request. An ID that matches no
