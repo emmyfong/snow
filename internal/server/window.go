@@ -164,8 +164,10 @@ func (st *state) closePane(p *pane) {
 	p.closed.Store(true)
 	st.srv.closing.Add(1)
 	log := st.srv.log
+	released := st.srv.releasing(p)
 	go func() {
 		defer st.srv.closing.Done()
+		defer released()
 		if err := p.close(); err != nil {
 			log.Warn("pane close", "pane", p.id, "err", err)
 		}

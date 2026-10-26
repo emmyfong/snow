@@ -103,6 +103,7 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	if err := f.busy(); err != nil {
 		return err
 	}
+	s.awaitRelease(id)
 	loaded, err := s.opts.Chat.Store.Load(id)
 	if err != nil {
 		return fmt.Errorf("resume: %w", err)

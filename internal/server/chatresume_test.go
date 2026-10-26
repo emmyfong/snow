@@ -305,3 +305,32 @@ func TestFinishInputTellsOfAReplacedConversation(t *testing.T) {
 		}
 	}
 }
+
+// TestAwaitRelease: a resume waits for a conversation a closed pane is still
+// saving, returns at once for any other, and gives up after releaseWait.
+func TestAwaitRelease(t *testing.T) {
+	s, _, _ := newChatServer(t)
+	took := func(id string) time.Duration {
+		start := time.Now()
+		s.awaitRelease(id)
+		return time.Since(start)
+	}
+	if d := took("nothing-closes"); d > 50*time.Millisecond {
+		t.Fatalf("waited %v for a conversation nothing is closing", d)
+	}
+
+	gate := make(chan struct{})
+	s.releases.Store("closing", gate)
+	time.AfterFunc(200*time.Millisecond, func() { close(gate) })
+	if d := took("closing"); d < 150*time.Millisecond {
+		t.Fatalf("returned after %v, before the close ended", d)
+	}
+
+	old := releaseWait
+	releaseWait = 100 * time.Millisecond
+	t.Cleanup(func() { releaseWait = old })
+	s.releases.Store("stuck", make(chan struct{}))
+	if d := took("stuck"); d < 80*time.Millisecond || d > 2*time.Second {
+		t.Fatalf("a stuck close made the resume wait %v", d)
+	}
+}
