@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
@@ -72,6 +73,7 @@ type Conversation struct {
 	effort  provider.Effort
 	grants  map[string]bool // tools the user said yes to for this conversation
 	unsaved string          // the user's message whose save failed; a retry sends it
+	turns   int             // turns saved before this run; the loop numbers new ones after them
 
 	mode atomic.Value // Mode; set by the loop, read by the turn
 }
@@ -107,12 +109,27 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
 	}
+	return ResumeLoaded(cfg, loaded)
+}
+
+// ResumeLoaded is Resume for a conversation the caller loaded already, for
+// a caller that needs the file's folder before it builds cfg. cfg.Folder
+// must be the folder saved in the file. The writer is claimed first and the
+// file is read again, because the writer of an earlier pane may have saved
+// more records since the caller's read. The returned conversation is that
+// second read, which is the one to show.
+func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, *convstore.Conversation, error) {
+	id := loaded.Meta.ID
 	if loaded.Meta.Folder != cfg.Folder.Path {
 		return nil, nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)
 	}
 	w, err := cfg.Store.Writer(id)
 	if err != nil {
 		return nil, nil, fmt.Errorf("resume conversation: %w", err)
+	}
+	loaded, err = cfg.Store.Load(id)
+	if err != nil {
+		return nil, nil, errors.Join(fmt.Errorf("resume conversation: %w", err), w.Close())
 	}
 	if loaded.MidTurn {
 		// The turn that was running when Snow stopped is over; record it, so
@@ -122,20 +139,35 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 		}
 	}
 	c := newConversation(cfg, w)
-	c.model, c.effort = loaded.Meta.Model, provider.Effort(loaded.Meta.Effort)
+	model, effort, mode := StateOf(loaded)
+	c.model, c.effort = model, provider.Effort(effort)
+	c.mode.Store(mode)
+	c.history = history(loaded.Records)
+	for _, r := range loaded.Records {
+		if _, ok := r.(*convstore.User); ok {
+			c.turns++
+		}
+	}
+	go c.loop()
+	return c, loaded, nil
+}
+
+// StateOf returns the model ("provider/model"), the effort, and the
+// approval mode a loaded conversation ends in: the last of each saved in
+// the file, else the ones it started with.
+func StateOf(loaded *convstore.Conversation) (model, effort string, mode Mode) {
+	model, effort, mode = loaded.Meta.Model, loaded.Meta.Effort, ModeAsk
 	for _, r := range loaded.Records {
 		switch r := r.(type) {
 		case *convstore.ModelSwitch:
-			c.model, c.effort = r.Model, provider.Effort(r.Effort)
+			model, effort = r.Model, r.Effort
 		case *convstore.Mode:
 			if Mode(r.Mode).valid() {
-				c.mode.Store(Mode(r.Mode))
+				mode = Mode(r.Mode)
 			}
 		}
 	}
-	c.history = history(loaded.Records)
-	go c.loop()
-	return c, loaded, nil
+	return model, effort, mode
 }
 
 func newConversation(cfg Config, w *convstore.Writer) *Conversation {
@@ -193,6 +225,26 @@ func (c *Conversation) SetMode(m Mode) error {
 	return c.post(modeCmd{m})
 }
 
+// MaxTitle is the longest title Rename takes, in characters.
+const MaxTitle = 120
+
+// Rename gives the conversation a title. Control characters, tabs, and
+// line breaks in title become spaces, and runs of spaces become one. A
+// blank title, or one longer than MaxTitle characters, gives an error
+// wrapping ErrInvalid. The title is saved as a record at the end of the
+// conversation file, which is never rewritten, and a TitleChanged event
+// reports it, or why it could not be saved.
+func (c *Conversation) Rename(title string) error {
+	t := convstore.OneLine(title)
+	switch n := utf8.RuneCountInString(t); {
+	case n == 0:
+		return fmt.Errorf("rename: %w: the title is blank", ErrInvalid)
+	case n > MaxTitle:
+		return fmt.Errorf("rename: %w: the title is %d characters; the limit is %d", ErrInvalid, n, MaxTitle)
+	}
+	return c.post(renameCmd{t})
+}
+
 // Answer answers a waiting approval request. An ID that matches no
 // waiting request gives an error wrapping ErrNoApproval.
 func (c *Conversation) Answer(a Answer) error {
@@ -214,6 +266,19 @@ func (c *Conversation) Pending() *ApprovalRequest {
 	res := make(chan *ApprovalRequest, 1)
 	if c.post(pendingCmd{res}) != nil {
 		return nil
+	}
+	return <-res
+}
+
+// Idle reports whether nothing is running, waiting, or being saved. The
+// loop answers in order, so a message sent before the call counts: a caller
+// that must not cut a turn short, such as one that replaces the
+// conversation, asks here and not in a copy of the state. A closed
+// conversation is not idle.
+func (c *Conversation) Idle() bool {
+	res := make(chan bool, 1)
+	if c.post(idleCmd{res}) != nil {
+		return false
 	}
 	return <-res
 }

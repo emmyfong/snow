@@ -6,8 +6,10 @@
 package chat
 
 import (
+	"maps"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -29,12 +31,20 @@ type Model struct {
 	box           approval
 	drawn         rendered
 	usage         bool   // the top bar shows the context gauge and the cost
+	providerReady bool   // at least one provider has a key
 	errAt         int    // the entry of the failure whose choices take keys
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
 	loaded        bool   // the first snapshot came
 	note          string // a note for the status bar; see Note
 	diffs         diffCache
+
+	reg      *command.Registry  // the commands that run in a chat
+	runs     map[string]RunFunc // what each chat command does here
+	sent     *api.ChatInput     // what a command asked to send
+	cmdOpen  bool               // the slash command list shows
+	cmdSel   int                // the highlighted command in the list
+	cmdQuery string             // the filter the selection belongs to
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -43,7 +53,10 @@ func New(snap *api.ChatSnapshot, th theme.Theme, now func() time.Time) *Model {
 	if now == nil {
 		now = time.Now
 	}
-	m := &Model{th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1}
+	m := &Model{
+		th: th, now: now, expanded: map[string]bool{}, usage: true, errAt: -1,
+		reg: command.Default(), runs: maps.Clone(chatRuns),
+	}
 	m.Snapshot(snap)
 	return m
 }
@@ -63,12 +76,28 @@ func (m *Model) SetTheme(th theme.Theme) { m.th = th; m.invalidate() }
 // from the [chat] usage setting. The model always shows.
 func (m *Model) SetUsage(show bool) { m.usage = show }
 
+// SetProviderReady says whether any provider has a saved key. It changes
+// what an empty chat without a model says.
+func (m *Model) SetProviderReady(ready bool) {
+	if m.providerReady == ready {
+		return
+	}
+	m.providerReady = ready
+	m.invalidate()
+}
+
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), max(height, 0) }
 
 // Snapshot replaces the transcript with snap, as the server sends it on
 // attach or after this client fell behind. What the user is typing stays.
 func (m *Model) Snapshot(snap *api.ChatSnapshot) {
+	if m.loaded && snap.Agent != m.snap.Agent {
+		// /new or /resume put another conversation in this pane: nothing of
+		// the old view applies to it.
+		m.scroll, m.selected = 0, ""
+		clear(m.expanded)
+	}
 	m.keepPlace(func() {
 		m.snap = *snap
 		m.loaded = true

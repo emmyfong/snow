@@ -21,6 +21,12 @@ internal/client/
   home/          the home page (one screen)
   session/       the attached view: panes, borders, status bar
   picker/        the profile picker popup
+  listpick/      the list popup (rows, keys, click mapping) that the mode and resume pickers share
+  modepick/      the approval mode picker (`/mode`)
+  resumepick/    the past-conversation picker (`/resume`; `Ctrl+a` toggles every folder)
+  modelpick/     the model and effort picker (`/model`)
+  authpick/      the provider key picker (`/login`)
+  helppanel/     the help panel that home and chat share; each screen passes its commands and keys
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
   sessionlist/   session rows (name, state, last used) for the home page, and the session list popup (Ctrl+b s)
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
@@ -29,7 +35,7 @@ internal/client/
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
-  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the message being typed, scrolling
+  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
 ```
 

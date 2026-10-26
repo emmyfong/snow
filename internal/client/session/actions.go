@@ -52,7 +52,13 @@ func buildHandlers() map[string]handler {
 			m.enterCopy()
 			return nil
 		},
-		"new-chat":      func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
+		"new-chat": func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
+		"model-picker": func(m *Model, _ tea.Key) tea.Cmd {
+			if p := m.focused(); p != nil {
+				return m.openModelPicker(p.ID)
+			}
+			return nil
+		},
 		keys.SendPrefix: func(m *Model, _ tea.Key) tea.Cmd { m.sendKey(m.prefixKey); return nil },
 	}
 	for i := range 10 {

@@ -27,6 +27,10 @@ type state struct {
 	notes       []string               // notes on saved files that could not be read
 	saveProblem string                 // why saving fails, or "" while it works
 	endTimers   map[string]*time.Timer // sessions that ended, waiting to be deleted
+	// defaultModel and defaultEffort go to every new chat. Empty Model
+	// means the client asks the user to choose before the first message.
+	defaultModel, defaultEffort string
+	models                      modelCache // provider model lists for the picker
 }
 
 type session struct {
@@ -38,7 +42,11 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	return &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}}
+	st := &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}, models: newModelCache()}
+	if s.opts.Chat != nil {
+		st.defaultModel, st.defaultEffort = s.opts.Chat.DefaultModel, s.opts.Chat.DefaultEffort
+	}
+	return st
 }
 
 // createSession starts a session with one window and one pane in dir. An

@@ -80,11 +80,13 @@ func (m *Model) draw() {
 	}
 	switch {
 	case len(m.snap.Entries) > 0 || len(m.snap.Queue) > 0:
-	case m.snap.Model == "":
+	case m.snap.Model == "" && !m.providerReady:
 		// No provider has a saved key, so the chat has no model to start with.
 		box := ui.ChoiceBox(m.th, ui.ChoiceOptions{Width: m.width - indent, Title: "Connect a provider", Selected: -1, Alert: true,
-			Body: []string{" No provider has a saved key.", " Run snow auth in a terminal, then open a new chat."}})
+			Body: []string{" No provider has a saved key.", " Type /login to save one."}})
 		add(indented(box), hit{}, false)
+	case m.snap.Model == "":
+		text(ui.EntryNote, "No messages yet. Type /model to choose one.", false)
 	default:
 		text(ui.EntryNote, "No messages yet. Model: "+m.snap.Model, false)
 	}
@@ -149,8 +151,19 @@ func (m *Model) visible() (start, n int) {
 // lands in the transcript. It returns what to send, or nil.
 func (m *Model) Click(x, y int) *api.ChatInput {
 	if y < m.barRows() {
-		// TODO(#113): a click on the model or the mode opens their picker.
+		if y == 0 && m.hasBar() {
+			if _, spans := ui.TopBarRow(m.th, m.barOptions()); modelSpanAt(spans, x) {
+				m.asked = AskPickModel
+			}
+		}
+		// TODO(#115): a click on the mode opens its picker.
 		return nil
+	}
+	if m.cmdOpen {
+		top := m.commandTop()
+		if y >= top && y < top+m.commandHeight() {
+			return m.commandClick(y)
+		}
 	}
 	y -= m.barRows()
 	start, n := m.visible()

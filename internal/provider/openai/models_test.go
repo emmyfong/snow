@@ -32,6 +32,12 @@ func TestModels(t *testing.T) {
 	if w := provider.ContextWindow(provider.ModelName{Provider: Name, Model: got[1].ID}, got[1].ContextWindow); w != 1_050_000 {
 		t.Errorf("context window of %s = %d, want the built-in 1050000", got[1].ID, w)
 	}
+	if want := provider.AllEfforts[:]; !reflect.DeepEqual(got[0].Efforts, want) {
+		t.Errorf("%s efforts = %v, want %v", got[0].ID, got[0].Efforts, want)
+	}
+	if want := provider.AllEfforts[:4]; !reflect.DeepEqual(got[1].Efforts, want) {
+		t.Errorf("%s efforts = %v, want %v", got[1].ID, got[1].Efforts, want)
+	}
 }
 
 func TestCheckKey(t *testing.T) {

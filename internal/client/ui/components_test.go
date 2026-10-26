@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
 
@@ -54,6 +55,30 @@ func TestInput(t *testing.T) {
 	}
 }
 
+// TestMaskedInput: a masked value shows one glyph per character and never
+// the value.
+func TestMaskedInput(t *testing.T) {
+	th := theme.Default()
+	const secret = "sk-secret-value"
+	got := ansi.Strip(Input(th, InputOptions{Value: secret, Prompt: "> ", Width: 30, Focused: true, Mask: true}))
+	if strings.Contains(got, "secret") || strings.Contains(got, "sk-") {
+		t.Fatalf("masked Input = %q, leaks the value", got)
+	}
+	if n := strings.Count(got, th.Glyphs.Mask); n != len(secret) {
+		t.Fatalf("masked Input = %q, shows %d glyphs, want %d", got, n, len(secret))
+	}
+	if ansi.StringWidth(got) != 30 {
+		t.Fatalf("masked Input width = %d, want 30", ansi.StringWidth(got))
+	}
+}
+
+// TestMaskedInputGolden draws a masked field, so a change to the glyph or
+// its style shows.
+func TestMaskedInputGolden(t *testing.T) {
+	got := Input(theme.Default(), InputOptions{Value: "sk-ant-example", Prompt: "$ ", Width: 24, Focused: true, Mask: true})
+	golden.RequireEqual(t, got)
+}
+
 func TestListAlignsColumnsAndMarksSelection(t *testing.T) {
 	th := theme.Default()
 	out := ansi.Strip(List(th, ListOptions{Items: []ListItem{
@@ -69,6 +94,45 @@ func TestListAlignsColumnsAndMarksSelection(t *testing.T) {
 	}
 	if !strings.HasPrefix(rows[1], th.Glyphs.Pointer) || strings.HasPrefix(rows[0], th.Glyphs.Pointer) {
 		t.Fatalf("selection marker wrong:\n%s", out)
+	}
+}
+
+func TestListHeadingsAndRows(t *testing.T) {
+	th := theme.Default()
+	items := []ListItem{
+		{Heading: "Model"},
+		{Cols: []string{"/model"}},
+		{Heading: "Snow"},
+		{Cols: []string{"/help"}},
+	}
+	out, rows := ListRows(th, ListOptions{Items: items, Selected: 3, Width: 20})
+	lines := strings.Split(ansi.Strip(out), "\n")
+	if len(lines) != 4 || !strings.Contains(lines[0], "Model") || !strings.Contains(lines[2], "Snow") {
+		t.Fatalf("ListRows =\n%s", ansi.Strip(out))
+	}
+	if len(rows) != 4 || rows[0] != 0 || rows[1] != 1 || rows[2] != 2 || rows[3] != 3 {
+		t.Fatalf("rows = %v, want one per item", rows)
+	}
+	if strings.HasPrefix(lines[0], th.Glyphs.Pointer) || strings.HasPrefix(lines[2], th.Glyphs.Pointer) {
+		t.Fatalf("a heading is marked as selected:\n%s", ansi.Strip(out))
+	}
+	if !strings.HasPrefix(lines[3], th.Glyphs.Pointer) {
+		t.Fatalf("the selected item is not marked:\n%s", ansi.Strip(out))
+	}
+}
+
+func TestListWindow(t *testing.T) {
+	tests := []struct{ n, selected, height, first, last int }{
+		{5, 0, 0, 0, 5},
+		{8, 6, 3, 4, 7},
+		{8, 0, 3, 0, 3},
+		{3, 2, 8, 0, 3},
+	}
+	for _, tt := range tests {
+		first, last := ListWindow(tt.n, tt.selected, tt.height)
+		if first != tt.first || last != tt.last {
+			t.Errorf("ListWindow(%d, %d, %d) = %d, %d; want %d, %d", tt.n, tt.selected, tt.height, first, last, tt.first, tt.last)
+		}
 	}
 }
 

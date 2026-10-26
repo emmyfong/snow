@@ -159,6 +159,46 @@ func TestTopBarDropsInOrder(t *testing.T) {
 	}
 }
 
+// TestTopBarSpans: every part reports the cells it covers, and the text
+// there is the part's text, cut only when the row is too narrow.
+func TestTopBarSpans(t *testing.T) {
+	th := theme.Default()
+	o := TopBarOptions{Title: "Fix the bug", Gauge: "ctx 31%", Cost: "$0.42 est.", Model: "anthropic/claude-sonnet-5-5 high", Mode: "mode: ask"}
+	want := map[string]string{
+		TopBarTitle: "Fix the bug",
+		TopBarGauge: "ctx 31%",
+		TopBarCost:  "$0.42 est.",
+		TopBarModel: "anthropic/claude-sonnet-5-5 high",
+		TopBarMode:  "mode: ask",
+	}
+	for _, w := range []int{120, 80, 70, 55, 40, 20, 3, 2, 1} {
+		o.Width = w
+		row, spans := TopBarRow(th, o)
+		if got := ansi.StringWidth(row); got != w {
+			t.Fatalf("width %d: row is %d wide", w, got)
+		}
+		text := []rune(ansi.Strip(row))
+		seen := map[string]bool{}
+		for _, s := range spans {
+			if s.X < 0 || s.W <= 0 || s.X+s.W > len(text) {
+				t.Fatalf("width %d: span %+v outside %q", w, s, string(text))
+			}
+			got := string(text[s.X : s.X+s.W])
+			full := want[s.Kind]
+			if !strings.HasPrefix(full, got) && !strings.HasPrefix(got, full) {
+				t.Errorf("width %d: %s covers %q, want %q", w, s.Kind, got, full)
+			}
+			if seen[s.Kind] {
+				t.Errorf("width %d: two %s spans", w, s.Kind)
+			}
+			seen[s.Kind] = true
+		}
+		if w >= 2 && !seen[TopBarModel] {
+			t.Errorf("width %d: no model span", w)
+		}
+	}
+}
+
 // TestTopBarFitsEveryWidth: the bar is exactly Width cells wide at every
 // width, with and without the optional parts.
 func TestTopBarFitsEveryWidth(t *testing.T) {

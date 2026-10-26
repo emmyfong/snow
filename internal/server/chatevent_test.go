@@ -38,6 +38,8 @@ func TestChatEventMapping(t *testing.T) {
 			return e.Usage.Window == 1_000_000 && e.Usage.Cost == 0.5
 		}},
 		{&agent.ModelChanged{Model: "p/m", Effort: "low"}, api.ChatEventModel, func(e *api.ChatEvent) bool { return e.Model == "p/m" && e.Error == nil }},
+		{&agent.TitleChanged{Title: "Fix it"}, api.ChatEventTitle, func(e *api.ChatEvent) bool { return e.Text == "Fix it" && e.Error == nil }},
+		{&agent.TitleChanged{Failure: &agent.Failure{Kind: agent.FailSave}}, api.ChatEventTitle, func(e *api.ChatEvent) bool { return e.Error.Code == api.ChatErrSave }},
 		{&agent.ModeChanged{Mode: agent.ModeAuto, Failure: &agent.Failure{Kind: agent.FailSave}}, api.ChatEventMode, func(e *api.ChatEvent) bool { return e.Error.Code == api.ChatErrSave }},
 	}
 	for _, tt := range tests {

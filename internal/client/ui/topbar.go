@@ -21,14 +21,36 @@ type TopBarOptions struct {
 	Mode     string // for example "mode: ask"
 }
 
+// Kinds of top bar parts, for TopBarSpan.
+const (
+	TopBarTitle = "title"
+	TopBarGauge = "gauge"
+	TopBarCost  = "cost"
+	TopBarModel = "model"
+	TopBarMode  = "mode"
+)
+
+// TopBarSpan is one part of a top bar and the cells it covers.
+type TopBarSpan struct {
+	Kind string
+	X, W int
+}
+
 // TopBar draws a chat's top bar in exactly Width cells: the title in bold
 // on the left, a rule in Border, then the gauge, the cost, the model in
 // the accent color, and the mode. When the row is short it drops the
 // cost, then the gauge, then the mode, then the title; the model stays,
 // cut if it must be.
 func TopBar(th theme.Theme, o TopBarOptions) string {
+	row, _ := TopBarRow(th, o)
+	return row
+}
+
+// TopBarRow draws what TopBar draws and reports the cells of the parts it
+// kept, so a click can tell which one it landed on.
+func TopBarRow(th theme.Theme, o TopBarOptions) (string, []TopBarSpan) {
 	if o.Width <= 0 {
-		return ""
+		return "", nil
 	}
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	gauge := muted
@@ -63,14 +85,30 @@ func TopBar(th theme.Theme, o TopBarOptions) string {
 	if ansi.StringWidth(rhs) > o.Width-3 {
 		// Only the model is left, and it does not fit.
 		cut := " " + ansi.Truncate(rhs, o.Width-1, "")
-		return cut + strings.Repeat(" ", max(o.Width-ansi.StringWidth(cut), 0))
+		var spans []TopBarSpan
+		if w := min(ansi.StringWidth(parts[2].text), o.Width-1); w > 0 {
+			spans = []TopBarSpan{{Kind: TopBarModel, X: 1, W: w}}
+		}
+		return cut + strings.Repeat(" ", max(o.Width-ansi.StringWidth(cut), 0)), spans
 	}
 	left := " "
+	var spans []TopBarSpan
 	if title.text != "" {
+		spans = append(spans, TopBarSpan{Kind: TopBarTitle, X: ansi.StringWidth(left), W: ansi.StringWidth(title.text)})
 		left += title.style.Render(title.text) + " "
 	}
 	fill := o.Width - ansi.StringWidth(left) - ansi.StringWidth(rhs) - 2
-	return left + lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat(th.Glyphs.Horizontal, max(fill, 0))) + " " + rhs + " "
+	row := left + lipgloss.NewStyle().Foreground(th.Border).Render(strings.Repeat(th.Glyphs.Horizontal, max(fill, 0))) + " "
+	x := ansi.StringWidth(left) + max(fill, 0) + 1
+	for i, p := range parts {
+		if p.text == "" {
+			continue
+		}
+		kinds := [...]string{TopBarGauge, TopBarCost, TopBarModel, TopBarMode}
+		spans = append(spans, TopBarSpan{Kind: kinds[i], X: x, W: ansi.StringWidth(p.text)})
+		x += ansi.StringWidth(p.text) + 2
+	}
+	return row + rhs + " ", spans
 }
 
 type barPart struct {

@@ -7,12 +7,15 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/authpick"
 	"github.com/emmyfong/snow/internal/client/clipboard"
 	"github.com/emmyfong/snow/internal/client/copymode"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/menu"
+	"github.com/emmyfong/snow/internal/client/modelpick"
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/resumepick"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -60,16 +63,22 @@ type Model struct {
 	setClip    func(text string) tea.Cmd // puts text on the system clipboard
 	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
 	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
+	modelPick  *modelpick.Model          // the model picker, when open
+	modelList  api.ModelList             // the server's last model list
+	modelPane  int                       // the pane modelPick chooses a model for
+	firstRun   map[int]bool              // panes the first-run flow ran for
+	over       *overlay                  // the mode picker, resume picker, or help, when open
+	resume     *resumepick.Model         // the resume picker, when over is it
+	authPick   *authpick.Model           // the login picker, when open
+	authPane   int                       // the pane authPick serves
+	authList   api.AuthList              // the server's last provider key list
+	authWait   map[int]bool              // panes waiting for the first-run key list
+	authAfter  map[int]bool              // panes to open the model picker for after a login
+	loginPane  int                       // the pane whose login check runs, or 0
+	logoutPane int                       // the pane whose /logout waits for a key list, or 0
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
-}
-
-// paneState is what the screen knows of one pane: its rows and its cursor.
-type paneState struct {
-	lines  []string
-	cursor api.Cursor
-	mouse  bool // the program asked for mouse events
 }
 
 // maxEarly bounds input held before the first Layout. The Layout follows
@@ -92,7 +101,8 @@ type clockMsg struct{}
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
 	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
-		panes: map[int]*paneState{}, own: map[int]ownPane{}, setClip: clipboard.Set}
+		panes: map[int]*paneState{}, own: map[int]ownPane{}, firstRun: map[int]bool{}, authWait: map[int]bool{},
+		authAfter: map[int]bool{}, setClip: clipboard.Set}
 	for _, o := range opts {
 		o(m)
 	}
@@ -125,6 +135,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.ModelList:
+		m.setModelList(msg)
+	case *api.ConversationList:
+		m.setConversationList(msg)
+	case *api.AuthList:
+		return m.setAuthList(msg)
+	case *api.Login:
+		return m.loginDone(msg)
+	case *api.Logout:
+		return m.logoutDone(msg)
 	case *api.SessionList:
 		m.sessions = msg.Sessions
 		if m.switcher != nil {
@@ -137,6 +157,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if cmd, ok := m.authError(msg.Message); ok {
+			return cmd
+		}
 		return m.ShowError(msg.Message)
 	case clearMessageMsg:
 		if msg.at.Equal(m.messageAt) {
@@ -172,6 +195,14 @@ func (m *Model) ShowError(text string) tea.Cmd {
 	m.message, m.messageAt = text, m.now()
 	at := m.messageAt
 	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearMessageMsg{at} })
+}
+
+// showNotice shows text in the status bar for a moment: something that
+// worked, such as a saved key.
+func (m *Model) showNotice(text string) tea.Cmd {
+	m.notice, m.noticeAt = text, m.now()
+	at := m.noticeAt
+	return tea.Tick(messageFor, func(time.Time) tea.Msg { return clearNoticeMsg{at} })
 }
 
 func tick() tea.Cmd {
@@ -253,37 +284,7 @@ func (m *Model) applyLayout(l *api.Layout) {
 	}
 }
 
-func (m *Model) applyUpdate(u *api.PaneUpdate) {
-	st, ok := m.panes[u.Pane]
-	if !ok {
-		return
-	}
-	for _, l := range u.Lines {
-		if l.Row < 0 {
-			continue
-		}
-		if l.Row >= len(st.lines) {
-			st.lines = resize(st.lines, l.Row+1)
-		}
-		st.lines[l.Row] = l.Text
-	}
-	if u.Cursor != nil {
-		st.cursor = *u.Cursor
-	}
-	st.mouse = u.Mouse
-}
-
-func resize(lines []string, rows int) []string {
-	if rows < 0 {
-		rows = 0
-	}
-	if rows <= len(lines) {
-		return lines[:rows]
-	}
-	return append(lines, make([]string, rows-len(lines))...)
-}
-
 // modal reports whether a popup or a question holds the keyboard.
 func (m *Model) modal() bool {
-	return m.picker != nil || m.switcher != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
+	return m.picker != nil || m.switcher != nil || m.modelPick != nil || m.authPick != nil || m.over != nil || m.prompt != nil || m.confirm != nil || m.rename != nil || m.menu != nil || m.copy != nil
 }

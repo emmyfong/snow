@@ -1,0 +1,40 @@
+ [38;2;153;153;153m───────────────────────────────────────────────────────────────────────────────[m [1;38;2;34;102;204manthropic/claude-sonnet-5-5[m  [38;2;102;102;102mmode: ask[m 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+       [38;2;102;102;102mNo messages yet. Model: anthropic/claude-sonnet-5-5[m
+[38;2;153;153;153m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────[m
+  [38;2;102;102;102mModel[m                                                                                                                 
+[1;38;2;0;0;0;48;2;187;214;255m> /model [id]        Pick a model                                                                                       [m
+  /effort [level]    Set reasoning effort                                                                               
+  /login             Save a provider key                                                                                
+  [38;2;102;102;102mConversation[m                                                                                                          
+  /new               Start a new conversation                                                                           
+  /resume            Return to a past conversation                                                                      
+  /rename [title]    Rename this conversation                                                                           
+  /mode [ask|auto]   Set the approval mode                                                                              
+  [38;2;102;102;102mWorkspace[m                                                                                                             
+  /open [path]       Open a file                                                                                        
+  [38;2;102;102;102mSnow[m                                                                                                                  
+  /help              Show commands and keys                                                                             
+[38;2;34;102;204m> [m/                                                                                                                     

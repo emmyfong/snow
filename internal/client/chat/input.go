@@ -22,6 +22,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	if !m.loaded {
 		return nil
 	}
+	defer m.syncCommands()
 	if p := m.pending(); p != nil {
 		if in, ok := m.approvalKey(p, k); ok {
 			return in
@@ -29,6 +30,12 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	}
 	if in, ok := m.errorKey(k); ok {
 		return in
+	}
+	m.syncCommands()
+	if m.cmdOpen {
+		if in, ok := m.commandKey(k); ok {
+			return in
+		}
 	}
 	switch {
 	case m.selected != "" && k.Code == tea.KeyEnter && k.Mod == 0:
@@ -115,9 +122,18 @@ func (m *Model) insert(text string) {
 // submit sends the typed message, unless it is blank. During a turn the
 // server queues it.
 func (m *Model) submit() *api.ChatInput {
+	if m.commanding() {
+		return m.runCommand()
+	}
 	text := string(m.input)
 	switch {
 	case strings.TrimSpace(text) == "":
+		return nil
+	case m.snap.Model == "" && !m.providerReady:
+		m.note = "Connect a provider first. Type /login to save a key."
+		return nil
+	case m.snap.Model == "":
+		m.note = "Choose a model first. Type /model, or /model provider/model."
 		return nil
 	case len(text) > api.MaxChatMessage:
 		m.note = fmt.Sprintf("Message too long: at most %d KiB. Shorten it, or save it to a file and name the file.", api.MaxChatMessage>>10)

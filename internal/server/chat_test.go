@@ -36,7 +36,7 @@ func chatOptions(t *testing.T, replies ...providertest.Reply) (Options, *provide
 	opts := testOptions()
 	opts.Chat = &ChatOptions{
 		Store: store, Providers: reg, Tools: tool.NewRegistry(),
-		Model: func() (string, string) { return chatModel, "" },
+		DefaultModel: chatModel,
 	}
 	return opts, fake, store
 }

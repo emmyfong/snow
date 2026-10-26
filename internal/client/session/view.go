@@ -28,14 +28,22 @@ func (m *Model) View() tea.View {
 		}
 	}
 	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
-	content = m.overlayConfirm(m.overlayMenu(m.overlayHint(m.overlayPrompt(m.overlaySwitcher(m.overlayPicker(content, area), area)), area), area), area)
+	content = m.overlayPicker(content, area)
+	content = m.overlaySwitcher(content, area)
+	content = m.overlayModelPick(content, area)
+	content = m.overlayAuthPick(content, area)
+	content = m.overlayOver(content, area)
+	content = m.overlayPrompt(content)
+	content = m.overlayHint(content, area)
+	content = m.overlayMenu(content, area)
+	content = m.overlayConfirm(content, area)
 	bar := ui.StatusBar(m.theme, m.statusOptions())
 	if content != "" {
 		content += "\n"
 	}
 	v := tea.NewView(content + bar)
 	v.MouseMode = tea.MouseModeCellMotion
-	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.prompt == nil {
+	if p := m.focused(); p != nil && m.picker == nil && m.switcher == nil && m.modelPick == nil && m.authPick == nil && m.over == nil && m.prompt == nil {
 		if x, y, ok := m.copyCursor(p.ID); ok {
 			v.Cursor = tea.NewCursor(p.Rect.X+x, p.Rect.Y+y)
 		} else if c := m.own[p.ID]; c != nil {

@@ -96,6 +96,14 @@ func TestChatApply(t *testing.T) {
 			},
 		},
 		{
+			name: "a failed rename keeps the title and shows the error",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTitle, Text: "T"}),
+				ev(ChatEvent{Kind: ChatEventTitle, Error: &ChatError{Code: ChatErrSave}}),
+			},
+			want: ChatSnapshot{Title: "T", Entries: []ChatEntry{{Kind: ChatEntryError, Error: &ChatError{Code: ChatErrSave}}}},
+		},
+		{
 			name:   "other pane",
 			events: []*ChatEvent{{Pane: 9, Agent: "a", Kind: ChatEventTitle, Text: "T"}},
 		},

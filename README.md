@@ -151,6 +151,27 @@ context is and the estimated cost.
 | `Tab`, `Shift+Tab` | Select a tool call; `Enter` or a click shows its details |
 | `y` `a` `n` `d` | When a tool asks and the message line is empty: yes, always for this tool, no (with a reason), show the diff or the rest of a long input |
 
+#### Chat commands
+
+Type `/` in the message line to see them. Tab completes, Enter runs.
+
+| Command | Does |
+|---|---|
+| `/model [id]` | Pick a model and its effort, or switch to `provider/model` |
+| `/login` | Save a provider key |
+| `/logout` | Remove a saved provider key |
+| `/new` | Start a new conversation in this pane, in the same folder |
+| `/resume` | Open a past conversation; `Ctrl+a` lists every folder |
+| `/rename [title]` | Rename the conversation |
+| `/mode [ask\|auto]` | Set when tools wait for you; with no word, pick from a list |
+| `/effort [level]` | Set the effort from the next turn; `default` lets the provider choose |
+| `/help` | Show the commands and keys |
+
+`/new` and `/resume` wait for a running turn to end: press `Esc` first. A
+conversation that another pane shows is not opened twice; `/resume` moves
+focus to that pane. A model refuses an effort level it does not take, and
+the message lists the levels it does.
+
 The approval box lists the whole input of the call. A message holds at most
 16 KiB, and at most four messages wait while a turn runs.
 

@@ -161,6 +161,9 @@ type Mode struct {
 type Interruption struct {
 	At     time.Time `json:"at"`
 	Reason string    `json:"reason,omitempty"`
+	// Failed is set when the turn ended in a failure, not at the user's
+	// request, so a resumed view shows the error and not a stop.
+	Failed bool `json:"failed,omitempty"`
 }
 
 // Partial is the text of a reply that is still streaming. A later Partial

@@ -37,6 +37,7 @@ func buildActions() []Action {
 		{Name: "split-down", Desc: "Split down"},
 		{Name: "new-window", Desc: "New window"},
 		{Name: "new-chat", Desc: "New chat"},
+		{Name: "model-picker", Desc: "Pick model"},
 		{Name: "next-window", Desc: "Next window"},
 		{Name: "prev-window", Desc: "Previous window"},
 	}
@@ -93,7 +94,7 @@ type binding struct{ key, action string }
 
 func buildDefaults() []binding {
 	b := []binding{
-		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"}, {"a", "new-chat"}, {"n", "next-window"}, {"p", "prev-window"},
+		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"}, {"a", "new-chat"}, {"m", "model-picker"}, {"n", "next-window"}, {"p", "prev-window"},
 	}
 	for i := range 10 {
 		n := strconv.Itoa(i)

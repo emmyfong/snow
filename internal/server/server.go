@@ -34,6 +34,7 @@ type Server struct {
 	done     chan struct{} // closed when the last session ends
 	once     sync.Once
 	closing  sync.WaitGroup // panes still being closed in the background
+	releases sync.Map       // conversation ID → channel closed once its pane let go of the file
 	saver    *store.Saver   // nil when sessions are not saved
 	store    *store.Store   // where saver writes; nil with it
 	// startSaved lists the sessions saved when the server started; the

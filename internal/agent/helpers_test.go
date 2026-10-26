@@ -76,6 +76,19 @@ func next[T Body](t *testing.T, h *harness) T {
 	}
 }
 
+// waitIdle waits until the conversation's loop has ended the turn. The
+// TurnEnded event comes a moment before the loop is ready for a Retry.
+func (h *harness) waitIdle(t *testing.T) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for !h.conv.Idle() {
+		if time.Now().After(deadline) {
+			t.Fatal("the conversation never became idle")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // records loads the conversation file, without its meta record.
 func (h *harness) records(t *testing.T) []convstore.Record {
 	t.Helper()

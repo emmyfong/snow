@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path"
+	"time"
 
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -29,9 +30,27 @@ type ChatOptions struct {
 	Store     *convstore.Store
 	Providers *provider.Registry
 	Tools     *tool.Registry
-	// Model returns the model a new chat starts with, as "provider/model",
-	// and its effort.
-	Model  func() (model, effort string)
+	// DefaultModel is the model a new chat starts with, as "provider/model",
+	// and its effort. Empty Model means the client asks the user to choose
+	// before the first message.
+	DefaultModel, DefaultEffort string
+	// ProviderStatuses returns the providers the model picker shows, in
+	// order, with their titles and whether a key is saved. It may read the
+	// OS key store, so callers run it off the state goroutine. Nil lists
+	// the registry's providers as connected.
+	ProviderStatuses func() []api.ProviderModels
+	// SaveDefault saves model and effort as the default for new chats. It
+	// runs off the state goroutine. Nil means a default cannot be saved.
+	SaveDefault func(model, effort string) error
+	// Auth lists the providers and saves or removes their keys. Its calls
+	// may read the OS key store, so the server runs them off the state
+	// goroutine. Nil refuses auth requests.
+	Auth Auth
+	// ModelTTL is how long a fetched model list stays fresh. Zero means
+	// DefaultModelTTL.
+	ModelTTL time.Duration
+	// Now returns the current time. Nil means time.Now.
+	Now    func() time.Time
 	System string // the system prompt
 	// HideEnv names the variables the run tool's commands do not get: the
 	// ones that hold provider keys.
@@ -41,37 +60,100 @@ type ChatOptions struct {
 	Shell *shell.Profile
 }
 
+// providerStatuses is the provider list the model picker shows.
+func (o *ChatOptions) providerStatuses() []api.ProviderModels {
+	if o.ProviderStatuses != nil {
+		return o.ProviderStatuses()
+	}
+	if o.Providers == nil {
+		return nil
+	}
+	names := o.Providers.Names()
+	out := make([]api.ProviderModels, len(names))
+	for i, name := range names {
+		out[i] = api.ProviderModels{Name: name, Title: name, Connected: true}
+	}
+	return out
+}
+
+// modelTTL is how long a fetched model list stays fresh.
+func (o *ChatOptions) modelTTL() time.Duration {
+	if o.ModelTTL > 0 {
+		return o.ModelTTL
+	}
+	return DefaultModelTTL
+}
+
+// now is the current time.
+func (o *ChatOptions) now() time.Time {
+	if o.Now != nil {
+		return o.Now()
+	}
+	return time.Now()
+}
+
 // chatPane is the conversation a chat pane shows. The model goroutine owns
 // snap; conv is safe from any goroutine.
 type chatPane struct {
 	conv *agent.Conversation
 	snap api.ChatSnapshot
+	// folder and profile are where the conversation works, as its file
+	// records them: the history list shows the conversations of the same
+	// folder and profile.
+	folder, profile string
 }
 
 // startChat starts a conversation in dir for a new chat pane id, opened
-// from a pane running profile. The conversation reports to the model
-// goroutine in order.
-func (s *Server) startChat(id int, profile, dir string) (*pane, error) {
+// from a pane running profile, with model and effort for its next turn.
+// The conversation reports to the model goroutine in order.
+func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, error) {
 	o := s.opts.Chat
 	if o == nil {
 		return nil, ErrNoChat
 	}
-	folder := tool.Folder{Path: usableDir(dir)}
-	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
-		folder = tool.Folder{Path: dir, Distro: distro}
+	cfg := s.chatConfig(id, profile, dir)
+	folder, sh := cfg.Folder, cfg.Shell
+	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
+	if err != nil {
+		return nil, fmt.Errorf("start chat: %w", err)
 	}
+	p := &pane{id: id, profile: profile, dir: folder.Path, chat: &chatPane{conv: conv, folder: folder.Path, profile: sh.Name}}
+	p.chat.snap = newSnapshot(id, conv, model, effort, conv.Mode())
+	return p, nil
+}
+
+// newSnapshot is the snapshot of chat pane id showing conv, with no
+// transcript and no turn running.
+func newSnapshot(id int, conv *agent.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
+	return api.ChatSnapshot{
+		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
+		Model: model, Effort: effort, Mode: string(mode), State: api.ChatStateIdle,
+	}
+}
+
+// chatFolder returns the folder a chat opened from a pane running profile
+// works in: dir if it is usable, else the home folder. A WSL profile's
+// folder lives in its distribution, out of reach of a stat.
+func (s *Server) chatFolder(profile, dir string) tool.Folder {
+	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
+		return tool.Folder{Path: dir, Distro: distro}
+	}
+	return tool.Folder{Path: usableDir(dir)}
+}
+
+// chatConfig is the agent config of a conversation in chat pane id. Its
+// events reach the pane by its ID, and chatEvent drops the ones of a
+// conversation the pane replaced.
+func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
+	o := s.opts.Chat
 	sh := shell.Profile{}
 	if o.Shell != nil {
 		sh = *o.Shell
 	} else if s.launch.shell != nil {
 		sh, _ = s.launch.shell(profile)
 	}
-	model, effort := "", ""
-	if o.Model != nil {
-		model, effort = o.Model()
-	}
-	cfg := agent.Config{
-		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: folder, Shell: sh,
+	return agent.Config{
+		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: s.chatFolder(profile, dir), Shell: sh,
 		HideEnv: o.HideEnv, System: o.System,
 		Events: func(e agent.Event) {
 			if ce := chatEvent(id, e); ce != nil {
@@ -79,16 +161,6 @@ func (s *Server) startChat(id int, profile, dir string) (*pane, error) {
 			}
 		},
 	}
-	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
-	if err != nil {
-		return nil, fmt.Errorf("start chat: %w", err)
-	}
-	p := &pane{id: id, profile: profile, dir: folder.Path, chat: &chatPane{conv: conv}}
-	p.chat.snap = api.ChatSnapshot{
-		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
-		Model: model, Effort: effort, Mode: string(conv.Mode()), State: api.ChatStateIdle,
-	}
-	return p, nil
 }
 
 // distroOf returns the WSL distribution profile runs, if it is a WSL
@@ -126,6 +198,9 @@ func (st *state) chatEvent(e *api.ChatEvent) {
 	sess, p := st.findChat(e.Pane)
 	if p == nil {
 		return
+	}
+	if e.Agent != p.chat.snap.Agent {
+		return // an event of a conversation this pane replaced
 	}
 	p.chat.snap.Apply(e)
 	for c := range st.clients {

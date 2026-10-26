@@ -141,22 +141,23 @@ func chatSessionGolden(t *testing.T, cols, rows int) {
 func TestChatSessionGolden80x24(t *testing.T)  { chatSessionGolden(t, 80, 24) }
 func TestChatSessionGolden120x40(t *testing.T) { chatSessionGolden(t, 120, 40) }
 
-// TestChatAskShowsWhatToDo: choosing Log in after a rejected key sends
-// nothing and tells the user how to save a key.
-func TestChatAskShowsWhatToDo(t *testing.T) {
+// TestChatAskOpensLogin: choosing Log in after a rejected key opens the
+// login picker and asks the server for the key state.
+func TestChatAskOpensLogin(t *testing.T) {
 	m, r := chatScreen(t, 100, 30)
 	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "hi"}))
 	m.Update(chatEvent(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndFailed,
 		Error: &api.ChatError{Code: api.ChatErrBadKey, Message: "key rejected", Choices: []string{api.ChatChoiceLogin}}}))
 	sent := len(r.sent)
-	if cmd := m.Update(press(tea.KeyEnter, 0, "")); cmd == nil {
-		t.Fatal("no message")
-	}
-	if len(r.sent) != sent {
+	m.Update(press(tea.KeyEnter, 0, ""))
+	if len(r.sent) != sent+1 {
 		t.Fatalf("sent %+v", r.sent[sent:])
 	}
-	if s := ansi.Strip(content(m)); !strings.Contains(s, "snow auth") {
-		t.Fatalf("screen:\n%s", s)
+	if _, ok := r.sent[len(r.sent)-1].(*api.AuthListRequest); !ok {
+		t.Fatalf("sent %+v, want an auth list request", r.sent[sent:])
+	}
+	if m.authPick == nil {
+		t.Fatal("choosing Log in did not open the login picker")
 	}
 }
 

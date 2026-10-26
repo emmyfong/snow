@@ -2,7 +2,6 @@ package session
 
 import (
 	"strings"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/copymode"
@@ -76,9 +75,7 @@ func (m *Model) afterCopy(res copymode.Result, cmd tea.Cmd) tea.Cmd {
 	if note == "" {
 		return cmd
 	}
-	m.notice, m.noticeAt = note, m.now()
-	at := m.noticeAt
-	return tea.Batch(cmd, tea.Tick(messageFor, func(time.Time) tea.Msg { return clearNoticeMsg{at} }))
+	return tea.Batch(cmd, m.showNotice(note))
 }
 
 // syncCopy keeps copy mode in step with the layout: it follows the pane's

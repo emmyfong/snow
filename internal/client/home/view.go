@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
@@ -96,11 +97,10 @@ func (m *Model) commandList(p placement) []string {
 	if p.list.count == 0 {
 		return append(lines, indent([]string{muted.Render("No command matches. Type /help to see them all.")}, p.x)[0])
 	}
-	items := make([]ui.ListItem, 0, p.list.count)
-	for _, c := range ms[p.list.first : p.list.first+p.list.count] {
-		items = append(items, ui.ListItem{Cols: []string{"/" + c.Line(), c.Desc}})
-	}
-	list := ui.List(th, ui.ListOptions{Items: items, Selected: m.cmdSel - p.list.first, Width: p.width})
+	list := ui.List(th, ui.ListOptions{
+		Items:    command.NewList(ms[p.list.first:p.list.first+p.list.count], false, true).Items,
+		Selected: m.cmdSel - p.list.first, Width: p.width,
+	})
 	return append(lines, indent(strings.Split(list, "\n"), p.x)...)
 }
 

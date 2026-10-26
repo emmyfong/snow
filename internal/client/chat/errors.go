@@ -17,7 +17,11 @@ import (
 // cannot carry out itself.
 const (
 	AskLogin     = "login"      // save a provider key
+	AskLogout    = "logout"     // remove a provider key
 	AskPickModel = "pick-model" // choose another model
+	AskResume    = "resume"     // choose a past conversation
+	AskPickMode  = "pick-mode"  // choose the approval mode
+	AskHelp      = "help"       // show the commands and keys
 )
 
 // errorTitles name each failure in its box's top edge.
@@ -155,8 +159,8 @@ func (m *Model) pickError(i, c int) *api.ChatInput {
 	return nil
 }
 
-// Asked returns the request the last key or click raised, AskLogin or
-// AskPickModel, or "", and clears it.
+// Asked returns the request the last key or click raised, AskLogin,
+// AskLogout, or AskPickModel, or "", and clears it.
 func (m *Model) Asked() string {
 	a := m.asked
 	m.asked = ""

@@ -33,7 +33,9 @@ func TestEntriesGroupRelatedKeys(t *testing.T) {
 			t.Errorf("%s keys = %q, want %q", desc, got, keys)
 		}
 	}
-	if len(es) > 20 {
+	// A 24-row screen keeps 23 rows for the window; the popup's frame
+	// takes two, so it holds at most 21 entries in one column.
+	if len(es) > 21 {
 		t.Errorf("%d entries; the popup must fit a 24-row screen", len(es))
 	}
 }

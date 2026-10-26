@@ -32,6 +32,56 @@ func SetTheme(path, name string) error {
 	return writeFile(path, text)
 }
 
+// SetChatModel writes model as [chat] model and effort as [chat] effort in
+// the config file at path, creating the file when it is missing. Those are
+// the model and effort new chats start with. Only those two lines change:
+// other settings, comments, and a comment after a value stay as they are.
+func SetChatModel(path, model, effort string) error {
+	if !modelName(model) {
+		return fmt.Errorf("config: chat.model: must be provider/model, got %q", model)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("config: read %s: %w", path, err)
+	}
+	if dottedTable(string(data), "chat") && keyLine(string(data), []string{"chat"}) == 0 {
+		// A top-level dotted key makes the table, and adding a [chat]
+		// header after it would make a file other TOML readers reject.
+		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
+	}
+	text, err := setKey(string(data), []string{"chat", "model"}, strconv.Quote(model))
+	if err != nil {
+		return fmt.Errorf("config: %s: chat.model: %w", path, err)
+	}
+	if text, err = setKey(text, []string{"chat", "effort"}, strconv.Quote(effort)); err != nil {
+		return fmt.Errorf("config: %s: chat.effort: %w", path, err)
+	}
+	if cfg, perr := parse(text); perr != nil {
+		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
+	} else if cfg.Chat.Model != model {
+		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
+	} else if cfg.Chat.Effort != effort {
+		return fmt.Errorf("config: %s: chat.effort: %w", path, ErrCannotEdit)
+	}
+	return writeFile(path, text)
+}
+
+// dottedTable reports whether a top-level dotted key starts the table name,
+// such as chat.model = "..." for chat.
+func dottedTable(data, name string) bool {
+	for _, line := range strings.Split(data, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] == '#' || line[0] == '[' {
+			continue
+		}
+		parts, rest := splitKey(line)
+		if len(parts) > 1 && parts[0] == name && strings.HasPrefix(rest, "=") {
+			return true
+		}
+	}
+	return false
+}
+
 // setKey sets a two-part key ([table] key) to value, a TOML literal, in a
 // document. It replaces the value on the key's line, adds the key under the
 // table's header, or appends the table.

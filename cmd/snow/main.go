@@ -224,7 +224,7 @@ func serve(stderr io.Writer) int {
 		savedLines = -1 // the config's 0 is "no lines", the server's is "default"
 	}
 	// Without chat options, terminal panes still work; a chat says why not.
-	chat, err := chatOptions(cfg, log)
+	chat, err := chatOptions(cfg)
 	if err != nil {
 		log.Warn("chat panes are off", "err", err)
 	}

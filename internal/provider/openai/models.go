@@ -25,7 +25,7 @@ func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
 		if !textModel(m.ID) {
 			continue
 		}
-		out = append(out, provider.Model{ID: m.ID, DisplayName: m.ID})
+		out = append(out, provider.Model{ID: m.ID, DisplayName: m.ID, Efforts: capsFor(m.ID).supported()})
 	}
 	if err := pager.Err(); err != nil {
 		return nil, mapErr(ctx, err)

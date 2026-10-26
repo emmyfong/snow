@@ -63,7 +63,7 @@ func (sess *session) findPane(id int) (*window, *pane) {
 // or a chat in dir opened from a pane running profile.
 func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane, error) {
 	if kind == api.PaneChat {
-		return st.srv.startChat(id, profile, dir)
+		return st.srv.startChat(id, profile, dir, st.defaultModel, st.defaultEffort)
 	}
 	return st.srv.startPane(id, cols, rows, profile, dir, "")
 }
@@ -164,8 +164,10 @@ func (st *state) closePane(p *pane) {
 	p.closed.Store(true)
 	st.srv.closing.Add(1)
 	log := st.srv.log
+	released := st.srv.releasing(p)
 	go func() {
 		defer st.srv.closing.Done()
+		defer released()
 		if err := p.close(); err != nil {
 			log.Warn("pane close", "pane", p.id, "err", err)
 		}

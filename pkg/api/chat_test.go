@@ -78,12 +78,32 @@ func TestChatInputValidate(t *testing.T) {
 		{"answer", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: ChatDecisionAlways}, true},
 		{"interrupt", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputInterrupt}, true},
 		{"retry", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRetry}, true},
+		{"model", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "anthropic/claude-opus-5-5", Effort: "high"}, true},
+		{"model without effort", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol"}, true},
+		{"model saved as default", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol", SaveDefault: true}, true},
+		{"model without a provider", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "opus"}, false},
+		{"unknown effort", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputModel, Model: "openai/gpt-6.1-sol", Effort: "turbo"}, false},
+		{"default on a message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: "hi", SaveDefault: true}, false},
 		{"no pane", ChatInput{Agent: "a", Kind: ChatInputInterrupt}, false},
 		{"no agent", ChatInput{Pane: 1, Kind: ChatInputInterrupt}, false},
 		{"unknown kind", ChatInput{Pane: 1, Agent: "a", Kind: "dance"}, false},
 		{"empty message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage}, false},
 		{"answer without id", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, Decision: ChatDecisionYes}, false},
 		{"unknown decision", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: "maybe"}, false},
+		{"new", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputNew}, true},
+		{"resume", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputResume, Conversation: "c1"}, true},
+		{"resume of nothing", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputResume}, false},
+		{"rename", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRename, Text: "Fix it"}, true},
+		{"rename blank", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRename, Text: "  "}, false},
+		{"rename longest", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRename, Text: strings.Repeat("é", MaxChatTitle)}, true},
+		{"rename too long", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRename, Text: strings.Repeat("é", MaxChatTitle+1)}, false},
+		{"mode ask", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMode, Mode: ChatModeAsk}, true},
+		{"mode auto", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMode, Mode: ChatModeAuto}, true},
+		{"mode unknown", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMode, Mode: "yolo"}, false},
+		{"mode none", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMode}, false},
+		{"effort", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputEffort, Effort: "high"}, true},
+		{"effort default", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputEffort}, true},
+		{"effort unknown", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputEffort, Effort: "extreme"}, false},
 		{"longest message", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: strings.Repeat("x", MaxChatMessage)}, true},
 		{"message too long", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputMessage, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
 		{"reason too long", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: ChatDecisionNo, Text: strings.Repeat("x", MaxChatMessage+1)}, false},
@@ -143,7 +163,7 @@ func TestChatMessageNumbers(t *testing.T) {
 	for _, tt := range []struct {
 		got  MsgType
 		want MsgType
-	}{{TypeChatSnapshot, 22}, {TypeChatEvent, 23}, {TypeChatInput, 24}} {
+	}{{TypeChatSnapshot, 22}, {TypeChatEvent, 23}, {TypeChatInput, 24}, {TypeModelListRequest, 25}, {TypeModelList, 26}} {
 		if tt.got != tt.want {
 			t.Errorf("type is %d, want %d", tt.got, tt.want)
 		}
