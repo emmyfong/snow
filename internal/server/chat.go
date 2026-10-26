@@ -111,25 +111,8 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 	if o == nil {
 		return nil, ErrNoChat
 	}
-	folder := tool.Folder{Path: usableDir(dir)}
-	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
-		folder = tool.Folder{Path: dir, Distro: distro}
-	}
-	sh := shell.Profile{}
-	if o.Shell != nil {
-		sh = *o.Shell
-	} else if s.launch.shell != nil {
-		sh, _ = s.launch.shell(profile)
-	}
-	cfg := agent.Config{
-		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: folder, Shell: sh,
-		HideEnv: o.HideEnv, System: o.System,
-		Events: func(e agent.Event) {
-			if ce := chatEvent(id, e); ce != nil {
-				s.send(func(st *state) { st.chatEvent(ce) })
-			}
-		},
-	}
+	cfg := s.chatConfig(id, profile, dir)
+	folder, sh := cfg.Folder, cfg.Shell
 	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
 	if err != nil {
 		return nil, fmt.Errorf("start chat: %w", err)
@@ -140,6 +123,38 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 		Model: model, Effort: effort, Mode: string(conv.Mode()), State: api.ChatStateIdle,
 	}
 	return p, nil
+}
+
+// chatFolder returns the folder a chat opened from a pane running profile
+// works in: dir if it is usable, else the home folder. A WSL profile's
+// folder lives in its distribution, out of reach of a stat.
+func (s *Server) chatFolder(profile, dir string) tool.Folder {
+	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
+		return tool.Folder{Path: dir, Distro: distro}
+	}
+	return tool.Folder{Path: usableDir(dir)}
+}
+
+// chatConfig is the agent config of a conversation in chat pane id. Its
+// events reach the pane by its ID, and chatEvent drops the ones of a
+// conversation the pane replaced.
+func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
+	o := s.opts.Chat
+	sh := shell.Profile{}
+	if o.Shell != nil {
+		sh = *o.Shell
+	} else if s.launch.shell != nil {
+		sh, _ = s.launch.shell(profile)
+	}
+	return agent.Config{
+		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: s.chatFolder(profile, dir), Shell: sh,
+		HideEnv: o.HideEnv, System: o.System,
+		Events: func(e agent.Event) {
+			if ce := chatEvent(id, e); ce != nil {
+				s.send(func(st *state) { st.chatEvent(ce) })
+			}
+		},
+	}
 }
 
 // distroOf returns the WSL distribution profile runs, if it is a WSL
@@ -177,6 +192,9 @@ func (st *state) chatEvent(e *api.ChatEvent) {
 	sess, p := st.findChat(e.Pane)
 	if p == nil {
 		return
+	}
+	if e.Agent != p.chat.snap.Agent {
+		return // an event of a conversation this pane replaced
 	}
 	p.chat.snap.Apply(e)
 	for c := range st.clients {

@@ -33,6 +33,10 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	}
 	var err error
 	switch in.Kind {
+	case api.ChatInputNew:
+		err = s.newChat(c, in.Pane)
+	case api.ChatInputResume:
+		err = s.resumeChat(c, in.Pane, in.Conversation)
 	case api.ChatInputMessage:
 		if snapModel == "" {
 			s.refuse(c, api.CodeCommandFailed, errors.New("no model: choose one before sending"))

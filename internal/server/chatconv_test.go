@@ -302,7 +302,14 @@ func TestResumeLoadsConversation(t *testing.T) {
 
 	second := openSecondChat(t, c, first)
 	c.Send(&api.Command{Op: api.OpClose, Target: first})
-	eventually(t, "the first pane to close", func() bool { return c.Chat(first) == nil || len(c.Chats()) == 1 })
+	nextLayout(t, c, func(l *api.Layout) bool {
+		for _, p := range shownPanes(l) {
+			if p.ID == first {
+				return false
+			}
+		}
+		return true
+	})
 
 	chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
 	got := c.WaitChat(second, func(s *api.ChatSnapshot) bool { return s.Conversation == past })
