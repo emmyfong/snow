@@ -77,39 +77,63 @@ func TestRenameAppendsRecord(t *testing.T) {
 	wantRefused(t, c)
 }
 
-// TestModeCommand: ask and auto change the mode of the pane now; a word
-// that is neither is refused and the mode stays.
+// modeRecords counts the mode records of conversation id and returns the
+// last one's mode.
+func modeRecords(t *testing.T, store *convstore.Store, id string) (n int, last string) {
+	t.Helper()
+	for _, r := range conversationRecords(t, store, id) {
+		if m, ok := r.(*convstore.Mode); ok {
+			n, last = n+1, m.Mode
+		}
+	}
+	return n, last
+}
+
+// TestModeCommand: ask and auto change the mode of the pane now, from the
+// other mode; a word that is neither is refused, and nothing is saved.
 func TestModeCommand(t *testing.T) {
 	for _, tt := range []struct {
-		name, mode, want string
-		refused          bool
+		name, start, mode, want string
+		refused                 bool
 	}{
-		{"auto", api.ChatModeAuto, api.ChatModeAuto, false},
-		{"ask", api.ChatModeAsk, api.ChatModeAsk, false},
-		{"bad word", "yolo", api.ChatModeAsk, true},
+		{name: "to auto", start: api.ChatModeAsk, mode: api.ChatModeAuto, want: api.ChatModeAuto},
+		{name: "to ask", start: api.ChatModeAuto, mode: api.ChatModeAsk, want: api.ChatModeAsk},
+		{name: "bad word", start: api.ChatModeAuto, mode: "yolo", want: api.ChatModeAuto, refused: true},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			s, _, store := newChatServer(t)
 			c := connect(t, s, 100, 30)
 			id := openChat(t, c)
-			chatInputOf(c, id, api.ChatInputMode, func(in *api.ChatInput) { in.Mode = api.ChatModeAuto })
-			c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Mode == api.ChatModeAuto })
+			conv := c.Chat(id).Conversation
+			if tt.start == api.ChatModeAuto {
+				chatInputOf(c, id, api.ChatInputMode, func(in *api.ChatInput) { in.Mode = api.ChatModeAuto })
+			}
+			c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Mode == tt.start })
+			eventually(t, "the start mode to be saved", func() bool {
+				n, _ := modeRecords(t, store, conv)
+				return (tt.start == api.ChatModeAuto) == (n == 1)
+			})
+			before, _ := modeRecords(t, store, conv)
+
 			chatInputOf(c, id, api.ChatInputMode, func(in *api.ChatInput) { in.Mode = tt.mode })
 			if tt.refused {
 				wantRefused(t, c)
-				if got := c.Chat(id).Mode; got != api.ChatModeAuto {
+				// An input after the refused one is handled after it, so once
+				// its title shows, a write for the bad word would be there.
+				chatInputOf(c, id, api.ChatInputRename, func(in *api.ChatInput) { in.Text = "after" })
+				c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Title == "after" })
+				if got := c.Chat(id).Mode; got != tt.want {
 					t.Fatalf("a refused word changed the mode to %q", got)
+				}
+				if n, _ := modeRecords(t, store, conv); n != before {
+					t.Fatalf("a refused word wrote %d mode records", n-before)
 				}
 				return
 			}
 			c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Mode == tt.want })
 			eventually(t, "the mode record", func() bool {
-				for _, r := range conversationRecords(t, store, c.Chat(id).Conversation) {
-					if m, ok := r.(*convstore.Mode); ok && m.Mode == tt.want {
-						return true
-					}
-				}
-				return false
+				n, last := modeRecords(t, store, conv)
+				return n == before+1 && last == tt.want
 			})
 		})
 	}
@@ -367,5 +391,74 @@ func TestResumeOpenElsewhere(t *testing.T) {
 	for _, bad := range []string{"../escape", "no-such-conversation"} {
 		chatInputOf(c, second, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = bad })
 		wantRefused(t, c)
+	}
+}
+
+// TestResumeNeverChangesTheModel: a conversation whose model no provider
+// offers keeps that model on resume; Snow does not pick another.
+func TestResumeNeverChangesTheModel(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	id := openChat(t, c)
+	w, err := store.Create(convstore.Meta{Folder: folderOf(t, store, c, id), Model: "retired/model-0", Effort: "high", Created: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	past := w.ID()
+	_ = w.Close()
+
+	chatInputOf(c, id, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
+	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Conversation == past })
+	if got.Model != "retired/model-0" || got.Effort != "high" {
+		t.Fatalf("model %q, effort %q after the resume", got.Model, got.Effort)
+	}
+}
+
+// folderOf returns the folder the conversation of pane id works in.
+func folderOf(t *testing.T, store *convstore.Store, c *apitest.Client, id int) string {
+	t.Helper()
+	loaded, err := store.Load(c.Chat(id).Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return loaded.Meta.Folder
+}
+
+// TestDamagedConversationIsListedAndRefused: a file that cannot be read
+// shows in the list with its reason, and a resume of it is refused and
+// leaves the pane alone.
+func TestDamagedConversationIsListedAndRefused(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	id := openChat(t, c)
+	own := c.Chat(id).Conversation
+	const bad = "20260101-000000-deadbeef"
+	path, err := store.Path(bad)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("this is not json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Send(&api.ConversationListRequest{Pane: id, All: true})
+	l := waitConversations(t, c, func(l *api.ConversationList) bool { return l.All })
+	found := false
+	for _, it := range l.Items {
+		if it.ID == bad {
+			found = true
+			if it.Err == "" {
+				t.Fatal("the damaged file is listed without a reason")
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("the damaged file is not listed: %+v", l.Items)
+	}
+
+	chatInputOf(c, id, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = bad })
+	wantRefused(t, c)
+	if got := c.Chat(id).Conversation; got != own {
+		t.Fatal("the pane changed its conversation")
 	}
 }

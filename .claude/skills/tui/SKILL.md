@@ -35,7 +35,7 @@ internal/client/
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
-  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the message being typed, scrolling
+  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
 ```
 

@@ -42,7 +42,10 @@ type RunFunc func(h Host, rest string)
 
 // Register adds c to the shared registry and binds what it does in the chat.
 // A feature package calls it while the program starts, so the chat pane and
-// the home page need no edit for a new command.
+// the home page need no edit for a new command. A command that only sends an
+// input or shows a notice stays inside its own package. One that opens a
+// popup also needs an Ask constant (see errors.go) and a case in the
+// session's ownResult, because the session owns every popup.
 func Register(c command.Command, run RunFunc) error {
 	if run == nil {
 		return fmt.Errorf("command %q: no run function", c.Name)

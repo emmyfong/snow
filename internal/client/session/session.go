@@ -81,13 +81,6 @@ type Model struct {
 	hideUsage  bool // chats leave out the context gauge and the cost
 }
 
-// paneState is what the screen knows of one pane: its rows and its cursor.
-type paneState struct {
-	lines  []string
-	cursor api.Cursor
-	mouse  bool // the program asked for mouse events
-}
-
 // maxEarly bounds input held before the first Layout. The Layout follows
 // Attach at once, so only a fast typist or a paste can fill it.
 const maxEarly = 256
@@ -289,36 +282,6 @@ func (m *Model) applyLayout(l *api.Layout) {
 			m.input(in)
 		}
 	}
-}
-
-func (m *Model) applyUpdate(u *api.PaneUpdate) {
-	st, ok := m.panes[u.Pane]
-	if !ok {
-		return
-	}
-	for _, l := range u.Lines {
-		if l.Row < 0 {
-			continue
-		}
-		if l.Row >= len(st.lines) {
-			st.lines = resize(st.lines, l.Row+1)
-		}
-		st.lines[l.Row] = l.Text
-	}
-	if u.Cursor != nil {
-		st.cursor = *u.Cursor
-	}
-	st.mouse = u.Mouse
-}
-
-func resize(lines []string, rows int) []string {
-	if rows < 0 {
-		rows = 0
-	}
-	if rows <= len(lines) {
-		return lines[:rows]
-	}
-	return append(lines, make([]string, rows-len(lines))...)
 }
 
 // modal reports whether a popup or a question holds the keyboard.

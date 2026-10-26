@@ -239,61 +239,74 @@ func (b *lockedBuffer) String() string {
 }
 
 // TestKeyNotLogged: a login key reaches the provider but never the log, a
-// conversation file, or a client.
+// conversation file, or a client, whether the provider accepts it or not.
 func TestKeyNotLogged(t *testing.T) {
-	opts, srv, _, convDir := authOptions(t)
-	logs := &lockedBuffer{}
-	opts.Log = slog.New(slog.NewTextHandler(logs, nil))
-	s := New(opts)
-	t.Cleanup(s.Close)
-	c := connect(t, s, 80, 24)
-	openChat(t, c)
+	for _, tt := range []struct {
+		name, key string
+		reply     func(api.Message) bool
+	}{
+		{"accepted", authKey, func(m api.Message) bool { return m.Type() == api.TypeLogin }},
+		{"rejected", "sk-ant-rejected-key-0123456789", func(m api.Message) bool {
+			e, ok := m.(*api.Error)
+			return ok && e.Code == api.CodeAuthFailed
+		}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			opts, srv, _, convDir := authOptions(t)
+			logs := &lockedBuffer{}
+			opts.Log = slog.New(slog.NewTextHandler(logs, nil))
+			s := New(opts)
+			t.Cleanup(s.Close)
+			c := connect(t, s, 80, 24)
+			openChat(t, c)
 
-	c.Send(&api.LoginRequest{Provider: "anthropic", Key: authKey})
-	waitAuth(t, c, "the login result", func(m api.Message) bool { return m.Type() == api.TypeLogin })
+			c.Send(&api.LoginRequest{Provider: "anthropic", Key: tt.key})
+			waitAuth(t, c, "the login reply", tt.reply)
 
-	// Every message the client gets must be free of the key.
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) {
-		m, err := c.Next(50 * time.Millisecond)
-		if errors.Is(err, apitest.ErrTimeout) {
-			continue
-		}
-		if err != nil {
-			break
-		}
-		b, err := json.Marshal(m)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if bytes.Contains(b, []byte(authKey)) {
-			t.Fatalf("a %T to the client holds the key: %s", m, b)
-		}
-	}
-	if got := logs.String(); strings.Contains(got, authKey) {
-		t.Fatalf("the server log holds the key:\n%s", got)
-	}
-	files := 0
-	if err := filepath.WalkDir(convDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return err
-		}
-		files++
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		if bytes.Contains(b, []byte(authKey)) {
-			t.Fatalf("%s holds the key", path)
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if files == 0 {
-		t.Fatal("the chat wrote no conversation file")
-	}
-	if n := srv.Requests(); n != 1 {
-		t.Fatalf("provider requests = %d, want the key checked once", n)
+			// Every message the client gets must be free of the key.
+			deadline := time.Now().Add(500 * time.Millisecond)
+			for time.Now().Before(deadline) {
+				m, err := c.Next(50 * time.Millisecond)
+				if errors.Is(err, apitest.ErrTimeout) {
+					continue
+				}
+				if err != nil {
+					break
+				}
+				b, err := json.Marshal(m)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if bytes.Contains(b, []byte(tt.key)) {
+					t.Fatalf("a %T to the client holds the key: %s", m, b)
+				}
+			}
+			if got := logs.String(); strings.Contains(got, tt.key) {
+				t.Fatalf("the server log holds the key:\n%s", got)
+			}
+			files := 0
+			if err := filepath.WalkDir(convDir, func(path string, d fs.DirEntry, err error) error {
+				if err != nil || d.IsDir() {
+					return err
+				}
+				files++
+				b, err := os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+				if bytes.Contains(b, []byte(tt.key)) {
+					t.Fatalf("%s holds the key", path)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if files == 0 {
+				t.Fatal("the chat wrote no conversation file")
+			}
+			if n := srv.Requests(); n != 1 {
+				t.Fatalf("provider requests = %d, want the key checked once", n)
+			}
+		})
 	}
 }
