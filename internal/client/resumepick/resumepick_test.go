@@ -1,10 +1,12 @@
 package resumepick
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -73,6 +75,63 @@ func TestChoose(t *testing.T) {
 	}
 	if it, _ := m.Choice(); it.ID != "c2" {
 		t.Fatalf("chose %q, want c2", it.ID)
+	}
+}
+
+func TestFolderName(t *testing.T) {
+	for in, want := range map[string]string{
+		"/home/u/snow":      "snow",
+		"/home/u/snow/":     "snow",
+		`C:\Users\u\snow`:   "snow",
+		`C:\`:               "C:",
+		"/":                 "/",
+		"":                  "-",
+		`\\wsl$\Ubuntu\src`: "src",
+	} {
+		if got := folderName(in); got != want {
+			t.Errorf("folderName(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// TestRowsHoldNoEscapeSequences: text from a conversation file never
+// reaches the screen with a control character in it.
+func TestRowsHoldNoEscapeSequences(t *testing.T) {
+	m := New(4, func() time.Time { return now })
+	m.SetList(&api.ConversationList{Pane: 4, Items: []api.ConversationInfo{{
+		ID: "c1", Title: "a\x1b]52;c;AAAA\x07b", Model: "m\x1b[2Jx", Folder: "/f\x1b[H",
+		LastActivity: now, Turns: 1,
+	}}})
+	m.Key(tea.Key{Code: 'a', Mod: tea.ModCtrl})
+	m.SetList(&api.ConversationList{Pane: 4, All: true, Items: []api.ConversationInfo{{
+		ID: "c1", Title: "a\x1b]52;c;AAAA\x07b", Model: "m\x1b[2Jx", Folder: "/f\x1b[H",
+		LastActivity: now, Turns: 1,
+	}}})
+	for _, c := range m.row(m.items[0]) {
+		if strings.ContainsAny(c, "\x1b\x07") {
+			t.Fatalf("cell %q holds a control character", c)
+		}
+	}
+}
+
+// TestLongTitleStaysInTheBox: a title longer than the box is cut, and the
+// box keeps its width.
+func TestLongTitleStaysInTheBox(t *testing.T) {
+	m := New(4, func() time.Time { return now })
+	m.SetList(&api.ConversationList{Pane: 4, Items: []api.ConversationInfo{
+		{ID: "c1", Title: strings.Repeat("long title ", 30), Model: "anthropic/claude-opus-5-5", LastActivity: now, Turns: 2},
+	}})
+	box, _, _ := m.View(theme.Default(), 100, 24)
+	w := 0
+	for _, l := range strings.Split(box, "\n") {
+		if lw := ansi.StringWidth(l); lw != 0 && w != 0 && lw != w {
+			t.Fatalf("lines differ in width: %d and %d", w, lw)
+		} else if lw != 0 {
+			w = lw
+		}
+	}
+	if !strings.Contains(ansi.Strip(box), "long title") {
+		t.Fatal("the title is missing")
 	}
 }
 

@@ -195,7 +195,7 @@ func failed(e Entry, f os.DirEntry, err error) Entry {
 // titleFrom makes a one-line title of at most maxTitle characters from a
 // message.
 func titleFrom(text string) string {
-	title := strings.Join(strings.FieldsFunc(text, unicode.IsSpace), " ")
+	title := OneLine(text)
 	if r := []rune(title); len(r) > maxTitle {
 		title = strings.TrimRightFunc(string(r[:maxTitle-1]), unicode.IsSpace) + "…"
 	}

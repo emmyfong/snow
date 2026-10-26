@@ -47,3 +47,26 @@ func TestConversationTitleMatchesList(t *testing.T) {
 		})
 	}
 }
+
+// TestOneLine: control characters become spaces and runs of whitespace
+// collapse, so a title never carries an escape sequence to a screen.
+func TestOneLine(t *testing.T) {
+	for _, tt := range []struct{ in, want string }{
+		{"  Fix the\trename\x1b[2J bug \n", "Fix the rename [2J bug"},
+		{"hi \x1b]52;c;AAAA\x07 there", "hi ]52;c;AAAA there"},
+		{"\x00\x01", ""},
+		{"plain", "plain"},
+	} {
+		if got := OneLine(tt.in); got != tt.want {
+			t.Errorf("OneLine(%q) = %q, want %q", tt.in, got, tt.want)
+		}
+	}
+}
+
+// TestFirstMessageTitleHasNoControlCharacters: the list title made from a
+// first message is clean even when the message holds an escape sequence.
+func TestFirstMessageTitleHasNoControlCharacters(t *testing.T) {
+	if got := titleFrom("hi \x1b]52;c;AAAA\x07 there"); got != "hi ]52;c;AAAA there" {
+		t.Fatalf("titleFrom = %q", got)
+	}
+}

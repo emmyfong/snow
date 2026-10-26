@@ -93,7 +93,7 @@ func (m *Model) row(it api.ConversationInfo) []string {
 	}
 	cols := []string{name, it.Model}
 	if m.all {
-		cols = append(cols, path.Base(strings.ReplaceAll(it.Folder, `\`, "/")))
+		cols = append(cols, folderName(it.Folder))
 	}
 	turns := strconv.Itoa(it.Turns) + " turns"
 	if it.Turns == 1 {
@@ -103,7 +103,26 @@ func (m *Model) row(it api.ConversationInfo) []string {
 	if it.Open {
 		open = "open"
 	}
-	return append(cols, sessionlist.Ago(max(m.now().Sub(it.LastActivity), 0)), turns, open)
+	cols = append(cols, sessionlist.Ago(max(m.now().Sub(it.LastActivity), 0)), turns, open)
+	// The text comes from files the user may not have written.
+	for i, c := range cols {
+		cols[i] = ui.PlainLine(c)
+	}
+	return cols
+}
+
+// folderName is the last part of a folder path, as Linux, macOS, WSL, or
+// Windows writes it, or "-" for no folder.
+func folderName(folder string) string {
+	s := strings.TrimRight(strings.ReplaceAll(folder, `\`, "/"), "/")
+	switch {
+	case s != "":
+		return path.Base(s)
+	case folder != "":
+		return "/"
+	default:
+		return "-"
+	}
 }
 
 // Key handles one key press. Ctrl+a switches between this folder and every
