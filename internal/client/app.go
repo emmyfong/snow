@@ -201,8 +201,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.result, a.sessions = Result{}, nil
 			a.showHome(msg.Message)
 			return a, nil
-		case api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize:
-			// A refused request changes nothing; the screen shows why.
+		case api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize, api.CodeAuthFailed:
+			// A refused request changes nothing; the screen shows why. A
+			// refused login goes to the login picker, which keeps the key,
+			// or to the status bar when no picker waits.
 			return a, a.screen.Update(msg)
 		default:
 			a.result.Err = msg

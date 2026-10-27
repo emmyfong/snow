@@ -81,7 +81,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		// same session, or drop it when that session is gone.
 		m.selected = slices.IndexFunc(m.shown(), func(s api.SessionInfo) bool { return s.Name == chosen })
 	case *api.Error:
-		// A refused rename or kill; the server says why.
+		// A refused rename or kill, or a late login or logout refusal; the
+		// server says why.
 		m.notice = msg.Message
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
