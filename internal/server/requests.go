@@ -100,6 +100,7 @@ func (s *Server) input(c *client, in *api.Input) {
 		}
 		if p := st.paneOf(c, in.Pane); p != nil {
 			tp = p.term // nil for a chat pane: its keys go in ChatInput
+			st.userTyped(st.sessions[c.session], p)
 		}
 	})
 	if tp == nil {

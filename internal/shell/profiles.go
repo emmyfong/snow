@@ -47,6 +47,34 @@ type Profile struct {
 // IsAgent reports whether p runs a coding agent rather than a shell.
 func (p Profile) IsAgent() bool { return p.Kind == KindClaude }
 
+// Find returns the profile called name; an empty name is the first.
+func Find(profiles []Profile, name string) (Profile, bool) {
+	for _, p := range profiles {
+		if name == "" || p.Name == name {
+			return p, true
+		}
+	}
+	return Profile{}, false
+}
+
+// HostShell returns the shell that commands for a pane running p go
+// through: p itself for a shell, and for a Claude Code profile the WSL
+// profile of its distribution, or the first shell on this machine.
+func HostShell(profiles []Profile, p Profile) (Profile, bool) {
+	if !p.IsAgent() {
+		return p, true
+	}
+	for _, s := range profiles {
+		if s.IsAgent() {
+			continue
+		}
+		if p.Distro == "" && s.Kind != KindWSL || p.Distro != "" && s.Kind == KindWSL && s.Distro == p.Distro {
+			return s, true
+		}
+	}
+	return Profile{}, false
+}
+
 // Detect returns the shells available on this machine, most preferred first.
 func Detect() []Profile { return detect(currentSystem()) }
 

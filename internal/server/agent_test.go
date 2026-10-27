@@ -154,3 +154,64 @@ func TestWindowShowsMostUrgent(t *testing.T) {
 	hook(t, s, first, api.AgentNeedsYou, now.Add(time.Millisecond))
 	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentNeedsYou })
 }
+
+// TestNeedsYouClearsOnKeys: hooks cannot see the user answer a permission
+// question, so a key or a paste sent to a waiting pane shows it working;
+// the next hook corrects it.
+func TestNeedsYouClearsOnKeys(t *testing.T) {
+	for _, in := range []*api.Input{{Key: &api.Key{Code: "1", Text: "1"}}, {Paste: "yes"}} {
+		s := newTestServer(t)
+		c, first := attachNoPrompt(t, s)
+		hook(t, s, first, api.AgentNeedsYou, time.Now())
+		nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentNeedsYou })
+		in.Pane = first
+		c.Send(in)
+		nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentWorking })
+	}
+}
+
+// TestKeysLeaveOtherStates: keys sent to an idle pane change nothing.
+func TestKeysLeaveOtherStates(t *testing.T) {
+	s := newTestServer(t)
+	c, first := attachNoPrompt(t, s)
+	hook(t, s, first, api.AgentIdle, time.Now())
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentIdle })
+	c.Send(&api.Input{Pane: first, Paste: "hello"})
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		m, _ := c.Next(100 * time.Millisecond)
+		if l, ok := m.(*api.Layout); ok && l.Windows[0].AgentState != api.AgentIdle {
+			t.Fatalf("state %q after typing, want idle", l.Windows[0].AgentState)
+		}
+	}
+}
+
+// TestEndedPaneLosesState: a pane whose WSL distribution stopped runs no
+// agent: its state and its hint go, and late hooks are ignored.
+func TestEndedPaneLosesState(t *testing.T) {
+	opts, _ := hintOptions()
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c, first := attachNoPrompt(t, s)
+	hook(t, s, first, api.AgentNeedsYou, time.Now())
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentNeedsYou })
+	s.call(func(st *state) {
+		sess := st.sessions["work"]
+		_, p := sess.findPane(first)
+		p.hookless = true
+		st.endPane(sess, p)
+	})
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == "" })
+	var (
+		got      string
+		hookless bool
+	)
+	s.call(func(st *state) {
+		st.agentState(&api.AgentState{Pane: first, State: api.AgentWorking, At: time.Now().Add(time.Second)})
+		_, p := st.sessions["work"].findPane(first)
+		got, hookless = p.agent, p.hookless
+	})
+	if got != "" || hookless {
+		t.Fatalf("ended pane: state %q, hookless %v; want none", got, hookless)
+	}
+}

@@ -36,3 +36,23 @@ func TestHomeNeedsYouGolden(t *testing.T) {
 		}
 	}
 }
+
+// TestHomeHookHint: the server's hint shows under the sessions, muted,
+// and goes when the server stops sending it.
+func TestHomeHookHint(t *testing.T) {
+	for _, size := range []struct{ cols, rows int }{{80, 24}, {120, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size.cols, size.rows), func(t *testing.T) {
+			m := screen(size.cols, size.rows, session("api", time.Minute, 1))
+			const hint = "Claude Code sends Snow no hooks: run snow claude setup"
+			m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("api", time.Minute, 1)}, Hint: hint})
+			if !strings.Contains(ansi.Strip(m.View().Content), hint) {
+				t.Fatalf("no hint:\n%s", ansi.Strip(m.View().Content))
+			}
+			golden.RequireEqual(t, m.View().Content)
+			m.Update(&api.SessionList{Sessions: []api.SessionInfo{session("api", time.Minute, 1)}})
+			if strings.Contains(ansi.Strip(m.View().Content), "snow claude setup") {
+				t.Fatal("the hint stayed")
+			}
+		})
+	}
+}

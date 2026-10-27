@@ -54,6 +54,7 @@ arrow keys and Enter.
 snow           open the home page
 snow <name>    attach to session <name>, or create it
 snow auth      save or remove provider API keys
+snow claude    add Snow's hooks to Claude Code's settings
 snow version   print the version
 snow help      show the commands
 ```
@@ -71,9 +72,36 @@ reads, stores, or forwards your Claude Code login or tokens.
 `Ctrl+b a` opens a Claude Code pane beside the focused pane, in its folder.
 Next to a WSL pane it runs the `claude` inside that distribution. The
 profile picker (`Ctrl+b %`, `"`, `c`) lists "Claude Code" when Snow finds
-`claude` on your PATH, and "Claude Code (Ubuntu)" for a running WSL
-distribution that has it. When Snow finds no `claude`, `Ctrl+b a` says how
+`claude` on your PATH, and "Claude Code (Ubuntu)" for a WSL distribution
+that has it and ran when the Snow server started. A distribution started
+later joins the picker after the first `Ctrl+b a` in one of its panes,
+which always looks again. When Snow finds no `claude`, `Ctrl+b a` says how
 to install it. A saved session starts `claude` again in its folder.
+Snow finds the Windows side of a WSL pane at `/mnt/<drive>`, WSL's default
+mount point.
+
+Run `snow claude setup` once so Snow can show which agent needs you. It
+adds one hook, `snow hook`, to `~/.claude/settings.json` (or the file in
+`CLAUDE_CONFIG_DIR`), shows the change, and asks first. It keeps every
+other setting and hook, and saves a copy as `settings.json.snow.bak`. On
+Windows it offers each WSL distribution that has `claude` too.
+`snow claude status` says whether the hooks are set, and
+`snow claude remove` takes out only Snow's. Claude Code sessions use the
+change when they start again. Until the hooks are set, the home page
+says so while a Claude Code pane is open. Run `snow claude setup` with
+snow under its own name, `snow` or `snow.exe`. A settings file holds one
+Snow hook: in a WSL distribution, the Windows `snow.exe` sets it for the
+panes of the Windows Snow, and a Linux `snow` there replaces it with its
+own when you run setup inside the distribution.
+
+With the hooks set, each window's tab in the status bar shows the state
+of its agents after the name: `○` idle, `◐` working, `●` needs you (a
+permission question or another answer). A window that needs you is
+drawn in the prompt colors. The home page marks a session with "needs
+you", and the count when more than one agent waits. Claude Code's hooks do
+not say when you answer its question, so a key or a paste you send to a
+pane that needs you shows it as working until its next hook. Snow's own chat panes
+show the same marks. A terminal with no colors shows `-`, `~`, and `!`.
 
 ### Provider keys
 

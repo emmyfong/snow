@@ -106,7 +106,7 @@ func (l *Launch) wsl(h Hooks, dir, script string) {
 	if dir != "" {
 		l.Args = append(l.Args, "--cd", dir)
 	}
-	l.Args = append(l.Args, "-e", "sh", wslPath(filepath.Join(h.Dir, script)))
+	l.Args = append(l.Args, "-e", "sh", WSLPath(filepath.Join(h.Dir, script)))
 	l.Env = []string{"WSLENV=" + forwardSnow(os.Getenv("WSLENV"))}
 	l.Dir = ""
 }
@@ -145,9 +145,9 @@ func cmdPrompt() string {
 	return `$E]7;file://` + os.Getenv("COMPUTERNAME") + `/$P$E\` + user
 }
 
-// wslPath turns a Windows path into the path WSL mounts it at, assuming the
+// WSLPath turns a Windows path into the path WSL mounts it at, assuming the
 // default automount root /mnt. Other paths are returned unchanged.
-func wslPath(p string) string {
+func WSLPath(p string) string {
 	if len(p) < 3 || p[1] != ':' || !isLetter(p[0]) {
 		return p
 	}

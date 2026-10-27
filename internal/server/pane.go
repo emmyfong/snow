@@ -27,6 +27,9 @@ type pane struct {
 	// terminal pane, at agentAt; owned by the model goroutine.
 	agent   string
 	agentAt time.Time
+	// sawHook is set by the pane's first hook. hookless is set when an
+	// agent pane sent none in time: its hooks are not set up.
+	sawHook, hookless bool
 }
 
 // startPane starts profile's program in dir at cols by rows, below
@@ -45,6 +48,14 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 		return nil, err
 	}
 	p := &pane{id: id, profile: profile, term: tp, dir: dir}
+	if s.launch.isAgent(profile) {
+		due := func() { s.post(func(st *state) { st.hooksDue(id) }) }
+		if s.opts.afterHookWait != nil {
+			s.opts.afterHookWait(due)
+		} else {
+			time.AfterFunc(defaultHookWait, due)
+		}
+	}
 	go func() {
 		<-tp.Done()
 		// A pane Snow closed did not end with WSL; skip asking.

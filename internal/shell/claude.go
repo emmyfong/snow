@@ -144,16 +144,6 @@ func foundClaude(out string) bool {
 	return false
 }
 
-// Find returns the profile called name; an empty name is the first.
-func Find(profiles []Profile, name string) (Profile, bool) {
-	for _, p := range profiles {
-		if name == "" || p.Name == name {
-			return p, true
-		}
-	}
-	return Profile{}, false
-}
-
 // ClaudeFor returns the Claude Code profile for a new pane next to a pane
 // running host: the one inside host's WSL distribution for a WSL pane, or
 // else the one on this machine. A Claude Code pane gets its own profile.
@@ -190,20 +180,39 @@ func FindClaude(host Profile) (Profile, bool) {
 	return wslClaude(wsl, host.Distro), true
 }
 
-// HostShell returns the shell that commands for a pane running p go
-// through: p itself for a shell, and for a Claude Code profile the WSL
-// profile of its distribution, or the first shell on this machine.
-func HostShell(profiles []Profile, p Profile) (Profile, bool) {
-	if !p.IsAgent() {
-		return p, true
+// ClaudeDistros returns a Claude Code profile for each installed WSL
+// distribution that has claude. It asks every distribution, which starts
+// the ones that do not run, so it is for a command the user runs, such as
+// snow claude setup, never for the server. Outside Windows it returns none.
+// The error names each distribution that gave no answer, so the user knows
+// it was left out.
+func ClaudeDistros() ([]Profile, error) { return claudeDistros(currentSystem()) }
+
+func claudeDistros(sys system) ([]Profile, error) {
+	if sys.goos != "windows" {
+		return nil, nil
 	}
-	for _, s := range profiles {
-		if s.IsAgent() {
-			continue
-		}
-		if p.Distro == "" && s.Kind != KindWSL || p.Distro != "" && s.Kind == KindWSL && s.Distro == p.Distro {
-			return s, true
+	wsl, err := sys.lookPath("wsl.exe")
+	if err != nil {
+		return nil, nil
+	}
+	// wsl.exe exits non-zero when no distribution is installed.
+	list, err := sys.wslList()
+	if err != nil {
+		return nil, nil
+	}
+	var (
+		out  []Profile
+		errs []error
+	)
+	for _, d := range parseWSLList(list) {
+		ok, err := sys.claudeIn(wsl, d)
+		switch {
+		case err != nil:
+			errs = append(errs, err)
+		case ok:
+			out = append(out, wslClaude(wsl, d))
 		}
 	}
-	return Profile{}, false
+	return out, errors.Join(errs...)
 }

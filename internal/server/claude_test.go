@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/shell"
@@ -161,5 +162,76 @@ func writeExe(t *testing.T, dir, name string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, name), []byte("#!/bin/sh\n"), 0o700); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// hintOptions are claudeOptions whose Claude Code panes count as agents.
+// Each pane's hook wait goes to the returned channel, to fire by hand.
+func hintOptions() (Options, <-chan func()) {
+	due := make(chan func(), 8)
+	opts := claudeOptions(func(string) (string, bool) { return "Claude Code", true }, nil)
+	opts.agentProfile = func(p string) bool { return strings.HasPrefix(p, "Claude Code") }
+	opts.afterHookWait = func(f func()) { due <- f }
+	return opts, due
+}
+
+// claudePane attaches to a new session, splits it with a Claude Code pane,
+// and returns the client, a home page client, the pane's ID, and the
+// function that ends its hook wait.
+func claudePane(t *testing.T) (*Server, *apitest.Client, *apitest.Client, int, func()) {
+	t.Helper()
+	opts, due := hintOptions()
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c, first := attachNoPrompt(t, s)
+	home := connect(t, s, 80, 24)
+	c.Send(claudeSplit(first))
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	return s, c, home, shownPanes(l)[1].ID, <-due
+}
+
+// TestHooksNotSetHint: a Claude Code pane that sends no hook in time puts a
+// hint on the home page; its first hook takes the hint away.
+func TestHooksNotSetHint(t *testing.T) {
+	s, _, home, claude, fire := claudePane(t)
+	fire()
+	got := nextList(t, home, func(l *api.SessionList) bool { return l.Hint != "" })
+	if !strings.Contains(got.Hint, "snow claude setup") {
+		t.Fatalf("hint %q, want it to name snow claude setup", got.Hint)
+	}
+	hook(t, s, claude, api.AgentIdle, time.Now())
+	nextList(t, home, func(l *api.SessionList) bool { return l.Hint == "" })
+}
+
+// TestHooksNotSetHintGoesWithPane: closing the silent pane takes the hint
+// away too.
+func TestHooksNotSetHintGoesWithPane(t *testing.T) {
+	_, c, home, claude, fire := claudePane(t)
+	fire()
+	nextList(t, home, func(l *api.SessionList) bool { return l.Hint != "" })
+	c.Send(&api.Command{Op: api.OpClose, Target: claude})
+	nextList(t, home, func(l *api.SessionList) bool { return l.Hint == "" })
+}
+
+// TestHookedPaneHasNoHint: a pane whose hook arrived before its wait ended
+// shows no hint.
+func TestHookedPaneHasNoHint(t *testing.T) {
+	s, _, _, claude, _ := claudePane(t)
+	hint := "unset"
+	s.call(func(st *state) {
+		st.agentState(&api.AgentState{Pane: claude, State: api.AgentIdle, At: time.Now()})
+		st.hooksDue(claude) // what the armed wait runs when it ends
+		hint = st.hookHint()
+	})
+	if hint != "" {
+		t.Fatalf("hint %q for a pane that sent a hook", hint)
+	}
+}
+
+// TestHookWaitCoversTrust: a first claude start can sit on its trust
+// question; the hint waits long enough not to nag there.
+func TestHookWaitCoversTrust(t *testing.T) {
+	if defaultHookWait < 30*time.Second {
+		t.Fatalf("hook wait %v, want 30 s or more", defaultHookWait)
 	}
 }

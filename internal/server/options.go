@@ -55,6 +55,12 @@ type Options struct {
 	// Tests with Spec set give the Claude Code profiles with these; see
 	// launcher.claude and launcher.findClaude. Nil finds none.
 	claudeProfile, findClaude func(host string) (string, bool)
+	// agentProfile tells tests with Spec set which profiles run an agent;
+	// nil means none.
+	agentProfile func(profile string) bool
+	// afterHookWait runs f when an agent pane has had defaultHookWait to
+	// send its first hook; nil means a timer. Tests fire it by hand.
+	afterHookWait func(f func())
 }
 
 func (o Options) logger() *slog.Logger {
@@ -82,6 +88,9 @@ type launcher struct {
 	// running host, and adds what it finds to the profiles. It can run
 	// wsl.exe, so it never runs on the model goroutine.
 	findClaude func(host string) (string, bool)
+	// isAgent reports whether profile runs an agent that reports through
+	// hooks, such as Claude Code.
+	isAgent func(profile string) bool
 }
 
 // newLauncher returns the launcher for opts. It detects shell profiles once:
@@ -90,7 +99,10 @@ func newLauncher(opts Options, log *slog.Logger) launcher {
 	if opts.Spec != nil {
 		l := launcher{profiles: opts.Profiles, spec: func(profile, dir string) (term.Spec, string, error) {
 			return opts.Spec(profile, usableDir(dir))
-		}, claude: orNone(opts.claudeProfile), findClaude: orNone(opts.findClaude)}
+		}, claude: orNone(opts.claudeProfile), findClaude: orNone(opts.findClaude), isAgent: opts.agentProfile}
+		if l.isAgent == nil {
+			l.isAgent = func(string) bool { return false }
+		}
 		if l.profiles == nil {
 			_, name, err := opts.Spec("", "")
 			l.profiles = func() []string {
@@ -190,6 +202,10 @@ func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
 				return shell.Profile{}, false
 			}
 			return shell.HostShell(set.all(), p)
+		},
+		isAgent: func(profile string) bool {
+			p, ok := shell.Find(set.all(), profile)
+			return ok && profile != "" && p.IsAgent()
 		},
 		distro: func(profile string) (string, bool) {
 			for _, p := range set.all() {

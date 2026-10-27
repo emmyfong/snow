@@ -39,6 +39,7 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    │           │                       │     agent, server, convstore, provider, or credential)
    ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
    │           │                       │    hooks and settings only, never its login)
+   ├──► shell  (snow claude: the WSL distributions that have claude)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;

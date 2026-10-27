@@ -31,6 +31,7 @@ type state struct {
 	// means the client asks the user to choose before the first message.
 	defaultModel, defaultEffort string
 	models                      modelCache // provider model lists for the picker
+	hint                        string     // the hint the clients last heard
 }
 
 type session struct {
@@ -170,13 +171,17 @@ func (st *state) sessionList() []api.SessionInfo {
 // sessionsChanged sends the session list to every client: the home page
 // and the session screen's list both show what runs now.
 func (st *state) sessionsChanged() {
-	var list *api.SessionList
+	list := st.listMessage()
 	for c := range st.clients {
-		if list == nil {
-			list = &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()}
-		}
 		st.enqueue(c, list)
 	}
+}
+
+// listMessage is the session list every client gets, and remembers the
+// hint it carries, so syncHint sends it again only on a change.
+func (st *state) listMessage() *api.SessionList {
+	st.hint = st.hookHint()
+	return &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes(), Hint: st.hint}
 }
 
 func (st *state) closeAll() {

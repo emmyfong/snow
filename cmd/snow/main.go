@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"strings"
 	"syscall"
 
 	"github.com/emmyfong/snow/internal/client"
@@ -29,12 +28,13 @@ const usage = `usage:
   snow           open the home page: your sessions, running and saved
   snow <name>    attach to session <name>, or create it
   snow auth      save or remove provider API keys (snow auth help)
+  snow claude    add Snow's hooks to Claude Code's settings (snow claude help)
   snow hook      tell Snow what Claude Code does; Claude Code's hooks run it
   snow version   print the version (also -v, --version)
   snow help      show this help (also -h, --help)
 
-The names version, help, server, auth, and hook are commands, not
-sessions.
+The names version, help, server, auth, claude, and hook are commands,
+not sessions.
 Inside a session, press Ctrl+b then d to go back to the home page, and
 Ctrl+b alone, then wait, to see every key.
 `
@@ -47,68 +47,15 @@ func main() {
 	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
 
-// kind is what a command line asks snow to do.
-type kind int
-
-const (
-	kindAttach kind = iota
-	kindServer
-	kindVersion
-	kindHelp
-	kindAuth
-	kindAuthHelp
-	kindHook
-)
-
-// command is a parsed command line.
-type command struct {
-	kind    kind
-	session string // for kindAttach; "" creates a numbered session
-	auth    authCommand
-}
-
-func parseArgs(args []string) (command, error) {
-	switch {
-	case len(args) == 0:
-		return command{kind: kindAttach}, nil
-	case args[0] == "auth":
-		if len(args) == 2 && (args[1] == "help" || args[1] == "-h" || args[1] == "--help") {
-			return command{kind: kindAuthHelp}, nil
-		}
-		a, err := parseAuth(args[1:])
-		if err != nil {
-			return command{kind: kindAuthHelp}, err
-		}
-		return command{kind: kindAuth, auth: a}, nil
-	case len(args) > 1:
-		return command{}, errors.New("too many arguments")
-	}
-	switch a := args[0]; a {
-	case "version", "-v", "--version":
-		return command{kind: kindVersion}, nil
-	case "help", "-h", "--help":
-		return command{kind: kindHelp}, nil
-	case "server":
-		return command{kind: kindServer}, nil
-	case "hook":
-		return command{kind: kindHook}, nil
-	default:
-		if strings.HasPrefix(a, "-") {
-			return command{}, fmt.Errorf("unknown option %s", a)
-		}
-		if strings.ContainsAny(a, `/\`) {
-			return command{}, fmt.Errorf("session names cannot contain / or \\: %s", a)
-		}
-		return command{kind: kindAttach, session: a}, nil
-	}
-}
-
 func run(args []string, stdout, stderr io.Writer) int {
 	cmd, err := parseArgs(args)
 	if err != nil {
 		help := usage
-		if cmd.kind == kindAuthHelp {
+		switch cmd.kind {
+		case kindAuthHelp:
 			help = authUsage
+		case kindClaudeHelp:
+			help = claudeUsage
 		}
 		_, _ = fmt.Fprintf(stderr, "snow: %v\n%s", err, help)
 		return 2
@@ -129,6 +76,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runAuth(cmd.auth, stdout, stderr)
 	case kindHook:
 		return runHook(stdin)
+	case kindClaudeHelp:
+		_, _ = fmt.Fprint(stdout, claudeUsage)
+		return 0
+	case kindClaude:
+		return runClaude(cmd.claude, stdin, stdout, stderr)
 	default:
 		if err := nested(); err != nil {
 			_, _ = fmt.Fprintln(stderr, "snow:", err)

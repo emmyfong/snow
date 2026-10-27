@@ -287,9 +287,13 @@ const (
 // attached client gets it too, for its session list. Notes holds problems
 // with saved sessions the user should know about: a file the server could
 // not read and moved aside, with both paths, or saving that fails.
+//
+// Hint is a one-line tip for the home page, or empty: for example that a
+// Claude Code pane sends no hooks, so Snow cannot show when it needs you.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
 	Notes    []string      `json:"notes,omitempty"`
+	Hint     string        `json:"hint,omitempty"`
 }
 
 // SessionInfo summarizes one session. NeedsYou counts the agents in it

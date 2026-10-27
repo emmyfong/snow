@@ -36,8 +36,10 @@ func (st *state) changed(sess *session) {
 	st.relayout(sess)
 	st.save(sess)
 	st.sendLayout(sess)
-	// A closed pane may have been an agent that waited for the user.
+	// A closed pane may have been an agent that waited for the user, or
+	// one that sent no hooks.
 	st.syncNeedsYou(sess)
+	st.syncHint()
 }
 
 // repaint makes the next frame send every visible row to the clients of

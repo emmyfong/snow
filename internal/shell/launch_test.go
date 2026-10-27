@@ -137,8 +137,8 @@ func TestWSLPath(t *testing.T) {
 		{"/already/linux", "/already/linux"},
 	}
 	for _, tt := range tests {
-		if got := wslPath(tt.in); got != tt.want {
-			t.Errorf("wslPath(%q) = %q, want %q", tt.in, got, tt.want)
+		if got := WSLPath(tt.in); got != tt.want {
+			t.Errorf("WSLPath(%q) = %q, want %q", tt.in, got, tt.want)
 		}
 	}
 }
