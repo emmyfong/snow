@@ -26,9 +26,12 @@ type Store interface {
 type Provider struct {
 	Name   string // the provider's part of a model name, for example "anthropic"
 	Title  string // the name to show, for example "Anthropic (Claude)"
-	KeyURL string // the vendor's page where the user creates a key
-	check  func(ctx context.Context, key string) error
-	open   func(keys provider.KeySource) provider.Provider
+	KeyURL string // the vendor's page where the user creates a key; empty when unknown
+	// NoKey marks a provider that takes no key, such as a local server. It
+	// counts as connected.
+	NoKey bool
+	check func(ctx context.Context, key string) error
+	open  func(keys provider.KeySource) provider.Provider
 }
 
 // ErrUnknownProvider means no provider has the name given.
@@ -118,6 +121,9 @@ func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (Result,
 	if p.check == nil {
 		return Result{}, fmt.Errorf("%w %q", ErrUnknownProvider, p.Name)
 	}
+	if p.NoKey {
+		return Result{}, fmt.Errorf("%s: %w; its config table has no_key = true", p.Title, ErrNoKeyNeeded)
+	}
 	if err := p.check(ctx, k.Reveal()); err != nil {
 		var pe *provider.Error
 		if errors.As(err, &pe) && pe.Kind == provider.KindBadKey {
@@ -169,6 +175,10 @@ func (s Status) Connected() bool { return s.Err == nil }
 func Statuses(ps []Provider, s Store) []Status {
 	out := make([]Status, len(ps))
 	for i, p := range ps {
+		if p.NoKey {
+			out[i] = Status{Provider: p}
+			continue
+		}
 		_, src, err := s.Get(p.Name)
 		out[i] = Status{Provider: p, Source: src, Err: err}
 	}

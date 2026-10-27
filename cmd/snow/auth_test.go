@@ -66,8 +66,8 @@ func authTest(t *testing.T) string {
 	srv := providertest.NewKeyServer(t, goodKey)
 	keyServer = srv
 	old, oldIn := authProviders, stdin
-	authProviders = func() []signin.Provider {
-		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL})
+	authProviders = func() ([]signin.Provider, error) {
+		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}), nil
 	}
 	t.Cleanup(func() { authProviders, stdin = old, oldIn })
 	return filepath.Join(home, ".snow")
@@ -255,8 +255,8 @@ func TestLoginCouldNotCheck(t *testing.T) {
 	dir := authTest(t)
 	srv := httptest.NewServer(http.NotFoundHandler())
 	srv.Close()
-	authProviders = func() []signin.Provider {
-		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL})
+	authProviders = func() ([]signin.Provider, error) {
+		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}), nil
 	}
 	code, _, errOut := auth(t, goodKey+"\n", "login", "openai")
 	if code != 1 || !strings.Contains(errOut, "could not check the key") || strings.Contains(errOut, "did not accept") {

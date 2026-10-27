@@ -22,14 +22,16 @@ const authUsage = `usage:
   snow auth logout <provider>   remove a saved API key
   snow auth status              show which providers have a key
 
-Providers: anthropic, openai. Keys go to the OS credential store, or to
+Providers: anthropic, openai, and each [provider.<name>] table in
+~/.snow/config.toml. Keys go to the OS credential store, or to
 ~/.snow/credentials where the system has none. An environment variable
 such as ANTHROPIC_API_KEY takes precedence over a saved key.
 `
 
-// authProviders lists the providers `snow auth` knows. Tests point the
-// key checks at a fake server.
-var authProviders = signin.Providers
+// authProviders lists the providers `snow auth` knows: the built-in ones
+// and those of the config file. Tests point the key checks at a fake
+// server.
+var authProviders = configuredProviders
 
 // authAction is what `snow auth` does.
 type authAction string
@@ -72,7 +74,11 @@ func parseAuth(args []string) (authCommand, error) {
 		if len(rest) != 1 {
 			return authCommand{}, fmt.Errorf("auth %s needs one provider", a)
 		}
-		if _, err := signin.Find(authProviders(), rest[0]); err != nil {
+		ps, err := authProviders()
+		if err != nil {
+			return authCommand{}, err
+		}
+		if _, err := signin.Find(ps, rest[0]); err != nil {
 			return authCommand{}, err
 		}
 		return authCommand{action: a, provider: rest[0]}, nil
@@ -91,11 +97,16 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 		return 1
 	}
 	store := credential.New(dir, func(msg string) { _, _ = fmt.Fprintln(stdout, msg) })
+	ps, err := authProviders()
+	if err != nil {
+		_, _ = fmt.Fprintln(stderr, "snow:", err)
+		return 1
+	}
 	if cmd.action == authStatus {
-		return authStatusCmd(store, stdout)
+		return authStatusCmd(ps, store, stdout)
 	}
 	// parseAuth has already found the provider.
-	p, err := signin.Find(authProviders(), cmd.provider)
+	p, err := signin.Find(ps, cmd.provider)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 2
@@ -108,7 +119,9 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 }
 
 func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
-	_, _ = fmt.Fprintf(stdout, "Create a %s API key at %s\n", p.Title, p.KeyURL)
+	if p.KeyURL != "" {
+		_, _ = fmt.Fprintf(stdout, "Create an API key for %s at %s\n", p.Title, p.KeyURL)
+	}
 	secret, err := readSecret(in, stderr, "Paste the key (it does not show): ")
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
@@ -161,10 +174,12 @@ func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdo
 	return 0
 }
 
-func authStatusCmd(store signin.Store, stdout io.Writer) int {
-	for _, s := range signin.Statuses(authProviders(), store) {
+func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) int {
+	for _, s := range signin.Statuses(ps, store) {
 		var line string
 		switch {
+		case s.Provider.NoKey:
+			line = "no key needed"
 		case s.Connected():
 			line = fmt.Sprintf("API key (%s)", s.Source)
 		case errors.Is(s.Err, credential.ErrNoKey):

@@ -24,6 +24,9 @@ type Config struct {
 	Theme      Theme      `toml:"theme"`
 	Sessions   Sessions   `toml:"sessions"`
 	Chat       Chat       `toml:"chat"`
+	// Providers holds the [provider.<name>] tables, by name. Nil means
+	// none.
+	Providers map[string]Endpoint `toml:"provider"`
 }
 
 // Chat sets how chat panes start.
@@ -157,6 +160,10 @@ func parse(data string) (Config, *Error) {
 		return Config{}, verr
 	}
 	if verr, path := cfg.Keys.validateBind(); verr != nil {
+		verr.Line = keyLine(data, path)
+		return Config{}, verr
+	}
+	if verr, path := cfg.validateProviders(); verr != nil {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}

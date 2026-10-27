@@ -11,9 +11,17 @@ import (
 
 // Models implements provider.Provider. The API lists every model the key
 // can use, including images, audio, and embeddings; only text models that
-// the Responses API serves are kept.
+// the Responses API serves are kept. A compatible service offers the models
+// from its config, or else its whole list.
 func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
-	opts, err := p.options()
+	if len(p.models) > 0 {
+		out := make([]provider.Model, len(p.models))
+		for i, id := range p.models {
+			out[i] = provider.Model{ID: id, DisplayName: id, Efforts: capsFor(id).supported()}
+		}
+		return out, nil
+	}
+	opts, key, err := p.options()
 	if err != nil {
 		return nil, err
 	}
@@ -22,13 +30,13 @@ func (p *Provider) Models(ctx context.Context) ([]provider.Model, error) {
 	var out []provider.Model
 	for pager.Next() {
 		m := pager.Current()
-		if !textModel(m.ID) {
+		if !p.compat && !textModel(m.ID) {
 			continue
 		}
 		out = append(out, provider.Model{ID: m.ID, DisplayName: m.ID, Efforts: capsFor(m.ID).supported()})
 	}
 	if err := pager.Err(); err != nil {
-		return nil, mapErr(ctx, err)
+		return nil, mapErr(ctx, err, key)
 	}
 	return out, nil
 }

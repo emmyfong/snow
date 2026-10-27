@@ -21,14 +21,15 @@ type stream struct {
 	done   bool  // the response completed or stopped early
 	err    error // the error that ended the reply; Next returns it again
 	closed bool
+	key    string // the key the request sent, which errors must not repeat
 
 	toolCalls bool   // the reply holds a tool call
 	refused   bool   // the reply holds a refusal
 	lastItem  string // the reasoning item whose summary streamed last
 }
 
-func newStream(ctx context.Context, sse *ssestream.Stream[responses.ResponseStreamEventUnion]) *stream {
-	return &stream{ctx: ctx, sse: sse}
+func newStream(ctx context.Context, sse *ssestream.Stream[responses.ResponseStreamEventUnion], key string) *stream {
+	return &stream{ctx: ctx, sse: sse, key: key}
 }
 
 // Next implements provider.Stream.
@@ -53,7 +54,7 @@ func (s *stream) Next() (provider.Event, error) {
 		}
 		if !s.sse.Next() {
 			if err := s.sse.Err(); err != nil {
-				s.err = mapErr(s.ctx, err)
+				s.err = mapErr(s.ctx, err, s.key)
 			} else {
 				// The connection ended before response.completed: the reply was cut.
 				s.err = &provider.Error{Kind: provider.KindNetwork, Err: io.ErrUnexpectedEOF}
@@ -104,9 +105,9 @@ func (s *stream) handle(ev responses.ResponseStreamEventUnion) error {
 		s.finish(e.Response.Usage, incompleteReason(e.Response.IncompleteDetails.Reason))
 	case responses.ResponseFailedEvent:
 		er := e.Response.Error
-		return failure(0, string(er.Code), er.Type, er.Message)
+		return failure(0, string(er.Code), er.Type, er.Message, s.key)
 	case responses.ResponseErrorEvent:
-		return failure(0, e.Code, "", e.Message)
+		return failure(0, e.Code, "", e.Message, s.key)
 	}
 	return nil
 }
