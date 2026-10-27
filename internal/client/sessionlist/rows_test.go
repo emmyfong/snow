@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -61,11 +62,38 @@ func TestSortNewestFirst(t *testing.T) {
 }
 
 func TestItems(t *testing.T) {
-	items := Items([]api.SessionInfo{info("api", 5*time.Minute, 1)}, base)
+	items := Items([]api.SessionInfo{info("api", 5*time.Minute, 1)}, base, theme.Default().Glyphs)
 	if len(items) != 1 {
 		t.Fatalf("%d items, want 1", len(items))
 	}
 	if c := items[0].Cols; len(c) != 3 || c[0] != "api" || c[1] != "running, 1 client" || c[2] != "5m ago" {
 		t.Fatalf("cols %q", c)
+	}
+}
+
+// TestNeedsYouAlert: a session where agents wait says so in words, with
+// the count when more than one waits; the mark is the theme's glyph.
+func TestNeedsYouAlert(t *testing.T) {
+	g := theme.Default().Glyphs
+	tests := []struct {
+		n    int
+		want string
+	}{
+		{0, ""},
+		{1, "● needs you"},
+		{3, "● needs you (3)"},
+	}
+	for _, tt := range tests {
+		s := info("api", time.Minute, 0)
+		s.NeedsYou = tt.n
+		if got := Items([]api.SessionInfo{s}, base, g)[0].Alert; got != tt.want {
+			t.Errorf("%d waiting: alert %q, want %q", tt.n, got, tt.want)
+		}
+	}
+	g.AgentNeedsYou = "!"
+	s := info("api", time.Minute, 0)
+	s.NeedsYou = 1
+	if got := Items([]api.SessionInfo{s}, base, g)[0].Alert; got != "! needs you" {
+		t.Errorf("alert %q ignores the theme's glyph", got)
 	}
 }

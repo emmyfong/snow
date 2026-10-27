@@ -39,6 +39,8 @@ type session struct {
 	active     int       // index of the shown window
 	lastUsed   time.Time
 	cols, rows int
+	// needsYou is the count of waiting agents the clients last heard of.
+	needsYou int
 }
 
 func newState(s *Server) *state {
@@ -158,6 +160,7 @@ func (st *state) sessionList() []api.SessionInfo {
 			Attached: attached[sess.name],
 			State:    api.StateRunning,
 			LastUsed: sess.lastUsed,
+			NeedsYou: needsYou(sess),
 		})
 	}
 	slices.SortFunc(out, func(a, b api.SessionInfo) int { return cmp.Compare(a.Name, b.Name) })

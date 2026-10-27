@@ -292,13 +292,16 @@ type SessionList struct {
 	Notes    []string      `json:"notes,omitempty"`
 }
 
-// SessionInfo summarizes one session.
+// SessionInfo summarizes one session. NeedsYou counts the agents in it
+// that wait for the user (AgentNeedsYou), for a running session; it is
+// left out when none does.
 type SessionInfo struct {
 	Name     string    `json:"name"`
 	Windows  int       `json:"windows"`
 	Attached int       `json:"attached"`
 	State    string    `json:"state"`
 	LastUsed time.Time `json:"lastUsed"`
+	NeedsYou int       `json:"needsYou,omitempty"`
 }
 
 // Bell reports that a pane rang the terminal bell.

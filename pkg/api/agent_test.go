@@ -73,3 +73,38 @@ func TestLayoutAgentIsOptional(t *testing.T) {
 		t.Fatalf("encoded %s, want no agent field", b)
 	}
 }
+
+// TestOldClientIgnoresField: a client built before NeedsYou existed still
+// reads the session list, and a session where no agent waits sends no new
+// field at all.
+func TestOldClientIgnoresField(t *testing.T) {
+	when := time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)
+	var buf bytes.Buffer
+	sent := &SessionList{Sessions: []SessionInfo{
+		{Name: "api", Windows: 2, State: StateRunning, LastUsed: when, NeedsYou: 2},
+		{Name: "docs", Windows: 1, State: StateRunning, LastUsed: when},
+	}}
+	if err := WriteFrame(&buf, sent); err != nil {
+		t.Fatal(err)
+	}
+	payload := buf.Bytes()[5:] // past the length and the type
+	type oldInfo struct {
+		Name     string    `json:"name"`
+		Windows  int       `json:"windows"`
+		Attached int       `json:"attached"`
+		State    string    `json:"state"`
+		LastUsed time.Time `json:"lastUsed"`
+	}
+	var old struct {
+		Sessions []oldInfo `json:"sessions"`
+	}
+	if err := json.Unmarshal(payload, &old); err != nil {
+		t.Fatalf("an old client cannot read the list: %v", err)
+	}
+	if len(old.Sessions) != 2 || old.Sessions[0].Name != "api" || old.Sessions[1].Windows != 1 {
+		t.Fatalf("old client read %+v", old)
+	}
+	if b := mustJSON(t, &sent.Sessions[1]); bytes.Contains([]byte(b), []byte("needsYou")) {
+		t.Fatalf("a session with no waiting agent encodes %s", b)
+	}
+}

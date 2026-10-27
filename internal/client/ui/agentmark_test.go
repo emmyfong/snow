@@ -111,3 +111,38 @@ func colorCode(c color.Color) string {
 	r, g, b, _ := c.RGBA()
 	return fmt.Sprintf("48;2;%d;%d;%d", r>>8, g>>8, b>>8)
 }
+
+// TestListAlert: an alert sits at the row's right end in the prompt
+// colors, selected or not, and stays when the row is cut to fit.
+func TestListAlert(t *testing.T) {
+	th := theme.Default()
+	items := []ListItem{
+		{Cols: []string{"api", "running", "2m ago"}, Alert: "● needs you (2)"},
+		{Cols: []string{"docs", "running", "1h ago"}},
+	}
+	for _, width := range []int{60, 30, 24} {
+		for _, sel := range []int{0, 1} {
+			out := List(th, ListOptions{Items: items, Selected: sel, Width: width})
+			rows := strings.Split(out, "\n")
+			for i, r := range rows {
+				if w := ansi.StringWidth(r); w != width {
+					t.Fatalf("width %d, selected %d: row %d is %d wide", width, sel, i, w)
+				}
+			}
+			plain := ansi.Strip(rows[0])
+			if !strings.HasSuffix(plain, " ● needs you (2) ") || !strings.HasPrefix(strings.TrimLeft(plain, "> "), "api") {
+				t.Fatalf("width %d: row %q, want the name and the alert at the end", width, plain)
+			}
+			if !strings.Contains(rows[0], colorCode(th.PromptBG)) {
+				t.Fatalf("width %d, selected %d: the alert is not in the prompt colors", width, sel)
+			}
+			if strings.Contains(ansi.Strip(rows[1]), "needs") {
+				t.Fatalf("the plain row has an alert: %q", rows[1])
+			}
+		}
+	}
+	// Too narrow for the alert: the row still fits, with no alert.
+	if out := List(th, ListOptions{Items: items, Selected: -1, Width: 12}); ansi.StringWidth(strings.Split(out, "\n")[0]) != 12 {
+		t.Fatalf("narrow list %q", out)
+	}
+}

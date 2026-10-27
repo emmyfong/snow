@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -21,13 +22,26 @@ func Sort(sessions []api.SessionInfo) []api.SessionInfo {
 }
 
 // Items returns one list row per session: its name, its state, and when it
-// was last used, as seen at now.
-func Items(sessions []api.SessionInfo, now time.Time) []ui.ListItem {
+// was last used, as seen at now, with an alert when agents in it wait for
+// the user, marked with g's needs-you glyph.
+func Items(sessions []api.SessionInfo, now time.Time, g theme.Glyphs) []ui.ListItem {
 	items := make([]ui.ListItem, len(sessions))
 	for i, s := range sessions {
-		items[i] = ui.ListItem{Cols: []string{s.Name, State(s), Ago(now.Sub(s.LastUsed))}}
+		items[i] = ui.ListItem{Cols: []string{s.Name, State(s), Ago(now.Sub(s.LastUsed))}, Alert: needsYou(s, g)}
 	}
 	return items
+}
+
+// needsYou says that agents in s wait for the user, in words, so color is
+// not the only sign; "" when none waits.
+func needsYou(s api.SessionInfo, g theme.Glyphs) string {
+	switch {
+	case s.NeedsYou <= 0:
+		return ""
+	case s.NeedsYou == 1:
+		return g.AgentNeedsYou + " needs you"
+	}
+	return g.AgentNeedsYou + " needs you (" + strconv.Itoa(s.NeedsYou) + ")"
 }
 
 // State describes a session in a few words: running or saved, and how many

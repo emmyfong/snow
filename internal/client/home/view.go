@@ -84,7 +84,7 @@ func (m *Model) sessionList(x, width int, b band, sessions []api.SessionInfo, se
 		return append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, x)[0])
 	}
 	shown := sessions[b.first : b.first+b.count]
-	list := ui.List(th, ui.ListOptions{Items: sessionlist.Items(shown, m.now()), Selected: selected - b.first, Width: width})
+	list := ui.List(th, ui.ListOptions{Items: sessionlist.Items(shown, m.now(), th.Glyphs), Selected: selected - b.first, Width: width})
 	return append(lines, indent(strings.Split(list, "\n"), x)...)
 }
 

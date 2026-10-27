@@ -35,11 +35,9 @@ func (st *state) fitSession(sess *session) {
 func (st *state) changed(sess *session) {
 	st.relayout(sess)
 	st.save(sess)
-	for c := range st.clients {
-		if c.session == sess.name {
-			st.enqueue(c, st.layout(sess))
-		}
-	}
+	st.sendLayout(sess)
+	// A closed pane may have been an agent that waited for the user.
+	st.syncNeedsYou(sess)
 }
 
 // repaint makes the next frame send every visible row to the clients of

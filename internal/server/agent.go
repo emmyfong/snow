@@ -34,6 +34,29 @@ func (st *state) agentState(m *api.AgentState) {
 // agentChanged shows a changed agent state to the clients of sess.
 func (st *state) agentChanged(sess *session) {
 	st.sendLayout(sess)
+	st.syncNeedsYou(sess)
+}
+
+// syncNeedsYou sends the session list to every client when the count of
+// agents in sess that wait for the user changed since they last heard.
+func (st *state) syncNeedsYou(sess *session) {
+	if n := needsYou(sess); n != sess.needsYou {
+		sess.needsYou = n
+		st.sessionsChanged()
+	}
+}
+
+// needsYou counts the agents in sess that wait for the user.
+func needsYou(sess *session) int {
+	n := 0
+	for _, w := range sess.windows {
+		for _, p := range w.panes {
+			if p.agentNow() == api.AgentNeedsYou {
+				n++
+			}
+		}
+	}
+	return n
 }
 
 // sendLayout sends the layout of sess to its clients.
