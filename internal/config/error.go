@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -51,4 +53,19 @@ func Locate(path string, key []string, msg string, cause error) *Error {
 		e.Line = keyLine(string(data), key)
 	}
 	return e
+}
+
+// typeErrorText matches the text of a TOML type mismatch, for example
+// `toml: line 3 (last key "agent.x.env.A"): incompatible types: ...`.
+var typeErrorText = regexp.MustCompile(`^toml: line (\d+) \(last key "([^"]*)"\): (.*)$`)
+
+// typeError turns a TOML decode error that is not a ParseError into an
+// *Error with the line and the key its text names.
+func typeError(err error) *Error {
+	m := typeErrorText.FindStringSubmatch(err.Error())
+	if m == nil {
+		return &Error{Msg: err.Error(), Err: err}
+	}
+	line, _ := strconv.Atoi(m[1]) // the pattern holds only digits
+	return &Error{Line: line, Key: m[2], Msg: m[3], Err: err}
 }

@@ -1,10 +1,12 @@
 package apitest
 
 import (
+	"bytes"
 	"errors"
 	"net"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -35,6 +37,8 @@ type Client struct {
 	Updates, LastLen int
 	// Snapshots counts ChatSnapshots received.
 	Snapshots int
+
+	rec *recorder
 }
 
 type received struct {
@@ -47,12 +51,13 @@ type received struct {
 func New(t testing.TB, raw net.Conn, cols, rows int) *Client {
 	t.Helper()
 	t.Cleanup(func() { _ = raw.Close() })
-	conn := api.NewConn(raw)
+	rec := &recorder{Conn: raw}
+	conn := api.NewConn(rec)
 	hello := api.Hello{ClientVersion: "test", Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}
 	if _, err := api.ClientHandshake(conn, hello); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
-	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}, chats: map[int]*api.ChatSnapshot{}}
+	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}, chats: map[int]*api.ChatSnapshot{}, rec: rec}
 	go func() {
 		for {
 			m, err := conn.Receive()
@@ -80,6 +85,10 @@ func Dial(t testing.TB, path string, cols, rows int) *Client {
 		time.Sleep(20 * time.Millisecond)
 	}
 }
+
+// Received returns every byte the client has read from the server so
+// far, for tests that check what never crosses the protocol.
+func (c *Client) Received() []byte { return c.rec.bytes() }
 
 // Close closes the connection.
 func (c *Client) Close() { _ = c.raw.Close() }
@@ -233,4 +242,25 @@ func (c *Client) Drain(quiet time.Duration) {
 			return
 		}
 	}
+}
+
+// recorder keeps a copy of what is read from a connection.
+type recorder struct {
+	net.Conn
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (r *recorder) Read(p []byte) (int, error) {
+	n, err := r.Conn.Read(p)
+	r.mu.Lock()
+	r.buf.Write(p[:n])
+	r.mu.Unlock()
+	return n, err
+}
+
+func (r *recorder) bytes() []byte {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return bytes.Clone(r.buf.Bytes())
 }

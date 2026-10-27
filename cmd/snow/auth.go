@@ -23,9 +23,11 @@ const authUsage = `usage:
   snow auth status              show which providers have a key
 
 Providers: anthropic, openai, and each [provider.<name>] table in
-~/.snow/config.toml. Keys go to the OS credential store, or to
-~/.snow/credentials where the system has none. An environment variable
-such as ANTHROPIC_API_KEY takes precedence over a saved key.
+~/.snow/config.toml. A secret an [agent.<name>] table names as
+"$secret:<name>", such as a gateway's token, is saved the same way.
+Keys go to the OS credential store, or to ~/.snow/credentials where the
+system has none. An environment variable such as ANTHROPIC_API_KEY takes
+precedence over a saved key.
 `
 
 // authProviders lists the providers `snow auth` knows: the built-in ones
@@ -123,7 +125,8 @@ func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdou
 	if p.KeyURL != "" {
 		_, _ = fmt.Fprintf(stdout, "Create an API key for %s at %s\n", p.Title, p.KeyURL)
 	}
-	secret, err := readSecret(in, stderr, "Paste the key (it does not show): ")
+	noun := keyNoun(p)
+	secret, err := readSecret(in, stderr, "Paste the "+noun+" (it does not show): ")
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
@@ -133,7 +136,9 @@ func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdou
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "Checking the key with %s...\n", p.Title)
+	if !p.Token {
+		_, _ = fmt.Fprintf(stdout, "Checking the key with %s...\n", p.Title)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), checkTimeout)
 	defer cancel()
 	res, err := p.Login(ctx, store, k)
@@ -141,14 +146,26 @@ func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdou
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "Saved the %s key in the %s.\n", p.Name, res.Source)
+	_, _ = fmt.Fprintf(stdout, "Saved the %s %s in the %s.\n", p.Name, noun, res.Source)
 	if res.Shadowed {
 		_, _ = fmt.Fprintf(stdout, "%s is set, and Snow uses it before the saved key. Unset it to use the saved key.\n", credential.EnvVar(p.Name))
 	}
-	if res.Unchecked {
+	switch {
+	case p.Token:
+		_, _ = fmt.Fprintln(stdout, signin.TokenText)
+	case res.Unchecked:
 		_, _ = fmt.Fprintln(stdout, signin.UncheckedText)
 	}
 	return 0
+}
+
+// keyNoun names what a provider's secret is: a key, or a token for a
+// secret only agent profiles use.
+func keyNoun(p signin.Provider) string {
+	if p.Token {
+		return "token"
+	}
+	return "key"
 }
 
 func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
@@ -157,24 +174,24 @@ func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdo
 		_, _ = fmt.Fprintf(stderr, "snow: %v. Unset it to sign out.\n", err)
 		return 1
 	case !stored:
-		_, _ = fmt.Fprintf(stdout, "No %s key is saved.\n", p.Name)
+		_, _ = fmt.Fprintf(stdout, "No %s %s is saved.\n", p.Name, keyNoun(p))
 		return 0
 	}
-	_, _ = fmt.Fprintf(stderr, "Remove the saved %s key? [y/N] ", p.Name)
+	_, _ = fmt.Fprintf(stderr, "Remove the saved %s %s? [y/N] ", p.Name, keyNoun(p))
 	answer, err := in.ReadString('\n')
 	if err != nil && !errors.Is(err, io.EOF) {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
 	if a := strings.ToLower(strings.TrimSpace(answer)); a != "y" && a != "yes" {
-		_, _ = fmt.Fprintln(stdout, "Kept the key.")
+		_, _ = fmt.Fprintf(stdout, "Kept the %s.\n", keyNoun(p))
 		return 0
 	}
 	if err := p.Logout(store); err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
 	}
-	_, _ = fmt.Fprintf(stdout, "Removed the %s key.\n", p.Name)
+	_, _ = fmt.Fprintf(stdout, "Removed the %s %s.\n", p.Name, keyNoun(p))
 	return 0
 }
 
@@ -188,10 +205,12 @@ func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) i
 		switch {
 		case s.Provider.NoKey:
 			line = "no key needed"
+		case s.Connected() && s.Provider.Token:
+			line = fmt.Sprintf("token for agent profiles (%s)", s.Source)
 		case s.Connected():
 			line = fmt.Sprintf("API key (%s)", s.Source)
 		case errors.Is(s.Err, credential.ErrNoKey):
-			line = "no key. Run: snow auth login " + s.Provider.Name
+			line = fmt.Sprintf("no %s. Run: snow auth login %s", keyNoun(s.Provider), s.Provider.Name)
 		default:
 			line = fmt.Sprintf("cannot read the key: %v", s.Err)
 		}

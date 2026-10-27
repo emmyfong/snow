@@ -45,6 +45,15 @@ type Options struct {
 	// Chat is what chat panes need. Nil means the server cannot open them:
 	// a split or a new window of kind chat fails with ErrNoChat.
 	Chat *ChatOptions
+	// Agents are the agent profiles from config.toml. The picker lists
+	// them after the detected profiles. They are ignored when Spec is set.
+	Agents []AgentProfile
+	// Secrets reads the secrets agent profiles name. Nil means none can
+	// be read: such a profile's panes fail with ErrNoSecret.
+	Secrets SecretSource
+	// KeyVars names the variables that hold provider keys, such as
+	// OPENAI_API_KEY. Agent profile panes do not inherit them.
+	KeyVars []string
 
 	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 
@@ -58,6 +67,9 @@ type Options struct {
 	// agentProfile tells tests with Spec set which profiles run an agent;
 	// nil means none.
 	agentProfile func(profile string) bool
+	// detect stands in for shell.Detect in tests with Spec unset; set, no
+	// hook scripts are written either.
+	detect func() []shell.Profile
 	// afterHookWait runs f when an agent pane has had defaultHookWait to
 	// send its first hook; nil means a timer. Tests fire it by hand.
 	afterHookWait func(f func())
@@ -91,6 +103,11 @@ type launcher struct {
 	// isAgent reports whether profile runs an agent that reports through
 	// hooks, such as Claude Code.
 	isAgent func(profile string) bool
+	// secrets returns the secrets a pane of profile needs, and
+	// loadSecrets reads them so the next spec call finds them. loadSecrets
+	// may block on the OS key store: never call it on the model goroutine.
+	secrets     func(profile string) []string
+	loadSecrets func(names []string) error
 }
 
 // newLauncher returns the launcher for opts. It detects shell profiles once:
@@ -103,6 +120,8 @@ func newLauncher(opts Options, log *slog.Logger) launcher {
 		if l.isAgent == nil {
 			l.isAgent = func(string) bool { return false }
 		}
+		l.secrets = func(string) []string { return nil }
+		l.loadSecrets = func([]string) error { return nil }
 		if l.profiles == nil {
 			_, name, err := opts.Spec("", "")
 			l.profiles = func() []string {
@@ -115,18 +134,31 @@ func newLauncher(opts Options, log *slog.Logger) launcher {
 		return l
 	}
 	var hooks shell.Hooks
-	if dir, err := shell.DefaultHooksDir(); err == nil {
-		if h, err := shell.WriteHooks(dir); err == nil {
-			hooks = h
-		} else {
-			log.Warn("write shell hooks", "err", err)
+	detect := opts.detect
+	if detect == nil {
+		detect = shell.Detect
+		if dir, err := shell.DefaultHooksDir(); err == nil {
+			if h, err := shell.WriteHooks(dir); err == nil {
+				hooks = h
+			} else {
+				log.Warn("write shell hooks", "err", err)
+			}
 		}
 	}
-	detected := shell.Detect()
+	detected := detect()
+	agents, extra := newAgentSet(opts, detected, log)
+	detected = append(detected, extra...)
+	if names := agents.all(); len(names) > 0 {
+		go func() {
+			if err := agents.load(names); err != nil {
+				log.Warn("agent profile secrets", "err", err)
+			}
+		}()
+	}
 	if opts.DefaultProfile != "" && !hasProfile(detected, opts.DefaultProfile) {
 		log.Warn("default profile not found; using the first detected", "profile", opts.DefaultProfile)
 	}
-	return detectedLauncher(preferProfile(detected, opts.DefaultProfile), hooks)
+	return agentLauncher(preferProfile(detected, opts.DefaultProfile), hooks, agents)
 }
 
 func hasProfile(profiles []shell.Profile, name string) bool {
@@ -186,8 +218,23 @@ func (s *profileSet) add(p shell.Profile) {
 // detectedLauncher runs the given shell profiles, the first being the
 // default.
 func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
+	agents, _ := newAgentSet(Options{}, nil, slog.New(slog.DiscardHandler))
+	return agentLauncher(detected, hooks, agents)
+}
+
+// agentLauncher is detectedLauncher with the agent profiles of agents
+// among detected.
+func agentLauncher(detected []shell.Profile, hooks shell.Hooks, agents *agentSet) launcher {
 	set := newProfileSet(detected)
 	return launcher{
+		secrets: func(profile string) []string {
+			p, ok := shell.Find(set.all(), profile)
+			if !ok {
+				return nil
+			}
+			return agents.secrets(p.Name)
+		},
+		loadSecrets: agents.load,
 		profiles: func() []string {
 			all := set.all()
 			names := make([]string, len(all))
@@ -237,7 +284,11 @@ func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
 				return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
 			}
 			l := p.Launch(hooks, folderFor(p, dir))
-			return term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir, CmdLine: l.CmdLine}, p.Name, nil
+			spec := term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir, CmdLine: l.CmdLine}
+			if err := agents.apply(p.Name, &spec); err != nil {
+				return term.Spec{}, "", err
+			}
+			return spec, p.Name, nil
 		},
 	}
 }

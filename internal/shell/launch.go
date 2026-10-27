@@ -94,6 +94,8 @@ func (p Profile) Launch(h Hooks, dir string) Launch {
 			l.wsl(h, dir, "claude.sh")
 		}
 		l.CmdLine = p.CmdLine
+	case KindCommand:
+		l.CmdLine = p.CmdLine
 	default:
 		l.Args = append(l.Args, "-l")
 	}

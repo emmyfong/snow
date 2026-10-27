@@ -103,6 +103,51 @@ not say when you answer its question, so a key or a paste you send to a
 pane that needs you shows it as working until its next hook. Snow's own chat panes
 show the same marks. A terminal with no colors shows `-`, `~`, and `!`.
 
+### Agent profiles
+
+An agent profile runs a program in a pane with its own environment, for
+example Claude Code through a gateway such as OmniRoute. Add an
+`[agent.<name>]` table to `~/.snow/config.toml` and restart the Snow
+server (see "Other providers"). The profile picker lists each profile
+after "Claude Code", by its `title`, or by its name when it has none.
+
+```toml
+[provider.omniroute]
+base_url = "http://localhost:20128/v1"
+
+[agent.claude-free]
+title = "Claude Code (free)"
+command = ["claude"]
+
+[agent.claude-free.env]
+ANTHROPIC_BASE_URL = "http://localhost:20128"
+ANTHROPIC_AUTH_TOKEN = "$secret:omniroute"
+```
+
+A value `"$secret:<name>"` is read from the credential store when the
+pane starts, so a token never goes in `config.toml`. Save it with
+`snow auth login <name>`. When `<name>` is a `[provider.<name>]` table,
+the profile uses that provider's key; another name is saved as a token
+that Snow cannot check. `<NAME>_API_KEY` in the environment takes
+precedence, as for providers. Snow refuses a literal value for a variable
+whose name ends in `_KEY`, `_TOKEN`, `_SECRET`, or `_PASSWORD` (`""` is
+allowed), and a profile that sets `ANTHROPIC_BASE_URL` with no
+`ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY`: Claude Code would send
+your own login to the other host.
+
+A profile's pane does not inherit `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, or a provider key variable
+such as `OPENAI_API_KEY` from the Snow server; only the profile's own
+`env` sets them. A profile whose program is `claude` shows agent states
+like the built-in "Claude Code" profile. Other programs run as they are.
+Profiles run on the server's machine, not inside a WSL distribution. The
+built-in "Claude Code" profile always uses your own `claude` login.
+
+Never connect a Claude Free, Pro, or Max login inside the gateway.
+Anthropic allows those logins only in Claude Code and Claude.ai, and a
+gateway that forwards one breaks that rule and puts your account at risk.
+Connect the gateway to API keys or to other providers' free tiers.
+
 ### Provider keys
 
 Snow connects to Anthropic (Claude) and OpenAI with your API key.
@@ -308,6 +353,11 @@ usage = true          # false hides the context gauge and the cost
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
+
+# [agent.claude-free]                   # a program for a pane, with its own
+# title = "Claude Code (free)"          # environment; see "Agent profiles"
+# command = ["claude"]
+# env = { ANTHROPIC_BASE_URL = "http://localhost:20128", ANTHROPIC_AUTH_TOKEN = "$secret:omniroute" }
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,

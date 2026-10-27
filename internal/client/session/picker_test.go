@@ -83,3 +83,23 @@ func goldenPicker(t *testing.T, cols, rows int) {
 
 func TestPickerGolden80x24(t *testing.T)  { goldenPicker(t, 80, 24) }
 func TestPickerGolden120x40(t *testing.T) { goldenPicker(t, 120, 40) }
+
+// goldenAgentProfilePicker shows the picker with the agent profiles from
+// config.toml after the detected Claude Code profile, as the server lists
+// them, with the focused Ubuntu pane's profile preselected.
+func goldenAgentProfilePicker(t *testing.T, cols, rows int) {
+	m, r := pickerScreen(t, cols, rows)
+	m.Update(&api.ProfileList{Profiles: []string{"PowerShell", "Ubuntu", "Claude Code", "Claude Code (free)", "aider"}, Default: "PowerShell"})
+	m.Update(ctrlB)
+	m.Update(press('%', 0, "%"))
+	golden.RequireEqual(t, m.View().Content)
+	m.Update(press(tea.KeyDown, 0, ""))
+	m.Update(press(tea.KeyDown, 0, ""))
+	m.Update(enter)
+	if c := lastCommand(t, r); c.Args[api.ArgProfile] != "Claude Code (free)" {
+		t.Fatalf("profile %q, want Claude Code (free)", c.Args[api.ArgProfile])
+	}
+}
+
+func TestAgentProfileInPicker80x24(t *testing.T)  { goldenAgentProfilePicker(t, 80, 24) }
+func TestAgentProfileInPicker120x40(t *testing.T) { goldenAgentProfilePicker(t, 120, 40) }

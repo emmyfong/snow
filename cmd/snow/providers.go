@@ -31,9 +31,10 @@ func providers(cfg config.Config, path string) ([]signin.Provider, error) {
 	return append(ps, signin.Endpoints(cs)...), nil
 }
 
-// configuredProviders is providers for the user's config file. When the
-// file cannot be used, it returns the built-in providers with the error,
-// so `snow auth` still works for them.
+// configuredProviders is providers for the user's config file, then a
+// token for each secret its agent profiles name that no provider holds.
+// When the file cannot be used, it returns the built-in providers with the
+// error, so `snow auth` still works for them.
 func configuredProviders() ([]signin.Provider, error) {
 	path, err := config.DefaultPath()
 	if err != nil {
@@ -47,5 +48,9 @@ func configuredProviders() ([]signin.Provider, error) {
 	if err != nil {
 		return signin.Providers(), err
 	}
-	return ps, nil
+	_, tokens, err := agentProfiles(cfg, path, ps)
+	if err != nil {
+		return ps, err
+	}
+	return append(ps, signin.Tokens(tokens)...), nil
 }

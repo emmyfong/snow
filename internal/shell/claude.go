@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
-	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -67,7 +66,7 @@ func detectClaude(sys system, distros []string) []Profile {
 }
 
 // nativeClaude finds claude on this machine's PATH. On Windows the npm
-// install is a .cmd script, which runs through cmd.
+// install is a .cmd script, which runs through cmd (see programAt).
 func nativeClaude(sys system) (Profile, bool) {
 	if sys.lookPath == nil {
 		return Profile{}, false
@@ -81,17 +80,11 @@ func nativeClaude(sys system) (Profile, bool) {
 		if err != nil {
 			continue
 		}
-		p := Profile{Name: ClaudeName, Kind: KindClaude, Path: path}
-		if strings.EqualFold(filepath.Ext(path), ".cmd") {
-			cmd, err := sys.lookPath("cmd.exe")
-			if err != nil {
-				continue
-			}
-			// /S strips only the outer quotes, so a path with spaces,
-			// parentheses, or & stays one quoted word.
-			p.Path, p.Args = cmd, []string{"/D", "/S", "/C", `"` + path + `"`}
-			p.CmdLine = `"` + cmd + `" /D /S /C ""` + path + `""`
+		p, err := programAt(sys, path, nil)
+		if err != nil {
+			continue
 		}
+		p.Name, p.Kind = ClaudeName, KindClaude
 		return p, true
 	}
 	return Profile{}, false
