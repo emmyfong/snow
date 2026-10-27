@@ -3,6 +3,7 @@ package signin
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 
 	"github.com/emmyfong/snow/internal/credential"
@@ -45,6 +46,7 @@ func (a *Auth) Providers() []api.ProviderAuth {
 			Title:     s.Provider.Title,
 			KeyURL:    s.Provider.KeyURL,
 			Connected: s.Connected(),
+			NoKey:     s.Provider.NoKey,
 		}
 		if s.Source != 0 {
 			pa.Source = s.Source.String()
@@ -76,7 +78,11 @@ func (a *Auth) Login(ctx context.Context, provider, key string) (api.LoginResult
 	if err != nil {
 		return api.LoginResult{}, err
 	}
-	return api.LoginResult{Source: res.Source.String(), Shadowed: res.Shadowed, Notice: a.takeNotice()}, nil
+	notice := a.takeNotice()
+	if res.Unchecked {
+		notice = strings.TrimSpace(notice + " " + UncheckedText)
+	}
+	return api.LoginResult{Source: res.Source.String(), Shadowed: res.Shadowed, Notice: notice}, nil
 }
 
 // Logout removes provider's saved key. It returns an error matching

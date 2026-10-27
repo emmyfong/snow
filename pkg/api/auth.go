@@ -32,6 +32,9 @@ type ProviderAuth struct {
 	EnvVar string `json:"envVar,omitempty"`
 	// Connected says a key is available to use.
 	Connected bool `json:"connected,omitempty"`
+	// NoKey says the provider takes no key, such as a local server. It is
+	// always connected, and there is nothing to log in or out of.
+	NoKey bool `json:"noKey,omitempty"`
 	// Err is why the key could not be read, for example a permissions
 	// error. A provider with Err set is not connected.
 	Err string `json:"err,omitempty"`

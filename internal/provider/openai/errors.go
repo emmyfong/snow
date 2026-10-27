@@ -19,15 +19,16 @@ import (
 
 // mapErr turns an SDK failure into a *provider.Error. The SDK's error holds
 // the HTTP request, whose headers carry the key, so the cause is rebuilt
-// from the status and the API's message alone. A canceled context passes
+// from the status and the API's message alone, with key, the key the
+// request sent, blanked out of the message. A canceled context passes
 // through unchanged.
-func mapErr(ctx context.Context, err error) error {
+func mapErr(ctx context.Context, err error, key string) error {
 	if ctxErr := ctx.Err(); ctxErr != nil {
 		return ctxErr
 	}
 	var apiErr *sdk.Error
 	if errors.As(err, &apiErr) {
-		pe := failure(apiErr.StatusCode, apiErr.Code, apiErr.Type, apiErr.Message)
+		pe := failure(apiErr.StatusCode, apiErr.Code, apiErr.Type, apiErr.Message, key)
 		if pe.Kind == provider.KindRateLimited && apiErr.Response != nil {
 			pe.RetryAfter = retryAfter(apiErr.Response.Header)
 		}
@@ -43,14 +44,27 @@ func mapErr(ctx context.Context, err error) error {
 			} `json:"error"`
 		}
 		_ = json.Unmarshal(streamErr.Event.Data, &body)
-		return failure(0, body.Error.Code, body.Error.Type, body.Error.Message)
+		return failure(0, body.Error.Code, body.Error.Type, body.Error.Message, key)
+	}
+	if key != "" && strings.Contains(err.Error(), key) {
+		err = errors.New(strings.ReplaceAll(err.Error(), key, keyMark))
 	}
 	return &provider.Error{Kind: provider.KindNetwork, Err: err}
 }
 
+// keyMark replaces a key in a message.
+const keyMark = "[key]"
+
 // failure builds the error for an API refusal. status is 0 for an error
-// inside a stream.
-func failure(status int, code, errType, msg string) *provider.Error {
+// inside a stream. A service that echoes the request can put key, the key
+// sent, in any field; it is blanked out before the message is cut, so no
+// part of it is left at the cut.
+func failure(status int, code, errType, msg, key string) *provider.Error {
+	if key != "" {
+		code = strings.ReplaceAll(code, key, keyMark)
+		errType = strings.ReplaceAll(errType, key, keyMark)
+		msg = strings.ReplaceAll(msg, key, keyMark)
+	}
 	label := code
 	if label == "" {
 		label = errType

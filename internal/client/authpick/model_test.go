@@ -302,3 +302,23 @@ func TestViewFitsEveryWindow(t *testing.T) {
 		t.Fatalf("small window:\n%s", box)
 	}
 }
+
+// TestNoKeyProvider: a provider that takes no key says so in the list,
+// and Enter on it opens no key field.
+func TestNoKeyProvider(t *testing.T) {
+	m := New()
+	m.SetList([]api.ProviderAuth{{Name: "omniroute", Connected: true, NoKey: true}, {Name: "openai", Title: "OpenAI"}})
+	if s := status(m.providers[0]); s != "no key needed" {
+		t.Fatalf("status %q", s)
+	}
+	if r := m.Key(key(tea.KeyEnter)); r != Open || m.stage != stageList {
+		t.Fatalf("Enter: %v at stage %v; want the list to stay", r, m.stage)
+	}
+	if !strings.Contains(m.note, "omniroute takes no key") {
+		t.Fatalf("note %q", m.note)
+	}
+	box, _, _ := m.View(theme.Default(), 80, 24)
+	if !strings.Contains(ansi.Strip(box), "no key needed") {
+		t.Fatalf("view:\n%s", ansi.Strip(box))
+	}
+}

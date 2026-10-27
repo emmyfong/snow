@@ -30,7 +30,14 @@ func chatOptions(cfg config.Config) (*server.ChatOptions, error) {
 	if err != nil {
 		return nil, fmt.Errorf("chat: %w", err)
 	}
-	ps := signin.Providers()
+	path, err := config.DefaultPath()
+	if err != nil {
+		return nil, fmt.Errorf("chat: %w", err)
+	}
+	ps, err := providers(cfg, path)
+	if err != nil {
+		return nil, err
+	}
 	auth := signin.NewAuth(ps, credDir)
 	keys := auth.Keys()
 	reg, err := signin.Registry(ps, keys)
@@ -41,10 +48,6 @@ func chatOptions(cfg config.Config) (*server.ChatOptions, error) {
 	hide := make([]string, len(ps))
 	for i, p := range ps {
 		hide[i] = credential.EnvVar(p.Name)
-	}
-	path, err := config.DefaultPath()
-	if err != nil {
-		return nil, fmt.Errorf("chat: %w", err)
 	}
 	return &server.ChatOptions{
 		Store: store, Providers: reg, Tools: tool.Builtin(), HideEnv: hide,

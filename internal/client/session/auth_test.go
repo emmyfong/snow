@@ -299,3 +299,22 @@ func TestLoginOverlayGolden(t *testing.T) {
 	m, _ := loginOpen(t, authProviders()...)
 	golden.RequireEqual(t, content(m))
 }
+
+// TestLogoutSkipsNoKeyProvider: /logout never offers to remove the key of
+// a provider that takes none, even when the chat uses it.
+func TestLogoutSkipsNoKeyProvider(t *testing.T) {
+	m, r := chatScreen(t, 100, 30)
+	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", Model: "omniroute/cc/claude-x", Mode: "ask", State: api.ChatStateIdle})
+	typeSlash(m, "/logout")
+	m.Update(&api.AuthList{Providers: []api.ProviderAuth{
+		{Name: "omniroute", Connected: true, NoKey: true},
+		{Name: "openai", Title: "OpenAI", Source: "OS credential store", Connected: true},
+	}})
+	if m.confirm == nil {
+		t.Fatal("/logout did not ask about the saved key")
+	}
+	m.Update(press('y', 0, "y"))
+	if req := lastLogoutRequest(r); req == nil || req.Provider != "openai" {
+		t.Fatalf("sent %+v, want a logout for openai", req)
+	}
+}

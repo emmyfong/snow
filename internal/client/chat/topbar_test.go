@@ -119,3 +119,16 @@ func TestTokens(t *testing.T) {
 		}
 	}
 }
+
+// TestCompatTokensOnly: a model from a compatible service has no price
+// and no known context window, so the top bar shows a token count only.
+func TestCompatTokensOnly(t *testing.T) {
+	m, _ := newChat(140, 20)
+	u := priced
+	u.Requested, u.Cost, u.Priced, u.Window = "omniroute/cc/claude-x", 0, false, 0
+	usageTurn(m, u)
+	bar := stripped(m.View()[0])
+	if !strings.Contains(bar, "ctx 62.2k tok") || strings.Contains(bar, "$") || strings.Contains(bar, "%") {
+		t.Fatalf("bar %q", bar)
+	}
+}

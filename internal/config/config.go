@@ -24,6 +24,9 @@ type Config struct {
 	Theme      Theme      `toml:"theme"`
 	Sessions   Sessions   `toml:"sessions"`
 	Chat       Chat       `toml:"chat"`
+	// Providers holds the [provider.<name>] tables, by name. Nil means
+	// none.
+	Providers map[string]Endpoint `toml:"provider"`
 }
 
 // Chat sets how chat panes start.
@@ -160,6 +163,10 @@ func parse(data string) (Config, *Error) {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}
+	if verr, path := cfg.validateProviders(); verr != nil {
+		verr.Line = keyLine(data, path)
+		return Config{}, verr
+	}
 	return cfg, nil
 }
 
@@ -215,8 +222,12 @@ func (k Keys) validateBind() (*Error, []string) {
 	return nil, nil
 }
 
-// quoteKey writes a TOML key, quoted unless it is a bare key.
+// quoteKey writes a TOML key, quoted unless it is a bare key. The empty
+// key is quoted too.
 func quoteKey(key string) string {
+	if key == "" {
+		return `""`
+	}
 	for _, r := range key {
 		bare := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_'
 		if !bare {

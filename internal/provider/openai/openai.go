@@ -24,11 +24,16 @@ const Name = "openai"
 // default; Snow names the address itself so a saved key never follows it.
 const defaultBaseURL = "https://api.openai.com/v1/"
 
-// Provider talks to the OpenAI API. It is safe for concurrent use.
+// Provider talks to the OpenAI API, or to a service that speaks it (see
+// NewCompatible). It is safe for concurrent use.
 type Provider struct {
 	keys    provider.KeySource
 	baseURL string
 	http    *http.Client
+	name    string   // Name, or the compatible service's name
+	compat  bool     // a compatible service: its whole model list is offered
+	models  []string // a compatible service's models from the config, if any
+	noKey   bool     // requests go without a key
 }
 
 // Option changes how New builds a Provider.
@@ -43,7 +48,7 @@ func WithHTTPClient(c *http.Client) Option { return func(p *Provider) { p.http =
 
 // New returns a Provider that reads its key from keys.
 func New(keys provider.KeySource, opts ...Option) *Provider {
-	p := &Provider{keys: keys, baseURL: defaultBaseURL}
+	p := &Provider{keys: keys, baseURL: defaultBaseURL, name: Name}
 	for _, o := range opts {
 		o(p)
 	}
@@ -52,7 +57,7 @@ func New(keys provider.KeySource, opts ...Option) *Provider {
 }
 
 // Name implements provider.Provider.
-func (p *Provider) Name() string { return Name }
+func (p *Provider) Name() string { return p.name }
 
 // options builds the SDK's options with the current key. The services are
 // built from these alone, never through sdk.NewClient: that reads
@@ -61,34 +66,53 @@ func (p *Provider) Name() string { return Name }
 // another project. The SDK's retries are off too: a rate limit or an
 // overload goes back to the user with its retry time, and Snow never
 // retries or switches models by itself.
-func (p *Provider) options() ([]option.RequestOption, error) {
-	key, err := p.keys.APIKey(Name)
-	if err != nil {
-		return nil, &provider.Error{Kind: provider.KindNoKey, Err: err}
-	}
-	return []option.RequestOption{
+//
+// It also returns the key, which errors must not repeat; it is empty for a
+// service that takes none.
+func (p *Provider) options() ([]option.RequestOption, string, error) {
+	opts := []option.RequestOption{
 		option.WithHTTPClient(p.http),
 		option.WithBaseURL(p.baseURL),
-		option.WithAPIKey(key),
 		option.WithMaxRetries(0),
-	}, nil
+	}
+	if p.noKey {
+		// With no key set, the SDK sends no Authorization header.
+		return opts, "", nil
+	}
+	key, err := p.keys.APIKey(p.name)
+	if err != nil {
+		return nil, "", &provider.Error{Kind: provider.KindNoKey, Err: err}
+	}
+	return append(opts, option.WithAPIKey(key)), key, nil
 }
 
+// ErrKeyNotChecked is what CheckKey returns for a compatible service with
+// no model list: nothing else checks a key without spending a request, so
+// the key may be saved, unchecked.
+var ErrKeyNotChecked = errors.New("the service has no model list, so the key could not be checked")
+
 // CheckKey makes one model list call: nil means the key works, and an
-// error of KindBadKey means the API rejected it. A 403 passes: the key is
-// valid, but a restricted key may not list models and can still reply.
+// error of KindBadKey means the API rejected it. For OpenAI a 403 passes:
+// the key is valid, but a restricted key may not list models and can still
+// reply. A compatible service's 403 fails, as gateways send it for a bad
+// key, and its 404 gives ErrKeyNotChecked.
 func (p *Provider) CheckKey(ctx context.Context) error {
-	opts, err := p.options()
+	opts, key, err := p.options()
 	if err != nil {
 		return err
 	}
 	models := sdk.NewModelService(opts...)
 	if _, err := models.List(ctx); err != nil {
 		var apiErr *sdk.Error
-		if errors.As(err, &apiErr) && apiErr.StatusCode == http.StatusForbidden {
-			return nil
+		if errors.As(err, &apiErr) {
+			switch {
+			case apiErr.StatusCode == http.StatusForbidden && !p.compat:
+				return nil
+			case apiErr.StatusCode == http.StatusNotFound && p.compat:
+				return ErrKeyNotChecked
+			}
 		}
-		return mapErr(ctx, err)
+		return mapErr(ctx, err, key)
 	}
 	return nil
 }
@@ -96,7 +120,7 @@ func (p *Provider) CheckKey(ctx context.Context) error {
 // Stream implements provider.Provider. Reasoning and effort are sent only
 // to a model that takes them.
 func (p *Provider) Stream(ctx context.Context, req provider.Request) (provider.Stream, error) {
-	opts, err := p.options()
+	opts, key, err := p.options()
 	if err != nil {
 		return nil, err
 	}
@@ -105,5 +129,5 @@ func (p *Provider) Stream(ctx context.Context, req provider.Request) (provider.S
 		return nil, err
 	}
 	svc := responses.NewResponseService(opts...)
-	return newStream(ctx, svc.NewStreaming(ctx, params)), nil
+	return newStream(ctx, svc.NewStreaming(ctx, params), key), nil
 }

@@ -75,6 +75,47 @@ Keys go to the OS credential store, or to `~/.snow/credentials` (readable
 only by you) where the system has none. `ANTHROPIC_API_KEY` or
 `OPENAI_API_KEY`, when set, takes precedence over a saved key.
 
+### Other providers
+
+Snow also connects to any service that speaks the OpenAI Responses API,
+such as OmniRoute, OpenRouter, or a local server. Add a
+`[provider.<name>]` table to `~/.snow/config.toml`, then restart the
+Snow server so it reads the file: stop it and run `snow`. Your sessions
+come back as saved sessions. On Linux and macOS:
+
+```sh
+pkill -f 'snow server'
+```
+
+On Windows, in PowerShell:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='snow.exe'" | Where-Object CommandLine -match ' server$' | ForEach-Object { Stop-Process -Id $_.ProcessId }
+```
+
+```toml
+[provider.omniroute]
+base_url = "http://localhost:20128/v1"
+no_key = true                  # the service takes no key
+
+[provider.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+# models = ["qwen/qwen3-coder:free"]   # only for a service with no model list
+```
+
+Its models show in `/model` as `<name>/<model>`, for example
+`openrouter/qwen/qwen3-coder:free`. Save its key with
+`snow auth login openrouter` or `/login`, or set `OPENROUTER_API_KEY`.
+A key never goes in `config.toml`. A model with no known price shows tokens
+instead of a cost. A service with no model list cannot check a key, so
+Snow saves it unchecked and says so. Over `http://` the key goes in clear
+text, so use `http://` only for a service on your own machine or network.
+
+Use only accounts that the service's vendor allows in other apps.
+Anthropic states that apps other than Claude Code and Claude.ai may not
+use a Claude Free, Pro, or Max login, and a gateway such as OmniRoute does
+not change that: use an API key, or run Claude Code itself in a Snow pane.
+
 ### Home page commands
 
 Type `/` on the home page to see them. Tab completes, Enter runs.
@@ -219,6 +260,11 @@ model = ""            # "provider/model"; empty: the default of the first
                       # provider with a saved key
 effort = ""           # for example "high"; empty: the provider's choice
 usage = true          # false hides the context gauge and the cost
+
+# [provider.omniroute]                  # a service that speaks the OpenAI API;
+# base_url = "http://localhost:20128/v1"  # see "Other providers"
+# no_key = true
+# models = []
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`, `new-chat`,

@@ -66,7 +66,8 @@ func (m *Model) finishLogout() tea.Cmd {
 }
 
 // logoutProvider returns the key /logout would remove: the chat's provider
-// when it has a key, else the first provider with one.
+// when it has a key, else the first provider with one. A provider that
+// takes no key has none to remove.
 func (m *Model) logoutProvider(id int) (api.ProviderAuth, bool) {
 	name := ""
 	if c, ok := m.own[id].(modelChooser); ok {
@@ -76,13 +77,13 @@ func (m *Model) logoutProvider(id int) (api.ProviderAuth, bool) {
 	}
 	if name != "" {
 		for _, p := range m.authList.Providers {
-			if p.Name == name && (p.Connected || p.Err != "") {
+			if p.Name == name && !p.NoKey && (p.Connected || p.Err != "") {
 				return p, true
 			}
 		}
 	}
 	for _, p := range m.authList.Providers {
-		if p.Connected {
+		if p.Connected && !p.NoKey {
 			return p, true
 		}
 	}

@@ -22,14 +22,16 @@ const authUsage = `usage:
   snow auth logout <provider>   remove a saved API key
   snow auth status              show which providers have a key
 
-Providers: anthropic, openai. Keys go to the OS credential store, or to
+Providers: anthropic, openai, and each [provider.<name>] table in
+~/.snow/config.toml. Keys go to the OS credential store, or to
 ~/.snow/credentials where the system has none. An environment variable
 such as ANTHROPIC_API_KEY takes precedence over a saved key.
 `
 
-// authProviders lists the providers `snow auth` knows. Tests point the
-// key checks at a fake server.
-var authProviders = signin.Providers
+// authProviders lists the providers `snow auth` knows: the built-in ones
+// and those of the config file. Tests point the key checks at a fake
+// server.
+var authProviders = configuredProviders
 
 // authAction is what `snow auth` does.
 type authAction string
@@ -72,8 +74,10 @@ func parseAuth(args []string) (authCommand, error) {
 		if len(rest) != 1 {
 			return authCommand{}, fmt.Errorf("auth %s needs one provider", a)
 		}
-		if _, err := signin.Find(authProviders(), rest[0]); err != nil {
-			return authCommand{}, err
+		ps, cfgErr := authProviders()
+		if _, err := signin.Find(ps, rest[0]); err != nil {
+			// The provider may be in the config file that could not be used.
+			return authCommand{}, errors.Join(err, cfgErr)
 		}
 		return authCommand{action: a, provider: rest[0]}, nil
 	default:
@@ -91,11 +95,15 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 		return 1
 	}
 	store := credential.New(dir, func(msg string) { _, _ = fmt.Fprintln(stdout, msg) })
+	ps, cfgErr := authProviders()
+	if cfgErr != nil {
+		_, _ = fmt.Fprintf(stderr, "snow: %v\nsnow: only the built-in providers are listed until the file is fixed.\n", cfgErr)
+	}
 	if cmd.action == authStatus {
-		return authStatusCmd(store, stdout)
+		return authStatusCmd(ps, store, stdout)
 	}
 	// parseAuth has already found the provider.
-	p, err := signin.Find(authProviders(), cmd.provider)
+	p, err := signin.Find(ps, cmd.provider)
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 2
@@ -108,7 +116,13 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 }
 
 func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
-	_, _ = fmt.Fprintf(stdout, "Create a %s API key at %s\n", p.Title, p.KeyURL)
+	if p.NoKey {
+		_, _ = fmt.Fprintf(stderr, "snow: %s takes no key (no_key = true in config.toml). It is ready to use.\n", p.Title)
+		return 1
+	}
+	if p.KeyURL != "" {
+		_, _ = fmt.Fprintf(stdout, "Create an API key for %s at %s\n", p.Title, p.KeyURL)
+	}
 	secret, err := readSecret(in, stderr, "Paste the key (it does not show): ")
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
@@ -130,6 +144,9 @@ func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdou
 	_, _ = fmt.Fprintf(stdout, "Saved the %s key in the %s.\n", p.Name, res.Source)
 	if res.Shadowed {
 		_, _ = fmt.Fprintf(stdout, "%s is set, and Snow uses it before the saved key. Unset it to use the saved key.\n", credential.EnvVar(p.Name))
+	}
+	if res.Unchecked {
+		_, _ = fmt.Fprintln(stdout, signin.UncheckedText)
 	}
 	return 0
 }
@@ -161,10 +178,16 @@ func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdo
 	return 0
 }
 
-func authStatusCmd(store signin.Store, stdout io.Writer) int {
-	for _, s := range signin.Statuses(authProviders(), store) {
+func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) int {
+	width := 0
+	for _, p := range ps {
+		width = max(width, len(p.Name))
+	}
+	for _, s := range signin.Statuses(ps, store) {
 		var line string
 		switch {
+		case s.Provider.NoKey:
+			line = "no key needed"
 		case s.Connected():
 			line = fmt.Sprintf("API key (%s)", s.Source)
 		case errors.Is(s.Err, credential.ErrNoKey):
@@ -172,7 +195,7 @@ func authStatusCmd(store signin.Store, stdout io.Writer) int {
 		default:
 			line = fmt.Sprintf("cannot read the key: %v", s.Err)
 		}
-		_, _ = fmt.Fprintf(stdout, "%-10s %s\n", s.Provider.Name, line)
+		_, _ = fmt.Fprintf(stdout, "%-*s  %s\n", width, s.Provider.Name, line)
 	}
 	return 0
 }

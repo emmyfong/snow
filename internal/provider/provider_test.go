@@ -118,3 +118,24 @@ func TestUndated(t *testing.T) {
 		}
 	}
 }
+
+// TestModelNameWithSlash: a compatible service's model IDs hold slashes;
+// the name splits at the first one only, and such a model has no price
+// even when its ID matches a priced model of another provider.
+func TestModelNameWithSlash(t *testing.T) {
+	for _, tt := range []struct{ in, prov, model string }{
+		{"openrouter/vendor/model", "openrouter", "vendor/model"},
+		{"omniroute/cc/claude-x:free", "omniroute", "cc/claude-x:free"},
+	} {
+		got, err := provider.ParseModelName(tt.in)
+		if err != nil || got.Provider != tt.prov || got.Model != tt.model {
+			t.Errorf("ParseModelName(%q) = %+v, %v", tt.in, got, err)
+		}
+	}
+	if _, ok := provider.LookupPrice(provider.ModelName{Provider: "omniroute", Model: "gpt-5.5"}); ok {
+		t.Error("an endpoint's model took the price of OpenAI's model of the same ID")
+	}
+	if w := provider.ContextWindow(provider.ModelName{Provider: "omniroute", Model: "gpt-5.5"}, 0); w != 0 {
+		t.Errorf("context window %d for an endpoint's model, want 0 (unknown)", w)
+	}
+}

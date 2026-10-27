@@ -26,9 +26,12 @@ type Store interface {
 type Provider struct {
 	Name   string // the provider's part of a model name, for example "anthropic"
 	Title  string // the name to show, for example "Anthropic (Claude)"
-	KeyURL string // the vendor's page where the user creates a key
-	check  func(ctx context.Context, key string) error
-	open   func(keys provider.KeySource) provider.Provider
+	KeyURL string // the vendor's page where the user creates a key; empty when unknown
+	// NoKey marks a provider that takes no key, such as a local server. It
+	// counts as connected.
+	NoKey bool
+	check func(ctx context.Context, key string) error
+	open  func(keys provider.KeySource) provider.Provider
 }
 
 // ErrUnknownProvider means no provider has the name given.
@@ -108,17 +111,29 @@ func Find(ps []Provider, name string) (Provider, error) {
 type Result struct {
 	Source   credential.Source // where the key went
 	Shadowed bool              // an environment variable holds a key for the provider, and Snow uses it first
+	// Unchecked says the provider could not check the key, as it has no
+	// model list, and the key was saved anyway.
+	Unchecked bool
 }
+
+// UncheckedText tells the user that a saved key was not checked.
+const UncheckedText = "The service has no model list, so Snow could not check the key. It is saved; a wrong key fails on the first message."
 
 // Login checks k with the provider and saves it only if the provider
 // accepts it. A rejected key comes back as a *provider.Error of
 // KindBadKey; a check that could not run (no network, a timeout, an
-// overload) saves nothing either and says so.
+// overload) saves nothing either and says so. A service with no model list
+// cannot check a key: it is saved, and Result.Unchecked says so.
 func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (Result, error) {
 	if p.check == nil {
 		return Result{}, fmt.Errorf("%w %q", ErrUnknownProvider, p.Name)
 	}
-	if err := p.check(ctx, k.Reveal()); err != nil {
+	if p.NoKey {
+		return Result{}, fmt.Errorf("%s: %w; its config table has no_key = true", p.Title, ErrNoKeyNeeded)
+	}
+	err := p.check(ctx, k.Reveal())
+	unchecked := errors.Is(err, openai.ErrKeyNotChecked)
+	if err != nil && !unchecked {
 		var pe *provider.Error
 		if errors.As(err, &pe) && pe.Kind == provider.KindBadKey {
 			return Result{}, fmt.Errorf("%s did not accept the key: %w", p.Title, err)
@@ -130,7 +145,7 @@ func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (Result,
 		return Result{Source: src}, fmt.Errorf("save the key: %w", err)
 	}
 	_, now, err := s.Get(p.Name)
-	return Result{Source: src, Shadowed: err == nil && now == credential.SourceEnv}, nil
+	return Result{Source: src, Shadowed: err == nil && now == credential.SourceEnv, Unchecked: unchecked}, nil
 }
 
 // Stored reports whether a key is saved for the provider, even one that
@@ -169,6 +184,10 @@ func (s Status) Connected() bool { return s.Err == nil }
 func Statuses(ps []Provider, s Store) []Status {
 	out := make([]Status, len(ps))
 	for i, p := range ps {
+		if p.NoKey {
+			out[i] = Status{Provider: p}
+			continue
+		}
 		_, src, err := s.Get(p.Name)
 		out[i] = Status{Provider: p, Source: src, Err: err}
 	}
