@@ -215,6 +215,17 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 	return nil
 }
 
+// newClaude splits the focused pane with a Claude Code pane on the right,
+// in its folder. The server picks the Claude Code profile that fits the
+// pane, for example the one inside the same WSL distribution.
+func (m *Model) newClaude() {
+	args := []string{api.ArgDir, api.DirRight, api.ArgAgent, api.AgentClaude}
+	if p := m.focused(); p != nil && p.Folder != "" {
+		args = append(args, api.ArgFolder, p.Folder)
+	}
+	m.paneCommand(api.OpSplit, args...)
+}
+
 // newChat splits the focused pane with a chat on the right.
 func (m *Model) newChat() {
 	m.paneCommand(api.OpSplit, api.ArgDir, api.DirRight, api.ArgKind, api.PaneChat)

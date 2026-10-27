@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"syscall"
 
 	"github.com/charmbracelet/x/xpty"
 	"golang.org/x/sys/windows"
@@ -21,6 +22,9 @@ func startPTY(spec Spec, cols, rows int) (PTY, error) {
 		return nil, fmt.Errorf("open conpty: %w", err)
 	}
 	cmd := command(spec)
+	if spec.CmdLine != "" {
+		cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: spec.CmdLine}
+	}
 	if err := p.Start(cmd); err != nil {
 		_ = p.Close()
 		return nil, fmt.Errorf("start %s: %w", spec.Path, err)

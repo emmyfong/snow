@@ -17,7 +17,7 @@ func TestDefaultBindings(t *testing.T) {
 		action string
 	}{
 		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"},
-		{"a", "new-chat"}, {"m", "model-picker"},
+		{"a", "new-claude"}, {"m", "model-picker"},
 		{"n", "next-window"}, {"p", "prev-window"},
 		{"0", "select-window-0"}, {"1", "select-window-1"}, {"2", "select-window-2"},
 		{"3", "select-window-3"}, {"4", "select-window-4"}, {"5", "select-window-5"},
@@ -281,5 +281,16 @@ func TestRebindCommandPrompt(t *testing.T) {
 	}
 	if _, ok := tab.Action(":"); ok {
 		t.Error(": is still bound")
+	}
+}
+
+// TestNewChatKeepsItsAction: Ctrl+b a now opens Claude Code, but a config
+// that binds new-chat still works.
+func TestNewChatKeepsItsAction(t *testing.T) {
+	if _, ok := ActionByName("new-chat"); !ok {
+		t.Fatal("new-chat is no longer an action; configs that bind it would break")
+	}
+	if ks := Default().KeysOf("new-chat"); len(ks) != 0 {
+		t.Fatalf("new-chat has default keys %q, want none", ks)
 	}
 }

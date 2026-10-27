@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"path"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/emmyfong/snow/internal/shell"
@@ -51,6 +52,9 @@ type Options struct {
 	// shell.RunningDistros.
 	paneDistro    func(profile string) (string, bool)
 	distroRunning func(distro string) bool
+	// Tests with Spec set give the Claude Code profiles with these; see
+	// launcher.claude and launcher.findClaude. Nil finds none.
+	claudeProfile, findClaude func(host string) (string, bool)
 }
 
 func (o Options) logger() *slog.Logger {
@@ -66,9 +70,18 @@ type launcher struct {
 	profiles func() []string
 	// distro returns the WSL distribution profile runs, for WSL profiles.
 	distro func(profile string) (string, bool)
-	// shell returns the detected profile called name, the default for an
-	// empty name. It is nil when Options.Spec is set.
+	// shell returns the shell that commands for a pane running profile
+	// name go through: the profile itself, or for an agent profile the
+	// shell under it. An empty name means the default. It is nil when
+	// Options.Spec is set.
 	shell func(name string) (shell.Profile, bool)
+	// claude returns the Claude Code profile for a pane next to one
+	// running host, from the profiles known now.
+	claude func(host string) (string, bool)
+	// findClaude looks for Claude Code again, for a pane next to one
+	// running host, and adds what it finds to the profiles. It can run
+	// wsl.exe, so it never runs on the model goroutine.
+	findClaude func(host string) (string, bool)
 }
 
 // newLauncher returns the launcher for opts. It detects shell profiles once:
@@ -77,7 +90,7 @@ func newLauncher(opts Options, log *slog.Logger) launcher {
 	if opts.Spec != nil {
 		l := launcher{profiles: opts.Profiles, spec: func(profile, dir string) (term.Spec, string, error) {
 			return opts.Spec(profile, usableDir(dir))
-		}}
+		}, claude: orNone(opts.claudeProfile), findClaude: orNone(opts.findClaude)}
 		if l.profiles == nil {
 			_, name, err := opts.Spec("", "")
 			l.profiles = func() []string {
@@ -121,39 +134,94 @@ func preferProfile(profiles []shell.Profile, name string) []shell.Profile {
 	return append(out, profiles[i+1:]...)
 }
 
+// orNone returns f, or a function that finds nothing when f is nil.
+func orNone(f func(string) (string, bool)) func(string) (string, bool) {
+	if f != nil {
+		return f
+	}
+	return func(string) (string, bool) { return "", false }
+}
+
+// profileSet holds the detected profiles. A Claude Code profile found later
+// is added by findClaude off the model goroutine while others read the
+// set, so it is swapped whole, never changed in place.
+type profileSet struct {
+	p atomic.Pointer[[]shell.Profile]
+}
+
+func newProfileSet(profiles []shell.Profile) *profileSet {
+	s := &profileSet{}
+	s.p.Store(&profiles)
+	return s
+}
+
+func (s *profileSet) all() []shell.Profile { return *s.p.Load() }
+
+// add appends p unless a profile with its name is there already.
+func (s *profileSet) add(p shell.Profile) {
+	for {
+		old := s.p.Load()
+		if hasProfile(*old, p.Name) {
+			return
+		}
+		next := append(slices.Clone(*old), p)
+		if s.p.CompareAndSwap(old, &next) {
+			return
+		}
+	}
+}
+
 // detectedLauncher runs the given shell profiles, the first being the
 // default.
 func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
-	names := make([]string, len(detected))
-	for i, p := range detected {
-		names[i] = p.Name
-	}
+	set := newProfileSet(detected)
 	return launcher{
-		profiles: func() []string { return names },
-		shell: func(name string) (shell.Profile, bool) {
-			for _, p := range detected {
-				if name == "" || p.Name == name {
-					return p, true
-				}
+		profiles: func() []string {
+			all := set.all()
+			names := make([]string, len(all))
+			for i, p := range all {
+				names[i] = p.Name
 			}
-			return shell.Profile{}, false
+			return names
+		},
+		shell: func(name string) (shell.Profile, bool) {
+			p, ok := shell.Find(set.all(), name)
+			if !ok {
+				return shell.Profile{}, false
+			}
+			return shell.HostShell(set.all(), p)
 		},
 		distro: func(profile string) (string, bool) {
-			for _, p := range detected {
-				if p.Name == profile && p.Kind == shell.KindWSL {
+			for _, p := range set.all() {
+				if p.Name == profile && p.Distro != "" {
 					return p.Distro, true
 				}
 			}
 			return "", false
 		},
-		spec: func(profile, dir string) (term.Spec, string, error) {
-			for _, p := range detected {
-				if profile == "" || p.Name == profile {
-					l := p.Launch(hooks, folderFor(p, dir))
-					return term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir}, p.Name, nil
-				}
+		claude: func(host string) (string, bool) {
+			p, ok := shell.ClaudeFor(set.all(), host)
+			return p.Name, ok
+		},
+		findClaude: func(host string) (string, bool) {
+			h, _ := shell.Find(set.all(), host)
+			if h.IsAgent() {
+				return h.Name, true
 			}
-			return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
+			p, ok := shell.FindClaude(h)
+			if !ok {
+				return "", false
+			}
+			set.add(p)
+			return p.Name, true
+		},
+		spec: func(profile, dir string) (term.Spec, string, error) {
+			p, ok := shell.Find(set.all(), profile)
+			if !ok {
+				return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
+			}
+			l := p.Launch(hooks, folderFor(p, dir))
+			return term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir, CmdLine: l.CmdLine}, p.Name, nil
 		},
 	}
 }
@@ -163,7 +231,7 @@ func detectedLauncher(detected []shell.Profile, hooks shell.Hooks) launcher {
 // path passes through and wsl --cd checks it. Other profiles get dir if it
 // exists here, or the home folder.
 func folderFor(p shell.Profile, dir string) string {
-	if p.Kind == shell.KindWSL && path.IsAbs(dir) {
+	if p.Distro != "" && path.IsAbs(dir) {
 		return dir
 	}
 	return usableDir(dir)

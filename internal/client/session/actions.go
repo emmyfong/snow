@@ -52,7 +52,8 @@ func buildHandlers() map[string]handler {
 			m.enterCopy()
 			return nil
 		},
-		"new-chat": func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
+		"new-chat":   func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
+		"new-claude": func(m *Model, _ tea.Key) tea.Cmd { m.newClaude(); return nil },
 		"model-picker": func(m *Model, _ tea.Key) tea.Cmd {
 			if p := m.focused(); p != nil {
 				return m.openModelPicker(p.ID)

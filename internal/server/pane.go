@@ -33,7 +33,7 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 		return nil, err
 	}
 	if s.opts.Socket != "" {
-		spec.Env = append(spec.Env, transport.PaneEnv(s.opts.Socket, id))
+		spec.Env = append(spec.Env, transport.PaneVars(s.opts.Socket, id)...)
 	}
 	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback, Preamble: preamble})
 	if err != nil {

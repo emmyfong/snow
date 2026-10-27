@@ -39,9 +39,10 @@ func TestMissingFolderFallsBack(t *testing.T) {
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
 
-// TestPaneEnvHasSnow: a pane's shell sees SNOW with the socket path and the
-// pane ID, so a nested snow can tell it runs inside a session.
-func TestPaneEnvHasSnow(t *testing.T) {
+// TestPaneEnv: a pane's shell sees SNOW with the socket path and the pane
+// ID, so a nested snow can tell it runs inside a session, and SNOW_PANE and
+// SNOW_SOCKET, so snow hook can tell the server which pane it runs in.
+func TestPaneEnv(t *testing.T) {
 	opts := testOptions()
 	opts.Socket = "/snow-test/default.sock"
 	s := New(opts)
@@ -49,10 +50,10 @@ func TestPaneEnvHasSnow(t *testing.T) {
 	c := connect(t, s, 200, 24)
 	c.Send(&api.Attach{Session: "env", Create: true})
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
-	show := "echo [$SNOW]\r"
+	show := "echo [$SNOW] [$SNOW_PANE] [$SNOW_SOCKET]\r"
 	if runtime.GOOS == "windows" {
-		show = "echo [%SNOW%]\r"
+		show = "echo [%SNOW%] [%SNOW_PANE%] [%SNOW_SOCKET%]\r"
 	}
 	c.Send(&api.Input{Pane: 1, Paste: show})
-	c.WaitScreen("[/snow-test/default.sock,1]\n")
+	c.WaitScreen("[/snow-test/default.sock,1] [1] [/snow-test/default.sock]\n")
 }

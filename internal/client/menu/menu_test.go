@@ -28,7 +28,7 @@ func TestPaneMenuItems(t *testing.T) {
 	want := []Item{
 		{"Split right", "Ctrl+b %", "split-right"},
 		{"Split down", `Ctrl+b "`, "split-down"},
-		{"New chat", "Ctrl+b a", "new-chat"},
+		{"Claude Code pane", "Ctrl+b a", "new-claude"},
 		{"Zoom", "Ctrl+b z", "zoom"},
 		{"Even out", "Ctrl+b E", "even-out"},
 		{"New window", "Ctrl+b c", "new-window"},
@@ -167,7 +167,7 @@ func TestClick(t *testing.T) {
 		action string
 	}{
 		{"first item", x + 3, y + 1, Chosen, "split-right"},
-		{"third item, last column", x + w - 2, y + 3, Chosen, "new-chat"},
+		{"third item, last column", x + w - 2, y + 3, Chosen, "new-claude"},
 		{"last item", x + 1, y + h - 2, Chosen, "detach"},
 		{"top border", x + 3, y, Open, ""},
 		{"bottom border", x + 3, y + h - 1, Open, ""},

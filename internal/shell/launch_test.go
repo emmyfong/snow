@@ -15,7 +15,7 @@ func TestWriteHooks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"bash.sh", "snow.ps1", "wsl.sh", "zsh/.zshenv", "zsh/.zprofile", "zsh/.zshrc"} {
+	for _, name := range []string{"bash.sh", "claude.sh", "snow.ps1", "wsl.sh", "zsh/.zshenv", "zsh/.zprofile", "zsh/.zshrc"} {
 		b, err := os.ReadFile(filepath.Join(h.Dir, filepath.FromSlash(name)))
 		if err != nil {
 			t.Fatalf("hook %s: %v", name, err)
@@ -113,12 +113,13 @@ func TestLaunchWSL(t *testing.T) {
 	}
 }
 
-// TestLaunchWSLForwardsSnow: WSLENV lists SNOW, after any entries the user
-// already has, so a Linux snow in a WSL pane sees the variable.
+// TestLaunchWSLForwardsSnow: WSLENV lists SNOW and the pane variables,
+// after any entries the user already has, so a Linux snow in a WSL pane sees
+// SNOW, and a Windows snow.exe that a hook runs from WSL sees the pane.
 func TestLaunchWSLForwardsSnow(t *testing.T) {
 	tests := []struct{ wslenv, want string }{
-		{"", "WSLENV=SNOW"},
-		{"GOPATH/l", "WSLENV=GOPATH/l:SNOW"},
+		{"", "WSLENV=SNOW:SNOW_PANE:SNOW_SOCKET"},
+		{"GOPATH/l", "WSLENV=GOPATH/l:SNOW:SNOW_PANE:SNOW_SOCKET"},
 	}
 	for _, tt := range tests {
 		t.Setenv("WSLENV", tt.wslenv)

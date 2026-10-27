@@ -61,6 +61,20 @@ snow help      show the commands
 Inside a session, `Ctrl+b` then `d` goes back to the home page; the session
 keeps running. Press `Ctrl+b` and wait half a second to see every key.
 
+### Claude Code panes
+
+Snow runs Claude Code, Anthropic's coding agent, in a pane. Install it from
+[claude.com/claude-code](https://claude.com/claude-code) and log in with
+`claude` once. Snow uses your own `claude` and your own login: it never
+reads, stores, or forwards your Claude Code login or tokens.
+
+`Ctrl+b a` opens a Claude Code pane beside the focused pane, in its folder.
+Next to a WSL pane it runs the `claude` inside that distribution. The
+profile picker (`Ctrl+b %`, `"`, `c`) lists "Claude Code" when Snow finds
+`claude` on your PATH, and "Claude Code (Ubuntu)" for a running WSL
+distribution that has it. When Snow finds no `claude`, `Ctrl+b a` says how
+to install it. A saved session starts `claude` again in its folder.
+
 ### Provider keys
 
 Snow connects to Anthropic (Claude) and OpenAI with your API key.
@@ -139,7 +153,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `%` | Split right |
 | `"` | Split down |
 | `c` | New window |
-| `a` | New chat with the agent, beside the pane |
+| `a` | Claude Code pane beside the pane, in its folder |
 | `n`, `p` | Next and previous window |
 | `0` to `9` | Go to window 0 to 9 |
 | `,` | Rename the window |
@@ -152,7 +166,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
 | `s` | Switch to another session from a list |
-| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat`, `theme` for this session |
+| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `theme` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
@@ -178,7 +192,8 @@ across it, opens copy mode too.
 
 ### Chat
 
-A chat pane talks to Snow's agent in the pane's folder. It sits in the same
+A chat pane talks to Snow's agent in the pane's folder. Open one with `chat`
+in `Ctrl+b :`, or bind the `new-chat` action to a key. It sits in the same
 windows and layouts as terminal panes. The top bar shows the model, which
 is always visible, and the approval mode. It also shows how full the
 context is and the estimated cost.
@@ -267,7 +282,8 @@ usage = true          # false hides the context gauge and the cost
 # models = []
 ```
 
-Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`, `new-chat`,
+Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
+`new-claude`, `new-chat` (no key by default),
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),

@@ -9,6 +9,19 @@ import (
 // A snow that finds it set is running inside a snow pane.
 const EnvName = "SNOW"
 
+// EnvPane and EnvSocket are the variables the server sets in every pane for
+// snow hook: the pane's ID and the server's socket path.
+const (
+	EnvPane   = "SNOW_PANE"
+	EnvSocket = "SNOW_SOCKET"
+)
+
+// PaneVars returns every variable the server sets in pane id of the server
+// at socket: EnvName, EnvPane, and EnvSocket.
+func PaneVars(socket string, pane int) []string {
+	return []string{PaneEnv(socket, pane), EnvPane + "=" + strconv.Itoa(pane), EnvSocket + "=" + socket}
+}
+
 // PaneEnv returns the EnvName assignment for pane id of the server at socket:
 // the socket path, a comma, and the pane ID.
 func PaneEnv(socket string, pane int) string {
