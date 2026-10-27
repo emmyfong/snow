@@ -137,3 +137,20 @@ func TestAgentStateFutureAt(t *testing.T) {
 	hook(t, s, first, api.AgentWorking, time.Now())
 	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentWorking })
 }
+
+// TestWindowShowsMostUrgent: a window with two agents carries the more
+// urgent state, for its status bar tab.
+func TestWindowShowsMostUrgent(t *testing.T) {
+	s := newTestServer(t)
+	c, first := attachNoPrompt(t, s)
+	c.Send(split(first, api.DirRight))
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	second := shownPanes(l)[1].ID
+	now := time.Now()
+	hook(t, s, first, api.AgentIdle, now)
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentIdle })
+	hook(t, s, second, api.AgentWorking, now)
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentWorking })
+	hook(t, s, first, api.AgentNeedsYou, now.Add(time.Millisecond))
+	nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].AgentState == api.AgentNeedsYou })
+}

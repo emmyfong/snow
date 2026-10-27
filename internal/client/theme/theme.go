@@ -71,6 +71,10 @@ type Glyphs struct {
 	// than one answer, and a task that is done or still to do. Working
 	// marks the task in progress.
 	Checked, Unchecked, Working string
+	// AgentIdle, AgentWorking, and AgentNeedsYou follow a window's name in
+	// the status bar while an agent in it waits for a task, runs a turn,
+	// or waits for the user. One cell each.
+	AgentIdle, AgentWorking, AgentNeedsYou string
 }
 
 // Default returns the default theme, Frost.
@@ -90,6 +94,7 @@ func defaultGlyphs() Glyphs {
 		Collapsed: "▸", Expanded: "▾",
 		Mask:    "•",
 		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
+		AgentIdle: "○", AgentWorking: "◐", AgentNeedsYou: "●",
 	}
 }
 

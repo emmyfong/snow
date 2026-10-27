@@ -79,7 +79,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 |---|---|---|
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
 | Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
-| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (` 1 name `, active `*`, zoomed glyph; the padding is part of the tab's click target) on the left; `Right` or, after a one-cell divider and in the error color, `Message` on the right. The bar is `BarFG`/`BarBG` (the accent in built-in themes); the shown window's tab is the bar inverted, in `TabActive`/`TabActiveBG`. When short, drops `Right` first; a `Message` stays and the tabs are cut instead. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
+| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (` 1 name `, active `*`, zoomed glyph, then a space and the `Agent` mark's glyph when the window holds an agent (`MarkIdle`, `MarkWorking`, `MarkNeedsYou`); the padding is part of the tab's click target) on the left; `Right` or, after a one-cell divider and in the error color, `Message` on the right. The bar is `BarFG`/`BarBG` (the accent in built-in themes); the shown window's tab is the bar inverted, in `TabActive`/`TabActiveBG`; any other tab whose agent needs the user is in `PromptFG`/`PromptBG`, bold. When short, drops `Right` first; a `Message` stays and the tabs are cut instead; a `Message` wider than the bar is cut with `…`. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted; optional `Hints[i]` sits right-aligned and muted at the end of row i (a shortcut), and is dropped when it would touch its item. Nothing below 4 cells. |
 | CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`, `HighlightSelected` in `SelectedFG`/`SelectedBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
@@ -120,8 +120,10 @@ not be used).
   selection reuses the list selection.
 - `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
   mark, the session brackets, the list pointer, the text caret, the spinner frames, the collapsed and expanded markers of a
-  tool call, and the `Checked`, `Unchecked`, and `Working` marks of a
-  multi-select option and a task.
+  tool call, the `Checked`, `Unchecked`, and `Working` marks of a
+  multi-select option and a task, and the agent marks `AgentIdle`,
+  `AgentWorking`, `AgentNeedsYou` (○ ◐ ●; `For` swaps in `-` `~` `!` on a
+  terminal with no colors).
 - `Named(name)` reads `[theme] name` from the config: a built-in name,
   ignoring case, or `default`.
 - The terminal may be light or dark. Text on the terminal's own background
