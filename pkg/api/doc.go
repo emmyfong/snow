@@ -26,6 +26,9 @@
 //   - Arrays are never null; an empty array is [].
 //   - A ChatEvent kind a receiver does not know is ignored, so adding an
 //     event kind keeps ProtocolVersion.
+//   - A new ChatInput kind keeps ProtocolVersion: a server that does not
+//     know it answers with a command-failed Error, which leaves the session
+//     running.
 //   - Pane IDs start at 1; 0 means none. Window indexes start at 0, as in
 //     tmux.
 package api

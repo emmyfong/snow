@@ -47,6 +47,7 @@ func TestAskRejectsBadInput(t *testing.T) {
 		{"blank label", `{"question":"q","options":` + opts("a", " ") + `}`},
 		{"long label", `{"question":"q","options":` + opts("a", long(askMaxLabel+1)) + `}`},
 		{"two-line label", `{"question":"q","options":` + opts("a", "b\nc") + `}`},
+		{"tab in label", `{"question":"q","options":` + opts("a", "b\tc") + `}`},
 		{"same label", `{"question":"q","options":` + opts("Yes", "yes") + `}`},
 		{"other label", `{"question":"q","options":` + opts("a", "other") + `}`},
 		{"long description", `{"question":"q","options":[{"label":"a"},{"label":"b","description":"` + long(askMaxDesc+1) + `"}]}`},
@@ -101,5 +102,22 @@ func TestAskErrors(t *testing.T) {
 	gone := errors.New("interrupted")
 	if r := run(t, Env{User: &fakeUser{err: gone}}, "ask", in); !r.IsError || r.Content != gone.Error() {
 		t.Fatalf("ask error: %+v", r)
+	}
+}
+
+// TestAskAtTheLimit: a question with askMaxOptions options, each at the
+// longest label, description, and preview, reaches the user.
+func TestAskAtTheLimit(t *testing.T) {
+	var opts []map[string]string
+	for i := range askMaxOptions {
+		opts = append(opts, map[string]string{
+			"label":       strings.Repeat("é", askMaxLabel-1) + string(rune('a'+i)),
+			"description": strings.Repeat("d", askMaxDesc), "preview": strings.Repeat("p", askMaxPreview),
+		})
+	}
+	in, _ := json.Marshal(map[string]any{"question": strings.Repeat("q", askMaxQuestion), "options": opts})
+	u := &fakeUser{reply: Reply{Other: "x"}}
+	if r := Builtin().Call(context.Background(), Env{User: u}, "ask", in, nil); r.IsError || len(u.asked) != 1 || len(u.asked[0].Options) != askMaxOptions {
+		t.Fatalf("result %+v, asked %d", r, len(u.asked))
 	}
 }

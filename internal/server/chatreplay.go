@@ -53,31 +53,20 @@ func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversa
 				end(agent.EndInterrupted, nil)
 			}
 		case *convstore.Question:
-			play(&agent.Question{ID: r.ToolUseID, Text: r.Text, Multi: r.Multi, Options: replayOptions(r.Options)})
+			play(agent.QuestionOf(r))
 		case *convstore.Answer:
 			play(&agent.QuestionAnswered{ID: r.ToolUseID})
-		case *convstore.Tasks:
-			tasks := make([]agent.Task, len(r.Tasks))
-			for i, t := range r.Tasks {
-				tasks[i] = agent.Task{Text: t.Text, State: t.State}
-			}
-			play(&agent.TasksChanged{Tasks: tasks})
 		case *convstore.ModelSwitch:
 			cur = r.Model
 			play(&agent.ModelChanged{Model: r.Model, Effort: r.Effort})
 		}
 	}
 	end(agent.EndInterrupted, nil)
+	if tasks := agent.TasksOf(loaded); len(tasks) > 0 {
+		play(&agent.TasksChanged{Tasks: tasks})
+	}
 	snap.Title = loaded.Title()
 	return snap
-}
-
-func replayOptions(opts []convstore.QuestionOption) []agent.Option {
-	out := make([]agent.Option, len(opts))
-	for i, o := range opts {
-		out[i] = agent.Option{Label: o.Label, Description: o.Description, Preview: o.Preview}
-	}
-	return out
 }
 
 // replayReply plays the blocks of one saved reply, then its usage.

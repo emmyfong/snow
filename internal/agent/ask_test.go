@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"testing"
@@ -156,10 +157,12 @@ func TestAskInterrupt(t *testing.T) {
 	next[*TurnEnded](t, h)
 	recs := h.records(t)
 	n := len(recs)
-	if a, ok := recs[n-3].(*convstore.Answer); !ok || a.ToolUseID != "q1" || a.Picked[0] != "C" {
+	// The message comes first: it carries the answer to the model, so a
+	// crash after it loses nothing.
+	if u, ok := recs[n-3].(*convstore.User); !ok || u.Text != started.Text {
 		t.Fatalf("records %v", types(recs))
 	}
-	if u, ok := recs[n-2].(*convstore.User); !ok || u.Text != started.Text {
+	if a, ok := recs[n-2].(*convstore.Answer); !ok || a.ToolUseID != "q1" || a.Picked[0] != "C" {
 		t.Fatalf("records %v", types(recs))
 	}
 	if q := h.conv.Question(); q != nil {
@@ -275,5 +278,96 @@ func TestAnsweredQuestionNotOpen(t *testing.T) {
 	}
 	if err := c.Reply(QuestionReply{ID: "q1", Picked: []string{"A"}}); !errors.Is(err, ErrNoQuestion) {
 		t.Fatalf("reply: %v, want ErrNoQuestion", err)
+	}
+}
+
+// closeThen is a reply that calls "closer", which closes the conversation
+// file, then the tool name with input in, so name's own saves fail.
+func closeThen(name string, in json.RawMessage) providertest.Reply {
+	return providertest.Reply{Events: []provider.Event{
+		&provider.ToolUse{ID: "c1", Name: "closer", Input: json.RawMessage(`{}`)},
+		&provider.ToolUse{ID: "x1", Name: name, Input: in},
+		&provider.Stop{Reason: provider.StopToolUse},
+	}}
+}
+
+// closer returns a tool that closes h's conversation file when it runs.
+func closer(h **harness) fnTool {
+	return fnTool{tool.Def{Name: "closer"}, func(context.Context) (string, error) {
+		return "closed", (*h).conv.w.Close()
+	}}
+}
+
+// TestSaveFailures: a question, an answer, or a task list that cannot be
+// saved is never shown, and the turn fails with a save error.
+func TestSaveFailures(t *testing.T) {
+	askIn, _ := json.Marshal(map[string]any{"question": "Which?", "options": []map[string]string{{"label": "A"}, {"label": "B"}}})
+	tests := []struct {
+		name string
+		in   json.RawMessage
+	}{
+		{"ask", askIn},
+		{"tasks", json.RawMessage(`{"tasks":[{"text":"a","state":"pending"}]}`)},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var h *harness
+			h = newHarness(t, []tool.Tool{askTool(t), tasksTool(t), closer(&h)}, closeThen(tt.name, tt.in))
+			_ = h.conv.Send("go")
+			for {
+				e := <-h.events
+				switch b := e.Body.(type) {
+				case *Question, *TasksChanged:
+					t.Fatalf("%T shown although it was not saved", b)
+				case *TurnEnded:
+					if b.Reason != EndFailed || b.Failure == nil || b.Failure.Kind != FailSave {
+						t.Fatalf("turn ended %+v", b)
+					}
+					if q := h.conv.Question(); q != nil {
+						t.Fatalf("Question() = %+v", q)
+					}
+					return
+				}
+			}
+		})
+	}
+
+	t.Run("answer turn", func(t *testing.T) {
+		h := newHarness(t, []tool.Tool{askTool(t)}, askCall("q1", false), text("never"))
+		_ = h.conv.Send("pick")
+		next[*Question](t, h)
+		_ = h.conv.Interrupt()
+		next[*TurnEnded](t, h)
+		h.waitIdle(t)
+		if err := h.conv.w.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if err := h.conv.Reply(QuestionReply{ID: "q1", Picked: []string{"A"}}); err != nil {
+			t.Fatal(err)
+		}
+		if e := next[*TurnEnded](t, h); e.Reason != EndFailed || e.Failure == nil || e.Failure.Kind != FailSave {
+			t.Fatalf("turn ended %+v", e)
+		}
+		if n := len(h.fake.Requests()); n != 1 {
+			t.Fatalf("the provider got %d requests; the unsaved answer must not reach it", n)
+		}
+	})
+}
+
+// TestRetryRefusedWhileQuestionOpen: a retry sends no message after an
+// interrupted question, so it would leave the question open in the file
+// while the chat moved on. The user answers or sends a message instead.
+func TestRetryRefusedWhileQuestionOpen(t *testing.T) {
+	h := newHarness(t, []tool.Tool{askTool(t)}, askCall("q1", false), text("ok"))
+	_ = h.conv.Send("pick")
+	next[*Question](t, h)
+	_ = h.conv.Interrupt()
+	next[*TurnEnded](t, h)
+	h.waitIdle(t)
+	if err := h.conv.Retry(); !errors.Is(err, ErrBusy) {
+		t.Fatalf("Retry: %v, want ErrBusy", err)
+	}
+	if q := h.conv.Question(); q == nil {
+		t.Fatal("the refused retry closed the question")
 	}
 }

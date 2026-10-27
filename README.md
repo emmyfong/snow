@@ -150,7 +150,7 @@ context is and the estimated cost.
 | `PgUp` `PgDn`, arrows, wheel | Scroll; `End` or typing returns to the latest text |
 | `Tab`, `Shift+Tab` | Select a tool call; `Enter` or a click shows its details |
 | `y` `a` `n` `d` | When a tool asks and the message line is empty: yes, always for this tool, no (with a reason), show the diff or the rest of a long input |
-| Arrows, `1`-`9`, `Space`, `Enter` | When the agent asks a question: move, pick, check (when it takes more than one answer), and answer. "Other" takes a typed answer. After `Esc` the question stays; an answer starts a new turn, and a new message moves on |
+| Arrows, `Tab`, `j` `k`, `1`-`9`, `Space`, `Enter` | When the agent asks a question: move, pick, check (when it takes more than one answer), and answer. "Other" takes a typed answer. After `Esc` the question stays, and only the arrows, `Tab`, `Space`, and `Enter` reach it while the message line is empty; an answer starts a new turn, and a new message moves on |
 | `Ctrl+T` | Show or hide the agent's task list above the message line |
 
 #### Chat commands

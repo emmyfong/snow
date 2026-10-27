@@ -184,3 +184,17 @@ func TestQuestionGolden(t *testing.T) {
 		}
 	}
 }
+
+// TestQuestionFieldHidesCursor: after an interrupt, the field for a typed
+// answer draws its own cursor, so the message line has none.
+func TestQuestionFieldHidesCursor(t *testing.T) {
+	m := asking(t, 100, 30, false)
+	m.Event(ev(api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndInterrupted}))
+	if _, _, ok := m.Cursor(); !ok {
+		t.Fatal("no cursor in the message line after the interrupt")
+	}
+	typeKeys(m, up, enter)
+	if _, _, ok := m.Cursor(); ok {
+		t.Fatal("a cursor in the message line while the answer field is open")
+	}
+}

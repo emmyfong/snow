@@ -11,6 +11,8 @@ import (
 )
 
 // Limits of the ask tool, so a question fits the chat and the protocol.
+// Keep askMaxOptions and askMaxLabel in step with api.MaxChatPicked and
+// api.MaxChatLabel, which bound a reply.
 const (
 	askMinOptions  = 2
 	askMaxOptions  = 9 // the user picks one with a digit key
@@ -20,9 +22,9 @@ const (
 	askMaxPreview  = 2000
 )
 
-// OtherLabel is the choice the chat always adds to a question, for an
+// otherLabel is the choice the chat always adds to a question, for an
 // answer the user types. A model's option may not take it.
-const OtherLabel = "Other"
+const otherLabel = "Other"
 
 // ErrBadQuestion is the cause of an error for an ask input the chat
 // cannot show.
@@ -52,7 +54,7 @@ func (askTool) Def() Def {
 			"question": prop("string", "the question, in one or two sentences"),
 			"options": map[string]any{
 				"type": "array", "items": option, "minItems": askMinOptions, "maxItems": askMaxOptions,
-				"description": "the answers to pick from; do not add an \"" + OtherLabel + "\" answer",
+				"description": "the answers to pick from; do not add an \"" + otherLabel + "\" answer",
 			},
 			"multi": prop("boolean", "true lets the user pick more than one answer"),
 		}, "question", "options"),
@@ -115,8 +117,8 @@ func checkQuestion(q Question) error {
 			return bad("label %q is over %d characters", o.Label, askMaxLabel)
 		case strings.ContainsAny(o.Label, "\r\n\t"):
 			return bad("label %q is not one line", o.Label)
-		case key == strings.ToLower(OtherLabel):
-			return bad("the chat adds %q by itself", OtherLabel)
+		case key == strings.ToLower(otherLabel):
+			return bad("the chat adds %q by itself", otherLabel)
 		case seen[key]:
 			return bad("label %q is given twice", o.Label)
 		case utf8.RuneCountInString(o.Description) > askMaxDesc:

@@ -3,19 +3,19 @@ package server
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
+	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/internal/provider/providertest"
-	"github.com/emmyfong/snow/internal/tool"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
 // TestTasksInSnapshot: a client that attaches after the task list
 // changed gets the list in the snapshot.
 func TestTasksInSnapshot(t *testing.T) {
-	dir := t.TempDir()
 	in := json.RawMessage(`{"tasks":[{"text":"read code","state":"done"},{"text":"fix parser","state":"in_progress"}]}`)
-	opts, _, _ := chatOptions(t,
+	s, _, c, id := chatInFolder(t, t.TempDir(),
 		providertest.Reply{Events: []provider.Event{
 			&provider.Start{Model: "model-1"},
 			&provider.ToolUse{ID: "t1", Name: "tasks", Input: in},
@@ -23,17 +23,6 @@ func TestTasksInSnapshot(t *testing.T) {
 		}},
 		reply("on it"),
 	)
-	opts.Chat.Tools = tool.Builtin()
-	s := New(opts)
-	t.Cleanup(s.Close)
-	c := connect(t, s, 100, 30)
-	c.Send(&api.Attach{Session: "work", Create: true, Dir: dir})
-	l := nextLayout(t, c, func(*api.Layout) bool { return true })
-	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{
-		api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat, api.ArgFolder: dir,
-	}})
-	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
-	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
 	say(c, id, "fix the parser")
 	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "on it" && idle(s) })
 
@@ -44,5 +33,23 @@ func TestTasksInSnapshot(t *testing.T) {
 	want := []api.ChatTask{{Text: "read code", State: api.ChatTaskDone}, {Text: "fix parser", State: api.ChatTaskInProgress}}
 	if len(snap.Tasks) != 2 || snap.Tasks[0] != want[0] || snap.Tasks[1] != want[1] {
 		t.Fatalf("tasks %+v, want %+v", snap.Tasks, want)
+	}
+}
+
+// TestResumeShowsTasks: a resumed conversation shows the last task list
+// saved in its file.
+func TestResumeShowsTasks(t *testing.T) {
+	dir := t.TempDir()
+	_, store, c, id := chatInFolder(t, dir)
+	at := time.Now()
+	past := saveConversation(t, store, dir, append(pastExchange(),
+		&convstore.Tasks{At: at, Tasks: []convstore.TaskItem{{Text: "a", State: "in_progress"}}},
+		&convstore.Tasks{At: at, Tasks: []convstore.TaskItem{{Text: "a", State: "done"}, {Text: "b", State: "pending"}}},
+	)...)
+	chatInputOf(c, id, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
+	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Conversation == past })
+	want := []api.ChatTask{{Text: "a", State: api.ChatTaskDone}, {Text: "b", State: api.ChatTaskPending}}
+	if len(got.Tasks) != 2 || got.Tasks[0] != want[0] || got.Tasks[1] != want[1] {
+		t.Fatalf("tasks %+v, want %+v", got.Tasks, want)
 	}
 }

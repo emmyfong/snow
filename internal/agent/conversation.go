@@ -47,7 +47,9 @@ var (
 	// ErrInvalid is the cause of a call with a mode, a decision, or a model
 	// name this version does not know.
 	ErrInvalid = errors.New("invalid argument")
-	// ErrBusy is the cause of a Retry while a turn runs or messages wait.
+	// ErrBusy is the cause of a Retry while a turn runs, messages wait, or
+	// a question is open, and of a reply that would start a turn while one
+	// runs.
 	ErrBusy = errors.New("a turn is running")
 	// ErrFolderMismatch is the cause of a Resume whose folder is not the one
 	// saved in the conversation file: its tools would work elsewhere.
@@ -144,7 +146,7 @@ func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, *c
 	c.model, c.effort = model, provider.Effort(effort)
 	c.mode.Store(mode)
 	c.history = history(loaded.Records)
-	c.open = openQuestion(loaded.OpenQuestion)
+	c.open = QuestionOf(loaded.OpenQuestion)
 	for _, r := range loaded.Records {
 		if _, ok := r.(*convstore.User); ok {
 			c.turns++
@@ -288,7 +290,8 @@ func (c *Conversation) Idle() bool {
 // Retry runs the last turn again, after it failed or was interrupted:
 // with no new message when the conversation ends with the user's side,
 // and else with the user's last message sent again. It returns ErrBusy
-// while a turn runs or messages wait.
+// while a turn runs or messages wait, and while a question is open: the
+// user answers it or sends a message.
 func (c *Conversation) Retry() error {
 	res := make(chan error, 1)
 	if err := c.post(retryCmd{res}); err != nil {

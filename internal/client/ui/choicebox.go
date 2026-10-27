@@ -52,7 +52,10 @@ func ChoiceBox(th theme.Theme, o ChoiceOptions) string {
 	if o.Reason {
 		prompt, placeholder, hints := o.ReasonPrompt, o.ReasonPlaceholder, o.ReasonHints
 		if prompt == "" {
-			prompt, placeholder = " Reason: ", "optional"
+			prompt = " Reason: "
+		}
+		if placeholder == "" {
+			placeholder = "optional"
 		}
 		if hints == nil {
 			hints = reasonHints

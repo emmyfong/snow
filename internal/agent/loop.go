@@ -56,6 +56,7 @@ type loopState struct {
 	pending *convstore.ModelSwitch // applies when the running turn ends
 	waiting *waitCmd               // the approval the turn waits for
 	asking  *asking                // the open question
+	stopped bool                   // the running turn was interrupted; a question it asks waits for no turn
 	cancel  context.CancelFunc     // of the running turn; nil when idle
 	ended   chan struct{}          // the running turn is over
 	turn    int
@@ -143,6 +144,9 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		cmd.res <- nil
 	case askCmd:
 		l.asking = &asking{q: cmd.q, reply: cmd.reply}
+		if l.stopped {
+			l.asking.reply = nil
+		}
 	case replyCmd:
 		cmd.res <- c.reply(l, cmd.r)
 	case questionCmd:
@@ -160,7 +164,9 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 	case idleCmd:
 		cmd.res <- l.cancel == nil && len(l.queue) == 0 && !l.holding() && len(l.saves) == 0 && !l.closing
 	case retryCmd:
-		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 {
+		// A retry sends no message when the history ends on the user's
+		// side, so nothing would close an open question in the file.
+		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 || l.asking != nil {
 			cmd.res <- ErrBusy
 			return
 		}
@@ -174,6 +180,7 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		// The question stays open, and an answer to it starts a turn.
 		l.waiting = nil
 		l.stopAsking()
+		l.stopped = l.cancel != nil
 	case closeCmd:
 		l.closing = true
 		l.queue = nil
@@ -182,6 +189,7 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		}
 		l.waiting = nil
 		l.stopAsking()
+		l.stopped = l.cancel != nil
 	case savedCmd:
 		s := l.saves[0]
 		l.saves, l.saving = l.saves[1:], false
@@ -236,7 +244,7 @@ func (c *Conversation) beginWith(l *loopState, text string, ans *convstore.Answe
 
 func (c *Conversation) start(l *loopState, s turnStart) {
 	l.turn++
-	l.asking = nil
+	l.asking, l.stopped = nil, false
 	ctx, cancel := context.WithCancel(context.Background())
 	l.cancel = cancel
 	go func(n int) {

@@ -99,6 +99,8 @@ func askCell(s *api.ChatSnapshot) *api.ChatTool {
 func TestQuestionSurvivesDetach(t *testing.T) {
 	s, c, id, _ := askingChat(t, reply("thanks"))
 	c.Send(&api.Detach{})
+	// No client is attached while the question waits.
+	nextList(t, c, func(l *api.SessionList) bool { return hasSession(l, "work", 0) })
 	c2 := connect(t, s, 100, 30)
 	c2.Send(&api.Attach{Session: "work"})
 	again := c2.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Question != nil })
@@ -170,5 +172,20 @@ func TestResumeShowsOpenQuestion(t *testing.T) {
 	}
 	if asked != "You asked: Which store?\nMy answer: B" {
 		t.Fatalf("the answer turn says %q", asked)
+	}
+}
+
+// TestReplyRefusedKeepsQuestion: a reply that does not fit the question is
+// refused over the socket, and the question still waits for a good one.
+func TestReplyRefusedKeepsQuestion(t *testing.T) {
+	_, c, id, snap := askingChat(t, reply("thanks"))
+	c.Send(&api.ChatInput{Pane: id, Agent: snap.Agent, Kind: api.ChatInputReply, ID: "q1", Picked: []string{"Z"}})
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "invalid") {
+		t.Fatalf("bad reply: %+v", e)
+	}
+	c.Send(&api.ChatInput{Pane: id, Agent: snap.Agent, Kind: api.ChatInputReply, ID: "q1", Picked: []string{"A"}})
+	done := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "thanks" && idle(s) })
+	if cell := askCell(done); cell == nil || cell.Result != `The user picked "A".` {
+		t.Fatalf("ask cell %+v", cell)
 	}
 }

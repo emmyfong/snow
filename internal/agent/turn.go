@@ -35,7 +35,7 @@ func (r reply) calls() []*provider.ToolUse {
 type turnStart struct {
 	text   string
 	retry  bool
-	answer *convstore.Answer // saved before the message
+	answer *convstore.Answer // saved after the message
 }
 
 // runTurn runs one turn from the user's message until the model ends it,
@@ -55,13 +55,6 @@ func (c *Conversation) runTurn(ctx context.Context, n int, s turnStart) {
 		}
 	}
 	c.emit(&TurnStarted{Turn: n, Text: text})
-	if s.answer != nil {
-		if err := c.w.Append(s.answer); err != nil {
-			c.unsaved = text
-			c.end(n, EndFailed, saveFailure(err))
-			return
-		}
-	}
 	if text != "" {
 		if err := c.w.Append(&convstore.User{At: c.now(), Text: text}); err != nil {
 			// Nothing goes to the provider that could not be saved.
@@ -71,6 +64,14 @@ func (c *Conversation) runTurn(ctx context.Context, n int, s turnStart) {
 		}
 		c.unsaved = ""
 		c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
+	}
+	// The message carries the answer and already closes the question in
+	// the file; the Answer record after it says which question it was.
+	if s.answer != nil {
+		if err := c.w.Append(s.answer); err != nil {
+			c.end(n, EndFailed, saveFailure(err))
+			return
+		}
 	}
 	for {
 		c.emit(&StateChanged{State: StateStreaming})

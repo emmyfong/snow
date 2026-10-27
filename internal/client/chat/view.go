@@ -54,10 +54,11 @@ func (m *Model) View() []string {
 }
 
 // Cursor returns where the terminal's cursor goes in the pane: in the
-// message being typed. While an approval or a question waits, its box
-// takes the keys and draws its own cursor, so there is none.
+// message being typed. While an approval or a question waits, or the
+// question's field for a typed answer is open, the box takes the keys and
+// draws its own cursor, so there is none.
 func (m *Model) Cursor() (x, y int, ok bool) {
-	if m.width <= 0 || m.height <= 0 || m.snap.Pending != nil || (m.snap.Question != nil && m.snap.Running) {
+	if m.width <= 0 || m.height <= 0 || m.snap.Pending != nil || (m.question() != nil && (m.snap.Running || m.ask.typing)) {
 		return 0, 0, false
 	}
 	o := m.inputOptions()

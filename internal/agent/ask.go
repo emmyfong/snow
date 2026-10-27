@@ -45,37 +45,46 @@ type callUser struct {
 func (u callUser) Ask(ctx context.Context, q tool.Question) (tool.Reply, error) {
 	c := u.c
 	rec := &convstore.Question{At: c.now(), ToolUseID: u.id, Text: q.Text, Multi: q.Multi}
-	ev := &Question{ID: u.id, Text: q.Text, Multi: q.Multi}
 	for _, o := range q.Options {
 		rec.Options = append(rec.Options, convstore.QuestionOption{Label: o.Label, Description: o.Description, Preview: o.Preview})
-		ev.Options = append(ev.Options, Option{Label: o.Label, Description: o.Description, Preview: o.Preview})
 	}
+	ev := QuestionOf(rec)
 	if err := c.w.Append(rec); err != nil {
 		return tool.Reply{}, fmt.Errorf("the question could not be saved: %w", err)
 	}
+	// The saved question is open from here on, so the loop and the user
+	// must hear of it even when the turn was interrupted already. The loop
+	// does not return while a turn runs, so this send is always received.
 	reply := make(chan tool.Reply, 1)
-	select {
-	case c.cmds <- askCmd{q: ev, reply: reply}:
-	case <-ctx.Done():
-		return tool.Reply{}, errInterrupted
-	}
+	c.cmds <- askCmd{q: ev, reply: reply}
 	c.emit(ev)
 	c.emit(&StateChanged{State: StateApproval})
 	select {
 	case r := <-reply:
-		// As with an approval, an interrupt that is ready too wins.
-		if ctx.Err() != nil {
+		return u.answered(r)
+	case <-ctx.Done():
+		// The loop hands over a reply before it handles the interrupt, so
+		// one that came first is here now. Unlike an approval's, an answer
+		// the loop took is kept: dropping it would leave a question the
+		// file holds open and the loop does not.
+		select {
+		case r := <-reply:
+			return u.answered(r)
+		default:
 			return tool.Reply{}, errInterrupted
 		}
-		if err := c.w.Append(&convstore.Answer{At: c.now(), ToolUseID: u.id, Picked: r.Picked, Other: r.Other}); err != nil {
-			return tool.Reply{}, fmt.Errorf("the answer could not be saved: %w", err)
-		}
-		c.emit(&QuestionAnswered{ID: u.id})
-		c.emit(&StateChanged{State: StateTool})
-		return r, nil
-	case <-ctx.Done():
-		return tool.Reply{}, errInterrupted
 	}
+}
+
+// answered saves the answer r and reports it.
+func (u callUser) answered(r tool.Reply) (tool.Reply, error) {
+	c := u.c
+	if err := c.w.Append(&convstore.Answer{At: c.now(), ToolUseID: u.id, Picked: r.Picked, Other: r.Other}); err != nil {
+		return tool.Reply{}, fmt.Errorf("the answer could not be saved: %w", err)
+	}
+	c.emit(&QuestionAnswered{ID: u.id})
+	c.emit(&StateChanged{State: StateTool})
+	return r, nil
 }
 
 // Reply answers the open question. When a turn waits for it, the turn
@@ -92,8 +101,8 @@ func (c *Conversation) Reply(r QuestionReply) error {
 	return <-res
 }
 
-// Question returns the open question, or nil. A client that attaches
-// shows it again.
+// Question returns the open question, or nil. It waits for the
+// conversation's goroutine, so the server's own goroutine must not call it.
 func (c *Conversation) Question() *Question {
 	res := make(chan *Question, 1)
 	if c.post(questionCmd{res}) != nil {
@@ -165,8 +174,8 @@ func answerMessage(q *Question, picked []string, other string) string {
 	return "You asked: " + q.Text + "\nMy answer: " + answer
 }
 
-// openQuestion turns the open question of a loaded file into its event.
-func openQuestion(q *convstore.Question) *Question {
+// QuestionOf turns a saved question into its event, or nil for nil.
+func QuestionOf(q *convstore.Question) *Question {
 	if q == nil {
 		return nil
 	}
