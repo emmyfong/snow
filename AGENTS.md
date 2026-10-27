@@ -17,7 +17,7 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool,
+                     convstore, agent, tool, claudecode,
                      later: skills, gate, editor, worktree
 pkg/api/             the only public package: API types for other clients
 ```
@@ -37,6 +37,8 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    │           │                       │    (the server runs agents; agents never import server,
    │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
+   ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
+   │           │                       │    hooks and settings only, never its login)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;

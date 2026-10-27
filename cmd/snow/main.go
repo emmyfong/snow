@@ -29,10 +29,12 @@ const usage = `usage:
   snow           open the home page: your sessions, running and saved
   snow <name>    attach to session <name>, or create it
   snow auth      save or remove provider API keys (snow auth help)
+  snow hook      tell Snow what Claude Code does; Claude Code's hooks run it
   snow version   print the version (also -v, --version)
   snow help      show this help (also -h, --help)
 
-The names version, help, server, and auth are commands, not sessions.
+The names version, help, server, auth, and hook are commands, not
+sessions.
 Inside a session, press Ctrl+b then d to go back to the home page, and
 Ctrl+b alone, then wait, to see every key.
 `
@@ -55,6 +57,7 @@ const (
 	kindHelp
 	kindAuth
 	kindAuthHelp
+	kindHook
 )
 
 // command is a parsed command line.
@@ -87,6 +90,8 @@ func parseArgs(args []string) (command, error) {
 		return command{kind: kindHelp}, nil
 	case "server":
 		return command{kind: kindServer}, nil
+	case "hook":
+		return command{kind: kindHook}, nil
 	default:
 		if strings.HasPrefix(a, "-") {
 			return command{}, fmt.Errorf("unknown option %s", a)
@@ -122,6 +127,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	case kindAuth:
 		return runAuth(cmd.auth, stdout, stderr)
+	case kindHook:
+		return runHook(stdin)
 	default:
 		if err := nested(); err != nil {
 			_, _ = fmt.Fprintln(stderr, "snow:", err)

@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
@@ -22,6 +23,10 @@ type pane struct {
 	// fetching is set while a goroutine reads the busy pane's frame for the
 	// frame loop; owned by the model goroutine.
 	fetching bool
+	// agent is the state snow hook last reported for the agent in this
+	// terminal pane, at agentAt; owned by the model goroutine.
+	agent   string
+	agentAt time.Time
 }
 
 // startPane starts profile's program in dir at cols by rows, below

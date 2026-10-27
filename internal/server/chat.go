@@ -202,7 +202,11 @@ func (st *state) chatEvent(e *api.ChatEvent) {
 	if e.Agent != p.chat.snap.Agent {
 		return // an event of a conversation this pane replaced
 	}
+	before := p.agentNow()
 	p.chat.snap.Apply(e)
+	if p.agentNow() != before {
+		st.agentChanged(sess)
+	}
 	for c := range st.clients {
 		if c.session != sess.name || !c.chatLive[e.Pane] {
 			continue

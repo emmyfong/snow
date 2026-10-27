@@ -50,6 +50,15 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/client", desc: "agents report through events; the server forwards them" }
             - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "agents never read keys; providers get them through KeySource" }
             - { pkg: "github.com/emmyfong/snow/internal/signin", desc: "sign-in belongs to the server and snow auth" }
+        claudecode-uses-documented-surfaces:
+          # An allow list: this package touches Claude Code's hooks and
+          # settings only, so nothing that holds keys or logins can creep in.
+          list-mode: strict
+          files: ["**/internal/claudecode/**", "!$test"]
+          allow:
+            - $gostd
+            - github.com/emmyfong/snow/pkg/api
+            - github.com/emmyfong/snow/internal/transport
         tools-know-only-shell:
           files: ["**/internal/tool/**", "!$test"]
           deny:

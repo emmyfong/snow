@@ -59,7 +59,7 @@ func (st *state) layout(sess *session) *api.Layout {
 	cols, rows := sess.area()
 	l := &api.Layout{Session: sess.name, Active: sess.active}
 	for _, w := range sess.windows {
-		info := api.WindowInfo{Index: w.index, Name: w.name, Zoomed: w.tree.Zoomed != 0}
+		info := api.WindowInfo{Index: w.index, Name: w.name, Zoomed: w.tree.Zoomed != 0, AgentState: windowAgent(w)}
 		g := layout.Rects(w.tree, cols, rows)
 		for _, id := range w.tree.Panes() {
 			r, ok := g.Panes[id]
@@ -72,12 +72,13 @@ func (st *state) layout(sess *session) *api.Layout {
 				folder = p.term.Folder()
 			}
 			info.Panes = append(info.Panes, api.PaneInfo{
-				ID:      int(id),
-				Kind:    p.kind(),
-				Rect:    api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
-				Profile: p.profile,
-				Folder:  folder,
-				Focused: int(id) == w.focused,
+				ID:         int(id),
+				Kind:       p.kind(),
+				Rect:       api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
+				Profile:    p.profile,
+				Folder:     folder,
+				Focused:    int(id) == w.focused,
+				AgentState: p.agentNow(),
 			})
 		}
 		l.Windows = append(l.Windows, info)

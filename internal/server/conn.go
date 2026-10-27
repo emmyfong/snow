@@ -127,6 +127,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.killRequest(c, m) })
 		case *api.RenameSession:
 			s.call(func(st *state) { st.renameRequest(c, m) })
+		case *api.AgentState:
+			s.call(func(st *state) { st.agentState(m) })
 		case *api.Shutdown:
 			s.shutdown()
 		}

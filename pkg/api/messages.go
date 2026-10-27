@@ -45,6 +45,7 @@ const (
 	TypeLogout
 	TypeConversationListRequest
 	TypeConversationList
+	TypeAgentState
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -126,6 +127,8 @@ func newMessage(t MsgType) Message {
 		return &ConversationListRequest{}
 	case TypeConversationList:
 		return &ConversationList{}
+	case TypeAgentState:
+		return &AgentState{}
 	}
 	return nil
 }
@@ -214,12 +217,15 @@ type Layout struct {
 	Windows []WindowInfo `json:"windows"`
 }
 
-// WindowInfo is one window in a Layout.
+// WindowInfo is one window in a Layout. AgentState is the most urgent
+// agent state of all its panes, including panes a zoom hides (see
+// MoreUrgent); empty when no agent runs in it.
 type WindowInfo struct {
-	Index  int        `json:"index"`
-	Name   string     `json:"name"`
-	Zoomed bool       `json:"zoomed,omitempty"`
-	Panes  []PaneInfo `json:"panes"`
+	Index      int        `json:"index"`
+	Name       string     `json:"name"`
+	Zoomed     bool       `json:"zoomed,omitempty"`
+	Panes      []PaneInfo `json:"panes"`
+	AgentState string     `json:"agentState,omitempty"`
 }
 
 // PaneInfo is one pane's place on screen.
@@ -230,6 +236,10 @@ type PaneInfo struct {
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it
 	Focused bool   `json:"focused,omitempty"`
+	// AgentState is the state of the agent in the pane, one of the
+	// Agent* values: from snow hook for a terminal pane, from the chat
+	// for a chat pane. Empty when no agent has reported.
+	AgentState string `json:"agentState,omitempty"`
 }
 
 // Rect is a cell rectangle; X and Y are the top-left corner.

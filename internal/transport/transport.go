@@ -110,8 +110,12 @@ func (l *lockedListener) Close() error {
 // with nobody listening. Other failures, such as a timeout against a busy
 // server, are returned as they are, so a client does not start a second
 // server next to a live one.
-func Dial(path string) (net.Conn, error) {
-	c, err := net.DialTimeout("unix", path, probeTimeout)
+func Dial(path string) (net.Conn, error) { return DialTimeout(path, probeTimeout) }
+
+// DialTimeout is Dial with a limit of its own, for a caller with a tighter
+// budget, such as snow hook.
+func DialTimeout(path string, limit time.Duration) (net.Conn, error) {
+	c, err := net.DialTimeout("unix", path, limit)
 	if err != nil {
 		if isRefused(err) || isAbsent(err) {
 			return nil, fmt.Errorf("%w: %w", ErrNoServer, err)
