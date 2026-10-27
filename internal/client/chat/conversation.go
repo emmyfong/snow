@@ -109,6 +109,7 @@ var HelpKeys = []helppanel.Key{
 	{Keys: "Esc", Desc: "stop the running turn"},
 	{Keys: "/", Desc: "type a command; Tab completes"},
 	{Keys: "PgUp, PgDn", Desc: "scroll the conversation"},
+	{Keys: "Ctrl+T", Desc: "show or hide the agent's task list"},
 	{Keys: "Ctrl+b :", Desc: "run a command in the session"},
 	{Keys: "Ctrl+b d", Desc: "detach and go home"},
 }

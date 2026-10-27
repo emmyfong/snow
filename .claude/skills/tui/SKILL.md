@@ -35,7 +35,7 @@ internal/client/
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
-  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
+  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
 ```
 
@@ -95,7 +95,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | TextArea | `TextArea(th theme.Theme, o TextAreaOptions) string` | A multi-line text field, each row exactly `Width` wide: `Prompt` then `Value`, hard-wrapped by cell width, or a muted `Placeholder`. At most `Height` rows, scrolled to `Cursor` (a rune index). `TextAreaCursor(o)` gives the cursor cell and `TextAreaRows(o)` the row count. |
 | DiffView | `DiffView(th theme.Theme, o DiffOptions) string` | A line diff (`DiffLine`: `DiffKeep`, `DiffAdd`, `DiffRemove`) as rows at most `Width` wide: `+` rows in `Added`, `-` rows in `Removed`, kept rows muted. Kept rows further than `Context` from a change fold into one `...` row; past `MaxRows` a last row counts what was left out. Long lines are cut. `internal/client/textdiff` computes the lines. |
 | ToolCell | `ToolCell(th theme.Theme, o ToolCellOptions) string` | One tool call at most `Width` wide: a header with the `Collapsed` or `Expanded` glyph, `Name`, `Subject`, `+Added -Removed`, and `Summary` (or "running", "waiting for you", "failed ..." by `State`), then the caller's `Details` rows when `Expanded`. A failed header is in `Removed`; a `Selected` header fills the width in the selection colors. |
-| ChoiceBox | `ChoiceBox(th theme.Theme, o ChoiceOptions) string` | A question or a failure in a frame exactly `Width` wide: `Title` in the top edge, `Body` rows, then `Choices` as buttons with `Selected` highlighted (-1 for none; one row when they fit, else one row each; no button row without choices). Prompt colors, or `ErrorFG`/`Error` with `Alert`. `Reason` swaps the buttons for a text field and its keys. `ChoiceButtons(o)` gives each button's `ButtonSpan` for clicks. Used for the approval box and chat failures. |
+| ChoiceBox | `ChoiceBox(th theme.Theme, o ChoiceOptions) string` | A question or a failure in a frame exactly `Width` wide: `Title` in the top edge, `Body` rows, then `Choices` as buttons with `Selected` highlighted (-1 for none; one row when they fit, else one row each; no button row without choices). Prompt colors, or `ErrorFG`/`Error` with `Alert`. `Reason` swaps the buttons for a text field and its keys; `ReasonPrompt`, `ReasonPlaceholder`, and `ReasonHints` change what the field says (default: a reason for a no). `ChoiceButtons(o)` gives each button's `ButtonSpan` for clicks. Used for the approval box, the question box, and chat failures. |
 | TopBar | `TopBar(th theme.Theme, o TopBarOptions) string` | A chat's top row, exactly `Width` cells: `Title` in bold, a rule in `Border`, then `Gauge` (in `Removed` when `GaugeHot`), `Cost`, `Model` in the accent color, and `Mode`. When short it drops the cost, the gauge, the mode, then the title; the model stays. |
 
 ## Theme tokens
@@ -120,7 +120,8 @@ not be used).
   selection reuses the list selection.
 - `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
   mark, the session brackets, the list pointer, the text caret, the spinner frames, the collapsed and expanded markers of a
-  tool call.
+  tool call, and the `Checked`, `Unchecked`, and `Working` marks of a
+  multi-select option and a task.
 - `Named(name)` reads `[theme] name` from the config: a built-in name,
   ignoring case, or `default`.
 - The terminal may be light or dark. Text on the terminal's own background

@@ -36,8 +36,13 @@ type ChatSnapshot struct {
 	Entries []ChatEntry `json:"entries"`
 	// Pending is the approval request the turn waits for, or nil.
 	Pending *ChatApproval `json:"pending,omitempty"`
-	Queue   []string      `json:"queue"`           // messages that wait for the running turn to end
-	Usage   *ChatUsage    `json:"usage,omitempty"` // of the last reply
+	// Question is the open question, or nil. A running turn may wait for
+	// it; after an interrupt or a restart, an answer starts a new turn.
+	Question *ChatQuestion `json:"question,omitempty"`
+	// Tasks is the agent's task list, in order; absent means none.
+	Tasks []ChatTask `json:"tasks,omitempty"`
+	Queue []string   `json:"queue"`           // messages that wait for the running turn to end
+	Usage *ChatUsage `json:"usage,omitempty"` // of the last reply
 	// Cost is the estimated cost of the conversation's priced replies, in
 	// US dollars.
 	Cost float64 `json:"cost,omitempty"`
@@ -189,12 +194,16 @@ type ChatEvent struct {
 	Reason   string        `json:"reason,omitempty"`   // for ChatEventTurnEnded: one of the End* values
 	Tool     *ChatTool     `json:"tool,omitempty"`     // for ChatEventToolCall and ChatEventToolResult
 	Approval *ChatApproval `json:"approval,omitempty"` // for ChatEventApproval
-	State    string        `json:"state,omitempty"`    // for ChatEventState
-	Queue    []string      `json:"queue,omitempty"`    // for ChatEventQueue; absent means empty
-	Usage    *ChatUsage    `json:"usage,omitempty"`    // for ChatEventUsage
-	Model    string        `json:"model,omitempty"`    // for ChatEventModel
-	Effort   string        `json:"effort,omitempty"`   // for ChatEventModel
-	Mode     string        `json:"mode,omitempty"`     // for ChatEventMode
+	// Question is the question for ChatEventQuestion, and holds only the
+	// ID of the question answered for ChatEventAnswered.
+	Question *ChatQuestion `json:"question,omitempty"`
+	Tasks    []ChatTask    `json:"tasks,omitempty"`  // for ChatEventTasks: the whole list; absent means empty
+	State    string        `json:"state,omitempty"`  // for ChatEventState
+	Queue    []string      `json:"queue,omitempty"`  // for ChatEventQueue; absent means empty
+	Usage    *ChatUsage    `json:"usage,omitempty"`  // for ChatEventUsage
+	Model    string        `json:"model,omitempty"`  // for ChatEventModel
+	Effort   string        `json:"effort,omitempty"` // for ChatEventModel
+	Mode     string        `json:"mode,omitempty"`   // for ChatEventMode
 	// Error is why ChatEventTurnEnded failed, or why ChatEventModel or ChatEventMode
 	// could not be saved; the model or mode then stays as it was.
 	Error *ChatError `json:"error,omitempty"`
@@ -209,6 +218,9 @@ const (
 	ChatEventToolCall    = "tool-call"
 	ChatEventToolResult  = "tool-result"
 	ChatEventApproval    = "approval"
+	ChatEventQuestion    = "question" // the agent asks; the turn waits
+	ChatEventAnswered    = "answered" // the question was answered; the turn goes on
+	ChatEventTasks       = "tasks"    // the agent's task list changed
 	ChatEventState       = "state"
 	ChatEventQueue       = "queue"
 	ChatEventUsage       = "usage"
@@ -229,10 +241,10 @@ type ChatInput struct {
 	Pane  int    `json:"pane"`
 	Agent string `json:"agent"`
 	Kind  string `json:"kind"` // one of the Input* values
-	// Text is the message for ChatInputMessage and the reason for a "no"
-	// ChatInputAnswer.
+	// Text is the message for ChatInputMessage, the reason for a "no"
+	// ChatInputAnswer, and the typed answer for ChatInputReply.
 	Text     string `json:"text,omitempty"`
-	ID       string `json:"id,omitempty"`       // for ChatInputAnswer: the approval request's ID
+	ID       string `json:"id,omitempty"`       // for ChatInputAnswer and ChatInputReply: the request's or question's ID
 	Decision string `json:"decision,omitempty"` // for ChatInputAnswer: one of the Decision* values
 	// Model is the "provider/model" for ChatInputModel. Effort is the
 	// reasoning effort; empty lets the provider choose.
@@ -246,6 +258,9 @@ type ChatInput struct {
 	// Mode is the approval mode for ChatInputMode: ChatModeAsk or
 	// ChatModeAuto.
 	Mode string `json:"mode,omitempty"`
+	// Picked holds the labels picked for ChatInputReply. A reply picks
+	// labels or types Text, not both.
+	Picked []string `json:"picked,omitempty"`
 }
 
 // Approval modes a chat takes.
@@ -261,6 +276,7 @@ const MaxChatTitle = 120
 const (
 	ChatInputMessage   = "message"   // send Text; during a turn it waits in the queue
 	ChatInputAnswer    = "answer"    // answer approval request ID
+	ChatInputReply     = "reply"     // answer question ID with Picked or Text
 	ChatInputInterrupt = "interrupt" // stop the running turn
 	ChatInputRetry     = "retry"     // run the last turn again after a failure
 	ChatInputModel     = "model"     // make the next turn use Model with Effort
@@ -307,6 +323,10 @@ func (in *ChatInput) Validate() error {
 		case ChatDecisionYes, ChatDecisionAlways, ChatDecisionNo:
 		default:
 			return fmt.Errorf("%w: unknown decision %q", ErrInvalidChatInput, in.Decision)
+		}
+	case ChatInputReply:
+		if err := in.validateReply(); err != nil {
+			return err
 		}
 	case ChatInputModel:
 		if _, _, ok := ParseModelName(in.Model); !ok {

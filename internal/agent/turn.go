@@ -30,13 +30,22 @@ func (r reply) calls() []*provider.ToolUse {
 	return out
 }
 
+// turnStart is how a turn starts: with the user's message, as a retry,
+// or with the answer to a question whose turn ended.
+type turnStart struct {
+	text   string
+	retry  bool
+	answer *convstore.Answer // saved after the message
+}
+
 // runTurn runs one turn from the user's message until the model ends it,
 // the user interrupts it, or it fails. Every record is saved before the
 // next step depends on it. A retry sends no new message when the history
 // already ends with the user's side, and else the last message again: the
 // one whose save failed, or else the last one in the history.
-func (c *Conversation) runTurn(ctx context.Context, n int, text string, retry bool) {
-	if retry {
+func (c *Conversation) runTurn(ctx context.Context, n int, s turnStart) {
+	text := s.text
+	if s.retry {
 		if c.unsaved != "" {
 			text = c.unsaved
 		} else if len(c.history) > 0 && c.history[len(c.history)-1].Role == provider.RoleUser {
@@ -55,6 +64,14 @@ func (c *Conversation) runTurn(ctx context.Context, n int, text string, retry bo
 		}
 		c.unsaved = ""
 		c.history = appendMessage(c.history, provider.RoleUser, &provider.Text{Text: text})
+	}
+	// The message carries the answer and already closes the question in
+	// the file; the Answer record after it says which question it was.
+	if s.answer != nil {
+		if err := c.w.Append(s.answer); err != nil {
+			c.end(n, EndFailed, saveFailure(err))
+			return
+		}
 	}
 	for {
 		c.emit(&StateChanged{State: StateStreaming})
@@ -240,6 +257,7 @@ func (c *Conversation) runTools(ctx context.Context, calls []*provider.ToolUse) 
 		started := ctx.Err() == nil
 		if started {
 			c.emit(&StateChanged{State: StateTool})
+			env.User = callUser{c: c, id: call.ID}
 			res = c.cfg.Tools.Call(ctx, env, call.Name, call.Input, c.approver(call.ID))
 		}
 		// A call that finished despite the interrupt keeps its result: a

@@ -91,6 +91,14 @@ func TestChatInputValidate(t *testing.T) {
 		{"answer without id", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, Decision: ChatDecisionYes}, false},
 		{"unknown decision", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputAnswer, ID: "t", Decision: "maybe"}, false},
 		{"new", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputNew}, true},
+		{"reply picked", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Picked: []string{"A", "B"}}, true},
+		{"reply typed", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Text: "neither"}, true},
+		{"reply without id", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, Picked: []string{"A"}}, false},
+		{"reply empty", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Text: " "}, false},
+		{"reply both", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Picked: []string{"A"}, Text: "x"}, false},
+		{"reply too many", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Picked: strings.Split("1 2 3 4 5 6 7 8 9 10", " ")}, false},
+		{"reply long label", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Picked: []string{strings.Repeat("x", MaxChatLabel+1)}}, false},
+		{"reply empty label", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputReply, ID: "q", Picked: []string{""}}, false},
 		{"resume", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputResume, Conversation: "c1"}, true},
 		{"resume of nothing", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputResume}, false},
 		{"rename", ChatInput{Pane: 1, Agent: "a", Kind: ChatInputRename, Text: "Fix it"}, true},
@@ -125,7 +133,7 @@ func TestChatInputValidate(t *testing.T) {
 // decodes and leaves the snapshot as it was.
 func TestUnknownChatEventKindIgnored(t *testing.T) {
 	var buf bytes.Buffer
-	payload := []byte(`{"pane":1,"agent":"a","kind":"question","text":"which?","options":[{"label":"x"}]}`)
+	payload := []byte(`{"pane":1,"agent":"a","kind":"poll","text":"which?","options":[{"label":"x"}]}`)
 	buf.Write(rawFrame(uint32(len(payload)), byte(TypeChatEvent), payload))
 	m, err := ReadFrame(&buf)
 	if err != nil {

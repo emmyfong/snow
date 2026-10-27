@@ -25,6 +25,12 @@ var everyRecord = []Record{
 	&Interruption{At: at, Reason: "user"},
 	&Partial{At: at, Text: "Half a rep"},
 	&Rename{At: at, Title: "New title"},
+	&Question{At: at, ToolUseID: "call_2", Text: "Which one?", Multi: true, Options: []QuestionOption{
+		{Label: "A", Description: "the first", Preview: "code\nhere"}, {Label: "B"},
+	}},
+	&Answer{At: at, ToolUseID: "call_2", Picked: []string{"A", "B"}},
+	&Answer{At: at, ToolUseID: "call_3", Other: "neither"},
+	&Tasks{At: at, Tasks: []TaskItem{{Text: "read code", State: "done"}, {Text: "fix it", State: "in_progress"}}},
 }
 
 func TestEncodeDecode(t *testing.T) {
@@ -52,13 +58,13 @@ func TestEncodeDecode(t *testing.T) {
 // TestDecodeUnknown: a type from a later version is kept whole, and is
 // written back unchanged.
 func TestDecodeUnknown(t *testing.T) {
-	line := []byte(`{"type":"question","at":"2026-10-23T19:15:00Z","text":"Which file?"}`)
+	line := []byte(`{"type":"poll","at":"2026-10-23T19:15:00Z","text":"Which file?"}`)
 	r, err := Decode(append(line, '\r', '\n'))
 	if err != nil {
 		t.Fatal(err)
 	}
 	u, ok := r.(*Unknown)
-	if !ok || u.Type() != "question" || !bytes.Equal(u.Raw, line) {
+	if !ok || u.Type() != "poll" || !bytes.Equal(u.Raw, line) {
 		t.Fatalf("got %#v", r)
 	}
 	back, err := Encode(u)

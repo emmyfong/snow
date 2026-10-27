@@ -1,0 +1,24 @@
+ [38;2;153;153;153m───────────────────────────────────────[m [1;38;2;34;102;204manthropic/claude-sonnet-5-5[m  [38;2;102;102;102mmode: ask[m 
+
+
+
+
+
+
+
+
+
+
+[38;2;34;102;204;48;2;221;238;255m you  [m Fix the nested list indent
+
+       [1m▸ tasks[m  [38;2;102;102;102m1 line[m
+
+[38;2;34;102;204;48;2;238;238;238m snow [m Fixing the indent now.
+ ▾ Tasks [38;2;34;102;204m2/5 done[m                                                    [38;2;102;102;102mCtrl+T hide[m
+   [38;2;102;102;102m[x] Read the parser and its tests[m
+   [38;2;102;102;102m[x] Find why nested lists lose their indent[m
+   [1;38;2;34;102;204m[>] Fix the indent in parseList[m
+   [ ] Add a regression test
+   [ ] Run the whole suite
+[38;2;201;215;227;48;2;30;42;54m ⠋ working 0s                                                     Esc interrupt [m
+[38;2;34;102;204m> [m[38;2;102;102;102mMessage snow. Enter sends, Shift+Enter adds a line.[m                           

@@ -52,12 +52,19 @@ func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversa
 			} else {
 				end(agent.EndInterrupted, nil)
 			}
+		case *convstore.Question:
+			play(agent.QuestionOf(r))
+		case *convstore.Answer:
+			play(&agent.QuestionAnswered{ID: r.ToolUseID})
 		case *convstore.ModelSwitch:
 			cur = r.Model
 			play(&agent.ModelChanged{Model: r.Model, Effort: r.Effort})
 		}
 	}
 	end(agent.EndInterrupted, nil)
+	if tasks := agent.TasksOf(loaded); len(tasks) > 0 {
+		play(&agent.TasksChanged{Tasks: tasks})
+	}
 	snap.Title = loaded.Title()
 	return snap
 }

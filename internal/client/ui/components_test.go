@@ -212,3 +212,17 @@ func TestOverlayKeepsTheWidthAcrossWideCharacters(t *testing.T) {
 		}
 	}
 }
+
+// TestChoiceBoxFieldDefaults: each field option left empty keeps its own
+// default, whatever the others hold.
+func TestChoiceBoxFieldDefaults(t *testing.T) {
+	th := theme.Default()
+	got := ansi.Strip(ChoiceBox(th, ChoiceOptions{Width: 60, Title: "t", Reason: true, ReasonPlaceholder: "type here"}))
+	if !strings.Contains(got, "Reason: ") || !strings.Contains(got, "type here") || !strings.Contains(got, "answer no") {
+		t.Fatalf("box:\n%s", got)
+	}
+	got = ansi.Strip(ChoiceBox(th, ChoiceOptions{Width: 60, Title: "t", Reason: true, ReasonPrompt: " Answer: "}))
+	if !strings.Contains(got, "Answer: ") || !strings.Contains(got, "optional") {
+		t.Fatalf("box:\n%s", got)
+	}
+}

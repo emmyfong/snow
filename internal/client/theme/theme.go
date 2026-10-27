@@ -67,6 +67,10 @@ type Glyphs struct {
 	Collapsed, Expanded string
 	// Mask is the glyph that hides each character of a secret.
 	Mask string
+	// Checked and Unchecked mark an option of a question that takes more
+	// than one answer, and a task that is done or still to do. Working
+	// marks the task in progress.
+	Checked, Unchecked, Working string
 }
 
 // Default returns the default theme, Frost.
@@ -84,7 +88,8 @@ func defaultGlyphs() Glyphs {
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
 		Collapsed: "▸", Expanded: "▾",
-		Mask: "•",
+		Mask:    "•",
+		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
 	}
 }
 

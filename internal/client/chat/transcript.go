@@ -12,6 +12,7 @@ import (
 type hit struct {
 	tool string // the tool call whose cell holds the row
 	box  int    // for a row of the approval box, its first row plus one; else 0
+	ask  int    // for a row of the question box, its first row plus one; else 0
 	// failure is, for a row of a failure's box, the entry index plus one,
 	// and errTop its first row plus one.
 	failure, errTop int
@@ -129,6 +130,14 @@ func (m *Model) draw() {
 		}
 		add(indented(ui.ChoiceBox(m.th, m.boxOptions(p, m.width-indent))), hit{box: top + 1}, false)
 	}
+	if q := m.question(); q != nil {
+		top := len(m.drawn.rows)
+		if top > 0 {
+			top++
+		}
+		o, _ := m.questionView(q, m.width-indent)
+		add(indented(ui.ChoiceBox(m.th, o)), hit{ask: top + 1}, false)
+	}
 	for _, q := range m.snap.Queue {
 		text(ui.EntryQueued, "queued: "+q, false)
 	}
@@ -146,8 +155,9 @@ func (m *Model) visible() (start, n int) {
 }
 
 // Click handles a left click at x, y in the pane: on a tool cell it
-// expands or collapses the cell, and on a choice of the approval box it
-// picks that choice. A click anywhere returns to the latest text unless it
+// expands or collapses the cell, on a choice of the approval box or the
+// question box it picks that choice, and on the task list it opens or
+// closes the list. A click anywhere returns to the latest text unless it
 // lands in the transcript. It returns what to send, or nil.
 func (m *Model) Click(x, y int) *api.ChatInput {
 	if y < m.barRows() {
@@ -166,6 +176,10 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		}
 	}
 	y -= m.barRows()
+	if th := m.transcriptHeight(); y >= th && y < th+len(m.taskRows()) {
+		m.toggleTasks()
+		return nil
+	}
 	start, n := m.visible()
 	row := y - (m.transcriptHeight() - n)
 	if row < 0 || row >= n || y >= m.transcriptHeight() {
@@ -192,6 +206,8 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 				return m.pickError(h.failure-1, b.Index)
 			}
 		}
+	case h.ask > 0:
+		return m.questionClick(x-ui.TranscriptIndent(m.width), start+row-(h.ask-1))
 	case h.box > 0:
 		p := m.pending()
 		if p == nil {

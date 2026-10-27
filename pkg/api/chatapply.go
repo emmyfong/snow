@@ -14,7 +14,8 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 	}
 	switch e.Kind {
 	case ChatEventTurnStarted:
-		s.Running, s.Turn = true, e.Turn
+		// A new turn moves on from an open question.
+		s.Running, s.Turn, s.Question = true, e.Turn, nil
 		if e.Text != "" {
 			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryUser, Turn: e.Turn, Text: e.Text})
 		}
@@ -33,6 +34,17 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 			s.Pending = &a
 			s.changeTool(a.ID, func(t *ChatTool) { t.Diff = a.Diff })
 		}
+	case ChatEventQuestion:
+		if e.Question != nil {
+			q := *e.Question
+			s.Question = &q
+		}
+	case ChatEventAnswered:
+		if e.Question != nil && s.Question != nil && s.Question.ID == e.Question.ID {
+			s.Question = nil
+		}
+	case ChatEventTasks:
+		s.Tasks = append([]ChatTask(nil), e.Tasks...)
 	case ChatEventToolResult:
 		if e.Tool == nil {
 			return

@@ -42,6 +42,50 @@ func TestChatApply(t *testing.T) {
 			}, Pending: &ChatApproval{ID: "t", Tool: "write", Diff: diff}},
 		},
 		{
+			name: "question waits",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),
+				ev(ChatEvent{Kind: ChatEventQuestion, Question: &ChatQuestion{ID: "q", Text: "Which?", Options: []ChatOption{{Label: "A"}}}}),
+			},
+			want: ChatSnapshot{Running: true, Turn: 1, Question: &ChatQuestion{ID: "q", Text: "Which?", Options: []ChatOption{{Label: "A"}}}},
+		},
+		{
+			name: "answer closes the question",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),
+				ev(ChatEvent{Kind: ChatEventQuestion, Question: &ChatQuestion{ID: "q", Text: "Which?"}}),
+				ev(ChatEvent{Kind: ChatEventAnswered, Question: &ChatQuestion{ID: "other"}}),
+				ev(ChatEvent{Kind: ChatEventAnswered, Question: &ChatQuestion{ID: "q"}}),
+			},
+			want: ChatSnapshot{Running: true, Turn: 1},
+		},
+		{
+			name: "question outlives an interrupt and closes at the next turn",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),
+				ev(ChatEvent{Kind: ChatEventQuestion, Question: &ChatQuestion{ID: "q", Text: "Which?"}}),
+				ev(ChatEvent{Kind: ChatEventTurnEnded, Turn: 1, Reason: ChatEndInterrupted}),
+			},
+			want: ChatSnapshot{Turn: 1, Entries: []ChatEntry{{Kind: ChatEntryInterrupted, Turn: 1}},
+				Question: &ChatQuestion{ID: "q", Text: "Which?"}},
+		},
+		{
+			name: "task list replaces the last",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskPending}}}),
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskDone}, {Text: "b", State: ChatTaskInProgress}}}),
+			},
+			want: ChatSnapshot{Tasks: []ChatTask{{Text: "a", State: ChatTaskDone}, {Text: "b", State: ChatTaskInProgress}}},
+		},
+		{
+			name: "empty task list clears it",
+			events: []*ChatEvent{
+				ev(ChatEvent{Kind: ChatEventTasks, Tasks: []ChatTask{{Text: "a", State: ChatTaskPending}}}),
+				ev(ChatEvent{Kind: ChatEventTasks}),
+			},
+			want: ChatSnapshot{},
+		},
+		{
 			name: "result clears the approval",
 			events: []*ChatEvent{
 				ev(ChatEvent{Kind: ChatEventTurnStarted, Turn: 1}),
@@ -163,5 +207,14 @@ func TestModelMismatchShowsBoth(t *testing.T) {
 	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventUsage, Usage: &ChatUsage{Requested: u.Requested, Reported: "claude-sonnet-5-5-20261001"}})
 	if n := len(s.Entries); s.Entries[n-1].Kind != ChatEntryReported || n != 2 {
 		t.Fatalf("a dated ID added an entry: %+v", s.Entries)
+	}
+}
+
+// TestTurnClosesQuestion: a new turn moves on from an open question.
+func TestTurnClosesQuestion(t *testing.T) {
+	s := &ChatSnapshot{Pane: 1, Question: &ChatQuestion{ID: "q"}}
+	s.Apply(&ChatEvent{Pane: 1, Kind: ChatEventTurnStarted, Turn: 2, Text: "never mind"})
+	if s.Question != nil {
+		t.Fatalf("question %+v after a new turn", s.Question)
 	}
 }

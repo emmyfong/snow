@@ -29,6 +29,8 @@ type Model struct {
 	selected      string    // the tool call whose cell has the keyboard, or ""
 	expanded      map[string]bool
 	box           approval
+	ask           questionState
+	tasksOpen     bool // the task list shows a row per task
 	drawn         rendered
 	usage         bool   // the top bar shows the context gauge and the cost
 	providerReady bool   // at least one provider has a key

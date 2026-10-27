@@ -40,6 +40,15 @@ func chatEvent(id int, e agent.Event) *api.ChatEvent {
 	case *agent.ApprovalRequest:
 		out.Kind = api.ChatEventApproval
 		out.Approval = &api.ChatApproval{ID: b.ID, Tool: b.Tool, Input: capInput(b.Input), Diff: chatDiff(b.Diff), Outside: b.Outside}
+	case *agent.Question:
+		out.Kind, out.Question = api.ChatEventQuestion, chatQuestion(b)
+	case *agent.QuestionAnswered:
+		out.Kind, out.Question = api.ChatEventAnswered, &api.ChatQuestion{ID: b.ID}
+	case *agent.TasksChanged:
+		out.Kind = api.ChatEventTasks
+		for _, t := range b.Tasks {
+			out.Tasks = append(out.Tasks, api.ChatTask{Text: t.Text, State: t.State})
+		}
 	case *agent.StateChanged:
 		out.Kind, out.State = api.ChatEventState, string(b.State)
 	case *agent.QueueChanged:
@@ -126,6 +135,16 @@ func chatError(f *agent.Failure) *api.ChatError {
 		}
 	}
 	return e
+}
+
+// chatQuestion is q in its protocol form. The ask tool bounds every text,
+// so the question always fits a frame.
+func chatQuestion(q *agent.Question) *api.ChatQuestion {
+	out := &api.ChatQuestion{ID: q.ID, Text: q.Text, Multi: q.Multi}
+	for _, o := range q.Options {
+		out.Options = append(out.Options, api.ChatOption{Label: o.Label, Description: o.Description, Preview: o.Preview})
+	}
+	return out
 }
 
 func chatDiff(d *agent.Diff) *api.ChatDiff {

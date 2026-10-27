@@ -21,8 +21,9 @@ const (
 )
 
 // View draws the pane in exactly its height in rows, each at most its
-// width: the top bar, the transcript, then a row that is a divider or, during a turn,
-// the activity line, then the message being typed.
+// width: the top bar, the transcript, the task list, then a row that is a
+// divider or, during a turn, the activity line, then the message being
+// typed.
 func (m *Model) View() []string {
 	if m.width <= 0 || m.height <= 0 {
 		return nil
@@ -38,6 +39,7 @@ func (m *Model) View() []string {
 		rows = append(rows, "")
 	}
 	rows = append(rows, shown...)
+	rows = append(rows, m.taskRows()...)
 	if m.height > len(input) {
 		rows = append(rows, m.middleRow())
 	}
@@ -52,10 +54,11 @@ func (m *Model) View() []string {
 }
 
 // Cursor returns where the terminal's cursor goes in the pane: in the
-// message being typed. While an approval waits, its box takes the keys
-// and draws its own cursor, so there is none.
+// message being typed. While an approval or a question waits, or the
+// question's field for a typed answer is open, the box takes the keys and
+// draws its own cursor, so there is none.
 func (m *Model) Cursor() (x, y int, ok bool) {
-	if m.width <= 0 || m.height <= 0 || m.snap.Pending != nil {
+	if m.width <= 0 || m.height <= 0 || m.snap.Pending != nil || (m.question() != nil && (m.snap.Running || m.ask.typing)) {
 		return 0, 0, false
 	}
 	o := m.inputOptions()
@@ -76,7 +79,7 @@ func (m *Model) inputRows() []string {
 
 // transcriptHeight is how many rows the transcript gets.
 func (m *Model) transcriptHeight() int {
-	return max(m.height-ui.TextAreaRows(m.inputOptions())-1-m.barRows()-m.commandHeight(), 0)
+	return max(m.height-ui.TextAreaRows(m.inputOptions())-1-m.barRows()-m.commandHeight()-len(m.taskRows()), 0)
 }
 
 // barRows is the rows the top bar takes.

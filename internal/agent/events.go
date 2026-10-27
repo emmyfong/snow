@@ -21,8 +21,8 @@ type Event struct {
 
 // Body is what happened: *TurnStarted, *TurnEnded, *TextDelta,
 // *ThinkingDelta, *ToolCall, *ToolResult, *ApprovalRequest, *Question,
-// *TasksChanged, *Usage, *StateChanged, *QueueChanged, *ModelChanged, or
-// *ModeChanged.
+// *QuestionAnswered, *TasksChanged, *Usage, *StateChanged, *QueueChanged,
+// *ModelChanged, *ModeChanged, or *TitleChanged.
 type Body interface{ body() }
 
 // TurnStarted opens a turn. Turns count from 1 in each run of the
@@ -90,8 +90,10 @@ type Diff struct {
 	New  string
 }
 
-// Question asks the user to pick among options. The turn waits for the
-// answer.
+// Question asks the user to pick among options, or to type an answer.
+// The turn waits for the answer. ID is the ask tool call's ID. The
+// question stays open after an interrupt, until it is answered or the
+// next turn starts.
 type Question struct {
 	ID      string
 	Text    string
@@ -103,7 +105,12 @@ type Question struct {
 type Option struct {
 	Label       string
 	Description string
+	Preview     string // longer text shown while the option is highlighted
 }
+
+// QuestionAnswered closes the question ID: the turn that waited for it
+// goes on.
+type QuestionAnswered struct{ ID string }
 
 // TasksChanged gives the agent's whole task list after a change.
 type TasksChanged struct{ Tasks []Task }
@@ -111,7 +118,7 @@ type TasksChanged struct{ Tasks []Task }
 // Task is one item of an agent's task list.
 type Task struct {
 	Text  string
-	State string // for example "pending", "doing", "done"
+	State string // "pending", "in_progress", or "done"
 }
 
 // Usage counts the tokens of one reply, with its estimated cost.
@@ -165,18 +172,19 @@ type TitleChanged struct {
 	Failure *Failure
 }
 
-func (*TurnStarted) body()     {}
-func (*TurnEnded) body()       {}
-func (*TextDelta) body()       {}
-func (*ThinkingDelta) body()   {}
-func (*ToolCall) body()        {}
-func (*ToolResult) body()      {}
-func (*ApprovalRequest) body() {}
-func (*Question) body()        {}
-func (*TasksChanged) body()    {}
-func (*Usage) body()           {}
-func (*StateChanged) body()    {}
-func (*QueueChanged) body()    {}
-func (*ModelChanged) body()    {}
-func (*ModeChanged) body()     {}
-func (*TitleChanged) body()    {}
+func (*TurnStarted) body()      {}
+func (*TurnEnded) body()        {}
+func (*TextDelta) body()        {}
+func (*ThinkingDelta) body()    {}
+func (*ToolCall) body()         {}
+func (*ToolResult) body()       {}
+func (*ApprovalRequest) body()  {}
+func (*Question) body()         {}
+func (*QuestionAnswered) body() {}
+func (*TasksChanged) body()     {}
+func (*Usage) body()            {}
+func (*StateChanged) body()     {}
+func (*QueueChanged) body()     {}
+func (*ModelChanged) body()     {}
+func (*ModeChanged) body()      {}
+func (*TitleChanged) body()     {}

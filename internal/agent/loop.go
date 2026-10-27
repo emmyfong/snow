@@ -6,6 +6,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/tool"
 )
 
 // Commands posted to the loop.
@@ -22,6 +23,15 @@ type (
 		a   Answer
 		res chan<- error
 	}
+	askCmd struct {
+		q     *Question
+		reply chan<- tool.Reply
+	}
+	replyCmd struct {
+		r   QuestionReply
+		res chan<- error
+	}
+	questionCmd  struct{ res chan<- *Question }
 	pendingCmd   struct{ res chan<- *ApprovalRequest }
 	idleCmd      struct{ res chan<- bool }
 	retryCmd     struct{ res chan<- error }
@@ -45,6 +55,8 @@ type loopState struct {
 	queue   []string               // messages for the next turns
 	pending *convstore.ModelSwitch // applies when the running turn ends
 	waiting *waitCmd               // the approval the turn waits for
+	asking  *asking                // the open question
+	stopped bool                   // the running turn was interrupted; a question it asks waits for no turn
 	cancel  context.CancelFunc     // of the running turn; nil when idle
 	ended   chan struct{}          // the running turn is over
 	turn    int
@@ -60,6 +72,9 @@ type loopState struct {
 func (c *Conversation) loop() {
 	defer close(c.done)
 	l := &loopState{ended: make(chan struct{}), turn: c.turns}
+	if c.open != nil {
+		l.asking = &asking{q: c.open}
+	}
 	for {
 		select {
 		case cmd := <-c.cmds:
@@ -67,6 +82,7 @@ func (c *Conversation) loop() {
 		case <-l.ended:
 			l.cancel()
 			l.cancel, l.waiting = nil, nil
+			l.stopAsking()
 			if l.pending != nil {
 				c.queueSwitch(l, l.pending)
 				l.pending = nil
@@ -126,6 +142,19 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 		l.waiting.reply <- cmd.a
 		l.waiting = nil
 		cmd.res <- nil
+	case askCmd:
+		l.asking = &asking{q: cmd.q, reply: cmd.reply}
+		if l.stopped {
+			l.asking.reply = nil
+		}
+	case replyCmd:
+		cmd.res <- c.reply(l, cmd.r)
+	case questionCmd:
+		if l.asking != nil {
+			cmd.res <- l.asking.q
+		} else {
+			cmd.res <- nil
+		}
 	case pendingCmd:
 		if l.waiting != nil {
 			cmd.res <- l.waiting.req
@@ -135,7 +164,9 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 	case idleCmd:
 		cmd.res <- l.cancel == nil && len(l.queue) == 0 && !l.holding() && len(l.saves) == 0 && !l.closing
 	case retryCmd:
-		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 {
+		// A retry sends no message when the history ends on the user's
+		// side, so nothing would close an open question in the file.
+		if l.cancel != nil || l.closing || l.holding() || len(l.queue) > 0 || l.asking != nil {
 			cmd.res <- ErrBusy
 			return
 		}
@@ -146,7 +177,10 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 			l.cancel()
 		}
 		// The turn stops waiting; an answer that comes later is refused.
+		// The question stays open, and an answer to it starts a turn.
 		l.waiting = nil
+		l.stopAsking()
+		l.stopped = l.cancel != nil
 	case closeCmd:
 		l.closing = true
 		l.queue = nil
@@ -154,12 +188,21 @@ func (c *Conversation) handle(l *loopState, cmd any) {
 			l.cancel()
 		}
 		l.waiting = nil
+		l.stopAsking()
+		l.stopped = l.cancel != nil
 	case savedCmd:
 		s := l.saves[0]
 		l.saves, l.saving = l.saves[1:], false
 		s.done(cmd.err)
 		c.startSave(l)
 		c.next(l)
+	}
+}
+
+// stopAsking keeps the open question but lets no turn wait for it.
+func (l *loopState) stopAsking() {
+	if l.asking != nil {
+		l.asking.reply = nil
 	}
 }
 
@@ -187,13 +230,25 @@ func (c *Conversation) next(l *loopState) {
 	c.begin(l, text, false)
 }
 
-// begin starts a turn on its own goroutine.
+// begin starts a turn on its own goroutine. A new turn moves on from
+// the open question.
 func (c *Conversation) begin(l *loopState, text string, retry bool) {
+	c.start(l, turnStart{text: text, retry: retry})
+}
+
+// beginWith starts a turn that first saves ans, the answer to the open
+// question its message carries.
+func (c *Conversation) beginWith(l *loopState, text string, ans *convstore.Answer) {
+	c.start(l, turnStart{text: text, answer: ans})
+}
+
+func (c *Conversation) start(l *loopState, s turnStart) {
 	l.turn++
+	l.asking, l.stopped = nil, false
 	ctx, cancel := context.WithCancel(context.Background())
 	l.cancel = cancel
 	go func(n int) {
-		c.runTurn(ctx, n, text, retry)
+		c.runTurn(ctx, n, s)
 		l.ended <- struct{}{}
 	}(l.turn)
 }
