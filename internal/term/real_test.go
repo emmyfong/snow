@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 )
 
 // startReal runs spec on a real PTY for an OS-specific test.
@@ -34,9 +35,15 @@ func widen(t *testing.T, p *Pane) {
 }
 
 // typeLine types text and Enter through the emulator, the path real keys take.
+// An uppercase letter goes in the shape terminals send: the lowercase code
+// with Shift.
 func typeLine(p *Pane, text string) {
 	for _, r := range text {
-		p.SendKey(Key{Code: r, Text: string(r)})
+		k := Key{Code: r, Text: string(r)}
+		if unicode.IsUpper(r) {
+			k.Code, k.Mod = unicode.ToLower(r), ModShift
+		}
+		p.SendKey(k)
 	}
 	p.SendKey(Key{Code: KeyEnter})
 }

@@ -16,6 +16,7 @@ func TestToAPIKey(t *testing.T) {
 	}{
 		{"letter", tea.Key{Code: 'a', Text: "a"}, api.Key{Code: "a", Text: "a"}},
 		{"shifted letter", tea.Key{Code: 'a', Text: "A", Mod: tea.ModShift}, api.Key{Code: "a", Text: "A", Mod: []string{api.ModShift}}},
+		{"kitty uppercase", tea.Key{Code: 'A', Text: "A"}, api.Key{Code: "a", Text: "A"}},
 		{"ctrl+c", tea.Key{Code: 'c', Mod: tea.ModCtrl}, api.Key{Code: "c", Mod: []string{api.ModCtrl}}},
 		{"up", tea.Key{Code: tea.KeyUp}, api.Key{Code: api.KeyUp}},
 		{"enter", tea.Key{Code: tea.KeyEnter}, api.Key{Code: api.KeyEnter}},
