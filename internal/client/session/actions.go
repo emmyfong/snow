@@ -44,6 +44,7 @@ func buildHandlers() map[string]handler {
 		"even-out":       func(m *Model, _ tea.Key) tea.Cmd { m.paneCommand(api.OpEven); return nil },
 		"detach":         func(*Model, tea.Key) tea.Cmd { return func() tea.Msg { return DetachMsg{} } },
 		"sessions":       func(m *Model, _ tea.Key) tea.Cmd { return m.openSessions() },
+		"choose-agent":   func(m *Model, _ tea.Key) tea.Cmd { return m.openBoard() },
 		"command-prompt": func(m *Model, _ tea.Key) tea.Cmd { return m.openPrompt() },
 		"copy-mode": func(m *Model, _ tea.Key) tea.Cmd {
 			if m.focusedOwn() != nil {

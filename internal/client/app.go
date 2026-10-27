@@ -42,6 +42,7 @@ type app struct {
 	configMod  time.Time // when the config file last changed, as last seen
 	profile    *tea.ColorProfileMsg
 	sessions   *api.SessionList // the last list, for a screen opened later
+	agents     *api.AgentList   // the last agent list, for a screen opened later
 	opening    bool             // a session is being opened; its Layout has not come
 	openName   string           // the session being opened; "" for a new numbered one
 	leftName   string           // the session shown when the opening began
@@ -126,6 +127,11 @@ func (a *app) open(session string, create bool) {
 	if a.sessions != nil {
 		s.Update(a.sessions)
 	}
+	// The server sends the agent list only when it changes, so a detach
+	// keeps it current.
+	if a.agents != nil {
+		s.Update(a.agents)
+	}
 }
 
 // staleLayout reports whether l belongs to another session than the one
@@ -175,6 +181,8 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.profile = &msg
 	case *api.SessionList:
 		a.sessions = msg
+	case *api.AgentList:
+		a.agents = msg
 	case *api.Layout:
 		if a.staleLayout(msg) {
 			return a, nil

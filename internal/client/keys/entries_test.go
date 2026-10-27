@@ -21,12 +21,13 @@ func entryFor(t *testing.T, es []Entry, desc string) Entry {
 func TestEntriesGroupRelatedKeys(t *testing.T) {
 	es := Default().Entries()
 	tests := map[string]string{
-		"Split right":      "%",
-		"Select window":    "0-9",
-		"Focus pane":       "Arrows",
-		"Resize pane by 1": "Ctrl+Arrows",
-		"Resize pane by 5": "Alt+Arrows",
-		"Detach":           "d",
+		"Split right":          "%",
+		"Select window":        "0-9",
+		"Focus pane":           "Arrows",
+		"Resize pane by 1":     "Ctrl+Arrows",
+		"Resize pane by 5":     "Alt+Arrows",
+		"Detach":               "d",
+		"Next/previous window": "n/p",
 	}
 	for desc, keys := range tests {
 		if got := entryFor(t, es, desc).Keys; got != keys {

@@ -339,6 +339,21 @@ func TestSessionListReachesTheSessionScreen(t *testing.T) {
 	}
 }
 
+// TestAgentListReachesALaterSession: the agent list the server sent the
+// home page reaches a session opened later, whose board shows it; the
+// server sends no new list on attach while nothing changed.
+func TestAgentListReachesALaterSession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	a.Update(&api.AgentList{Agents: []api.AgentInfo{{Session: "api", Window: 0, WindowName: "reviewer", Pane: 1, Kind: api.AgentKindClaudeCode, State: api.AgentIdle}}})
+	openSession(t, a, "api")
+	a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	a.Update(tea.KeyPressMsg{Code: 'w', Text: "w"})
+	if !strings.Contains(a.View().Content, "reviewer") {
+		t.Fatalf("the board does not show the agent:\n%s", a.View().Content)
+	}
+}
+
 // TestSessionThemeAppliesAndSaves: a theme picked inside a session colors
 // the session at once and is saved; a failed save shows in the status bar.
 func TestSessionThemeAppliesAndSaves(t *testing.T) {
