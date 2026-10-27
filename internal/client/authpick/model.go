@@ -120,10 +120,15 @@ func (m *Model) listKey(k tea.Key) Result {
 	return Open
 }
 
-// startKey opens the key field for the selected provider.
+// startKey opens the key field for the selected provider. A provider that
+// takes no key has none to type.
 func (m *Model) startKey() {
 	if len(m.providers) == 0 {
 		m.note = "No providers."
+		return
+	}
+	if p, ok := m.Provider(); ok && p.NoKey {
+		m.note = providerTitle(p) + " takes no key. It is ready to use."
 		return
 	}
 	m.stage, m.key, m.note = stageKey, nil, ""

@@ -80,9 +80,18 @@ only by you) where the system has none. `ANTHROPIC_API_KEY` or
 Snow also connects to any service that speaks the OpenAI Responses API,
 such as OmniRoute, OpenRouter, or a local server. Add a
 `[provider.<name>]` table to `~/.snow/config.toml`, then restart the
-Snow server so it reads the file: stop it (`pkill -f 'snow server'` on
-Linux and macOS) and run `snow`. Your sessions come back as saved
-sessions.
+Snow server so it reads the file: stop it and run `snow`. Your sessions
+come back as saved sessions. On Linux and macOS:
+
+```sh
+pkill -f 'snow server'
+```
+
+On Windows, in PowerShell:
+
+```powershell
+Get-CimInstance Win32_Process -Filter "Name='snow.exe'" | Where-Object CommandLine -match ' server$' | ForEach-Object { Stop-Process -Id $_.ProcessId }
+```
 
 ```toml
 [provider.omniroute]
@@ -98,12 +107,14 @@ Its models show in `/model` as `<name>/<model>`, for example
 `openrouter/qwen/qwen3-coder:free`. Save its key with
 `snow auth login openrouter` or `/login`, or set `OPENROUTER_API_KEY`.
 A key never goes in `config.toml`. A model with no known price shows tokens
-instead of a cost.
+instead of a cost. A service with no model list cannot check a key, so
+Snow saves it unchecked and says so. Over `http://` the key goes in clear
+text, so use `http://` only for a service on your own machine or network.
 
-Use only accounts the service's vendor allows in other apps. Anthropic's
-terms do not allow a Claude Free, Pro, or Max login in apps other than
-Claude Code and Claude.ai, also through a gateway such as OmniRoute: use
-an API key, or run Claude Code itself in a Snow pane.
+Use only accounts that the service's vendor allows in other apps.
+Anthropic states that apps other than Claude Code and Claude.ai may not
+use a Claude Free, Pro, or Max login, and a gateway such as OmniRoute does
+not change that: use an API key, or run Claude Code itself in a Snow pane.
 
 ### Home page commands
 

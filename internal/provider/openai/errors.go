@@ -57,9 +57,12 @@ const keyMark = "[key]"
 
 // failure builds the error for an API refusal. status is 0 for an error
 // inside a stream. A service that echoes the request can put key, the key
-// sent, in msg; it is blanked out.
+// sent, in any field; it is blanked out before the message is cut, so no
+// part of it is left at the cut.
 func failure(status int, code, errType, msg, key string) *provider.Error {
 	if key != "" {
+		code = strings.ReplaceAll(code, key, keyMark)
+		errType = strings.ReplaceAll(errType, key, keyMark)
 		msg = strings.ReplaceAll(msg, key, keyMark)
 	}
 	label := code

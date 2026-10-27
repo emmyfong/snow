@@ -4,13 +4,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/credential"
-	"github.com/emmyfong/snow/internal/signin"
 )
 
 // writeUserConfig writes body to the config file in the test's home,
@@ -56,26 +56,61 @@ no_key = true
 		t.Fatalf("providers %v", names)
 	}
 
-	path = writeUserConfig(t, dir, `
+	for _, name := range []string{"openai", "anthropic"} {
+		path = writeUserConfig(t, dir, `
 [chat]
 usage = true
 
-[provider.openai]
+[provider.`+name+`]
 base_url = "http://localhost:20128/v1"
 `)
-	if cfg, err = config.Load(path); err != nil {
-		t.Fatal(err)
-	}
-	_, err = providers(cfg, path)
-	var ce *config.Error
-	if !errors.As(err, &ce) || ce.Line != 5 || !strings.Contains(err.Error(), "built-in provider") {
-		t.Fatalf("reserved name: %v", err)
+		if cfg, err = config.Load(path); err != nil {
+			t.Fatal(err)
+		}
+		_, err = providers(cfg, path)
+		var ce *config.Error
+		if !errors.As(err, &ce) || ce.Line != 5 || !strings.Contains(err.Error(), "built-in provider") {
+			t.Fatalf("reserved name %s: %v", name, err)
+		}
 	}
 }
 
-// TestChatOptionsEndpoints: an endpoint is in the registry and the model
-// picker, its key variable is hidden from commands, and one that takes no
-// key counts as connected.
+// TestLoadConfigReservedName: a table named like a built-in provider stops
+// snow with the file and the line before any server starts, as a bad key
+// binding does.
+func TestLoadConfigReservedName(t *testing.T) {
+	dir := authTest(t)
+	path := writeUserConfig(t, dir, "[chat]\nusage = true\n\n[provider.openai]\nbase_url = \"http://localhost:20128/v1\"\n")
+	var stderr strings.Builder
+	if _, ok := loadConfig(&stderr); ok {
+		t.Fatal("loadConfig accepted [provider.openai]")
+	}
+	if got := stderr.String(); !strings.Contains(got, path) || !strings.Contains(got, "line 4") || !strings.Contains(got, "built-in provider") {
+		t.Fatalf("stderr %q", got)
+	}
+}
+
+// TestAuthWithBadConfig: an unusable config file still lets snow auth
+// reach the built-in providers, and says why the others are missing.
+func TestAuthWithBadConfig(t *testing.T) {
+	dir := authTest(t)
+	writeUserConfig(t, dir, "[scrollback]\nlines = 0\n\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\n")
+	authProviders = configuredProviders
+	code, out, errOut := auth(t, "", "status")
+	if code != 0 || !strings.Contains(out, "anthropic") || !strings.Contains(errOut, "scrollback.lines") {
+		t.Fatalf("status: code %d, out %q, err %q", code, out, errOut)
+	}
+	if _, err := parseAuth([]string{"login", "anthropic"}); err != nil {
+		t.Fatalf("login anthropic with a bad config: %v", err)
+	}
+	if _, err := parseAuth([]string{"login", "gw"}); err == nil || !strings.Contains(err.Error(), "scrollback.lines") {
+		t.Fatalf("login gw with a bad config: %v; want the config error", err)
+	}
+}
+
+// TestChatOptionsEndpoints: an endpoint is in the registry and in the
+// provider statuses the model picker reads, its key variable is hidden from
+// commands, and one that takes no key counts as connected.
 func TestChatOptionsEndpoints(t *testing.T) {
 	dir := authTest(t)
 	t.Setenv("GW_API_KEY", "")
@@ -86,6 +121,9 @@ no_key = true
 
 [provider.gw]
 base_url = "https://gateway.example/v1"
+
+[provider.open-router]
+base_url = "https://openrouter.ai/api/v1"
 `)
 	cfg, err := config.Load(path)
 	if err != nil {
@@ -95,7 +133,7 @@ base_url = "https://gateway.example/v1"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(o.HideEnv, "OMNIROUTE_API_KEY") || !slices.Contains(o.HideEnv, "GW_API_KEY") {
+	if !slices.Contains(o.HideEnv, "OMNIROUTE_API_KEY") || !slices.Contains(o.HideEnv, "GW_API_KEY") || !slices.Contains(o.HideEnv, "OPEN_ROUTER_API_KEY") {
 		t.Fatalf("hidden %v", o.HideEnv)
 	}
 	if _, ok := o.Providers.Get("omniroute"); !ok {
@@ -132,11 +170,11 @@ base_url = "`+keyServer.URL+`"
 		t.Fatalf("saved: %v", err)
 	}
 	code, out, _ = auth(t, "", "status")
-	if code != 0 || !strings.Contains(out, "omniroute  no key needed") || !strings.Contains(out, "gw         API key") {
+	if code != 0 || !regexp.MustCompile(`(?m)^omniroute\s+no key needed$`).MatchString(out) || !regexp.MustCompile(`(?m)^gw\s+API key`).MatchString(out) {
 		t.Fatalf("status: code %d\n%s", code, out)
 	}
-	code, _, errOut = auth(t, goodKey+"\n", "login", "omniroute")
-	if code == 0 || !strings.Contains(errOut, signin.ErrNoKeyNeeded.Error()) {
-		t.Fatalf("login omniroute: code %d, err %q", code, errOut)
+	code, out, errOut = auth(t, goodKey+"\n", "login", "omniroute")
+	if code == 0 || !strings.Contains(errOut, "takes no key") || strings.Contains(out+errOut, "Paste the key") {
+		t.Fatalf("login omniroute: code %d, out %q, err %q; want a refusal before the prompt", code, out, errOut)
 	}
 }

@@ -222,8 +222,12 @@ func (k Keys) validateBind() (*Error, []string) {
 	return nil, nil
 }
 
-// quoteKey writes a TOML key, quoted unless it is a bare key.
+// quoteKey writes a TOML key, quoted unless it is a bare key. The empty
+// key is quoted too.
 func quoteKey(key string) string {
+	if key == "" {
+		return `""`
+	}
 	for _, r := range key {
 		bare := r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_'
 		if !bare {

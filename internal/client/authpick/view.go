@@ -218,6 +218,8 @@ func providerTitle(p api.ProviderAuth) string {
 // status says where a provider's key comes from, or why it has none.
 func status(p api.ProviderAuth) string {
 	switch {
+	case p.NoKey:
+		return "no key needed"
 	case p.Err != "":
 		return "error"
 	case p.Source != "":

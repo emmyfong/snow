@@ -74,12 +74,10 @@ func parseAuth(args []string) (authCommand, error) {
 		if len(rest) != 1 {
 			return authCommand{}, fmt.Errorf("auth %s needs one provider", a)
 		}
-		ps, err := authProviders()
-		if err != nil {
-			return authCommand{}, err
-		}
+		ps, cfgErr := authProviders()
 		if _, err := signin.Find(ps, rest[0]); err != nil {
-			return authCommand{}, err
+			// The provider may be in the config file that could not be used.
+			return authCommand{}, errors.Join(err, cfgErr)
 		}
 		return authCommand{action: a, provider: rest[0]}, nil
 	default:
@@ -97,10 +95,9 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 		return 1
 	}
 	store := credential.New(dir, func(msg string) { _, _ = fmt.Fprintln(stdout, msg) })
-	ps, err := authProviders()
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, "snow:", err)
-		return 1
+	ps, cfgErr := authProviders()
+	if cfgErr != nil {
+		_, _ = fmt.Fprintf(stderr, "snow: %v\nsnow: only the built-in providers are listed until the file is fixed.\n", cfgErr)
 	}
 	if cmd.action == authStatus {
 		return authStatusCmd(ps, store, stdout)
@@ -119,6 +116,10 @@ func runAuth(cmd authCommand, stdout, stderr io.Writer) int {
 }
 
 func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdout, stderr io.Writer) int {
+	if p.NoKey {
+		_, _ = fmt.Fprintf(stderr, "snow: %s takes no key (no_key = true in config.toml). It is ready to use.\n", p.Title)
+		return 1
+	}
 	if p.KeyURL != "" {
 		_, _ = fmt.Fprintf(stdout, "Create an API key for %s at %s\n", p.Title, p.KeyURL)
 	}
@@ -143,6 +144,9 @@ func authLoginCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdou
 	_, _ = fmt.Fprintf(stdout, "Saved the %s key in the %s.\n", p.Name, res.Source)
 	if res.Shadowed {
 		_, _ = fmt.Fprintf(stdout, "%s is set, and Snow uses it before the saved key. Unset it to use the saved key.\n", credential.EnvVar(p.Name))
+	}
+	if res.Unchecked {
+		_, _ = fmt.Fprintln(stdout, signin.UncheckedText)
 	}
 	return 0
 }
@@ -175,6 +179,10 @@ func authLogoutCmd(store signin.Store, p signin.Provider, in *bufio.Reader, stdo
 }
 
 func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) int {
+	width := 0
+	for _, p := range ps {
+		width = max(width, len(p.Name))
+	}
 	for _, s := range signin.Statuses(ps, store) {
 		var line string
 		switch {
@@ -187,7 +195,7 @@ func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) i
 		default:
 			line = fmt.Sprintf("cannot read the key: %v", s.Err)
 		}
-		_, _ = fmt.Fprintf(stdout, "%-10s %s\n", s.Provider.Name, line)
+		_, _ = fmt.Fprintf(stdout, "%-*s  %s\n", width, s.Provider.Name, line)
 	}
 	return 0
 }

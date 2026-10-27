@@ -64,6 +64,30 @@ models = ["a", " "]
 base_url = "http://localhost:20128/v1"
 api_key = "sk-secret"
 `, 4, "provider.omniroute.api_key"},
+		{"long name", `
+[provider.a-very-long-provider-name-of-33-chr]
+base_url = "http://localhost:20128/v1"
+`, 2, "provider.a-very-long-provider-name-of-33-chr"},
+		{"leading dash", `
+[provider.-gw]
+base_url = "http://localhost:20128/v1"
+`, 2, "provider.-gw"},
+		{"empty name", `
+[provider.""]
+base_url = "http://localhost:20128/v1"
+`, 2, `provider.""`},
+		{"model with a space", `
+[provider.omniroute]
+base_url = "http://localhost:20128/v1"
+models = ["auto best"]
+`, 4, "provider.omniroute.models"},
+		{"first bad table by name", `
+[provider.zeta]
+base_url = "ftp://z"
+
+[provider.alpha]
+base_url = "ftp://a"
+`, 6, "provider.alpha.base_url"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -89,5 +113,23 @@ api_key = "sk-secret"
 				t.Fatalf("the error shows the key: %v", err)
 			}
 		})
+	}
+}
+
+// TestConfigProvidersCRLF: a file with Windows line endings reports the
+// same lines.
+func TestConfigProvidersCRLF(t *testing.T) {
+	for _, tt := range []struct {
+		body string
+		line int
+	}{
+		{"\n[provider.omniroute]\nno_key = true\n", 2},
+		{"\n[provider.omniroute]\nbase_url = \"http://localhost:20128/v1\"\napi_key = \"x\"\n", 4},
+	} {
+		_, err := Load(writeConfig(t, strings.ReplaceAll(tt.body, "\n", "\r\n")))
+		var ce *Error
+		if !errors.As(err, &ce) || ce.Line != tt.line {
+			t.Fatalf("error %v, want line %d", err, tt.line)
+		}
 	}
 }

@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -35,9 +36,11 @@ func (k namedKeys) APIKey(name string) (string, error) {
 // Authorization header. It does not check the key.
 type compatServer struct {
 	*httptest.Server
-	mu    sync.Mutex
-	auths []string
-	paths []string
+	mu     sync.Mutex
+	auths  []string
+	paths  []string
+	model  string      // of the last /responses request
+	header http.Header // of the last request
 }
 
 func newCompatServer(t *testing.T, ids ...string) *compatServer {
@@ -51,6 +54,7 @@ func newCompatServer(t *testing.T, ids ...string) *compatServer {
 		cs.mu.Lock()
 		cs.auths = append(cs.auths, r.Header.Get("Authorization"))
 		cs.paths = append(cs.paths, r.URL.Path)
+		cs.header = r.Header.Clone()
 		cs.mu.Unlock()
 		switch r.URL.Path {
 		case "/v1/models":
@@ -61,7 +65,13 @@ func newCompatServer(t *testing.T, ids ...string) *compatServer {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = fmt.Fprintf(w, `{"object":"list","data":[%s]}`, strings.Join(entries, ","))
 		case "/v1/responses":
-			_, _ = io.Copy(io.Discard, r.Body)
+			var body struct {
+				Model string `json:"model"`
+			}
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			cs.mu.Lock()
+			cs.model = body.Model
+			cs.mu.Unlock()
 			w.Header().Set("Content-Type", "text/event-stream")
 			_, _ = w.Write(data)
 		default:
@@ -70,6 +80,18 @@ func newCompatServer(t *testing.T, ids ...string) *compatServer {
 	}))
 	t.Cleanup(cs.Close)
 	return cs
+}
+
+func (cs *compatServer) lastModel() string {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.model
+}
+
+func (cs *compatServer) lastHeader(name string) string {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	return cs.header.Get(name)
 }
 
 func (cs *compatServer) seen() (auths, paths []string) {
@@ -87,6 +109,10 @@ func TestCompatStream(t *testing.T) {
 		{"no key", true, ""},
 		{"key", false, "Bearer " + compatKey},
 	}
+	// The SDK's environment defaults must not reach a compatible service.
+	t.Setenv("OPENAI_API_KEY", "sk-env-WRONG")
+	t.Setenv("OPENAI_BASE_URL", "http://env.invalid/v1")
+	t.Setenv("OPENAI_ORG_ID", "org-env")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cs := newCompatServer(t)
@@ -110,6 +136,12 @@ func TestCompatStream(t *testing.T) {
 			auths, paths := cs.seen()
 			if len(paths) != 1 || paths[0] != "/v1/responses" || auths[0] != tt.auth {
 				t.Fatalf("requests %v with auth %q, want /v1/responses with %q", paths, auths, tt.auth)
+			}
+			if m := cs.lastModel(); m != "cc/claude-x" {
+				t.Fatalf("model %q sent, want the ID with its slash", m)
+			}
+			if org := cs.lastHeader("Openai-Organization"); org != "" {
+				t.Fatalf("OPENAI_ORG_ID reached the service: %q", org)
 			}
 		})
 	}
@@ -155,8 +187,9 @@ func TestCompatNoKey(t *testing.T) {
 	}
 }
 
-// TestCompatCheckKey: a rejected key is KindBadKey; a service with no
-// model list passes, as nothing else checks a key for free.
+// TestCompatCheckKey: a rejected key fails, a 403 included, as gateways
+// send it for a bad key; a service with no model list gives
+// ErrKeyNotChecked. OpenAI itself keeps its own rules.
 func TestCompatCheckKey(t *testing.T) {
 	bad := rawServer(t, http.StatusUnauthorized, "application/json", errBody("invalid_api_key", "auth", "bad key"), nil)
 	err := NewCompatible(Compat{Name: "gw", BaseURL: bad.URL}, namedKeys{"gw": compatKey}).CheckKey(context.Background())
@@ -164,33 +197,97 @@ func TestCompatCheckKey(t *testing.T) {
 	if !errors.As(err, &pe) || pe.Kind != provider.KindBadKey {
 		t.Fatalf("bad key: %v", err)
 	}
-	none := rawServer(t, http.StatusNotFound, "text/plain", "404 page not found", nil)
-	if err := NewCompatible(Compat{Name: "gw", BaseURL: none.URL}, namedKeys{"gw": compatKey}).CheckKey(context.Background()); err != nil {
-		t.Fatalf("no model list: %v", err)
+	forbidden := rawServer(t, http.StatusForbidden, "application/json", errBody("forbidden", "auth", "no"), nil)
+	if err := NewCompatible(Compat{Name: "gw", BaseURL: forbidden.URL}, namedKeys{"gw": compatKey}).CheckKey(context.Background()); err == nil {
+		t.Fatal("a compatible service's 403 passed the check")
 	}
-	if err := New(namedKeys{Name: compatKey}, WithBaseURL(none.URL)).CheckKey(context.Background()); err == nil {
-		t.Fatal("OpenAI itself with no model list passed the check")
+	if err := New(namedKeys{Name: compatKey}, WithBaseURL(forbidden.URL)).CheckKey(context.Background()); err != nil {
+		t.Fatalf("OpenAI's 403 is a restricted key, which works: %v", err)
+	}
+	none := rawServer(t, http.StatusNotFound, "text/plain", "404 page not found", nil)
+	if err := NewCompatible(Compat{Name: "gw", BaseURL: none.URL}, namedKeys{"gw": compatKey}).CheckKey(context.Background()); !errors.Is(err, ErrKeyNotChecked) {
+		t.Fatalf("no model list: %v, want ErrKeyNotChecked", err)
+	}
+	if err := New(namedKeys{Name: compatKey}, WithBaseURL(none.URL)).CheckKey(context.Background()); err == nil || errors.Is(err, ErrKeyNotChecked) {
+		t.Fatalf("OpenAI itself with no model list: %v, want a failure", err)
 	}
 }
 
 // TestCompatKeyNotLogged: no error from a compatible service holds its
-// key, even when the service echoes the request back.
+// key, whichever field or path the service echoes it in.
 func TestCompatKeyNotLogged(t *testing.T) {
-	echo := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusBadRequest)
-		_, _ = io.WriteString(w, errBody("bad", "invalid_request_error", "bad request with "+r.Header.Get("Authorization")))
-	}))
-	t.Cleanup(echo.Close)
-	p := NewCompatible(Compat{Name: "gw", BaseURL: echo.URL}, namedKeys{"gw": compatKey})
-	for _, err := range []error{streamErr(t, p), p.CheckKey(context.Background())} {
-		if err == nil {
-			t.Fatal("no error")
+	sse := func(events string) http.HandlerFunc {
+		return func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			_, _ = io.WriteString(w, events)
 		}
-		for e := err; e != nil; e = errors.Unwrap(e) {
-			if strings.Contains(fmt.Sprintf("%v %+v %#v", e, e, e), compatKey) {
-				t.Fatalf("the key is in the error: %v", e)
+	}
+	created := "event: response.created\ndata: {\"type\":\"response.created\",\"sequence_number\":0,\"response\":{\"id\":\"r\",\"object\":\"response\",\"created_at\":1,\"status\":\"in_progress\",\"model\":\"m\",\"output\":[],\"usage\":null}}\n\n"
+	tests := []struct {
+		name    string
+		handler http.HandlerFunc
+		check   bool // also run CheckKey
+	}{
+		{"HTTP error message", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, errBody("bad", "invalid_request_error", "bad request with "+r.Header.Get("Authorization")))
+		}, true},
+		{"HTTP error code and type", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			auth := r.Header.Get("Authorization")
+			_, _ = io.WriteString(w, errBody(auth, auth, ""))
+		}, true},
+		{"response.failed event", sse(created + "event: response.failed\ndata: {\"type\":\"response.failed\",\"sequence_number\":1,\"response\":{\"id\":\"r\",\"object\":\"response\",\"created_at\":1,\"status\":\"failed\",\"model\":\"m\",\"output\":[],\"usage\":null,\"error\":{\"code\":\"server_error\",\"message\":\"echo " + compatKey + "\"}}}\n\n"), false},
+		{"error event", sse(created + "event: error\ndata: {\"type\":\"error\",\"code\":\"" + compatKey + "\",\"message\":\"echo " + compatKey + "\",\"param\":null,\"sequence_number\":1}\n\n"), false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			srv := httptest.NewServer(tt.handler)
+			t.Cleanup(srv.Close)
+			p := NewCompatible(Compat{Name: "gw", BaseURL: srv.URL}, namedKeys{"gw": compatKey})
+			errs := []error{streamErr(t, p)}
+			if tt.check {
+				errs = append(errs, p.CheckKey(context.Background()))
 			}
+			for _, err := range errs {
+				assertNoKey(t, err)
+			}
+		})
+	}
+
+	t.Run("network error", func(t *testing.T) {
+		hc := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+			return nil, errors.New("proxy refused " + compatKey)
+		})}
+		p := NewCompatible(Compat{Name: "gw", BaseURL: "http://gw.invalid/v1"}, namedKeys{"gw": compatKey}, WithHTTPClient(hc))
+		err := streamErr(t, p)
+		var pe *provider.Error
+		if !errors.As(err, &pe) || pe.Kind != provider.KindNetwork {
+			t.Fatalf("error %v, want KindNetwork", err)
+		}
+		assertNoKey(t, err)
+	})
+}
+
+// assertNoKey fails unless err is an error whose chain shows the key's
+// mark and never the key.
+func assertNoKey(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("no error")
+	}
+	if !strings.Contains(err.Error(), keyMark) {
+		t.Fatalf("error %q does not mark the blanked key", err)
+	}
+	for e := err; e != nil; e = errors.Unwrap(e) {
+		if strings.Contains(fmt.Sprintf("%v %+v %#v", e, e, e), compatKey) {
+			t.Fatalf("the key is in the error: %v", e)
 		}
 	}
 }
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }

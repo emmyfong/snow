@@ -19,6 +19,7 @@ import (
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/credential"
 	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/provider/openai"
 	"github.com/emmyfong/snow/internal/provider/providertest"
 	"github.com/emmyfong/snow/internal/signin"
 	"github.com/emmyfong/snow/internal/tool"
@@ -311,5 +312,39 @@ func TestKeyNotLogged(t *testing.T) {
 				t.Fatalf("provider requests = %d, want the key checked once", n)
 			}
 		})
+	}
+}
+
+// TestAuthNoKeyProvider: a provider that takes no key is listed as
+// connected with no key, and a login to it is refused with a reason.
+func TestAuthNoKeyProvider(t *testing.T) {
+	opts, srv, dir, _ := authOptions(t)
+	ps := append(signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}),
+		signin.Endpoints([]openai.Compat{{Name: "local", BaseURL: srv.URL, NoKey: true}})...)
+	opts.Chat.Auth = signin.NewAuth(ps, dir)
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 80, 24)
+
+	c.Send(&api.AuthListRequest{})
+	m := waitAuth(t, c, "the list", func(m api.Message) bool { return m.Type() == api.TypeAuthList })
+	list := m.(*api.AuthList)
+	var local *api.ProviderAuth
+	for i := range list.Providers {
+		if list.Providers[i].Name == "local" {
+			local = &list.Providers[i]
+		}
+	}
+	if local == nil || !local.NoKey || !local.Connected || local.Source != "" {
+		t.Fatalf("local in the list: %+v", local)
+	}
+
+	c.Send(&api.LoginRequest{Provider: "local", Key: "sk-any-SECRET"})
+	m = waitAuth(t, c, "the refusal", func(m api.Message) bool { return m.Type() == api.TypeError })
+	if e := m.(*api.Error); e.Code != api.CodeAuthFailed || !strings.Contains(e.Message, signin.ErrNoKeyNeeded.Error()) || strings.Contains(e.Message, "SECRET") {
+		t.Fatalf("login to local: %+v", e)
+	}
+	if n := srv.Requests(); n != 0 {
+		t.Fatalf("%d requests; a key for a provider with none must go nowhere", n)
 	}
 }

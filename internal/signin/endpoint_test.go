@@ -3,11 +3,15 @@ package signin
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/zalando/go-keyring"
 
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/provider/openai"
 	"github.com/emmyfong/snow/internal/provider/providertest"
 )
 
@@ -18,7 +22,7 @@ func TestEndpoints(t *testing.T) {
 	t.Setenv("GW_API_KEY", "")
 	srv := providertest.NewKeyServer(t, goodKey)
 	store := credential.New(t.TempDir(), nil)
-	ps := Endpoints([]Endpoint{
+	ps := Endpoints([]openai.Compat{
 		{Name: "gw", BaseURL: srv.URL},
 		{Name: "local", BaseURL: srv.URL, NoKey: true},
 	})
@@ -49,5 +53,33 @@ func TestEndpoints(t *testing.T) {
 		if p, ok := reg.Get(name); !ok || p.Name() != name {
 			t.Fatalf("registry has no %s", name)
 		}
+	}
+}
+
+// TestEndpointUncheckedKey: a service with no model list cannot check a
+// key; it is saved, and the result and the /login notice say so.
+func TestEndpointUncheckedKey(t *testing.T) {
+	keyring.MockInit()
+	t.Setenv("GW_API_KEY", "")
+	none := httptest.NewServer(http.NotFoundHandler())
+	t.Cleanup(none.Close)
+	ps := Endpoints([]openai.Compat{{Name: "gw", BaseURL: none.URL}, {Name: "local", BaseURL: none.URL, NoKey: true}})
+	dir := t.TempDir()
+	res, err := ps[0].Login(context.Background(), credential.New(dir, nil), key(t, goodKey))
+	if err != nil || !res.Unchecked {
+		t.Fatalf("Login = %+v, %v; want saved and unchecked", res, err)
+	}
+
+	a := NewAuth(ps, t.TempDir())
+	lr, err := a.Login(context.Background(), "gw", goodKey)
+	if err != nil || !strings.Contains(lr.Notice, UncheckedText) {
+		t.Fatalf("Auth.Login = %+v, %v", lr, err)
+	}
+	if _, err := a.Login(context.Background(), "local", goodKey); !errors.Is(err, ErrNoKeyNeeded) {
+		t.Fatalf("login to a provider with no key: %v", err)
+	}
+	list := a.Providers()
+	if len(list) != 2 || list[0].NoKey || !list[1].NoKey || !list[1].Connected || list[1].Source != "" {
+		t.Fatalf("providers %+v", list)
 	}
 }

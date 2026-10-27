@@ -11,7 +11,9 @@ import (
 type Compat struct {
 	// Name is the provider's part of a model name, and the name its key
 	// is saved under.
-	Name    string
+	Name string
+	// BaseURL is the service's API address, for example
+	// "http://localhost:20128/v1".
 	BaseURL string
 	// Models are offered as they are, for an endpoint that cannot list
 	// its own; empty asks the endpoint.

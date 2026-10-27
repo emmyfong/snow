@@ -148,14 +148,18 @@ func nested() error {
 }
 
 // loadConfig reads ~/.snow/config.toml. A missing file gives the defaults;
-// a bad one is reported with its line and key.
+// a bad one is reported with its line and key. Key bindings and provider
+// names are checked too, so their mistakes stop snow before any server
+// starts.
 func loadConfig(stderr io.Writer) (config.Config, bool) {
 	path, err := config.DefaultPath()
 	if err == nil {
 		var cfg config.Config
 		if cfg, err = config.Load(path); err == nil {
 			if err = checkKeys(path, cfg); err == nil {
-				return cfg, true
+				if _, err = providers(cfg, path); err == nil {
+					return cfg, true
+				}
 			}
 		}
 	}
