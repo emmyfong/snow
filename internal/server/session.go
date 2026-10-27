@@ -30,8 +30,9 @@ type state struct {
 	// defaultModel and defaultEffort go to every new chat. Empty Model
 	// means the client asks the user to choose before the first message.
 	defaultModel, defaultEffort string
-	models                      modelCache // provider model lists for the picker
-	hint                        string     // the hint the clients last heard
+	models                      modelCache      // provider model lists for the picker
+	hint                        string          // the hint the clients last heard
+	agentsSent                  []api.AgentInfo // the agent list the clients last heard
 }
 
 type session struct {
@@ -175,6 +176,7 @@ func (st *state) sessionsChanged() {
 	for c := range st.clients {
 		st.enqueue(c, list)
 	}
+	st.syncAgents()
 }
 
 // listMessage is the session list every client gets, and remembers the

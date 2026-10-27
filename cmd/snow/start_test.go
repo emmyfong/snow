@@ -60,6 +60,11 @@ func TestRealDetachedServer(t *testing.T) {
 	} else if _, ok := m.(*api.SessionList); !ok {
 		t.Fatalf("first message %#v, want the session list", m)
 	}
+	if m, err := c.Next(apitest.Wait); err != nil {
+		t.Fatalf("no agent list on connect: %v", err)
+	} else if _, ok := m.(*api.AgentList); !ok {
+		t.Fatalf("second message %#v, want the agent list", m)
+	}
 	c.Send(&api.Attach{Session: "real", Create: true, Dir: dir})
 	m, err := c.Next(apitest.Wait)
 	if l, ok := m.(*api.Layout); !ok || l.Session != "real" {

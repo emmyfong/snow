@@ -59,6 +59,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
 		st.enqueue(c, st.listMessage())
+		st.enqueue(c, &api.AgentList{Agents: st.agents()})
 	}) {
 		_ = raw.Close()
 		return

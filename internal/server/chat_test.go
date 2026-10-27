@@ -237,7 +237,7 @@ func TestChatSlowClientResyncs(t *testing.T) {
 		want.WriteString(texts[i])
 	}
 	s, _, _ := newChatServer(t, reply(texts...))
-	s.outbox = 8
+	s.outbox = 12 // room for the attach, and each state's layout and agent list
 	watch := connect(t, s, 100, 30)
 	id := openChat(t, watch)
 	slow := silentClient(t, s, "work")
