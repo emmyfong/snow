@@ -53,6 +53,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
   version locally before you push; another version reports other issues.
   After you change a depguard rule, run `golangci-lint cache clean`: a stale
   cache hides the new rule.
+- Build that golangci-lint with the Go version in `go.mod`, or it refuses to
+  load the config ("lower than the targeted Go version"):
+  `GOTOOLCHAIN=go<version from go.mod> go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@<pinned version>`.
 - Accept interfaces, return structs. Wrap `charmbracelet/x` packages behind
   Snow's own interfaces in `internal/term`; they are experimental.
 - Wrap errors with `%w`. Never discard an error. Return typed errors at package
@@ -115,6 +118,9 @@ folder, without edits across the codebase.
 - Real-shell tests wait for the prompt before typing: shells discard input
   that arrives while they start. Match only screen text that cannot wrap;
   widen the pane or shorten the expected text.
+- Real-shell tests wait for a `$` prompt, so they fail when run as root,
+  whose prompt is `#`. Run them as a normal user. In a container that runs
+  as root, run the other tests with `-run` or `-skip` and leave these to CI.
 - Timing tests warm up first: Windows antivirus scans each new file on its
   first open (about 1.5 s per 1000 files), so the first pass is not the
   speed you measure. Timing limits skip under `-race`: a `raceDetector`
