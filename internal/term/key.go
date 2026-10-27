@@ -1,6 +1,11 @@
 package term
 
-import uv "github.com/charmbracelet/ultraviolet"
+import (
+	"strings"
+	"unicode"
+
+	uv "github.com/charmbracelet/ultraviolet"
+)
 
 // Key is one key press. Code is a Unicode code point for ordinary keys, or
 // one of the Key* constants. Text holds the characters the key produces, if
@@ -52,6 +57,36 @@ const (
 	KeyF12       = uv.KeyF12
 )
 
+// event converts k for vt. It leaves out Text: vt never reads it, but it
+// matches keys by comparing whole events, so a key with text, such as Up with
+// text x, matched nothing and sent its code as a broken character.
 func (k Key) event() uv.KeyPressEvent {
-	return uv.KeyPressEvent{Code: k.Code, Mod: uv.KeyMod(k.Mod), Text: k.Text}
+	return uv.KeyPressEvent{Code: k.Code, Mod: uv.KeyMod(k.Mod)}
+}
+
+// text returns the bytes a key types when only Shift, Alt, or both modify
+// it. vt's SendKey writes a printable key only when it has no modifier, and
+// writes its code, not its text, so Shift+a sent nothing and the kitty shape
+// of A (code a, text A) sent a (#236). Keys with Ctrl or Meta, special keys,
+// keys that type nothing, and keys whose text holds a control character are
+// left to vt, so a malformed key cannot write escape sequences.
+func (k Key) text() (string, bool) {
+	if k.Mod&^(ModShift|ModAlt) != 0 || k.Code > unicode.MaxRune {
+		return "", false
+	}
+	s := k.Text
+	if strings.ContainsFunc(s, unicode.IsControl) {
+		return "", false
+	}
+	if s == "" && k.Mod&ModShift != 0 && unicode.IsLower(k.Code) {
+		// Terminals send Alt+Shift+a with no text.
+		s = string(unicode.ToUpper(k.Code))
+	}
+	if s == "" {
+		return "", false
+	}
+	if k.Mod&ModAlt != 0 {
+		s = "\x1b" + s
+	}
+	return s, true
 }

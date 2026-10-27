@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/term"
@@ -122,20 +123,40 @@ func floodSpec(_, _ string) (spec term.Spec, profile string, err error) {
 	return term.Spec{Path: "/bin/sh", Args: []string{"-c", "while :; do echo x; done"}}, "flood", nil
 }
 
+// typeInput types text and Enter into pane 1 as key presses in the shape the
+// client sends: an uppercase letter is its lowercase code with Shift.
+func typeInput(c *apitest.Client, text string) {
+	for _, r := range text {
+		k := api.Key{Code: string(r), Text: string(r)}
+		switch {
+		case r == ' ':
+			k.Code = api.KeySpace // the protocol names space; " " is invalid
+		case unicode.IsUpper(r):
+			k.Code, k.Mod = string(unicode.ToLower(r)), []string{api.ModShift}
+		}
+		c.Send(&api.Input{Pane: 1, Key: &k})
+	}
+	c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
+}
+
 func TestInputReachesShell(t *testing.T) {
 	s := newTestServer(t)
 	c := connect(t, s, 120, 24)
 	c.Send(&api.Attach{Session: "work", Create: true})
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
-	for _, r := range "echo typed" {
-		code := string(r)
-		if r == ' ' {
-			code = api.KeySpace // the protocol names space; " " is invalid
-		}
-		c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: code, Text: string(r)}})
-	}
-	c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
+	typeInput(c, "echo typed")
 	c.WaitScreen("\ntyped\n")
+}
+
+// TestUppercaseReachesShell: Shift+letter reached the shell as nothing, so
+// "echo ABC" ran as "echo " (#236).
+func TestUppercaseReachesShell(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 120, 24)
+	c.Send(&api.Attach{Session: "work", Create: true})
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	typeInput(c, "echo ABC")
+	c.WaitScreen("\nABC\n")
 }
 
 func TestPasteReachesShell(t *testing.T) {

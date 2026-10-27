@@ -149,6 +149,10 @@ func (p *Pane) DroppedInput() uint64 { return p.dropped.Load() }
 func (p *Pane) SendKey(k Key) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	if text, ok := k.text(); ok {
+		p.emu.SendText(text)
+		return
+	}
 	p.emu.SendKey(k.event())
 }
 
