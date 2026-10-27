@@ -47,6 +47,7 @@ func (s *Server) wslStopped(profile string) bool {
 func (st *state) endPane(sess *session, p *pane) {
 	p.ended = true
 	p.term.Print(endedNote)
+	st.agentGone(sess, p)
 	st.srv.log.Info("pane ended with WSL", "session", sess.name, "pane", p.id)
 }
 

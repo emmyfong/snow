@@ -88,25 +88,42 @@ func (p Profile) Launch(h Hooks, dir string) Launch {
 	case KindCmd:
 		l.Env = []string{"PROMPT=" + cmdPrompt()}
 	case KindWSL:
-		if dir != "" {
-			l.Args = append(l.Args, "--cd", dir)
+		l.wsl(h, dir, "wsl.sh")
+	case KindClaude:
+		if p.Distro != "" {
+			l.wsl(h, dir, "claude.sh")
 		}
-		l.Args = append(l.Args, "-e", "sh", wslPath(filepath.Join(h.Dir, "wsl.sh")))
-		l.Env = []string{"WSLENV=" + forwardSnow(os.Getenv("WSLENV"))}
-		l.Dir = ""
+		l.CmdLine = p.CmdLine
 	default:
 		l.Args = append(l.Args, "-l")
 	}
 	return l
 }
 
-// forwardSnow adds SNOW to a WSLENV value, which lists the variables wsl.exe
-// passes into the Linux side. WSLENV always separates entries with a colon.
+// wsl makes l start script, a file in h's folder, with sh inside a WSL
+// distribution, in dir. wsl.exe takes the folder as --cd.
+func (l *Launch) wsl(h Hooks, dir, script string) {
+	if dir != "" {
+		l.Args = append(l.Args, "--cd", dir)
+	}
+	l.Args = append(l.Args, "-e", "sh", WSLPath(filepath.Join(h.Dir, script)))
+	l.Env = []string{"WSLENV=" + forwardSnow(os.Getenv("WSLENV"))}
+	l.Dir = ""
+}
+
+// snowVars are the variables the server sets in every pane: SNOW for a
+// nested snow, and SNOW_PANE and SNOW_SOCKET for snow hook.
+const snowVars = "SNOW:SNOW_PANE:SNOW_SOCKET"
+
+// forwardSnow adds snowVars to a WSLENV value, which lists the variables
+// wsl.exe passes between Windows and the Linux side, both ways: a Windows
+// snow.exe that a Claude Code hook starts from WSL sees them too. WSLENV
+// always separates entries with a colon.
 func forwardSnow(wslenv string) string {
 	if wslenv == "" {
-		return "SNOW"
+		return snowVars
 	}
-	return wslenv + ":SNOW"
+	return wslenv + ":" + snowVars
 }
 
 func userZDOTDIR() string {
@@ -128,9 +145,9 @@ func cmdPrompt() string {
 	return `$E]7;file://` + os.Getenv("COMPUTERNAME") + `/$P$E\` + user
 }
 
-// wslPath turns a Windows path into the path WSL mounts it at, assuming the
+// WSLPath turns a Windows path into the path WSL mounts it at, assuming the
 // default automount root /mnt. Other paths are returned unchanged.
-func wslPath(p string) string {
+func WSLPath(p string) string {
 	if len(p) < 3 || p[1] != ':' || !isLetter(p[0]) {
 		return p
 	}

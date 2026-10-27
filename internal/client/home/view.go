@@ -84,7 +84,7 @@ func (m *Model) sessionList(x, width int, b band, sessions []api.SessionInfo, se
 		return append(lines, indent([]string{muted.Render("No sessions yet. Type a name and press Enter.")}, x)[0])
 	}
 	shown := sessions[b.first : b.first+b.count]
-	list := ui.List(th, ui.ListOptions{Items: sessionlist.Items(shown, m.now()), Selected: selected - b.first, Width: width})
+	list := ui.List(th, ui.ListOptions{Items: sessionlist.Items(shown, m.now(), th.Glyphs), Selected: selected - b.first, Width: width})
 	return append(lines, indent(strings.Split(list, "\n"), x)...)
 }
 
@@ -137,16 +137,20 @@ func center(s string, width int) string {
 // maxNotes bounds the note lines on the page; the rest are counted.
 const maxNotes = 3
 
-// noteLines are the server's notes on saved sessions, shown under the
-// sessions: files it could not read, or saving that fails. A long path keeps its end, where the file name
+// noteLines are the server's hint, then its notes on saved sessions, shown
+// under the sessions: files it could not read, or saving that fails. A long path keeps its end, where the file name
 // is.
 func (m *Model) noteLines() []string {
-	if m.picking || m.commanding() || len(m.notes) == 0 {
+	if m.picking || m.commanding() || (len(m.notes) == 0 && m.hint == "") {
 		return nil
 	}
 	style := lipgloss.NewStyle().Foreground(m.theme.Error)
 	width := min(64, max(m.cols-4, 0))
 	var out []string
+	if m.hint != "" {
+		// A tip, not a problem: muted, and cut at its end.
+		out = append(out, lipgloss.NewStyle().Foreground(m.theme.Muted).Render(ansi.Truncate(m.hint, width, "…")))
+	}
 	for i, note := range m.notes {
 		if i == maxNotes-1 && len(m.notes) > maxNotes {
 			note = strconv.Itoa(len(m.notes)-i) + " more notes about saved sessions; see the log"
@@ -157,7 +161,7 @@ func (m *Model) noteLines() []string {
 			note = "…" + ansi.TruncateLeft(note, ansi.StringWidth(note)-width+1, "")
 		}
 		out = append(out, style.Render(note))
-		if len(out) == maxNotes {
+		if i+1 == maxNotes {
 			break
 		}
 	}

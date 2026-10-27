@@ -58,7 +58,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		st.served = true
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
-		st.enqueue(c, &api.SessionList{Sessions: st.sessionList(), Notes: st.listNotes()})
+		st.enqueue(c, st.listMessage())
 	}) {
 		_ = raw.Close()
 		return
@@ -127,6 +127,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.killRequest(c, m) })
 		case *api.RenameSession:
 			s.call(func(st *state) { st.renameRequest(c, m) })
+		case *api.AgentState:
+			s.call(func(st *state) { st.agentState(m) })
 		case *api.Shutdown:
 			s.shutdown()
 		}

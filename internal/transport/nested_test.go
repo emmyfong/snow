@@ -28,3 +28,18 @@ func TestParsePaneEnvRejects(t *testing.T) {
 		}
 	}
 }
+
+// TestPaneVars: every pane gets SNOW, and SNOW_PANE and SNOW_SOCKET for
+// snow hook, which reads them without parsing SNOW.
+func TestPaneVars(t *testing.T) {
+	got := PaneVars(`C:\snow\snow.sock`, 7)
+	want := []string{`SNOW=C:\snow\snow.sock,7`, "SNOW_PANE=7", `SNOW_SOCKET=C:\snow\snow.sock`}
+	if len(got) != len(want) {
+		t.Fatalf("PaneVars() = %q, want %q", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("PaneVars() = %q, want %q", got, want)
+		}
+	}
+}

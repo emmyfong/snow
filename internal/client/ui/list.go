@@ -15,6 +15,10 @@ type ListItem struct {
 	// Heading draws the row as a muted section title, with no columns and
 	// no selection mark. It comes before the first item of its group.
 	Heading string
+	// Alert is a short note at the row's right end in the prompt colors,
+	// such as "needs you". The columns are cut to keep it; it is dropped
+	// only when the row is too narrow for it.
+	Alert string
 }
 
 // ListOptions configures List.
@@ -58,6 +62,7 @@ func ListRows(th theme.Theme, o ListOptions) (view string, rows []int) {
 	}
 	first, last := ListWindow(len(o.Items), o.Selected, o.Height)
 	selected := lipgloss.NewStyle().Foreground(th.SelectionFG).Background(th.Selection).Bold(true)
+	alertStyle := lipgloss.NewStyle().Foreground(th.PromptFG).Background(th.PromptBG).Bold(true)
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
 	blank := strings.Repeat(" ", ansi.StringWidth(g.Pointer))
 	lines := make([]string, 0, last-first)
@@ -84,10 +89,24 @@ func ListRows(th theme.Theme, o ListOptions) (view string, rows []int) {
 				row += strings.Repeat(" ", widths[j]-ansi.StringWidth(c))
 			}
 		}
-		row = ansi.Truncate(row, o.Width, "")
-		row += strings.Repeat(" ", o.Width-ansi.StringWidth(row))
+		alert := ""
+		if it.Alert != "" {
+			alert = " " + it.Alert + " "
+			if ansi.StringWidth(alert)+ansi.StringWidth(g.Pointer)+1 > o.Width {
+				alert = ""
+			}
+		}
+		room := o.Width - ansi.StringWidth(alert)
+		if alert != "" {
+			room-- // a cell between the columns and the alert
+		}
+		row = ansi.Truncate(row, room, "")
+		row += strings.Repeat(" ", o.Width-ansi.StringWidth(alert)-ansi.StringWidth(row))
 		if i == o.Selected {
 			row = selected.Render(row)
+		}
+		if alert != "" {
+			row += alertStyle.Render(alert)
 		}
 		lines = append(lines, row)
 		rows = append(rows, i)

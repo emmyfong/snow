@@ -45,6 +45,7 @@ const (
 	TypeLogout
 	TypeConversationListRequest
 	TypeConversationList
+	TypeAgentState
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -126,6 +127,8 @@ func newMessage(t MsgType) Message {
 		return &ConversationListRequest{}
 	case TypeConversationList:
 		return &ConversationList{}
+	case TypeAgentState:
+		return &AgentState{}
 	}
 	return nil
 }
@@ -214,12 +217,15 @@ type Layout struct {
 	Windows []WindowInfo `json:"windows"`
 }
 
-// WindowInfo is one window in a Layout.
+// WindowInfo is one window in a Layout. AgentState is the most urgent
+// agent state of all its panes, including panes a zoom hides (see
+// MoreUrgent); empty when no agent runs in it.
 type WindowInfo struct {
-	Index  int        `json:"index"`
-	Name   string     `json:"name"`
-	Zoomed bool       `json:"zoomed,omitempty"`
-	Panes  []PaneInfo `json:"panes"`
+	Index      int        `json:"index"`
+	Name       string     `json:"name"`
+	Zoomed     bool       `json:"zoomed,omitempty"`
+	Panes      []PaneInfo `json:"panes"`
+	AgentState string     `json:"agentState,omitempty"`
 }
 
 // PaneInfo is one pane's place on screen.
@@ -230,6 +236,10 @@ type PaneInfo struct {
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it
 	Focused bool   `json:"focused,omitempty"`
+	// AgentState is the state of the agent in the pane, one of the
+	// Agent* values: from snow hook for a terminal pane, from the chat
+	// for a chat pane. Empty when no agent has reported.
+	AgentState string `json:"agentState,omitempty"`
 }
 
 // Rect is a cell rectangle; X and Y are the top-left corner.
@@ -277,18 +287,25 @@ const (
 // attached client gets it too, for its session list. Notes holds problems
 // with saved sessions the user should know about: a file the server could
 // not read and moved aside, with both paths, or saving that fails.
+//
+// Hint is a one-line tip for the home page, or empty: for example that a
+// Claude Code pane sends no hooks, so Snow cannot show when it needs you.
 type SessionList struct {
 	Sessions []SessionInfo `json:"sessions"`
 	Notes    []string      `json:"notes,omitempty"`
+	Hint     string        `json:"hint,omitempty"`
 }
 
-// SessionInfo summarizes one session.
+// SessionInfo summarizes one session. NeedsYou counts the agents in it
+// that wait for the user (AgentNeedsYou), for a running session; it is
+// left out when none does.
 type SessionInfo struct {
 	Name     string    `json:"name"`
 	Windows  int       `json:"windows"`
 	Attached int       `json:"attached"`
 	State    string    `json:"state"`
 	LastUsed time.Time `json:"lastUsed"`
+	NeedsYou int       `json:"needsYou,omitempty"`
 }
 
 // Bell reports that a pane rang the terminal bell.

@@ -35,6 +35,13 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpPrevWindow}, true},
 		{Command{Op: OpCloseWindow, Target: 1}, true},
 		{Command{Op: "explode", Target: 1}, false},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgFolder: "/src"}}, true},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: "gemini"}}, false},
+		{Command{Op: OpNewWindow, Args: map[string]string{ArgAgent: AgentClaude}}, false},
+		// An agent picks its own profile, and its pane is a terminal.
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgProfile: "Ubuntu"}}, false},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgKind: PaneChat}}, false},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgKind: PaneTerminal}}, true},
 	}
 	for _, tt := range tests {
 		err := tt.cmd.Validate()

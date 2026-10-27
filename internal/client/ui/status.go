@@ -15,6 +15,7 @@ type Tab struct {
 	Name   string
 	Active bool
 	Zoomed bool
+	Agent  Mark // the most urgent state of the window's agents
 }
 
 // StatusOptions configures StatusBar.
@@ -30,7 +31,8 @@ type StatusOptions struct {
 // StatusBar draws one line of exactly Width cells: the session name and the
 // window tabs on the left, and Right, or Message, on the right. When the
 // line is too short, Right is dropped first, but a Message stays and the tabs
-// are cut to make room for it. A Prompt replaces the whole bar.
+// are cut to make room for it; a Message wider than the line is cut too. A
+// Prompt replaces the whole bar.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
@@ -93,7 +95,6 @@ type statusLayout struct {
 
 func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
-	active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
 	g := th.Glyphs
 	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight + " ")
 	parts := []string{first}
@@ -107,10 +108,10 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		if t.Zoomed {
 			label += g.Zoomed
 		}
-		style := bar
-		if t.Active {
-			style = active
+		if mark := t.Agent.glyph(g); mark != "" {
+			label += " " + mark
 		}
+		style := tabStyle(th, t, bar)
 		// The padding belongs to the tab, so the current window's block and
 		// its click target are the same cells.
 		label = " " + label + " "
@@ -136,6 +137,11 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		// A refusal is the only feedback the user gets, so the tabs make
 		// room for it.
 		leftMax = o.Width - rw
+	case o.Message != "":
+		// Too wide even alone: cut it, and give it the whole bar but the
+		// divider.
+		right = " " + ansi.Truncate(o.Message, max(o.Width-3, 0), "…") + " "
+		leftMax = max(o.Width-ansi.StringWidth(right)-1, 0)
 	default:
 		right = ""
 	}

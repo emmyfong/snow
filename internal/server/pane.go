@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync/atomic"
+	"time"
 
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
@@ -22,6 +23,13 @@ type pane struct {
 	// fetching is set while a goroutine reads the busy pane's frame for the
 	// frame loop; owned by the model goroutine.
 	fetching bool
+	// agent is the state snow hook last reported for the agent in this
+	// terminal pane, at agentAt; owned by the model goroutine.
+	agent   string
+	agentAt time.Time
+	// sawHook is set by the pane's first hook. hookless is set when an
+	// agent pane sent none in time: its hooks are not set up.
+	sawHook, hookless bool
 }
 
 // startPane starts profile's program in dir at cols by rows, below
@@ -33,13 +41,21 @@ func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*
 		return nil, err
 	}
 	if s.opts.Socket != "" {
-		spec.Env = append(spec.Env, transport.PaneEnv(s.opts.Socket, id))
+		spec.Env = append(spec.Env, transport.PaneVars(s.opts.Socket, id)...)
 	}
 	tp, err := term.Start(spec, max(cols, 1), max(rows, 1), term.Options{Scrollback: s.opts.Scrollback, Preamble: preamble})
 	if err != nil {
 		return nil, err
 	}
 	p := &pane{id: id, profile: profile, term: tp, dir: dir}
+	if s.launch.isAgent(profile) {
+		due := func() { s.post(func(st *state) { st.hooksDue(id) }) }
+		if s.opts.afterHookWait != nil {
+			s.opts.afterHookWait(due)
+		} else {
+			time.AfterFunc(defaultHookWait, due)
+		}
+	}
 	go func() {
 		<-tp.Done()
 		// A pane Snow closed did not end with WSL; skip asking.

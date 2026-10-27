@@ -27,6 +27,9 @@ const (
 	KindPwsh // PowerShell 7 or Windows PowerShell
 	KindCmd
 	KindWSL
+	// KindClaude runs Claude Code, natively or, when Distro is set, inside
+	// a WSL distribution. It is an agent profile: no folder hook.
+	KindClaude
 )
 
 // Profile is one shell Snow can start in a pane.
@@ -35,7 +38,41 @@ type Profile struct {
 	Kind   Kind
 	Path   string   // the program to run
 	Args   []string // arguments before any Snow additions
-	Distro string   // the WSL distribution, for KindWSL only
+	Distro string   // the WSL distribution, for KindWSL and a WSL KindClaude
+	// CmdLine, when set, is the whole command line on Windows, passed as
+	// it is: a .cmd program runs through cmd, which reads its own quotes.
+	CmdLine string
+}
+
+// IsAgent reports whether p runs a coding agent rather than a shell.
+func (p Profile) IsAgent() bool { return p.Kind == KindClaude }
+
+// Find returns the profile called name; an empty name is the first.
+func Find(profiles []Profile, name string) (Profile, bool) {
+	for _, p := range profiles {
+		if name == "" || p.Name == name {
+			return p, true
+		}
+	}
+	return Profile{}, false
+}
+
+// HostShell returns the shell that commands for a pane running p go
+// through: p itself for a shell, and for a Claude Code profile the WSL
+// profile of its distribution, or the first shell on this machine.
+func HostShell(profiles []Profile, p Profile) (Profile, bool) {
+	if !p.IsAgent() {
+		return p, true
+	}
+	for _, s := range profiles {
+		if s.IsAgent() {
+			continue
+		}
+		if p.Distro == "" && s.Kind != KindWSL || p.Distro != "" && s.Kind == KindWSL && s.Distro == p.Distro {
+			return s, true
+		}
+	}
+	return Profile{}, false
 }
 
 // Detect returns the shells available on this machine, most preferred first.
@@ -43,22 +80,42 @@ func Detect() []Profile { return detect(currentSystem()) }
 
 // system holds the OS lookups Detect needs, so tests can supply them.
 type system struct {
-	goos     string
-	lookPath func(string) (string, error)
-	wslList  func() ([]byte, error)
+	goos       string
+	lookPath   func(string) (string, error)
+	wslList    func() ([]byte, error)
+	wslRunning func() ([]string, error)
+	// claudeIn reports whether claude is on the user's PATH inside a WSL
+	// distribution, asked through the wsl.exe at the given path. An error
+	// means the distribution gave no answer.
+	claudeIn func(wsl, distro string) (bool, error)
 	shellEnv string
 }
 
 func currentSystem() system {
 	return system{
-		goos:     runtime.GOOS,
-		lookPath: exec.LookPath,
-		wslList:  func() ([]byte, error) { return exec.Command("wsl.exe", "-l", "-q").Output() },
-		shellEnv: os.Getenv("SHELL"),
+		goos:       runtime.GOOS,
+		lookPath:   exec.LookPath,
+		wslList:    func() ([]byte, error) { return exec.Command("wsl.exe", "-l", "-q").Output() },
+		wslRunning: RunningDistros,
+		claudeIn:   claudeInDistro,
+		shellEnv:   os.Getenv("SHELL"),
 	}
 }
 
+// detect lists the shells, then the Claude Code profiles, so the default
+// stays a shell.
 func detect(sys system) []Profile {
+	shells := detectShells(sys)
+	var distros []string
+	for _, p := range shells {
+		if p.Kind == KindWSL {
+			distros = append(distros, p.Distro)
+		}
+	}
+	return append(shells, detectClaude(sys, distros)...)
+}
+
+func detectShells(sys system) []Profile {
 	if sys.goos != "windows" {
 		return []Profile{unixProfile(sys.shellEnv)}
 	}

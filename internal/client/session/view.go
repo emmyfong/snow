@@ -3,6 +3,7 @@ package session
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/ui"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // View draws the shown window's panes with their borders, and the status bar
@@ -64,7 +65,7 @@ func (m *Model) statusOptions() ui.StatusOptions {
 	if m.layout != nil {
 		opts.Session = m.layout.Session
 		for _, w := range m.layout.Windows {
-			opts.Tabs = append(opts.Tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed})
+			opts.Tabs = append(opts.Tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed, Agent: windowMark(w)})
 		}
 	}
 	if p := m.focused(); p != nil {
@@ -86,3 +87,10 @@ func (m *Model) statusOptions() ui.StatusOptions {
 	}
 	return opts
 }
+
+// marks maps the protocol's agent states to the status bar's marks.
+var marks = map[string]ui.Mark{api.AgentIdle: ui.MarkIdle, api.AgentWorking: ui.MarkWorking, api.AgentNeedsYou: ui.MarkNeedsYou}
+
+// windowMark is the most urgent agent state of w, as the server counts it,
+// panes a zoom hides included.
+func windowMark(w api.WindowInfo) ui.Mark { return marks[w.AgentState] }

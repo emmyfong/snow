@@ -86,12 +86,11 @@ func TestSessionChatStreams(t *testing.T) {
 	}
 }
 
-// TestSessionNewChat: Ctrl+b a, the menu item, and the chat command each
-// split the focused pane with a chat.
+// TestSessionNewChat: the new-chat action, which a config can bind, splits
+// the focused pane with a chat. Ctrl+b a opens Claude Code instead.
 func TestSessionNewChat(t *testing.T) {
 	m, r := newPrefixScreen(t)
-	m.Update(ctrlB)
-	m.Update(press('a', 0, "a"))
+	m.run("new-chat", tea.Key{})
 	c := lastCommand(t, r)
 	if c.Op != api.OpSplit || c.Args[api.ArgKind] != api.PaneChat || c.Args[api.ArgDir] != api.DirRight {
 		t.Fatalf("sent %+v", c)

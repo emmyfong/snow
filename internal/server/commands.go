@@ -30,6 +30,15 @@ func (st *state) command(c *client, cmd *api.Command) {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
 	}
+	if cmd.Args[api.ArgAgent] != "" {
+		st.agentSplit(c, sess, cmd)
+		return
+	}
+	st.run(c, sess, cmd)
+}
+
+// run applies a validated cmd to sess, as command does.
+func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	if err := st.apply(sess, cmd); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
 		return

@@ -146,3 +146,20 @@ func TestTabSpansForPromptAndNoWidth(t *testing.T) {
 		t.Errorf("width 0 leaves spans %v", got)
 	}
 }
+
+// TestStatusBarCutsLongMessage: a message wider than the bar is cut to
+// fit, never dropped; it is the only feedback the user gets.
+func TestStatusBarCutsLongMessage(t *testing.T) {
+	msg := "Claude Code is not installed in Ubuntu. Install it there: https://claude.com/claude-code"
+	for _, width := range []int{80, 40, 12, 4} {
+		o := StatusOptions{Width: width, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev", Active: true}}, Right: "14:02", Message: msg}
+		out := StatusBar(theme.Default(), o)
+		if w := ansi.StringWidth(out); w != width {
+			t.Fatalf("width %d: bar is %d wide", width, w)
+		}
+		got := ansi.Strip(out)
+		if width >= 12 && (!strings.Contains(got, "Claude") || !strings.Contains(got, "…")) {
+			t.Fatalf("width %d: bar %q, want the start of the message, cut", width, got)
+		}
+	}
+}

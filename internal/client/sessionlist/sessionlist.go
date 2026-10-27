@@ -139,7 +139,7 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 		sel := max(m.index(m.selected), 0)
 		l.first = min(max(sel-l.count+1, 0), len(m.sessions)-l.count)
 		shown := m.sessions[l.first : l.first+l.count]
-		items := Items(shown, m.now())
+		items := Items(shown, m.now(), th.Glyphs)
 		for i, s := range shown {
 			if s.Name == m.current {
 				items[i].Cols = append(items[i].Cols, "current")

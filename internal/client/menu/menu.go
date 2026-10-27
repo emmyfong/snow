@@ -23,7 +23,7 @@ type Item struct {
 }
 
 // paneActions are the actions the pane menu offers, in order.
-var paneActions = []string{"split-right", "split-down", "new-chat", "zoom", "even-out", "new-window", "rename-window", "close-pane", "close-window", "sessions", "command-prompt", "detach"}
+var paneActions = []string{"split-right", "split-down", "new-claude", "zoom", "even-out", "new-window", "rename-window", "close-pane", "close-window", "sessions", "command-prompt", "detach"}
 
 // PaneItems returns the pane menu's items. Labels and shortcuts come from
 // the key table, so a rebound key shows its new name.

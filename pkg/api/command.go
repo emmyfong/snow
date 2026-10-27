@@ -10,7 +10,7 @@ import (
 // operations take a window index, which counts from 0 as in tmux. Each
 // operation's arguments are listed with it.
 const (
-	OpSplit        = "split"         // dir; optional profile, folder, kind
+	OpSplit        = "split"         // dir; optional profile, folder, kind, agent
 	OpClose        = "close"         // close pane Target
 	OpResize       = "resize"        // dir, cells: move Target's edge on side dir
 	OpZoom         = "zoom"          // toggle zoom on Target
@@ -33,6 +33,17 @@ const (
 	ArgCells   = "cells"   // a positive whole number
 	ArgName    = "name"
 	ArgKind    = "kind" // PaneTerminal or PaneChat; empty means PaneTerminal
+	// ArgAgent asks a split for an agent's terminal pane in place of a
+	// profile: the server picks the agent's profile that fits the target
+	// pane, for example the one inside the same WSL distribution. When it
+	// finds none, it answers with a command-failed Error that says how to
+	// install the agent. Only AgentClaude is known.
+	ArgAgent = "agent"
+)
+
+// Agents for ArgAgent.
+const (
+	AgentClaude = "claude" // Claude Code
 )
 
 // Directions for ArgDir.
@@ -74,6 +85,16 @@ func (c *Command) Validate() error {
 	}
 	if k, ok := c.Args[ArgKind]; ok && k != PaneTerminal && k != PaneChat {
 		return fmt.Errorf("%w: unknown pane kind %q", ErrInvalidCommand, k)
+	}
+	if a, ok := c.Args[ArgAgent]; ok {
+		if a != AgentClaude || c.Op != OpSplit {
+			return fmt.Errorf("%w: %s cannot take agent %q", ErrInvalidCommand, c.Op, a)
+		}
+		// The server picks the agent's profile, and an agent runs in a
+		// terminal pane.
+		if _, set := c.Args[ArgProfile]; set || c.Args[ArgKind] == PaneChat {
+			return fmt.Errorf("%w: an agent takes no profile and no chat kind", ErrInvalidCommand)
+		}
 	}
 	switch c.Op {
 	case OpSplit, OpSwap:
