@@ -56,6 +56,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 			return
 		}
 	}
+	st.focusOnAttach(sess, m.Pane)
 	prev := c.session
 	c.session = sess.name
 	c.last = map[int][]string{}

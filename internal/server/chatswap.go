@@ -183,6 +183,7 @@ func (s *Server) adopt(c *client, pane int, conv *agent.Conversation, snap api.C
 			return
 		}
 		old = p.chat.conv
+		before := p.agentNow()
 		p.chat = &chatPane{conv: conv, snap: snap, folder: dir, profile: p.chat.profile}
 		p.dir = dir
 		for cl := range st.clients {
@@ -190,6 +191,13 @@ func (s *Server) adopt(c *client, pane int, conv *agent.Conversation, snap api.C
 				delete(cl.chatLive, pane)
 				st.syncChats(cl)
 			}
+		}
+		// A resumed conversation can wait for an answer to its question.
+		switch sess := st.sessions[c.session]; {
+		case sess != nil && p.agentNow() != before:
+			st.agentChanged(sess)
+		default:
+			st.syncAgents()
 		}
 	})
 	if err != nil {

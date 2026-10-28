@@ -154,10 +154,14 @@ type Welcome struct {
 // Session with Create set asks for a new session with the lowest free number.
 // Dir is the folder a new session starts in, usually the client's working
 // folder; empty, or a folder the server cannot use, means the user's home.
+// Pane, when set, is a pane of the session to focus, with its window, for
+// example an agent picked in the needs-you inbox; a pane the session does
+// not have is ignored, as an older server ignores the field.
 type Attach struct {
 	Session string `json:"session"`
 	Create  bool   `json:"create,omitempty"`
 	Dir     string `json:"dir,omitempty"`
+	Pane    int    `json:"pane,omitempty"`
 }
 
 // Input is one key press or one paste for a pane. Exactly one of Key and
