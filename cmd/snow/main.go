@@ -30,10 +30,11 @@ const usage = `usage:
   snow auth      save or remove provider API keys (snow auth help)
   snow claude    add Snow's hooks to Claude Code's settings (snow claude help)
   snow hook      tell Snow what Claude Code does; Claude Code's hooks run it
+  snow mcp       offer Snow's panes to Claude Code; Claude Code starts it
   snow version   print the version (also -v, --version)
   snow help      show this help (also -h, --help)
 
-The names version, help, server, auth, claude, and hook are commands,
+The names version, help, server, auth, claude, hook, and mcp are commands,
 not sessions.
 Inside a session, press Ctrl+b then d to go back to the home page, and
 Ctrl+b alone, then wait, to see every key.
@@ -76,6 +77,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return runAuth(cmd.auth, stdout, stderr)
 	case kindHook:
 		return runHook(stdin)
+	case kindMCP:
+		return runMCP(stdout, stderr)
 	case kindClaudeHelp:
 		_, _ = fmt.Fprint(stdout, claudeUsage)
 		return 0

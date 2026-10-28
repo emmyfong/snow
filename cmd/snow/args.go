@@ -19,6 +19,7 @@ const (
 	kindHook
 	kindClaude
 	kindClaudeHelp
+	kindMCP
 )
 
 // command is a parsed command line.
@@ -56,6 +57,8 @@ func parseArgs(args []string) (command, error) {
 		return command{kind: kindServer}, nil
 	case "hook":
 		return command{kind: kindHook}, nil
+	case "mcp":
+		return command{kind: kindMCP}, nil
 	default:
 		if strings.HasPrefix(a, "-") {
 			return command{}, fmt.Errorf("unknown option %s", a)

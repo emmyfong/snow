@@ -12,15 +12,18 @@ import (
 )
 
 const claudeUsage = `usage:
-  snow claude setup    add Snow's hooks to Claude Code's settings (asks first)
-  snow claude remove   take Snow's hooks out of Claude Code's settings
-  snow claude status   say whether the hooks are set
+  snow claude setup    add Snow's hooks and MCP server to Claude Code (asks first)
+  snow claude remove   take them out of Claude Code
+  snow claude status   say whether they are set
 
 The hooks run snow hook, which tells Snow when a Claude Code pane works,
-waits for you, or is idle. Snow changes only its own hooks in
-~/.claude/settings.json (or in CLAUDE_CONFIG_DIR), keeps a copy of the
-file first, and never reads your Claude Code login. On Windows it offers
-each WSL distribution that has claude too.
+waits for you, or is idle. The MCP server runs snow mcp, which offers the
+terminal panes of the same session to the agent.
+Snow adds only its own hooks to ~/.claude/settings.json (or in
+CLAUDE_CONFIG_DIR), keeps a copy of the file first, and never reads your
+Claude Code login. It registers its MCP server through Claude Code's own
+claude mcp command. On Windows it offers each WSL distribution that has
+claude too.
 `
 
 // claudeAction is what snow claude does.
@@ -58,18 +61,26 @@ func parseClaude(args []string) (claudeAction, error) {
 }
 
 // snowPath is where this snow program is, for the hook command, and
-// claudeDistros lists the WSL distributions that have claude. Tests
-// replace them: a test binary is not named snow, and a CI machine's WSL is
-// not the user's.
+// claudeDistros lists the WSL distributions that have claude. claudeProgram
+// finds this machine's claude. Tests replace them: a test binary is not
+// named snow, and a CI machine's WSL is not the user's.
 var (
 	snowPath      = os.Executable
 	claudeDistros = shell.ClaudeDistros
+	claudeProgram = shell.ClaudeProgram
 )
 
-// claudeTargets lists the settings files snow claude changes: this
-// machine's, and on Windows each WSL distribution's that has claude.
+// claudeInstall is one Claude Code: the settings snow claude changes and the
+// MCP server it registers with the same program.
+type claudeInstall struct {
+	target claudecode.Target
+	mcp    claudecode.MCP
+}
+
+// claudeInstalls lists the Claude Code installations snow claude changes:
+// this machine's, and on Windows each WSL distribution's that has claude.
 // skipped names the distributions that gave no answer.
-func claudeTargets() (targets []claudecode.Target, skipped error, err error) {
+func claudeInstalls() (installs []claudeInstall, skipped error, err error) {
 	exe, err := snowPath()
 	if err != nil {
 		return nil, nil, fmt.Errorf("find snow's own path: %w", err)
@@ -81,18 +92,29 @@ func claudeTargets() (targets []claudecode.Target, skipped error, err error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	targets = []claudecode.Target{claudecode.FileTarget{Path: path, Cmd: claudecode.HookCommand(exe)}}
+	native := claudeInstall{
+		target: claudecode.FileTarget{Path: path, Cmd: claudecode.HookCommand(exe)},
+		mcp:    claudecode.MCP{Name: "Claude Code", Exe: exe},
+	}
+	if p, ok := claudeProgram(); ok {
+		native.mcp = claudecode.NativeMCP(p.Path, p.Args, exe)
+	}
+	installs = []claudeInstall{native}
 	distros, skipped := claudeDistros()
 	for _, p := range distros {
-		targets = append(targets, claudecode.WSLTarget{WSL: p.Path, Distro: p.Distro, Cmd: claudecode.HookCommand(shell.WSLPath(exe))})
+		wslExe := shell.WSLPath(exe)
+		installs = append(installs, claudeInstall{
+			target: claudecode.WSLTarget{WSL: p.Path, Distro: p.Distro, Cmd: claudecode.HookCommand(wslExe)},
+			mcp:    claudecode.WSLMCP(p.Path, p.Distro, wslExe),
+		})
 	}
-	return targets, skipped, nil
+	return installs, skipped, nil
 }
 
-// runClaude is snow claude: it changes or reports each settings file in
-// turn. A file it cannot change does not stop the others.
+// runClaude is snow claude: it changes or reports each installation in
+// turn. An installation it cannot change does not stop the others.
 func runClaude(a claudeAction, in io.Reader, stdout, stderr io.Writer) int {
-	targets, skipped, err := claudeTargets()
+	installs, skipped, err := claudeInstalls()
 	if err != nil {
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1
@@ -102,14 +124,15 @@ func runClaude(a claudeAction, in io.Reader, stdout, stderr io.Writer) int {
 	}
 	answers := bufio.NewReader(in)
 	code := 0
-	for _, t := range targets {
+	for _, install := range installs {
+		var err error
 		switch a {
 		case claudeSetup:
-			err = claudecode.Setup(t, answers, stdout)
+			err = claudecode.Setup(install.target, install.mcp, answers, stdout)
 		case claudeRemove:
-			err = claudecode.Remove(t, answers, stdout)
+			err = claudecode.Remove(install.target, install.mcp, answers, stdout)
 		default:
-			err = claudecode.Report(t, stdout)
+			err = claudecode.Report(install.target, install.mcp, stdout)
 		}
 		if err != nil {
 			_, _ = fmt.Fprintln(stderr, "snow:", err)

@@ -1,0 +1,104 @@
+package mcp
+
+import (
+	"context"
+	"errors"
+	"net"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/emmyfong/snow/pkg/api"
+)
+
+// fakeSnow is the Snow server end of a net.Pipe connection. It answers the
+// handshake, sends the session list every connection gets, and answers the
+// first request with answer.
+func fakeSnow(t *testing.T, conn net.Conn, answer func(req api.Message) api.Message) {
+	t.Helper()
+	defer func() { _ = conn.Close() }()
+	apiConn := api.NewConn(conn)
+	if _, err := api.ServerHandshake(apiConn, api.Welcome{ServerVersion: "test", Protocol: api.ProtocolVersion}); err != nil {
+		return
+	}
+	if err := apiConn.Send(&api.SessionList{Sessions: []api.SessionInfo{{Name: "work", State: api.StateRunning}}}); err != nil {
+		return
+	}
+	req, err := apiConn.Receive()
+	if err != nil {
+		return
+	}
+	_ = apiConn.Send(answer(req))
+}
+
+// TestSnowList: a tool call skips the session list and returns the panes.
+func TestSnowList(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(req api.Message) api.Message {
+		r, ok := req.(*api.PanesRequest)
+		if !ok {
+			return &api.Error{Code: api.CodeBadCommand, Message: "not a panes request"}
+		}
+		return &api.Panes{Session: "work", Caller: r.Caller, Panes: []api.PaneSummary{{ID: 2, WindowName: "dev"}}}
+	})
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	panes, err := c.List(context.Background())
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if panes.Session != "work" || panes.Caller != 7 || len(panes.Panes) != 1 || panes.Panes[0].ID != 2 {
+		t.Fatalf("panes = %+v", panes)
+	}
+}
+
+// TestSnowListError: a server Error reaches the tool as an error, with its
+// code and message.
+func TestSnowListError(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(api.Message) api.Message {
+		return &api.Error{Code: api.CodeNoPane, Message: "your pane 7 is not in this Snow server"}
+	})
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	_, err := c.List(context.Background())
+	if err == nil || !strings.Contains(err.Error(), api.CodeNoPane) {
+		t.Fatalf("err = %v, want %s", err, api.CodeNoPane)
+	}
+}
+
+// TestSnowListCancel: a cancelled call returns at once and leaves the
+// connection closed.
+func TestSnowListCancel(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go func() {
+		defer func() { _ = theirs.Close() }()
+		apiConn := api.NewConn(theirs)
+		if _, err := api.ServerHandshake(apiConn, api.Welcome{ServerVersion: "test", Protocol: api.ProtocolVersion}); err != nil {
+			return
+		}
+		if _, err := apiConn.Receive(); err != nil {
+			return
+		}
+		<-time.After(2 * time.Second) // no answer: the client cancels first
+	}()
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := c.List(ctx)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("err = %v, want the context's", err)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Fatalf("a cancelled call took %v", took)
+	}
+}
+
+// TestSnowListNoServer: no socket gives a clear error that wraps the
+// transport's.
+func TestSnowListNoServer(t *testing.T) {
+	c := &snow{socket: t.TempDir() + "/none.sock", caller: 1}
+	_, err := c.List(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "reach Snow") {
+		t.Fatalf("err = %v", err)
+	}
+}

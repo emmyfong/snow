@@ -216,7 +216,7 @@ func TestSessionNamedAuth(t *testing.T) {
 	if code := run([]string{"auth", "help"}, &out, &errOut); code != 0 || out.String() != authUsage {
 		t.Fatalf("snow auth help: code %d, out %q", code, out.String())
 	}
-	if !strings.Contains(usage, "snow auth") || !strings.Contains(usage, "server, auth, claude, and hook are commands") {
+	if !strings.Contains(usage, "snow auth") || !strings.Contains(usage, "server, auth, claude, hook, and mcp are commands") {
 		t.Fatalf("usage does not list auth:\n%s", usage)
 	}
 }
