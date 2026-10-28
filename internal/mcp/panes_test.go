@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -48,6 +49,29 @@ func TestSnowList(t *testing.T) {
 	}
 	if panes.Session != "work" || panes.Caller != 7 || len(panes.Panes) != 1 || panes.Panes[0].ID != 2 {
 		t.Fatalf("panes = %+v", panes)
+	}
+}
+
+// TestSnowRead: a read_pane call sends the caller and returns the pane.
+func TestSnowRead(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(req api.Message) api.Message {
+		r, ok := req.(*api.ReadPaneRequest)
+		if !ok {
+			return &api.Error{Code: api.CodeBadCommand, Message: "not a read pane request"}
+		}
+		if r.Caller != 7 || r.Pane != 2 || r.Scrollback != 40 {
+			return &api.Error{Code: api.CodeBadCommand, Message: fmt.Sprintf("request %+v", r)}
+		}
+		return &api.ReadPane{Pane: 2, Session: "work", Screen: []string{"$ "}}
+	})
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	read, err := c.Read(context.Background(), 2, 40)
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if read.Pane != 2 || read.Session != "work" || len(read.Screen) != 1 {
+		t.Fatalf("read = %+v", read)
 	}
 }
 

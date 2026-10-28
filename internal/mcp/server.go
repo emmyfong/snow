@@ -224,13 +224,15 @@ func (s *server) runTool(ctx context.Context, name string, args json.RawMessage)
 }
 
 // callTool runs the named tool.
-func (s *server) callTool(ctx context.Context, name string, _ json.RawMessage) (string, error) {
+func (s *server) callTool(ctx context.Context, name string, args json.RawMessage) (string, error) {
 	if s.panes == nil {
 		return "", errors.New(s.outside)
 	}
 	switch name {
 	case "list_panes":
 		return s.listPanes(ctx)
+	case "read_pane":
+		return s.readPane(ctx, args)
 	}
 	return "", fmt.Errorf("unknown tool %q; tools/list names the tools", name)
 }

@@ -121,9 +121,13 @@ func toolText(t *testing.T, m map[string]any) (text string, isError bool) {
 // fakePanes is a Snow server that never runs.
 type fakePanes struct {
 	panes *api.Panes
+	read  *api.ReadPane
 	err   error
-	// block makes List wait for the context, for cancellation tests.
+	// block makes List and Read wait for the context, for cancellation
+	// tests.
 	block bool
+	// readPane and readScrollback record the last Read request.
+	readPane, readScrollback int
 }
 
 func (f *fakePanes) List(ctx context.Context) (*api.Panes, error) {
@@ -132,6 +136,15 @@ func (f *fakePanes) List(ctx context.Context) (*api.Panes, error) {
 		return nil, ctx.Err()
 	}
 	return f.panes, f.err
+}
+
+func (f *fakePanes) Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error) {
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	f.readPane, f.readScrollback = pane, scrollback
+	return f.read, f.err
 }
 
 func testPanes() *api.Panes {
@@ -164,15 +177,20 @@ func TestMCPHandshake(t *testing.T) {
 	c.send(t, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 	tools, ok := result(t, c.next(t))["tools"].([]any)
-	if !ok || len(tools) != 1 {
+	if !ok || len(tools) != 2 {
 		t.Fatalf("tools = %v", tools)
 	}
-	tool, _ := tools[0].(map[string]any)
-	if tool["name"] != "list_panes" {
-		t.Fatalf("tool = %v", tool)
+	names := map[string]bool{}
+	for i, raw := range tools {
+		tool, _ := raw.(map[string]any)
+		name, _ := tool["name"].(string)
+		names[name] = true
+		if _, ok := tool["inputSchema"].(map[string]any); !ok {
+			t.Errorf("tool %d has no input schema: %v", i, tool)
+		}
 	}
-	if _, ok := tool["inputSchema"].(map[string]any); !ok {
-		t.Fatalf("no input schema: %v", tool)
+	if !names["list_panes"] || !names["read_pane"] {
+		t.Fatalf("tools = %v, want list_panes and read_pane", names)
 	}
 
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": map[string]any{
@@ -186,6 +204,48 @@ func TestMCPHandshake(t *testing.T) {
 		if !strings.Contains(text, want) {
 			t.Errorf("output does not hold %q:\n%s", want, text)
 		}
+	}
+}
+
+// TestMCPReadPane: read_pane passes the pane and scrollback to Snow and
+// writes the copy for the agent.
+func TestMCPReadPane(t *testing.T) {
+	f := &fakePanes{read: &api.ReadPane{
+		Pane: 2, Session: "work", Profile: "bash", Folder: "/src", Cols: 80, Rows: 3,
+		CursorX: 4, CursorY: 2, CursorVisible: true,
+		Screen:     []string{"$ ls", "a.txt", "$ "},
+		Scrollback: []string{"tmp", "src"},
+		Omitted:    7,
+	}}
+	c := start(t, Options{Version: "test", Panes: f})
+
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "read_pane", "arguments": map[string]any{"pane": 2, "scrollback": 10},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("read_pane failed: %s", text)
+	}
+	if f.readPane != 2 || f.readScrollback != 10 {
+		t.Fatalf("Read(%d, %d), want (2, 10)", f.readPane, f.readScrollback)
+	}
+	for _, want := range []string{`pane 2`, `"work"`, "a.txt", "tmp\nsrc", "7 older lines", "80x3", "cursor at column 5, row 3"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("output does not hold %q:\n%s", want, text)
+		}
+	}
+}
+
+// TestMCPReadPaneNeedsPane: read_pane without a pane ID tells the agent how
+// to find one.
+func TestMCPReadPaneNeedsPane(t *testing.T) {
+	c := start(t, Options{Version: "test", Panes: &fakePanes{}})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "read_pane", "arguments": map[string]any{},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if !failed || !strings.Contains(text, "list_panes") {
+		t.Fatalf("call = %q, failed = %v; want a hint about list_panes", text, failed)
 	}
 }
 

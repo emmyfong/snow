@@ -48,6 +48,8 @@ const (
 	TypeAgentState
 	TypePanesRequest
 	TypePanes
+	TypeReadPaneRequest
+	TypeReadPane
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -135,6 +137,10 @@ func newMessage(t MsgType) Message {
 		return &PanesRequest{}
 	case TypePanes:
 		return &Panes{}
+	case TypeReadPaneRequest:
+		return &ReadPaneRequest{}
+	case TypeReadPane:
+		return &ReadPane{}
 	}
 	return nil
 }

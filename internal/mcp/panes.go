@@ -15,6 +15,9 @@ import (
 type Panes interface {
 	// List returns the terminal panes of the caller's session.
 	List(ctx context.Context) (*api.Panes, error)
+	// Read returns a plain-text copy of pane, with scrollback lines above
+	// the screen.
+	Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error)
 }
 
 // snow calls the Snow server over its socket. It opens one connection per
@@ -42,6 +45,22 @@ func (c *snow) List(ctx context.Context) (*api.Panes, error) {
 		p, ok := m.(*api.Panes)
 		if ok {
 			out = p
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Read implements Panes.
+func (c *snow) Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error) {
+	var out *api.ReadPane
+	err := c.call(ctx, &api.ReadPaneRequest{Caller: c.caller, Pane: pane, Scrollback: scrollback}, func(m api.Message) bool {
+		r, ok := m.(*api.ReadPane)
+		if ok {
+			out = r
 		}
 		return ok
 	})

@@ -131,6 +131,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.agentState(m) })
 		case *api.PanesRequest:
 			s.panes(c, m)
+		case *api.ReadPaneRequest:
+			s.readPane(c, m)
 		case *api.Shutdown:
 			s.shutdown()
 		}

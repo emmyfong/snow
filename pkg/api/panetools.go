@@ -83,6 +83,69 @@ func (p Panes) MarshalJSON() ([]byte, error) {
 // Validate checks the caller.
 func (r *PanesRequest) Validate() error { return validCaller(r.Caller) }
 
+// ReadPaneRequest asks for a plain-text copy of one terminal pane of the
+// caller's session. Scrollback is how many lines above the screen to
+// return; 0 asks for the server's default, and the server caps it.
+type ReadPaneRequest struct {
+	Caller     int `json:"caller"`
+	Pane       int `json:"pane"`
+	Scrollback int `json:"scrollback,omitempty"`
+}
+
+// ReadPane answers a ReadPaneRequest with a copy of one terminal pane at
+// one moment. Lines carry no styles. Screen holds the rows now on the
+// screen, top row first. Scrollback holds the newest lines above the
+// screen, oldest first. Omitted counts the lines not returned because the
+// request or the reply size left them out; they are the oldest lines.
+// Cursor is zero-based, and CursorVisible is set when the program shows it.
+// Ended is set for a pane whose program ended and that waits to restart.
+type ReadPane struct {
+	Pane          int      `json:"pane"`
+	Session       string   `json:"session"`
+	Profile       string   `json:"profile"`
+	Folder        string   `json:"folder,omitempty"`
+	Cols          int      `json:"cols"`
+	Rows          int      `json:"rows"`
+	CursorX       int      `json:"cursorX"`
+	CursorY       int      `json:"cursorY"`
+	CursorVisible bool     `json:"cursorVisible,omitempty"`
+	Screen        []string `json:"screen"`
+	Scrollback    []string `json:"scrollback,omitempty"`
+	Omitted       int      `json:"omitted,omitempty"`
+	Ended         bool     `json:"ended,omitempty"`
+}
+
+// Type implements Message.
+func (*ReadPaneRequest) Type() MsgType { return TypeReadPaneRequest }
+func (*ReadPaneRequest) message()      {}
+
+// Type implements Message.
+func (*ReadPane) Type() MsgType { return TypeReadPane }
+func (*ReadPane) message()      {}
+
+// MarshalJSON writes an empty Screen as [].
+func (r ReadPane) MarshalJSON() ([]byte, error) {
+	type wire ReadPane
+	if r.Screen == nil {
+		r.Screen = []string{}
+	}
+	return json.Marshal(wire(r))
+}
+
+// Validate checks the caller, the pane, and the scrollback count.
+func (r *ReadPaneRequest) Validate() error {
+	if err := validCaller(r.Caller); err != nil {
+		return err
+	}
+	if r.Pane < 1 {
+		return fmt.Errorf("%w: no pane", ErrInvalidPaneTool)
+	}
+	if r.Scrollback < 0 {
+		return fmt.Errorf("%w: negative scrollback %d", ErrInvalidPaneTool, r.Scrollback)
+	}
+	return nil
+}
+
 func validCaller(caller int) error {
 	if caller < 1 {
 		return fmt.Errorf("%w: no caller pane", ErrInvalidPaneTool)
