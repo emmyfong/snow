@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -60,6 +61,28 @@ var sendKeysArgs = json.RawMessage(`{
   "additionalProperties": false
 }`)
 
+const waitForDescription = `Wait until a terminal pane of your Snow session prints text, or stops changing. ` +
+	`With text, waits for a line that holds the text, as plain text, ignoring case unless the text has an upper-case letter. ` +
+	`Text already on the pane counts only with includeExisting. ` +
+	`With quietMs, waits until the pane has produced no output for that many milliseconds. ` +
+	`Give one of text and quietMs. Use it after send_keys instead of reading the pane in a loop. ` +
+	`The result says found with the matching line, quiet, exited with the program's exit status, or timed out. ` +
+	`A timeout is a normal result. The default timeout is 30 seconds and the most is 10 minutes.`
+
+// waitForArgs is the input schema of wait_for.
+var waitForArgs = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "pane": {"type": "integer", "description": "The pane ID that list_panes shows."},
+    "text": {"type": "string", "description": "Wait for a new line that holds this text. Give this or quietMs."},
+    "quietMs": {"type": "integer", "description": "Wait until the pane has produced no output for this many milliseconds. Give this or text."},
+    "timeoutMs": {"type": "integer", "description": "How long to wait at most. The default is 30000 and the most is 600000."},
+    "includeExisting": {"type": "boolean", "description": "Also match text that was on the pane before the wait began. The default is false."}
+  },
+  "required": ["pane"],
+  "additionalProperties": false
+}`)
+
 // toolList returns the tools, in the order an agent should try them. A
 // session outside Snow has none, which tools/list reports as [].
 func (s *server) toolList() []toolDef {
@@ -81,6 +104,11 @@ func (s *server) toolList() []toolDef {
 			Name:        "send_keys",
 			Description: sendKeysDescription,
 			InputSchema: sendKeysArgs,
+		},
+		{
+			Name:        "wait_for",
+			Description: waitForDescription,
+			InputSchema: waitForArgs,
 		},
 	}
 }
@@ -171,6 +199,59 @@ func formatRead(r *api.ReadPane) string {
 		fmt.Fprintf(&b, "\n\n%d older lines were left out.", r.Omitted)
 	}
 	return b.String()
+}
+
+// waitFor answers wait_for.
+func (s *server) waitFor(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		Pane            int    `json:"pane"`
+		Text            string `json:"text"`
+		QuietMS         int    `json:"quietMs"`
+		TimeoutMS       int    `json:"timeoutMs"`
+		IncludeExisting bool   `json:"includeExisting"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &in); err != nil {
+			return "", fmt.Errorf("wait_for: %w", err)
+		}
+	}
+	if in.Pane < 1 {
+		return "", errors.New("wait_for needs a pane ID; call list_panes first")
+	}
+	if in.QuietMS < 0 || in.TimeoutMS < 0 {
+		return "", errors.New("wait_for needs a quietMs and a timeoutMs of zero or more")
+	}
+	if (in.Text == "") == (in.QuietMS == 0) {
+		return "", errors.New("wait_for needs exactly one of text and quietMs")
+	}
+	// Clamp before converting, so a huge request cannot overflow the
+	// duration and reach Snow as a negative one.
+	in.QuietMS = min(in.QuietMS, api.WaitMaxMS)
+	in.TimeoutMS = min(in.TimeoutMS, api.WaitMaxMS)
+	res, err := s.panes.Wait(ctx, in.Pane, in.Text,
+		time.Duration(in.QuietMS)*time.Millisecond, time.Duration(in.TimeoutMS)*time.Millisecond, in.IncludeExisting)
+	if err != nil {
+		return "", err
+	}
+	return formatWait(res), nil
+}
+
+// formatWait writes why a wait ended the way an agent reads it.
+func formatWait(r *api.WaitFor) string {
+	switch r.Result {
+	case api.WaitFound:
+		return fmt.Sprintf("Pane %d printed the text:\n%s", r.Pane, r.Line)
+	case api.WaitQuiet:
+		return fmt.Sprintf("Pane %d stopped changing.", r.Pane)
+	case api.WaitExited:
+		if r.Exit != nil {
+			return fmt.Sprintf("Pane %d's program exited with status %d. Read the pane to see its last output.", r.Pane, *r.Exit)
+		}
+		return fmt.Sprintf("Pane %d's program exited. Read the pane to see its last output.", r.Pane)
+	case api.WaitTimeout:
+		return fmt.Sprintf("Pane %d reached the timeout first. It may still run; read the pane to see what it shows.", r.Pane)
+	}
+	return fmt.Sprintf("Pane %d: the wait ended with %q.", r.Pane, r.Result)
 }
 
 // formatSend writes what happened to the input the way an agent reads it.

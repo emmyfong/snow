@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 
@@ -28,7 +29,11 @@ type client struct {
 	// wantsModels says c asked for the model list and hears when a fetch
 	// finishes.
 	wantsModels bool
-	dropped     bool
+	// tools is canceled when the connection ends, so a wait that has no
+	// reader stops at once.
+	tools   context.Context
+	stop    context.CancelFunc
+	dropped bool
 }
 
 // serveConn handles one connection until it closes.
@@ -46,6 +51,8 @@ func (s *Server) serveConn(raw net.Conn) {
 		return
 	}
 	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}}
+	c.tools, c.stop = context.WithCancel(context.Background())
+	defer c.stop()
 	// A bad size is not fatal: the client gets the default size until it
 	// sends a valid Resize.
 	if err := hello.Validate(); err == nil {
@@ -135,6 +142,8 @@ func (s *Server) read(c *client) {
 			s.readPane(c, m)
 		case *api.SendKeysRequest:
 			s.sendKeys(c, m)
+		case *api.WaitForRequest:
+			s.waitFor(c, m)
 		case *api.Shutdown:
 			s.shutdown()
 		}

@@ -32,8 +32,8 @@ func TestReadPaneScreen(t *testing.T) {
 	if e != nil {
 		t.Fatalf("ReadPaneRequest: %v", e)
 	}
-	if got.Pane != pane || got.Session != "work" || got.Profile != "sh" {
-		t.Fatalf("read pane %d of %q profile %q, want pane %d of work with sh", got.Pane, got.Session, got.Profile, pane)
+	if got.Pane != pane || got.Session != "work" || got.Profile != shellProfile() {
+		t.Fatalf("read pane %d of %q profile %q, want pane %d of work with %s", got.Pane, got.Session, got.Profile, pane, shellProfile())
 	}
 	if got.Cols != 100 || got.Rows != 29 {
 		t.Fatalf("size %dx%d, want 100x29", got.Cols, got.Rows)

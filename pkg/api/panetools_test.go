@@ -30,6 +30,10 @@ func TestPaneToolsWire(t *testing.T) {
 		{&SendKeysRequest{Caller: 3, Pane: 2, Text: "go test", Keys: []Key{{Code: KeyEnter}}}, `{"caller":3,"pane":2,"text":"go test","keys":[{"code":"enter"}]}`},
 		{&SendKeys{Pane: 2}, `{"pane":2}`},
 		{&SendKeys{Pane: 2, Dropped: 7}, `{"pane":2,"dropped":7}`},
+		{&WaitForRequest{Caller: 3, Pane: 2, Text: "done"}, `{"caller":3,"pane":2,"text":"done"}`},
+		{&WaitForRequest{Caller: 3, Pane: 2, QuietMS: 500, TimeoutMS: 1000, IncludeExisting: true}, `{"caller":3,"pane":2,"quietMs":500,"timeoutMs":1000,"includeExisting":true}`},
+		{&WaitFor{Pane: 2, Result: WaitFound, Line: "$ go test"}, `{"pane":2,"result":"found","line":"$ go test"}`},
+		{&WaitFor{Pane: 2, Result: WaitTimeout}, `{"pane":2,"result":"timeout"}`},
 	}
 	for _, tt := range tests {
 		got, err := json.Marshal(tt.msg)
@@ -51,6 +55,10 @@ func TestPaneToolsRoundTrip(t *testing.T) {
 		&ReadPane{Pane: 1, Session: "a", Profile: "sh", Cols: 80, Rows: 2, Screen: []string{"$ "}, Scrollback: []string{"x"}},
 		&SendKeysRequest{Caller: 2, Pane: 1, Text: "go test", Keys: []Key{{Code: KeyEnter}, {Code: "c", Mod: []string{ModCtrl}}}},
 		&SendKeys{Pane: 1, Dropped: 7},
+		&WaitForRequest{Caller: 2, Pane: 1, Text: "ok", TimeoutMS: 500, IncludeExisting: true},
+		&WaitForRequest{Caller: 2, Pane: 1, QuietMS: 250},
+		&WaitFor{Pane: 1, Result: WaitFound, Line: "ok"},
+		&WaitFor{Pane: 1, Result: WaitExited, Exit: exitCode(4)},
 	}
 	for _, m := range msgs {
 		var buf bytes.Buffer
@@ -111,6 +119,36 @@ func TestSendKeysRequestValidate(t *testing.T) {
 		{"no pane", SendKeysRequest{Caller: 1, Text: "ls"}, true},
 		{"no input", SendKeysRequest{Caller: 1, Pane: 2}, true},
 		{"bad key", SendKeysRequest{Caller: 1, Pane: 2, Keys: []Key{{Code: "A"}}}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if got := errors.Is(err, ErrInvalidPaneTool); got != tt.bad {
+				t.Fatalf("Validate() = %v, want an invalid pane tool error: %v", err, tt.bad)
+			}
+		})
+	}
+}
+
+// exitCode returns a pointer to code, for the optional Exit field.
+func exitCode(code int) *int { return &code }
+
+func TestWaitForRequestValidate(t *testing.T) {
+	tests := []struct {
+		name string
+		req  WaitForRequest
+		bad  bool
+	}{
+		{"text", WaitForRequest{Caller: 1, Pane: 2, Text: "ok"}, false},
+		{"quiet", WaitForRequest{Caller: 1, Pane: 2, QuietMS: 500}, false},
+		{"timeout", WaitForRequest{Caller: 1, Pane: 2, Text: "ok", TimeoutMS: 1000}, false},
+		{"include existing", WaitForRequest{Caller: 1, Pane: 2, Text: "ok", IncludeExisting: true}, false},
+		{"no caller", WaitForRequest{Pane: 2, Text: "ok"}, true},
+		{"no pane", WaitForRequest{Caller: 1, Text: "ok"}, true},
+		{"no condition", WaitForRequest{Caller: 1, Pane: 2}, true},
+		{"text and quiet", WaitForRequest{Caller: 1, Pane: 2, Text: "ok", QuietMS: 500}, true},
+		{"negative quiet", WaitForRequest{Caller: 1, Pane: 2, QuietMS: -1}, true},
+		{"negative timeout", WaitForRequest{Caller: 1, Pane: 2, Text: "ok", TimeoutMS: -1}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

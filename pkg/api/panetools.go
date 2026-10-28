@@ -204,3 +204,73 @@ func (r *SendKeysRequest) Validate() error {
 	}
 	return nil
 }
+
+// Wait results, in WaitFor.Result.
+const (
+	// WaitFound means the pane printed the text.
+	WaitFound = "found"
+	// WaitQuiet means the pane did not change for the quiet period.
+	WaitQuiet = "quiet"
+	// WaitExited means the pane's program exited before the condition held.
+	WaitExited = "exited"
+	// WaitTimeout means the time ran out while the program kept running.
+	WaitTimeout = "timeout"
+)
+
+// Wait limits in milliseconds: a request without TimeoutMS gets
+// WaitDefaultMS, and no request may ask for more than WaitMaxMS.
+const (
+	WaitDefaultMS = 30_000
+	WaitMaxMS     = 600_000
+)
+
+// WaitForRequest waits until one terminal pane of the caller's session
+// prints Text or stops changing for QuietMS milliseconds. Give exactly one
+// of Text and QuietMS. A zero TimeoutMS takes the server's default. Text
+// already on the pane counts only with IncludeExisting.
+type WaitForRequest struct {
+	Caller          int    `json:"caller"`
+	Pane            int    `json:"pane"`
+	Text            string `json:"text,omitempty"`
+	QuietMS         int    `json:"quietMs,omitempty"`
+	TimeoutMS       int    `json:"timeoutMs,omitempty"`
+	IncludeExisting bool   `json:"includeExisting,omitempty"`
+}
+
+// WaitFor answers a WaitForRequest. Line holds the matching line for
+// WaitFound. Exit holds the program's status for WaitExited when Snow knows
+// it.
+type WaitFor struct {
+	Pane   int    `json:"pane"`
+	Result string `json:"result"`
+	Line   string `json:"line,omitempty"`
+	Exit   *int   `json:"exit,omitempty"`
+}
+
+// Type implements Message.
+func (*WaitForRequest) Type() MsgType { return TypeWaitForRequest }
+func (*WaitForRequest) message()      {}
+
+// Type implements Message.
+func (*WaitFor) Type() MsgType { return TypeWaitFor }
+func (*WaitFor) message()      {}
+
+// Validate checks the caller, the pane, and exactly one condition.
+func (r *WaitForRequest) Validate() error {
+	if err := validCaller(r.Caller); err != nil {
+		return err
+	}
+	if r.Pane < 1 {
+		return fmt.Errorf("%w: no pane", ErrInvalidPaneTool)
+	}
+	if (r.Text == "") == (r.QuietMS == 0) {
+		return fmt.Errorf("%w: need exactly one of text and quietMs", ErrInvalidPaneTool)
+	}
+	if r.QuietMS < 0 {
+		return fmt.Errorf("%w: quietMs cannot be negative", ErrInvalidPaneTool)
+	}
+	if r.TimeoutMS < 0 {
+		return fmt.Errorf("%w: timeoutMs cannot be negative", ErrInvalidPaneTool)
+	}
+	return nil
+}

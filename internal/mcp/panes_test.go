@@ -99,6 +99,30 @@ func TestSnowSend(t *testing.T) {
 	}
 }
 
+// TestSnowWait: a wait_for call sends the caller, the conditions, and the
+// limits, and returns the result.
+func TestSnowWait(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(req api.Message) api.Message {
+		r, ok := req.(*api.WaitForRequest)
+		if !ok {
+			return &api.Error{Code: api.CodeBadCommand, Message: "not a wait request"}
+		}
+		if r.Caller != 7 || r.Pane != 2 || r.Text != "ok" || r.QuietMS != 0 || r.TimeoutMS != 1500 || !r.IncludeExisting {
+			return &api.Error{Code: api.CodeBadCommand, Message: fmt.Sprintf("request %+v", r)}
+		}
+		return &api.WaitFor{Pane: 2, Result: api.WaitFound, Line: "ok"}
+	})
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	got, err := c.Wait(context.Background(), 2, "ok", 0, 1500*time.Millisecond, true)
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got.Pane != 2 || got.Result != api.WaitFound || got.Line != "ok" {
+		t.Fatalf("wait = %+v", got)
+	}
+}
+
 // TestSnowListError: a server Error reaches the tool as an error, with its
 // code and message.
 func TestSnowListError(t *testing.T) {

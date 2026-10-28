@@ -40,8 +40,8 @@ func TestListPanesSameSession(t *testing.T) {
 	}
 	for i, want := range []int{first, second} {
 		p := got.Panes[i]
-		if p.ID != want || p.WindowName == "" || !p.Shown || p.Profile != "sh" || p.Rect.W != 40 {
-			t.Errorf("pane %d = %+v; want pane %d, shown, sh, 40 wide", i, p, want)
+		if p.ID != want || p.WindowName == "" || !p.Shown || p.Profile != shellProfile() || p.Rect.W != 40 {
+			t.Errorf("pane %d = %+v; want pane %d, shown, %s, 40 wide", i, p, want, shellProfile())
 		}
 	}
 	if !got.Panes[1].Focused || got.Panes[0].Focused {

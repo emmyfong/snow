@@ -124,9 +124,10 @@ type fakePanes struct {
 	panes *api.Panes
 	read  *api.ReadPane
 	sent  *api.SendKeys
+	wait  *api.WaitFor
 	err   error
-	// block makes List and Read wait for the context, for cancellation
-	// tests.
+	// block makes List, Read, Send, and Wait wait for the context, for
+	// cancellation tests.
 	block bool
 	// readPane and readScrollback record the last Read request.
 	readPane, readScrollback int
@@ -134,6 +135,11 @@ type fakePanes struct {
 	sendPane int
 	sendText string
 	sendKeys []api.Key
+	// waitPane, waitText, waitQuiet, waitTimeout, and waitExisting record
+	// the last Wait request.
+	waitPane, waitQuiet, waitTimeout int
+	waitText                         string
+	waitExisting                     bool
 }
 
 func (f *fakePanes) List(ctx context.Context) (*api.Panes, error) {
@@ -163,6 +169,20 @@ func (f *fakePanes) Send(ctx context.Context, pane int, text string, keys []api.
 		f.sent = &api.SendKeys{Pane: pane}
 	}
 	return f.sent, f.err
+}
+
+func (f *fakePanes) Wait(ctx context.Context, pane int, text string, quiet, timeout time.Duration, includeExisting bool) (*api.WaitFor, error) {
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	f.waitPane, f.waitText = pane, text
+	f.waitQuiet, f.waitTimeout = int(quiet/time.Millisecond), int(timeout/time.Millisecond)
+	f.waitExisting = includeExisting
+	if f.wait == nil {
+		f.wait = &api.WaitFor{Pane: pane, Result: api.WaitFound, Line: "done"}
+	}
+	return f.wait, f.err
 }
 
 func testPanes() *api.Panes {
@@ -195,7 +215,7 @@ func TestMCPHandshake(t *testing.T) {
 	c.send(t, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 	tools, ok := result(t, c.next(t))["tools"].([]any)
-	if !ok || len(tools) != 3 {
+	if !ok || len(tools) != 4 {
 		t.Fatalf("tools = %v", tools)
 	}
 	names := map[string]bool{}
@@ -207,8 +227,8 @@ func TestMCPHandshake(t *testing.T) {
 			t.Errorf("tool %d has no input schema: %v", i, tool)
 		}
 	}
-	if !names["list_panes"] || !names["read_pane"] || !names["send_keys"] {
-		t.Fatalf("tools = %v, want list_panes, read_pane, and send_keys", names)
+	if !names["list_panes"] || !names["read_pane"] || !names["send_keys"] || !names["wait_for"] {
+		t.Fatalf("tools = %v, want list_panes, read_pane, send_keys, and wait_for", names)
 	}
 
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": map[string]any{
@@ -336,6 +356,154 @@ func TestMCPSendKeysNeedsInput(t *testing.T) {
 	text, failed := toolText(t, c.next(t))
 	if !failed || !strings.Contains(text, "text, keys, or both") {
 		t.Fatalf("call = %q, failed = %v; want a hint about text and keys", text, failed)
+	}
+}
+
+// TestMCPWaitFor: wait_for passes the pane, the text, and the limits to
+// Snow and writes why the wait ended.
+func TestMCPWaitFor(t *testing.T) {
+	f := &fakePanes{wait: &api.WaitFor{Pane: 2, Result: api.WaitFound, Line: "ok  github.com/x  0.2s"}}
+	c := start(t, Options{Version: "test", Panes: f})
+
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "wait_for", "arguments": map[string]any{"pane": 2, "text": "ok ", "timeoutMs": 1500, "includeExisting": true},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("wait_for failed: %s", text)
+	}
+	if f.waitPane != 2 || f.waitText != "ok " || f.waitQuiet != 0 || f.waitTimeout != 1500 || !f.waitExisting {
+		t.Fatalf("Wait = pane %d, text %q, quiet %d, timeout %d, existing %v", f.waitPane, f.waitText, f.waitQuiet, f.waitTimeout, f.waitExisting)
+	}
+	if !strings.Contains(text, "Pane 2") || !strings.Contains(text, "ok  github.com/x  0.2s") {
+		t.Fatalf("output %q, want the pane and the matching line", text)
+	}
+}
+
+// TestMCPWaitForQuiet: quietMs waits for the pane to stop changing.
+func TestMCPWaitForQuiet(t *testing.T) {
+	f := &fakePanes{wait: &api.WaitFor{Pane: 2, Result: api.WaitQuiet}}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "wait_for", "arguments": map[string]any{"pane": 2, "quietMs": 750},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("wait_for failed: %s", text)
+	}
+	if f.waitQuiet != 750 || f.waitText != "" {
+		t.Fatalf("Wait = quiet %d, text %q; want 750 and no text", f.waitQuiet, f.waitText)
+	}
+	if !strings.Contains(text, "stopped changing") {
+		t.Fatalf("output %q, want the quiet result", text)
+	}
+}
+
+// TestMCPWaitForClamp: a request over the cap is clamped before it reaches
+// Snow, so it cannot overflow a duration.
+func TestMCPWaitForClamp(t *testing.T) {
+	f := &fakePanes{}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "wait_for", "arguments": map[string]any{"pane": 2, "text": "ok", "timeoutMs": 1 << 40},
+	}})
+	if _, failed := toolText(t, c.next(t)); failed {
+		t.Fatal("wait_for failed")
+	}
+	if f.waitTimeout != api.WaitMaxMS {
+		t.Fatalf("timeout = %d, want the %d ms cap", f.waitTimeout, api.WaitMaxMS)
+	}
+}
+
+// TestMCPWaitForTimeout: a timeout is a normal result, not a failed call.
+func TestMCPWaitForTimeout(t *testing.T) {
+	f := &fakePanes{wait: &api.WaitFor{Pane: 2, Result: api.WaitTimeout}}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "wait_for", "arguments": map[string]any{"pane": 2, "text": "never"},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("a timeout was reported as a failed call: %s", text)
+	}
+	if !strings.Contains(text, "timeout") || !strings.Contains(text, "read the pane") {
+		t.Fatalf("output %q, want the timeout and a hint to read the pane", text)
+	}
+}
+
+// TestMCPWaitForBadArgs: wait_for checks its arguments before it reaches
+// Snow and says what it needs.
+func TestMCPWaitForBadArgs(t *testing.T) {
+	tests := []struct {
+		name string
+		args map[string]any
+		want string
+	}{
+		{"no pane", map[string]any{"text": "ok"}, "list_panes"},
+		{"no condition", map[string]any{"pane": 2}, "exactly one"},
+		{"both conditions", map[string]any{"pane": 2, "text": "ok", "quietMs": 100}, "exactly one"},
+		{"negative quiet", map[string]any{"pane": 2, "quietMs": -1}, "zero or more"},
+		{"negative timeout", map[string]any{"pane": 2, "text": "ok", "timeoutMs": -1}, "zero or more"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &fakePanes{}
+			c := start(t, Options{Version: "test", Panes: f})
+			c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+				"name": "wait_for", "arguments": tt.args,
+			}})
+			text, failed := toolText(t, c.next(t))
+			if !failed || !strings.Contains(text, tt.want) {
+				t.Fatalf("call = %q, failed = %v; want a hint about %q", text, failed, tt.want)
+			}
+			if f.waitPane != 0 {
+				t.Fatalf("a bad request reached Snow: pane %d", f.waitPane)
+			}
+		})
+	}
+}
+
+// TestWaitForInterrupt: a cancelled wait_for returns at once and leaves no
+// work behind.
+func TestWaitForInterrupt(t *testing.T) {
+	f := &fakePanes{block: true}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 9, "method": "tools/call", "params": map[string]any{
+		"name": "wait_for", "arguments": map[string]any{"pane": 2, "text": "never"},
+	}})
+	// Give the call time to reach the fake, then cancel it.
+	time.Sleep(50 * time.Millisecond)
+	start := time.Now()
+	c.send(t, map[string]any{"jsonrpc": "2.0", "method": "notifications/cancelled", "params": map[string]any{"requestId": 9, "reason": "test"}})
+	text, failed := toolText(t, c.next(t))
+	if !failed || !strings.Contains(text, "canceled") {
+		t.Fatalf("call = %q, failed = %v", text, failed)
+	}
+	if took := time.Since(start); took > time.Second {
+		t.Fatalf("a cancelled wait took %v to return", took)
+	}
+}
+
+// TestFormatWait: every result reads the way an agent can act on.
+func TestFormatWait(t *testing.T) {
+	exit := 4
+	tests := []struct {
+		name string
+		res  *api.WaitFor
+		want string
+	}{
+		{"found", &api.WaitFor{Pane: 2, Result: api.WaitFound, Line: "$ go test"}, "Pane 2 printed the text:\n$ go test"},
+		{"quiet", &api.WaitFor{Pane: 2, Result: api.WaitQuiet}, "Pane 2 stopped changing."},
+		{"exited", &api.WaitFor{Pane: 2, Result: api.WaitExited, Exit: &exit}, "status 4"},
+		{"exited unknown", &api.WaitFor{Pane: 2, Result: api.WaitExited}, "Pane 2's program exited."},
+		{"timeout", &api.WaitFor{Pane: 2, Result: api.WaitTimeout}, "Pane 2 reached the timeout first."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatWait(tt.res); !strings.Contains(got, tt.want) {
+				t.Fatalf("formatWait = %q, want %q", got, tt.want)
+			}
+		})
 	}
 }
 

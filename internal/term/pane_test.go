@@ -73,11 +73,17 @@ func TestPaneResize(t *testing.T) {
 
 func TestPaneDoneWhenShellExits(t *testing.T) {
 	p, f := newTestPane(t)
+	if _, ok := p.ExitStatus(); ok {
+		t.Fatal("a running pane reported an exit status")
+	}
 	f.exit()
 	select {
 	case <-p.Done():
 	case <-time.After(2 * time.Second):
 		t.Fatal("Done not closed after the shell exited")
+	}
+	if code, ok := p.ExitStatus(); !ok || code != 0 {
+		t.Fatalf("ExitStatus = %d, %v; want 0, true", code, ok)
 	}
 }
 

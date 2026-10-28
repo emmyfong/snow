@@ -20,6 +20,9 @@ type Panes interface {
 	Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error)
 	// Send pastes text into pane, then presses keys in order.
 	Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error)
+	// Wait returns when pane prints text, or after quiet with no output.
+	// A zero timeout takes the server's default.
+	Wait(ctx context.Context, pane int, text string, quiet, timeout time.Duration, includeExisting bool) (*api.WaitFor, error)
 }
 
 // snow calls the Snow server over its socket. It opens one connection per
@@ -77,6 +80,27 @@ func (c *snow) Send(ctx context.Context, pane int, text string, keys []api.Key) 
 	var out *api.SendKeys
 	err := c.call(ctx, &api.SendKeysRequest{Caller: c.caller, Pane: pane, Text: text, Keys: keys}, func(m api.Message) bool {
 		r, ok := m.(*api.SendKeys)
+		if ok {
+			out = r
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Wait implements Panes.
+func (c *snow) Wait(ctx context.Context, pane int, text string, quiet, timeout time.Duration, includeExisting bool) (*api.WaitFor, error) {
+	var out *api.WaitFor
+	req := &api.WaitForRequest{
+		Caller: c.caller, Pane: pane, Text: text,
+		QuietMS: int(quiet / time.Millisecond), TimeoutMS: int(timeout / time.Millisecond),
+		IncludeExisting: includeExisting,
+	}
+	err := c.call(ctx, req, func(m api.Message) bool {
+		r, ok := m.(*api.WaitFor)
 		if ok {
 			out = r
 		}
