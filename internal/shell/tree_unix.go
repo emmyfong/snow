@@ -30,4 +30,12 @@ func (t *tree) kill() error {
 	return nil
 }
 
+// terminate asks every process in the group to exit.
+func (t *tree) terminate() error {
+	if err := syscall.Kill(-t.cmd.Process.Pid, syscall.SIGTERM); err != nil && err != syscall.ESRCH {
+		return err
+	}
+	return nil
+}
+
 func (t *tree) close() {}

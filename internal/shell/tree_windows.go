@@ -84,4 +84,8 @@ func (t *tree) kill() error {
 	return nil
 }
 
+// terminate ends every process in the job. Windows has no signal a
+// console program without a console can be asked to exit with.
+func (t *tree) terminate() error { return t.kill() }
+
 func (t *tree) close() { _ = windows.CloseHandle(t.job) }
