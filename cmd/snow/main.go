@@ -15,6 +15,7 @@ import (
 	"github.com/emmyfong/snow/internal/client"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/config"
+	"github.com/emmyfong/snow/internal/notify"
 	"github.com/emmyfong/snow/internal/server"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/transport"
@@ -191,9 +192,13 @@ func serve(stderr io.Writer) int {
 	if err != nil {
 		log.Warn("chat panes are off", "err", err)
 	}
+	// The notifier starts one helper per event; a kind the config turns off
+	// starts none.
+	desktop := notify.New(notify.Options{NeedsYou: cfg.Notify.NeedsYou, TurnEnd: cfg.Notify.TurnEnd, Log: log})
 	if err := server.Run(ctx, server.Options{
 		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default, Chat: chat,
+		Notify: desktop,
 	}, path); err != nil {
 		log.Error("server stopped", "err", err)
 		_, _ = fmt.Fprintln(stderr, "snow:", err)

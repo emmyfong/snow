@@ -46,13 +46,16 @@ type app struct {
 	opening    bool             // a session is being opened; its Layout has not come
 	openName   string           // the session being opened; "" for a new numbered one
 	leftName   string           // the session shown when the opening began
+	focused    bool             // the terminal reports focus; see api.ClientFocus
 	cols, rows int
 }
 
 // newHomeApp returns an app that starts on the home page. Opening a session
-// there attaches and switches to the session screen.
+// there attaches and switches to the session screen. A program starts in
+// the foreground, and Bubble Tea reports only later changes, so the terminal
+// starts focused.
 func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
-	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts}
+	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts, focused: true}
 }
 
 // newSession returns a session screen with the app's theme and options.
@@ -121,6 +124,10 @@ func (a *app) showHome(notice string) {
 // focus, as when the user picks an agent in the needs-you inbox.
 func (a *app) open(session string, create bool, pane int) {
 	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir, Pane: pane})
+	// The new session screen hears about focus changes from now on; say
+	// where the terminal stands so a notification does not go to a user
+	// who looks at the pane.
+	a.send(&api.ClientFocus{Focused: a.focused})
 	a.opening, a.openName, a.leftName = true, session, a.result.Session
 	a.result.Detached = false
 	s := a.newSession()
@@ -180,6 +187,14 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.ColorProfileMsg:
 		a.profile = &msg
+	case tea.FocusMsg:
+		a.focused = true
+		a.send(&api.ClientFocus{Focused: true})
+		return a, nil
+	case tea.BlurMsg:
+		a.focused = false
+		a.send(&api.ClientFocus{Focused: false})
+		return a, nil
 	case *api.SessionList:
 		a.sessions = msg
 	case *api.AgentList:
@@ -276,6 +291,9 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *app) View() tea.View {
 	v := a.screen.View()
 	v.AltScreen = true
+	// Focus and blur events tell the server whether the user looks at an
+	// agent's pane, so it can skip a notification for it.
+	v.ReportFocus = true
 	v.WindowTitle = "snow"
 	if a.result.Session != "" {
 		v.WindowTitle = "snow: " + a.result.Session

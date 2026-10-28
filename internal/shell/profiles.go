@@ -193,7 +193,7 @@ func RunningDistros() ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), wslTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "wsl.exe", "-l", "-q", "--running")
-	hideWindow(cmd)
+	HideWindow(cmd)
 	out, err := cmd.Output()
 	if _, exited := errors.AsType[*exec.ExitError](err); exited && ctx.Err() == nil {
 		return parseWSLList(out), nil

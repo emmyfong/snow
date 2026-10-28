@@ -47,6 +47,7 @@ const (
 	TypeConversationList
 	TypeAgentState
 	TypeAgentList
+	TypeClientFocus
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -132,6 +133,8 @@ func newMessage(t MsgType) Message {
 		return &AgentState{}
 	case TypeAgentList:
 		return &AgentList{}
+	case TypeClientFocus:
+		return &ClientFocus{}
 	}
 	return nil
 }

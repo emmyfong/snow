@@ -30,6 +30,8 @@ func everyMessage() []Message {
 		&SessionList{Sessions: []SessionInfo{{Name: "api", State: StateRunning, NeedsYou: 2}}, Hint: "run snow claude setup"},
 		&Layout{Session: "api", Windows: []WindowInfo{{Index: 0, AgentState: AgentNeedsYou, Panes: []PaneInfo{{ID: 1, Kind: PaneTerminal, AgentState: AgentNeedsYou}}}}},
 		&AgentState{Pane: 7, State: AgentWorking, At: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)},
+		&AgentList{Agents: []AgentInfo{{Session: "api", Window: 0, Pane: 2, Kind: AgentKindChat, State: AgentNeedsYou, Since: time.Date(2026, 10, 27, 9, 0, 0, 0, time.UTC)}}},
+		&ClientFocus{Focused: true},
 		&Command{Op: OpSplit, Target: 2, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude}},
 		&Bell{Pane: 2},
 		&ScrollbackRequest{Pane: 1, From: 40, Count: 24},

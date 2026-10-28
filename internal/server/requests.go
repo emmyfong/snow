@@ -59,6 +59,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 	st.focusOnAttach(sess, m.Pane)
 	prev := c.session
 	c.session = sess.name
+	c.focused = false // until this client says where its terminal stands
 	c.last = map[int][]string{}
 	c.seen = map[int]uint64{}
 	c.chatLive = map[int]bool{}

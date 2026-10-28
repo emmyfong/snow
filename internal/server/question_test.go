@@ -31,8 +31,18 @@ func askReply(id string) providertest.Reply {
 // opens a chat in folder dir in session "work".
 func chatInFolder(t *testing.T, dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
 	t.Helper()
+	return chatInFolderOpts(t, nil, dir, replies...)
+}
+
+// chatInFolderOpts is chatInFolder with change applied to the server's
+// options first, for tests that turn an option on.
+func chatInFolderOpts(t *testing.T, change func(*Options), dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
+	t.Helper()
 	opts, _, store := chatOptions(t, replies...)
 	opts.Chat.Tools = tool.Builtin()
+	if change != nil {
+		change(&opts)
+	}
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 100, 30)

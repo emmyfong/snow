@@ -28,7 +28,10 @@ type client struct {
 	// wantsModels says c asked for the model list and hears when a fetch
 	// finishes.
 	wantsModels bool
-	dropped     bool
+	// focused is set while c's terminal reports focus. The server skips a
+	// desktop notification for the pane such a client shows.
+	focused bool
+	dropped bool
 }
 
 // serveConn handles one connection until it closes.
@@ -130,6 +133,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.renameRequest(c, m) })
 		case *api.AgentState:
 			s.call(func(st *state) { st.agentState(m) })
+		case *api.ClientFocus:
+			s.call(func(st *state) { st.clientFocus(c, m) })
 		case *api.Shutdown:
 			s.shutdown()
 		}

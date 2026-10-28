@@ -103,6 +103,24 @@ not say when you answer its question, so a key or a paste you send to a
 pane that needs you shows it as working until its next hook. Snow's own chat panes
 show the same marks. A terminal with no colors shows `-`, `~`, and `!`.
 
+`Ctrl+b w` opens the agents board: every agent in the session, with its
+folder, state, and wait time. `Ctrl+b i` opens the needs-you inbox: every
+agent in every session that waits for you, oldest first. Enter jumps to the
+selected agent's pane, and you answer there.
+
+### Desktop notifications
+
+Snow shows a desktop notification when an agent starts to need you or
+finishes a turn. It skips the notification when a Snow window with focus
+shows the agent's pane, because you already see the result. Turn the events
+off in `[notify]`:
+
+```toml
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
+```
+
 ### Provider keys
 
 Snow connects to Anthropic (Claude) and OpenAI with your API key.
@@ -303,6 +321,10 @@ model = ""            # "provider/model"; empty: the default of the first
                       # provider with a saved key
 effort = ""           # for example "high"; empty: the provider's choice
 usage = true          # false hides the context gauge and the cost
+
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
 
 # [provider.omniroute]                  # a service that speaks the OpenAI API;
 # base_url = "http://localhost:20128/v1"  # see "Other providers"

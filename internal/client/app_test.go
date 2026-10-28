@@ -156,12 +156,50 @@ func TestHomeOpensASession(t *testing.T) {
 		t.Fatalf("home title %q, want snow", a.View().WindowTitle)
 	}
 	a.Update(home.OpenMsg{Session: "api", Create: true})
-	at, ok := sent[len(sent)-1].(*api.Attach)
-	if !ok || at.Session != "api" || !at.Create || at.Dir != "/src" {
-		t.Fatalf("sent %#v, want Attach{api, create, /src}", sent[len(sent)-1])
+	var at *api.Attach
+	for _, m := range sent {
+		if m, ok := m.(*api.Attach); ok {
+			at = m
+		}
+	}
+	if at == nil || at.Session != "api" || !at.Create || at.Dir != "/src" {
+		t.Fatalf("sent %#v, want Attach{api, create, /src}", sent)
 	}
 	if _, ok := a.screen.(*session.Model); !ok {
 		t.Fatalf("screen is %T after opening, want the session screen", a.screen)
+	}
+}
+
+// TestFocusReportsReachTheServer: the terminal's focus events go to the
+// server, so it skips a desktop notification for a pane the user already
+// sees. A client that opens a session says where the terminal stands right
+// away.
+func TestFocusReportsReachTheServer(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	if !a.focused {
+		t.Fatal("a program starts in the foreground")
+	}
+	if !a.View().ReportFocus {
+		t.Fatal("the app must ask Bubble Tea for focus events")
+	}
+
+	a.Update(home.OpenMsg{Session: "api", Create: true})
+	n := len(sent)
+	if _, ok := sent[n-2].(*api.Attach); !ok {
+		t.Fatalf("sent %#v, want Attach before the focus report", sent[n-2])
+	}
+	if f, ok := sent[n-1].(*api.ClientFocus); !ok || !f.Focused {
+		t.Fatalf("sent %#v, want the focused terminal's report after Attach", sent[n-1])
+	}
+
+	a.Update(tea.BlurMsg{})
+	if f, ok := sent[len(sent)-1].(*api.ClientFocus); !ok || f.Focused {
+		t.Fatalf("sent %#v, want ClientFocus{Focused: false}", sent[len(sent)-1])
+	}
+	a.Update(tea.FocusMsg{})
+	if f, ok := sent[len(sent)-1].(*api.ClientFocus); !ok || !f.Focused {
+		t.Fatalf("sent %#v, want ClientFocus{Focused: true}", sent[len(sent)-1])
 	}
 }
 
@@ -287,8 +325,8 @@ func TestSwitchAttachesOtherSession(t *testing.T) {
 	old := a.screen
 	n := len(sent)
 	a.Update(session.SwitchMsg{Session: "web"})
-	if len(sent) != n+2 {
-		t.Fatalf("sent %v, want Detach then Attach", sent[n:])
+	if len(sent) != n+3 {
+		t.Fatalf("sent %v, want Detach, Attach, then the focus report", sent[n:])
 	}
 	if _, ok := sent[n].(*api.Detach); !ok {
 		t.Fatalf("first sent %#v, want Detach", sent[n])
@@ -296,6 +334,9 @@ func TestSwitchAttachesOtherSession(t *testing.T) {
 	at, ok := sent[n+1].(*api.Attach)
 	if !ok || at.Session != "web" || at.Create || at.Dir != "/src" {
 		t.Fatalf("then sent %#v, want Attach{web, /src}", sent[n+1])
+	}
+	if _, ok := sent[n+2].(*api.ClientFocus); !ok {
+		t.Fatalf("last sent %#v, want the focus report", sent[n+2])
 	}
 	if _, ok := a.screen.(*session.Model); !ok || a.screen == old || !a.opening || a.result.Detached {
 		t.Fatalf("screen %T (new %v), opening %v, detached %v; want a new session screen opening web", a.screen, a.screen != old, a.opening, a.result.Detached)
