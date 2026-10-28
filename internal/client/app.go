@@ -117,9 +117,10 @@ func (a *app) showHome(notice string) {
 }
 
 // open attaches to session, creating it when create is set, and shows a
-// new session screen for it.
-func (a *app) open(session string, create bool) {
-	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir})
+// new session screen for it. Pane, when set, is a pane of that session to
+// focus, as when the user picks an agent in the needs-you inbox.
+func (a *app) open(session string, create bool, pane int) {
+	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir, Pane: pane})
 	a.opening, a.openName, a.leftName = true, session, a.result.Session
 	a.result.Detached = false
 	s := a.newSession()
@@ -224,7 +225,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Quit
 	case home.OpenMsg:
-		a.open(msg.Session, msg.Create)
+		a.open(msg.Session, msg.Create, 0)
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)
@@ -264,7 +265,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Detach first: if the attach is refused, the client is left
 		// attached to nothing, which matches the home page it then shows.
 		a.send(&api.Detach{})
-		a.open(msg.Session, msg.Create)
+		a.open(msg.Session, msg.Create, msg.Pane)
 		return a, nil
 	}
 	return a, a.screen.Update(msg)

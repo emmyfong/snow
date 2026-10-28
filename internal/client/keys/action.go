@@ -22,6 +22,7 @@ type group struct {
 var groups = map[string]group{
 	"select-window": {"Select window"},
 	"step-window":   {"Next/previous window"},
+	"agents":        {"Agents"},
 	"focus":         {"Focus pane"},
 	"resize":        {"Resize pane by 1"},
 	"resize-5":      {"Resize pane by 5"},
@@ -66,7 +67,8 @@ func buildActions() []Action {
 	return append(as,
 		Action{Name: "copy-mode", Desc: "Copy mode"},
 		Action{Name: "sessions", Desc: "Switch session"},
-		Action{Name: "choose-agent", Desc: "Agents board"},
+		Action{Name: "choose-agent", Desc: "Agents board", Group: "agents"},
+		Action{Name: "inbox", Desc: "Needs-you inbox", Group: "agents"},
 		Action{Name: "command-prompt", Desc: "Command prompt"},
 		Action{Name: "detach", Desc: "Detach"},
 		Action{Name: "send-prefix", Desc: "Send the prefix key"},
@@ -109,5 +111,5 @@ func buildDefaults() []binding {
 		name := strings.ToUpper(d[:1]) + d[1:]
 		b = append(b, binding{name, "focus-" + d}, binding{"C-" + name, "resize-" + d}, binding{"M-" + name, "resize-" + d + "-5"})
 	}
-	return append(b, binding{"[", "copy-mode"}, binding{"s", "sessions"}, binding{"w", "choose-agent"}, binding{":", "command-prompt"}, binding{"d", "detach"})
+	return append(b, binding{"[", "copy-mode"}, binding{"s", "sessions"}, binding{"w", "choose-agent"}, binding{"i", "inbox"}, binding{":", "command-prompt"}, binding{"d", "detach"})
 }

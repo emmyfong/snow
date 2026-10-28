@@ -37,6 +37,7 @@ func TestPaneMenuItems(t *testing.T) {
 		{"Close window", "Ctrl+b &", "close-window"},
 		{"Switch session", "Ctrl+b s", "sessions"},
 		{"Agents board", "Ctrl+b w", "choose-agent"},
+		{"Needs-you inbox", "Ctrl+b i", "inbox"},
 		{"Command prompt", "Ctrl+b :", "command-prompt"},
 		{"Detach", "Ctrl+b d", "detach"},
 	}
