@@ -136,6 +136,9 @@ func TestAgentListFollowsHooks(t *testing.T) {
 	t0 := time.Now()
 	var since time.Time
 	for i, state := range []string{api.AgentWorking, api.AgentNeedsYou, api.AgentIdle} {
+		// Windows' monotonic clock ticks about every 15.6 ms, so two
+		// changes closer than that can get the same Since.
+		time.Sleep(20 * time.Millisecond)
 		hook(t, s, claude, state, t0.Add(time.Duration(i)*time.Millisecond))
 		a := mustAgent(t, nextAgents(t, home, hasAgentState(claude, state)), claude)
 		if !a.Since.After(since) {
