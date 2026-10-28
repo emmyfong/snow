@@ -25,7 +25,7 @@ func (m *Model) View() tea.View {
 			if o := m.own[p.ID]; o != nil {
 				lines = o.View()
 			}
-			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused})
+			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused, Driven: p.Driven})
 		}
 	}
 	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
@@ -65,7 +65,7 @@ func (m *Model) statusOptions() ui.StatusOptions {
 	if m.layout != nil {
 		opts.Session = m.layout.Session
 		for _, w := range m.layout.Windows {
-			opts.Tabs = append(opts.Tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed, Agent: windowMark(w)})
+			opts.Tabs = append(opts.Tabs, ui.Tab{Index: w.Index, Name: w.Name, Active: w.Index == m.layout.Active, Zoomed: w.Zoomed, Agent: windowMark(w), Driven: w.Driven})
 		}
 	}
 	if p := m.focused(); p != nil {

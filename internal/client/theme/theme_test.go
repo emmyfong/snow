@@ -134,19 +134,26 @@ func TestForTerminalsWithoutColor(t *testing.T) {
 }
 
 // TestAgentGlyphsFallBackWithoutColor: a terminal with no colors may also
-// lack the round marks, so agent states turn into ASCII there.
+// lack the drawn marks, so agent states and the driven mark turn into ASCII
+// there.
 func TestAgentGlyphsFallBackWithoutColor(t *testing.T) {
 	d := Default()
 	if d.Glyphs.AgentIdle != "○" || d.Glyphs.AgentWorking != "◐" || d.Glyphs.AgentNeedsYou != "●" {
 		t.Fatalf("default agent glyphs %q %q %q", d.Glyphs.AgentIdle, d.Glyphs.AgentWorking, d.Glyphs.AgentNeedsYou)
+	}
+	if d.Glyphs.Driven != "✎" {
+		t.Fatalf("default driven glyph %q, want ✎", d.Glyphs.Driven)
 	}
 	for _, p := range []colorprofile.Profile{colorprofile.NoTTY, colorprofile.ASCII} {
 		g := d.For(p).Glyphs
 		if g.AgentIdle != "-" || g.AgentWorking != "~" || g.AgentNeedsYou != "!" {
 			t.Errorf("For(%s) agent glyphs %q %q %q, want - ~ !", p, g.AgentIdle, g.AgentWorking, g.AgentNeedsYou)
 		}
+		if g.Driven != "*" {
+			t.Errorf("For(%s) driven glyph %q, want *", p, g.Driven)
+		}
 	}
-	if g := d.For(colorprofile.ANSI).Glyphs; g.AgentNeedsYou != "●" {
-		t.Errorf("For(ANSI) changed the agent glyphs to %q", g.AgentNeedsYou)
+	if g := d.For(colorprofile.ANSI).Glyphs; g.AgentNeedsYou != "●" || g.Driven != "✎" {
+		t.Errorf("For(ANSI) changed the glyphs to %q and %q", g.AgentNeedsYou, g.Driven)
 	}
 }

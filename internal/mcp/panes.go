@@ -18,6 +18,8 @@ type Panes interface {
 	// Read returns a plain-text copy of pane, with scrollback lines above
 	// the screen.
 	Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error)
+	// Send pastes text into pane, then presses keys in order.
+	Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error)
 }
 
 // snow calls the Snow server over its socket. It opens one connection per
@@ -59,6 +61,22 @@ func (c *snow) Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, e
 	var out *api.ReadPane
 	err := c.call(ctx, &api.ReadPaneRequest{Caller: c.caller, Pane: pane, Scrollback: scrollback}, func(m api.Message) bool {
 		r, ok := m.(*api.ReadPane)
+		if ok {
+			out = r
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Send implements Panes.
+func (c *snow) Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error) {
+	var out *api.SendKeys
+	err := c.call(ctx, &api.SendKeysRequest{Caller: c.caller, Pane: pane, Text: text, Keys: keys}, func(m api.Message) bool {
+		r, ok := m.(*api.SendKeys)
 		if ok {
 			out = r
 		}

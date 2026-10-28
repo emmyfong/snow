@@ -30,6 +30,9 @@ type pane struct {
 	// sawHook is set by the pane's first hook. hookless is set when an
 	// agent pane sent none in time: its hooks are not set up.
 	sawHook, hookless bool
+	// drivenUntil is when the mark that an agent types into this pane
+	// ends; owned by the model goroutine.
+	drivenUntil time.Time
 }
 
 // startPane starts profile's program in dir at cols by rows, below

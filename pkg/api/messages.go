@@ -50,6 +50,8 @@ const (
 	TypePanes
 	TypeReadPaneRequest
 	TypeReadPane
+	TypeSendKeysRequest
+	TypeSendKeys
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -141,6 +143,10 @@ func newMessage(t MsgType) Message {
 		return &ReadPaneRequest{}
 	case TypeReadPane:
 		return &ReadPane{}
+	case TypeSendKeysRequest:
+		return &SendKeysRequest{}
+	case TypeSendKeys:
+		return &SendKeys{}
 	}
 	return nil
 }
@@ -238,6 +244,8 @@ type WindowInfo struct {
 	Zoomed     bool       `json:"zoomed,omitempty"`
 	Panes      []PaneInfo `json:"panes"`
 	AgentState string     `json:"agentState,omitempty"`
+	// Driven is set while an agent types into one of the window's panes.
+	Driven bool `json:"driven,omitempty"`
 }
 
 // PaneInfo is one pane's place on screen.
@@ -252,6 +260,8 @@ type PaneInfo struct {
 	// Agent* values: from snow hook for a terminal pane, from the chat
 	// for a chat pane. Empty when no agent has reported.
 	AgentState string `json:"agentState,omitempty"`
+	// Driven is set while an agent types into the pane through send_keys.
+	Driven bool `json:"driven,omitempty"`
 }
 
 // Rect is a cell rectangle; X and Y are the top-left corner.

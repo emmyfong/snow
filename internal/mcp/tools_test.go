@@ -41,6 +41,25 @@ func TestFormatRead(t *testing.T) {
 	}
 }
 
+// TestFormatSend pins the text an agent reads after typing into a pane.
+func TestFormatSend(t *testing.T) {
+	tests := []struct {
+		name string
+		sent *api.SendKeys
+		want string
+	}{
+		{"read", &api.SendKeys{Pane: 2}, "Typed into pane 2. Read the pane to see the result."},
+		{"dropped", &api.SendKeys{Pane: 2, Dropped: 7}, "Typed into pane 2, but the program did not read 7 bytes and dropped them. Read the pane to see what it shows."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := formatSend(tt.sent); got != tt.want {
+				t.Errorf("formatSend = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 // TestFormatPanes pins the text an agent reads for its session.
 func TestFormatPanes(t *testing.T) {
 	tests := []struct {

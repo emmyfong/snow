@@ -26,6 +26,10 @@ func TestPaneToolsWire(t *testing.T) {
 		{&ReadPane{Pane: 2, Session: "work", Profile: "bash", Cols: 80, Rows: 3}, `{"pane":2,"session":"work","profile":"bash","cols":80,"rows":3,"cursorX":0,"cursorY":0,"screen":[]}`},
 		{&ReadPane{Pane: 2, Session: "work", Profile: "bash", Cols: 80, Rows: 2, CursorX: 1, CursorY: 1, CursorVisible: true, Folder: "/src", Screen: []string{"$ ls", "a.txt"}, Scrollback: []string{"one"}, Omitted: 4, Ended: true},
 			`{"pane":2,"session":"work","profile":"bash","folder":"/src","cols":80,"rows":2,"cursorX":1,"cursorY":1,"cursorVisible":true,"screen":["$ ls","a.txt"],"scrollback":["one"],"omitted":4,"ended":true}`},
+		{&SendKeysRequest{Caller: 3, Pane: 2}, `{"caller":3,"pane":2}`},
+		{&SendKeysRequest{Caller: 3, Pane: 2, Text: "go test", Keys: []Key{{Code: KeyEnter}}}, `{"caller":3,"pane":2,"text":"go test","keys":[{"code":"enter"}]}`},
+		{&SendKeys{Pane: 2}, `{"pane":2}`},
+		{&SendKeys{Pane: 2, Dropped: 7}, `{"pane":2,"dropped":7}`},
 	}
 	for _, tt := range tests {
 		got, err := json.Marshal(tt.msg)
@@ -45,6 +49,8 @@ func TestPaneToolsRoundTrip(t *testing.T) {
 		&Panes{Session: "a", Caller: 2, Panes: []PaneSummary{{ID: 1, WindowName: "w", Profile: "sh"}}},
 		&ReadPaneRequest{Caller: 2, Pane: 1, Scrollback: 5},
 		&ReadPane{Pane: 1, Session: "a", Profile: "sh", Cols: 80, Rows: 2, Screen: []string{"$ "}, Scrollback: []string{"x"}},
+		&SendKeysRequest{Caller: 2, Pane: 1, Text: "go test", Keys: []Key{{Code: KeyEnter}, {Code: "c", Mod: []string{ModCtrl}}}},
+		&SendKeys{Pane: 1, Dropped: 7},
 	}
 	for _, m := range msgs {
 		var buf bytes.Buffer
@@ -81,6 +87,30 @@ func TestReadPaneRequestValidate(t *testing.T) {
 		{"no caller", ReadPaneRequest{Pane: 2}, true},
 		{"no pane", ReadPaneRequest{Caller: 1}, true},
 		{"negative scrollback", ReadPaneRequest{Caller: 1, Pane: 2, Scrollback: -1}, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.req.Validate()
+			if got := errors.Is(err, ErrInvalidPaneTool); got != tt.bad {
+				t.Fatalf("Validate() = %v, want an invalid pane tool error: %v", err, tt.bad)
+			}
+		})
+	}
+}
+
+func TestSendKeysRequestValidate(t *testing.T) {
+	tests := []struct {
+		name string
+		req  SendKeysRequest
+		bad  bool
+	}{
+		{"text", SendKeysRequest{Caller: 1, Pane: 2, Text: "ls"}, false},
+		{"keys", SendKeysRequest{Caller: 1, Pane: 2, Keys: []Key{{Code: KeyEnter}}}, false},
+		{"text and keys", SendKeysRequest{Caller: 1, Pane: 2, Text: "ls", Keys: []Key{{Code: KeyEnter}}}, false},
+		{"no caller", SendKeysRequest{Pane: 2, Text: "ls"}, true},
+		{"no pane", SendKeysRequest{Caller: 1, Text: "ls"}, true},
+		{"no input", SendKeysRequest{Caller: 1, Pane: 2}, true},
+		{"bad key", SendKeysRequest{Caller: 1, Pane: 2, Keys: []Key{{Code: "A"}}}, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

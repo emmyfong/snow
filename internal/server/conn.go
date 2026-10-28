@@ -133,6 +133,8 @@ func (s *Server) read(c *client) {
 			s.panes(c, m)
 		case *api.ReadPaneRequest:
 			s.readPane(c, m)
+		case *api.SendKeysRequest:
+			s.sendKeys(c, m)
 		case *api.Shutdown:
 			s.shutdown()
 		}

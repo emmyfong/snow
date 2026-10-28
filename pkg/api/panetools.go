@@ -21,6 +21,13 @@ const (
 	// CodeOtherSession means the named pane is in another session than the
 	// caller. Tools reach only the caller's session.
 	CodeOtherSession = "other-session"
+	// CodeOwnPane means send_keys named the pane the agent runs in.
+	CodeOwnPane = "own-pane"
+	// CodeAgentPane means send_keys named a pane another agent runs in.
+	CodeAgentPane = "agent-pane"
+	// CodePaneEnded means send_keys named a pane whose program ended and
+	// that waits for the user to restore it.
+	CodePaneEnded = "pane-ended"
 )
 
 // ErrInvalidPaneTool is returned by the Validate methods of the pane tool
@@ -149,6 +156,51 @@ func (r *ReadPaneRequest) Validate() error {
 func validCaller(caller int) error {
 	if caller < 1 {
 		return fmt.Errorf("%w: no caller pane", ErrInvalidPaneTool)
+	}
+	return nil
+}
+
+// SendKeysRequest types into one terminal pane of the caller's session: it
+// pastes Text, then presses Keys in order. Keys are named as ParseKey takes
+// them. The server refuses the caller's own pane, another agent's pane, a
+// chat pane, and an ended pane.
+type SendKeysRequest struct {
+	Caller int    `json:"caller"`
+	Pane   int    `json:"pane"`
+	Text   string `json:"text,omitempty"`
+	Keys   []Key  `json:"keys,omitempty"`
+}
+
+// SendKeys answers a SendKeysRequest. Dropped counts the bytes the program
+// did not read because it stopped reading; they never reached it.
+type SendKeys struct {
+	Pane    int `json:"pane"`
+	Dropped int `json:"dropped,omitempty"`
+}
+
+// Type implements Message.
+func (*SendKeysRequest) Type() MsgType { return TypeSendKeysRequest }
+func (*SendKeysRequest) message()      {}
+
+// Type implements Message.
+func (*SendKeys) Type() MsgType { return TypeSendKeys }
+func (*SendKeys) message()      {}
+
+// Validate checks the caller, the pane, the keys, and that there is input.
+func (r *SendKeysRequest) Validate() error {
+	if err := validCaller(r.Caller); err != nil {
+		return err
+	}
+	if r.Pane < 1 {
+		return fmt.Errorf("%w: no pane", ErrInvalidPaneTool)
+	}
+	if r.Text == "" && len(r.Keys) == 0 {
+		return fmt.Errorf("%w: no text and no keys", ErrInvalidPaneTool)
+	}
+	for _, k := range r.Keys {
+		if !k.Valid() {
+			return fmt.Errorf("%w: bad key %+v", ErrInvalidPaneTool, k)
+		}
 	}
 	return nil
 }

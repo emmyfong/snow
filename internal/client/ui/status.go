@@ -16,6 +16,7 @@ type Tab struct {
 	Active bool
 	Zoomed bool
 	Agent  Mark // the most urgent state of the window's agents
+	Driven bool // an agent types into one of its panes
 }
 
 // StatusOptions configures StatusBar.
@@ -110,6 +111,9 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		}
 		if mark := t.Agent.glyph(g); mark != "" {
 			label += " " + mark
+		}
+		if t.Driven {
+			label += " " + g.Driven
 		}
 		style := tabStyle(th, t, bar)
 		// The padding belongs to the tab, so the current window's block and

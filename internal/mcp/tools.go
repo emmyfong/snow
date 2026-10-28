@@ -40,6 +40,26 @@ var readPaneArgs = json.RawMessage(`{
   "additionalProperties": false
 }`)
 
+const sendKeysDescription = `Type into a terminal pane of your Snow session: paste text and press keys. ` +
+	`The text goes in first, then the keys in order, as if the user typed them. ` +
+	`A key is a named key (enter, tab, space, escape, up, f5) or one character, ` +
+	`with shift, alt, ctrl, or meta before it: "ctrl+c", "shift+tab", "alt+enter". ` +
+	`This changes the pane, so the user approves each call. ` +
+	`It refuses your own pane, another agent's pane, a chat pane, and an ended pane. ` +
+	`Call read_pane afterwards to see the result.`
+
+// sendKeysArgs is the input schema of send_keys.
+var sendKeysArgs = json.RawMessage(`{
+  "type": "object",
+  "properties": {
+    "pane": {"type": "integer", "description": "The pane ID that list_panes shows."},
+    "text": {"type": "string", "description": "Text to paste into the pane, such as a command line. Omit it to press keys only."},
+    "keys": {"type": "array", "items": {"type": "string"}, "description": "Keys to press after the text, such as [\"enter\"] or [\"ctrl+c\"]."}
+  },
+  "required": ["pane"],
+  "additionalProperties": false
+}`)
+
 // toolList returns the tools, in the order an agent should try them. A
 // session outside Snow has none, which tools/list reports as [].
 func (s *server) toolList() []toolDef {
@@ -56,6 +76,11 @@ func (s *server) toolList() []toolDef {
 			Name:        "read_pane",
 			Description: readPaneDescription,
 			InputSchema: readPaneArgs,
+		},
+		{
+			Name:        "send_keys",
+			Description: sendKeysDescription,
+			InputSchema: sendKeysArgs,
 		},
 	}
 }
@@ -90,6 +115,39 @@ func (s *server) readPane(ctx context.Context, args json.RawMessage) (string, er
 	return formatRead(res), nil
 }
 
+// sendKeys answers send_keys.
+func (s *server) sendKeys(ctx context.Context, args json.RawMessage) (string, error) {
+	var in struct {
+		Pane int      `json:"pane"`
+		Text string   `json:"text"`
+		Keys []string `json:"keys"`
+	}
+	if len(args) > 0 {
+		if err := json.Unmarshal(args, &in); err != nil {
+			return "", fmt.Errorf("send_keys: %w", err)
+		}
+	}
+	if in.Pane < 1 {
+		return "", errors.New("send_keys needs a pane ID; call list_panes first")
+	}
+	if in.Text == "" && len(in.Keys) == 0 {
+		return "", errors.New("send_keys needs text, keys, or both")
+	}
+	keys := make([]api.Key, 0, len(in.Keys))
+	for _, name := range in.Keys {
+		k, err := api.ParseKey(name)
+		if err != nil {
+			return "", fmt.Errorf("send_keys: %w", err)
+		}
+		keys = append(keys, k)
+	}
+	res, err := s.panes.Send(ctx, in.Pane, in.Text, keys)
+	if err != nil {
+		return "", err
+	}
+	return formatSend(res), nil
+}
+
 // formatRead writes a pane copy the way an agent reads it: a header, the
 // screen, and then the scrollback above it.
 func formatRead(r *api.ReadPane) string {
@@ -113,6 +171,14 @@ func formatRead(r *api.ReadPane) string {
 		fmt.Fprintf(&b, "\n\n%d older lines were left out.", r.Omitted)
 	}
 	return b.String()
+}
+
+// formatSend writes what happened to the input the way an agent reads it.
+func formatSend(r *api.SendKeys) string {
+	if r.Dropped > 0 {
+		return fmt.Sprintf("Typed into pane %d, but the program did not read %d bytes and dropped them. Read the pane to see what it shows.", r.Pane, r.Dropped)
+	}
+	return fmt.Sprintf("Typed into pane %d. Read the pane to see the result.", r.Pane)
 }
 
 // formatPanes writes the panes the way an agent reads them: one line per

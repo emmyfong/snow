@@ -75,6 +75,30 @@ func TestSnowRead(t *testing.T) {
 	}
 }
 
+// TestSnowSend: a send_keys call sends the caller, the text, and the keys.
+func TestSnowSend(t *testing.T) {
+	keys := []api.Key{{Code: api.KeyEnter}, {Code: "c", Mod: []string{api.ModCtrl}}}
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(req api.Message) api.Message {
+		r, ok := req.(*api.SendKeysRequest)
+		if !ok {
+			return &api.Error{Code: api.CodeBadCommand, Message: "not a send keys request"}
+		}
+		if r.Caller != 7 || r.Pane != 2 || r.Text != "go test" || len(r.Keys) != 2 {
+			return &api.Error{Code: api.CodeBadCommand, Message: fmt.Sprintf("request %+v", r)}
+		}
+		return &api.SendKeys{Pane: 2, Dropped: 7}
+	})
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return ours, nil }}
+	sent, err := c.Send(context.Background(), 2, "go test", keys)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if sent.Pane != 2 || sent.Dropped != 7 {
+		t.Fatalf("sent = %+v", sent)
+	}
+}
+
 // TestSnowListError: a server Error reaches the tool as an error, with its
 // code and message.
 func TestSnowListError(t *testing.T) {

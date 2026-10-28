@@ -233,6 +233,8 @@ func (s *server) callTool(ctx context.Context, name string, args json.RawMessage
 		return s.listPanes(ctx)
 	case "read_pane":
 		return s.readPane(ctx, args)
+	case "send_keys":
+		return s.sendKeys(ctx, args)
 	}
 	return "", fmt.Errorf("unknown tool %q; tools/list names the tools", name)
 }

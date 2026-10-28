@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
@@ -85,5 +86,38 @@ func TestWindowIsWidthSafe(t *testing.T) {
 				t.Errorf("%+v: row width %d, want %d: %q", o, w, o.Width, r)
 			}
 		}
+	}
+}
+
+// TestWindowMarksDrivenPane: a pane an agent types into has its borders in
+// the accent color, in every built-in theme.
+func TestWindowMarksDrivenPane(t *testing.T) {
+	for _, th := range theme.Builtin() {
+		out := Window(th, WindowOptions{Width: 7, Height: 1, Panes: []WindowPane{
+			{X: 0, Y: 0, W: 3, H: 1},
+			{X: 4, Y: 0, W: 3, H: 1, Focused: true, Driven: true},
+		}})
+		accent := lipgloss.NewStyle().Foreground(th.Accent).Render("│")
+		if !strings.Contains(out, accent) {
+			t.Errorf("%s: driven pane's border %q lacks the accent color", th.Name, out)
+		}
+	}
+}
+
+// TestWindowDrivenBorderWins: the accent color wins over the focus color
+// when an agent types into the focused pane.
+func TestWindowDrivenBorderWins(t *testing.T) {
+	th := theme.Default()
+	th.Accent = lipgloss.Color("#ff0000")
+	th.FocusBorder = lipgloss.Color("#00ff00")
+	out := Window(th, WindowOptions{Width: 7, Height: 1, Panes: []WindowPane{
+		{X: 0, Y: 0, W: 3, H: 1},
+		{X: 4, Y: 0, W: 3, H: 1, Focused: true, Driven: true},
+	}})
+	if accent := lipgloss.NewStyle().Foreground(th.Accent).Render("│"); !strings.Contains(out, accent) {
+		t.Errorf("border %q lacks the accent color", out)
+	}
+	if focus := lipgloss.NewStyle().Foreground(th.FocusBorder).Render("│"); strings.Contains(out, focus) {
+		t.Errorf("border %q kept the focus color", out)
 	}
 }

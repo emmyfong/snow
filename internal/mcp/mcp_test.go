@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io"
 	"log"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -122,12 +123,17 @@ func toolText(t *testing.T, m map[string]any) (text string, isError bool) {
 type fakePanes struct {
 	panes *api.Panes
 	read  *api.ReadPane
+	sent  *api.SendKeys
 	err   error
 	// block makes List and Read wait for the context, for cancellation
 	// tests.
 	block bool
 	// readPane and readScrollback record the last Read request.
 	readPane, readScrollback int
+	// sendPane, sendText, and sendKeys record the last Send request.
+	sendPane int
+	sendText string
+	sendKeys []api.Key
 }
 
 func (f *fakePanes) List(ctx context.Context) (*api.Panes, error) {
@@ -145,6 +151,18 @@ func (f *fakePanes) Read(ctx context.Context, pane, scrollback int) (*api.ReadPa
 	}
 	f.readPane, f.readScrollback = pane, scrollback
 	return f.read, f.err
+}
+
+func (f *fakePanes) Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error) {
+	if f.block {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}
+	f.sendPane, f.sendText, f.sendKeys = pane, text, keys
+	if f.sent == nil {
+		f.sent = &api.SendKeys{Pane: pane}
+	}
+	return f.sent, f.err
 }
 
 func testPanes() *api.Panes {
@@ -177,7 +195,7 @@ func TestMCPHandshake(t *testing.T) {
 	c.send(t, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"})
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
 	tools, ok := result(t, c.next(t))["tools"].([]any)
-	if !ok || len(tools) != 2 {
+	if !ok || len(tools) != 3 {
 		t.Fatalf("tools = %v", tools)
 	}
 	names := map[string]bool{}
@@ -189,8 +207,8 @@ func TestMCPHandshake(t *testing.T) {
 			t.Errorf("tool %d has no input schema: %v", i, tool)
 		}
 	}
-	if !names["list_panes"] || !names["read_pane"] {
-		t.Fatalf("tools = %v, want list_panes and read_pane", names)
+	if !names["list_panes"] || !names["read_pane"] || !names["send_keys"] {
+		t.Fatalf("tools = %v, want list_panes, read_pane, and send_keys", names)
 	}
 
 	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": map[string]any{
@@ -246,6 +264,78 @@ func TestMCPReadPaneNeedsPane(t *testing.T) {
 	text, failed := toolText(t, c.next(t))
 	if !failed || !strings.Contains(text, "list_panes") {
 		t.Fatalf("call = %q, failed = %v; want a hint about list_panes", text, failed)
+	}
+}
+
+// TestMCPSendKeys: send_keys parses the key names and passes them to Snow
+// with the text.
+func TestMCPSendKeys(t *testing.T) {
+	f := &fakePanes{}
+	c := start(t, Options{Version: "test", Panes: f})
+
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "send_keys", "arguments": map[string]any{"pane": 2, "text": "go test", "keys": []string{"enter", "ctrl+c"}},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("send_keys failed: %s", text)
+	}
+	if f.sendPane != 2 || f.sendText != "go test" {
+		t.Fatalf("Send(pane %d, text %q), want (2, go test)", f.sendPane, f.sendText)
+	}
+	want := []api.Key{{Code: api.KeyEnter}, {Code: "c", Mod: []string{api.ModCtrl}}}
+	if !reflect.DeepEqual(f.sendKeys, want) {
+		t.Fatalf("keys = %+v, want %+v", f.sendKeys, want)
+	}
+	if !strings.Contains(text, "pane 2") {
+		t.Errorf("output does not name the pane:\n%s", text)
+	}
+}
+
+// TestMCPSendKeysDropped: a program that did not read the input is reported
+// in the result, with a hint to read the pane.
+func TestMCPSendKeysDropped(t *testing.T) {
+	f := &fakePanes{sent: &api.SendKeys{Pane: 2, Dropped: 7}}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "send_keys", "arguments": map[string]any{"pane": 2, "keys": []string{"enter"}},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if failed {
+		t.Fatalf("send_keys failed: %s", text)
+	}
+	if !strings.Contains(text, "did not read 7 bytes") || !strings.Contains(text, "Read the pane") {
+		t.Fatalf("output %q, want the dropped bytes and a hint", text)
+	}
+}
+
+// TestMCPSendKeysBadKey: a key name ParseKey does not know fails the call
+// with a hint at the key grammar, before it reaches Snow.
+func TestMCPSendKeysBadKey(t *testing.T) {
+	f := &fakePanes{}
+	c := start(t, Options{Version: "test", Panes: f})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "send_keys", "arguments": map[string]any{"pane": 2, "keys": []string{"hyper+a"}},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if !failed || !strings.Contains(text, "hyper") || !strings.Contains(text, "modifier") {
+		t.Fatalf("call = %q, failed = %v; want a hint about the modifier", text, failed)
+	}
+	if f.sendPane != 0 {
+		t.Fatalf("a bad key name reached Snow: pane %d", f.sendPane)
+	}
+}
+
+// TestMCPSendKeysNeedsInput: send_keys without text or keys tells the agent
+// what it needs.
+func TestMCPSendKeysNeedsInput(t *testing.T) {
+	c := start(t, Options{Version: "test", Panes: &fakePanes{}})
+	c.send(t, map[string]any{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": map[string]any{
+		"name": "send_keys", "arguments": map[string]any{"pane": 2},
+	}})
+	text, failed := toolText(t, c.next(t))
+	if !failed || !strings.Contains(text, "text, keys, or both") {
+		t.Fatalf("call = %q, failed = %v; want a hint about text and keys", text, failed)
 	}
 }
 
