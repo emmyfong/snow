@@ -1,0 +1,10 @@
+data: {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "llama3.1:8b", "choices": [{"index": 0, "delta": {"role": "assistant"}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "llama3.1:8b", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 0, "type": "function", "function": {"name": "read_file", "arguments": "{\"path\":\"a.go\"}"}, "id": "call_a"}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "llama3.1:8b", "choices": [{"index": 0, "delta": {"tool_calls": [{"index": 1, "type": "function", "function": {"name": "run", "arguments": "{\"cmd\":\"l"}, "id": "call_b"}]}, "finish_reason": null}]}
+
+data: {"id": "chatcmpl-1", "object": "chat.completion.chunk", "model": "llama3.1:8b", "choices": [{"index": 0, "delta": {}, "finish_reason": "length"}]}
+
+data: [DONE]
+

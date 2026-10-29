@@ -26,7 +26,7 @@ func providers(cfg config.Config, path string) ([]signin.Provider, error) {
 				fmt.Sprintf("%q is a built-in provider; give the table another name", name), nil)
 		}
 		e := cfg.Providers[name]
-		cs = append(cs, openai.Compat{Name: name, BaseURL: e.BaseURL, Models: e.Models, NoKey: e.NoKey})
+		cs = append(cs, openai.Compat{Name: name, BaseURL: e.BaseURL, Models: e.Models, NoKey: e.NoKey, Chat: e.API == config.APIChat})
 	}
 	return append(ps, signin.Endpoints(cs)...), nil
 }

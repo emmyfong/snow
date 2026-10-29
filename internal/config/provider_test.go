@@ -97,8 +97,8 @@ base_url = "ftp://a"
 					t.Fatal(err)
 				}
 				want := map[string]Endpoint{
-					"omniroute":   {BaseURL: "http://localhost:20128/v1", NoKey: true},
-					"open-router": {BaseURL: "https://openrouter.ai/api/v1", Models: []string{"qwen/qwen3-coder:free"}},
+					"omniroute":   {BaseURL: "http://localhost:20128/v1", NoKey: true, API: APIResponses},
+					"open-router": {BaseURL: "https://openrouter.ai/api/v1", Models: []string{"qwen/qwen3-coder:free"}, API: APIResponses},
 				}
 				if !reflect.DeepEqual(cfg.Providers, want) {
 					t.Fatalf("providers %+v, want %+v", cfg.Providers, want)
@@ -125,11 +125,48 @@ func TestConfigProvidersCRLF(t *testing.T) {
 	}{
 		{"\n[provider.omniroute]\nno_key = true\n", 2},
 		{"\n[provider.omniroute]\nbase_url = \"http://localhost:20128/v1\"\napi_key = \"x\"\n", 4},
+		{"\n[provider.omniroute]\nbase_url = \"http://localhost:20128/v1\"\napi = \"completions\"\n", 4},
 	} {
 		_, err := Load(writeConfig(t, strings.ReplaceAll(tt.body, "\n", "\r\n")))
 		var ce *Error
 		if !errors.As(err, &ce) || ce.Line != tt.line {
 			t.Fatalf("error %v, want line %d", err, tt.line)
 		}
+	}
+}
+
+// TestConfigProviderAPI: api picks the API a service speaks. Without it,
+// the service speaks the Responses API; a value that is neither names its
+// line (#225).
+func TestConfigProviderAPI(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		want string // the API, when the file loads
+		line int    // of the error, when it does not
+	}{
+		{"responses", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"responses\"\n", APIResponses, 0},
+		{"chat", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"chat\"\n", APIChat, 0},
+		{"no value", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\n", APIResponses, 0},
+		{"bad value", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"completions\"\n", "", 4},
+		{"wrong case", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"Chat\"\n", "", 4},
+		{"empty value is the default", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"\"\n", APIResponses, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Load(writeConfig(t, tt.body))
+			if tt.line == 0 {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := cfg.Providers["gw"].API; got != tt.want {
+					t.Fatalf("API %q, want %q", got, tt.want)
+				}
+				return
+			}
+			var ce *Error
+			if !errors.As(err, &ce) || ce.Line != tt.line || ce.Key != "provider.gw.api" {
+				t.Fatalf("error %v (%+v), want line %d key provider.gw.api", err, ce, tt.line)
+			}
+		})
 	}
 }

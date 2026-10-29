@@ -137,8 +137,9 @@ only by you) where the system has none. `ANTHROPIC_API_KEY` or
 
 ### Other providers
 
-Snow also connects to any service that speaks the OpenAI Responses API,
-such as OmniRoute, OpenRouter, or a local server. Add a
+Snow also connects to any service that speaks the OpenAI Responses or
+Chat Completions API, such as OmniRoute, OpenRouter, Ollama, or a local
+server. Add a
 `[provider.<name>]` table to `~/.snow/config.toml`, then restart the
 Snow server so it reads the file: stop it and run `snow`. Your sessions
 come back as saved sessions. On Linux and macOS:
@@ -161,6 +162,11 @@ no_key = true                  # the service takes no key
 [provider.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 # models = ["qwen/qwen3-coder:free"]   # only for a service with no model list
+
+[provider.ollama]
+base_url = "http://localhost:11434/v1"
+no_key = true
+api = "chat"                   # the service serves Chat Completions only
 ```
 
 Its models show in `/model` as `<name>/<model>`, for example
@@ -170,6 +176,13 @@ A key never goes in `config.toml`. A model with no known price shows tokens
 instead of a cost. A service with no model list cannot check a key, so
 Snow saves it unchecked and says so. Over `http://` the key goes in clear
 text, so use `http://` only for a service on your own machine or network.
+
+A service speaks the Responses API unless its table says otherwise.
+Ollama, LM Studio, llama.cpp, vLLM, and some gateways serve only the Chat
+Completions API. For such a service, set `api = "chat"`, and Snow sends
+each turn to `<base_url>/chat/completions`. Snow does not try the other
+API when one fails: the table says which one the service speaks. On the
+`chat` API Snow sends no reasoning effort and shows no reasoning.
 
 Use only accounts that the service's vendor allows in other apps.
 Anthropic states that apps other than Claude Code and Claude.ai may not
@@ -332,6 +345,7 @@ turn_end = true       # false: no notification when a turn ends
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
+# api = "responses"                     # or "chat", for a Chat Completions service
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,

@@ -1,5 +1,6 @@
-// Package openai is the provider for OpenAI's Responses API, by API key. It
-// streams replies with reasoning summaries and tool calls, lists models,
+// Package openai is the provider for OpenAI's Responses API, by API key, and
+// for a compatible service that serves the Responses or the Chat Completions
+// API. It streams replies with reasoning summaries and tool calls, lists models,
 // and checks a key. It reads the key through provider.KeySource on every
 // request and never puts it in an error.
 package openai
@@ -34,6 +35,7 @@ type Provider struct {
 	compat  bool     // a compatible service: its whole model list is offered
 	models  []string // a compatible service's models from the config, if any
 	noKey   bool     // requests go without a key
+	chat    bool     // turns use the Chat Completions API
 }
 
 // Option changes how New builds a Provider.
@@ -123,6 +125,9 @@ func (p *Provider) Stream(ctx context.Context, req provider.Request) (provider.S
 	opts, key, err := p.options()
 	if err != nil {
 		return nil, err
+	}
+	if p.chat {
+		return p.streamChat(ctx, opts, key, req)
 	}
 	params, err := toParams(req, capsFor(req.Model))
 	if err != nil {

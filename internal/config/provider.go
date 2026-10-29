@@ -21,11 +21,34 @@ type Endpoint struct {
 	// NoKey marks an endpoint that takes no key, such as a local server:
 	// requests go without one.
 	NoKey bool `toml:"no_key"`
+	// API is the API the service speaks: APIResponses or APIChat. Load
+	// fills in APIResponses when the file leaves it out. Snow never tries
+	// the other one by itself.
+	API string `toml:"api"`
 }
+
+// The APIs a service can speak.
+const (
+	// APIResponses is the OpenAI Responses API, POST <base_url>/responses.
+	APIResponses = "responses"
+	// APIChat is the Chat Completions API, POST <base_url>/chat/completions,
+	// which Ollama, LM Studio, llama.cpp, vLLM, and many gateways serve.
+	APIChat = "chat"
+)
 
 // maxProviderName bounds a provider's name, which starts every model name
 // of the provider.
 const maxProviderName = 32
+
+// defaultProviders fills in what a provider table leaves out.
+func (c Config) defaultProviders() {
+	for name, e := range c.Providers {
+		if e.API == "" {
+			e.API = APIResponses
+			c.Providers[name] = e
+		}
+	}
+}
 
 // validateProviders rejects endpoints that can never work. It returns the
 // error and the setting's path in the file. The first problem in name
@@ -44,6 +67,10 @@ func (c Config) validateProviders() (*Error, []string) {
 		}
 		if msg := baseURL(e.BaseURL); msg != "" {
 			return &Error{Key: key + ".base_url", Msg: msg}, []string{"provider", name, "base_url"}
+		}
+		if e.API != "" && e.API != APIResponses && e.API != APIChat {
+			return &Error{Key: key + ".api", Msg: fmt.Sprintf("must be %q or %q, got %q", APIResponses, APIChat, e.API)},
+				[]string{"provider", name, "api"}
 		}
 		for _, m := range e.Models {
 			if strings.TrimSpace(m) == "" || strings.ContainsAny(m, " \t\r\n") {
