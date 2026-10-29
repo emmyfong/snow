@@ -160,6 +160,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if msg.Code == api.CodeNotice {
+			return m.showNotice(msg.Message)
+		}
 		if cmd, ok := m.authError(msg.Message); ok {
 			return cmd
 		}
