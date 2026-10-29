@@ -163,14 +163,21 @@ func unixProfile(shellEnv string) Profile {
 	return Profile{Name: name, Kind: kind, Path: shellEnv}
 }
 
-// parseWSLList decodes the output of `wsl.exe -l -q`, which is UTF-16LE, and
-// drops Docker Desktop's internal distributions, which are not shells.
-func parseWSLList(b []byte) []string {
+// DecodeUTF16LE decodes what wsl.exe writes about itself, which is UTF-16LE,
+// and drops the byte order mark. What a program inside a distribution writes
+// is not in this form.
+func DecodeUTF16LE(b []byte) string {
 	units := make([]uint16, 0, len(b)/2)
 	for i := 0; i+1 < len(b); i += 2 {
 		units = append(units, uint16(b[i])|uint16(b[i+1])<<8)
 	}
-	text := strings.TrimPrefix(string(utf16.Decode(units)), "\uFEFF")
+	return strings.TrimPrefix(string(utf16.Decode(units)), "\uFEFF")
+}
+
+// parseWSLList decodes the output of `wsl.exe -l -q`, which is UTF-16LE, and
+// drops Docker Desktop's internal distributions, which are not shells.
+func parseWSLList(b []byte) []string {
+	text := DecodeUTF16LE(b)
 	var out []string
 	for line := range strings.Lines(text) {
 		name := strings.TrimSpace(strings.Trim(line, "\x00"))

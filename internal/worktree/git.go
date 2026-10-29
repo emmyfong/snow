@@ -1,7 +1,8 @@
 // Package worktree creates, lists, and removes the git worktrees that give
 // each coding agent a folder of its own. Git runs through the git command,
 // as the user would run it, in the repository's own distribution for a WSL
-// folder. Snow never writes git config.
+// folder. Snow never writes git config. It needs git 2.17 or later, the
+// first version with `git worktree remove`.
 //
 // The functions block while git runs. A caller on the server's goroutine
 // must run them somewhere else.
@@ -32,7 +33,7 @@ type Repo struct {
 }
 
 // gitEnv keeps git from asking questions no one can answer, and keeps its
-// messages in English, which classify reads.
+// messages in English, which classify reads for the repository errors.
 var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C"}
 
 // command builds the git process for args, started in dir. A WSL
@@ -79,7 +80,7 @@ func (r Repo) git(ctx context.Context, dir string, args ...string) (string, erro
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		f := &failure{sub: args[0], code: -1, stderr: strings.TrimSpace(stderr.String()), cause: err}
+		f := &failure{sub: args[0], code: -1, stderr: stderrText(stderr.Bytes(), r.Distro != ""), cause: err}
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			// A killed git says "signal: killed"; the caller wants to know why.
 			f.cause = fmt.Errorf("%w: %w", ctxErr, err)
@@ -91,6 +92,17 @@ func (r Repo) git(ctx context.Context, dir string, args ...string) (string, erro
 		return "", f
 	}
 	return stdout.String(), nil
+}
+
+// stderrText returns what a command wrote to its error output as text. Git
+// writes UTF-8. wsl.exe writes its own errors, such as a distribution that
+// is not there, in UTF-16 with NULs between the letters, so for WSL a NUL
+// means UTF-16.
+func stderrText(b []byte, wsl bool) string {
+	if wsl && bytes.IndexByte(b, 0) >= 0 {
+		return strings.TrimSpace(shell.DecodeUTF16LE(b))
+	}
+	return strings.TrimSpace(string(b))
 }
 
 // declined reports whether err is git answering "no" to a yes-or-no command,
@@ -109,7 +121,9 @@ func (r Repo) classify(err error) error {
 	}
 	switch {
 	case errors.Is(f.cause, exec.ErrNotFound),
-		r.Distro != "" && f.code == 127 && strings.Contains(f.stderr, "No such file"):
+		// env exits 127 when it cannot find git. Its message is in the
+		// distribution's language, so only the code is read.
+		r.Distro != "" && f.code == 127:
 		return fmt.Errorf("%w: %w", ErrNoGit, err)
 	case f.code == 128 && (strings.Contains(f.stderr, "not a git repository") || strings.Contains(f.stderr, "cannot change to")):
 		return fmt.Errorf("%w: %w", ErrNotRepo, err)

@@ -14,15 +14,16 @@ func TestAddExclude(t *testing.T) {
 		existing *string // nil for no file
 		want     string
 	}{
-		{"no file", nil, ".worktrees/\n"},
-		{"empty file", ptr(""), ".worktrees/\n"},
-		{"lines kept", ptr("# mine\n*.log\n"), "# mine\n*.log\n.worktrees/\n"},
-		{"no newline at the end", ptr("*.log"), "*.log\n.worktrees/\n"},
+		{"no file", nil, "/.worktrees/\n"},
+		{"empty file", ptr(""), "/.worktrees/\n"},
+		{"lines kept", ptr("# mine\n*.log\n"), "# mine\n*.log\n/.worktrees/\n"},
+		{"no newline at the end", ptr("*.log"), "*.log\n/.worktrees/\n"},
 		{"already there", ptr("*.log\n.worktrees/\n"), "*.log\n.worktrees/\n"},
 		{"already there without a slash", ptr(".worktrees\n"), ".worktrees\n"},
 		{"already there from the root", ptr("/.worktrees/\n"), "/.worktrees/\n"},
-		{"already there with spaces around", ptr("  .worktrees/  \n"), "  .worktrees/  \n"},
-		{"similar name is not it", ptr(".worktrees-old/\n"), ".worktrees-old/\n.worktrees/\n"},
+		{"already there with spaces after", ptr(".worktrees/  \n"), ".worktrees/  \n"},
+		{"spaces before are part of the pattern", ptr("  .worktrees/\n"), "  .worktrees/\n/.worktrees/\n"},
+		{"similar name is not it", ptr(".worktrees-old/\n"), ".worktrees-old/\n/.worktrees/\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -29,6 +29,14 @@ func (r Repo) Create(ctx context.Context, branch string) (Worktree, error) {
 	if err != nil {
 		return Worktree{}, err
 	}
+	// git lists a submodule's git directory, inside its superproject's, as
+	// its main checkout, and a worktree made there would land in it. Ask
+	// from the caller's folder: the git directory is not a work tree.
+	if out, err := r.git(ctx, r.Path, "rev-parse", "--show-superproject-working-tree"); err != nil {
+		return Worktree{}, r.classify(err)
+	} else if strings.TrimSpace(out) != "" {
+		return Worktree{}, fmt.Errorf("%w: %s is a submodule", ErrNotRepo, r.Path)
+	}
 	if badBranch(branch) {
 		return Worktree{}, fmt.Errorf("%w: %q", ErrBadBranch, branch)
 	}
@@ -186,10 +194,26 @@ func (r Repo) mainCheckout(ctx context.Context) (Worktree, error) {
 // slug turns a branch name into a folder name. Git allows names a Windows
 // folder does not, such as a slash or a colon.
 func slug(branch string) string {
-	return strings.Map(func(c rune) rune {
+	name := strings.Map(func(c rune) rune {
 		if strings.ContainsRune(`/\:*?"<>| `, c) {
 			return '-'
 		}
 		return c
 	}, branch)
+	if reserved(name) {
+		return "_" + name
+	}
+	return name
+}
+
+// reserved reports a name that Windows will not use for a file, with or
+// without an extension: CON, PRN, AUX, NUL, COM1 to COM9, and LPT1 to LPT9.
+func reserved(name string) bool {
+	base, _, _ := strings.Cut(name, ".")
+	switch b := strings.ToUpper(base); b {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	default:
+		return len(b) == 4 && (strings.HasPrefix(b, "COM") || strings.HasPrefix(b, "LPT")) && b[3] >= '1' && b[3] <= '9'
+	}
 }

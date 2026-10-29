@@ -42,7 +42,8 @@ func addExclude(file string) (err error) {
 		return err
 	}
 	for _, line := range strings.Split(string(data), "\n") {
-		switch strings.TrimSpace(line) {
+		// git ignores spaces at the end of a pattern, and not at the start.
+		switch strings.TrimRight(line, " \t\r") {
 		case dirName, dirName + "/", "/" + dirName, "/" + dirName + "/":
 			return nil
 		}
@@ -55,7 +56,8 @@ func addExclude(file string) (err error) {
 		return err
 	}
 	defer func() { err = errors.Join(err, f.Close()) }()
-	line := dirName + "/\n"
+	// Anchored: a folder of that name lower in the tree is the user's.
+	line := "/" + dirName + "/\n"
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		line = "\n" + line
 	}
