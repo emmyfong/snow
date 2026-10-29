@@ -20,6 +20,10 @@ type Compat struct {
 	Models []string
 	// NoKey sends requests without a key, for a local server.
 	NoKey bool
+	// Chat sends turns to the Chat Completions API, POST
+	// <BaseURL>/chat/completions, for a service that does not serve the
+	// Responses API. Snow never tries the other API by itself.
+	Chat bool
 }
 
 // NewCompatible returns a Provider for the service c, with its key read
@@ -29,6 +33,6 @@ type Compat struct {
 // tell its text models apart.
 func NewCompatible(c Compat, keys provider.KeySource, opts ...Option) *Provider {
 	p := New(keys, append([]Option{WithBaseURL(c.BaseURL)}, opts...)...)
-	p.name, p.compat, p.models, p.noKey = c.Name, true, slices.Clone(c.Models), c.NoKey
+	p.name, p.compat, p.models, p.noKey, p.chat = c.Name, true, slices.Clone(c.Models), c.NoKey, c.Chat
 	return p
 }
