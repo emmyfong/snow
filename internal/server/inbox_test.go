@@ -84,7 +84,7 @@ func TestInboxSurvivesRestart(t *testing.T) {
 	first := New(opts)
 	t.Cleanup(first.Close)
 	c1 := connect(t, first, 100, 30)
-	id1 := splitChat(t, c1, folder)
+	id1 := attachChat(t, c1, folder)
 	say(c1, id1, "pick a store")
 	c1.WaitChat(id1, func(s *api.ChatSnapshot) bool {
 		return s.Question != nil && s.State == api.ChatStateApproval
@@ -101,7 +101,7 @@ func TestInboxSurvivesRestart(t *testing.T) {
 	second := New(opts)
 	t.Cleanup(second.Close)
 	c2 := connect(t, second, 100, 30)
-	id2 := splitChat(t, c2, folder)
+	id2 := attachChat(t, c2, folder)
 	chatInputOf(c2, id2, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = conv })
 	a := mustAgent(t, nextAgents(t, c2, hasAgentState(id2, api.AgentNeedsYou)), id2)
 	if a.Waits != api.AgentWaitsQuestion {

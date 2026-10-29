@@ -27,16 +27,11 @@ func askReply(id string) providertest.Reply {
 	}}
 }
 
-// splitChat attaches c to a new session "work", splits its terminal pane
-// with a chat in folder dir, and returns the chat pane's ID once c has its
-// snapshot.
-func splitChat(t *testing.T, c *apitest.Client, dir string) int {
+// attachChat attaches c to a new session "work" in folder dir and returns
+// the ID of the chat the session starts with, once c has its snapshot.
+func attachChat(t *testing.T, c *apitest.Client, dir string) int {
 	t.Helper()
 	c.Send(&api.Attach{Session: "work", Create: true, Dir: dir})
-	l := nextLayout(t, c, func(*api.Layout) bool { return true })
-	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{
-		api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat, api.ArgFolder: dir,
-	}})
 	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
 	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
 	return id
@@ -61,7 +56,7 @@ func chatInFolderOpts(t *testing.T, change func(*Options), dir string, replies .
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 100, 30)
-	return s, store, c, splitChat(t, c, dir)
+	return s, store, c, attachChat(t, c, dir)
 }
 
 // askingChat starts a server whose model asks a question, opens a chat in

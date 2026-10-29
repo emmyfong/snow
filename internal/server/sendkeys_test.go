@@ -94,9 +94,8 @@ func TestSendKeysMarksDriven(t *testing.T) {
 // is not there, and an ended pane, each with its code.
 func TestSendKeysErrors(t *testing.T) {
 	s, _, _ := newChatServer(t)
-	a, first := sessionWith(t, s, "a")
-	a.Send(split(first, api.DirRight))
-	second := shownPanes(nextLayout(t, a, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 }))[1].ID
+	a, chat, shells := sessionShells(t, s, "a", 2)
+	first, second := shells[0], shells[1]
 	a.Send(&api.AgentState{Pane: second, State: api.AgentWorking})
 	nextLayout(t, a, func(l *api.Layout) bool {
 		for _, p := range shownPanes(l) {
@@ -106,8 +105,6 @@ func TestSendKeysErrors(t *testing.T) {
 		}
 		return false
 	})
-	a.Send(&api.Command{Op: api.OpSplit, Target: second, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat}})
-	chat := chatIn(nextLayout(t, a, func(l *api.Layout) bool { return chatIn(l) != 0 }))
 	_, other := sessionWith(t, s, "b")
 
 	tool := connect(t, s, 80, 24)

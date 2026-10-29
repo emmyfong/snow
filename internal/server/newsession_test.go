@@ -1,0 +1,152 @@
+package server
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/emmyfong/snow/internal/shell"
+	"github.com/emmyfong/snow/pkg/api"
+)
+
+// windowName returns the name of the window l shows.
+func windowName(l *api.Layout) string {
+	for _, w := range l.Windows {
+		if w.Index == l.Active {
+			return w.Name
+		}
+	}
+	return ""
+}
+
+// TestNewSessionOpensChat: the first pane of a new session is a chat, and
+// its conversation is saved for the folder the client ran snow from.
+func TestNewSessionOpensChat(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	dir := t.TempDir()
+	c.Send(&api.Attach{Session: "new", Create: true, Dir: dir})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	panes := shownPanes(l)
+	if len(panes) != 1 || panes[0].Kind != api.PaneChat {
+		t.Fatalf("panes %+v, want one chat", panes)
+	}
+	snap := c.WaitChat(panes[0].ID, func(*api.ChatSnapshot) bool { return true })
+	loaded, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Meta.Folder != dir {
+		t.Errorf("conversation folder %q, want %q", loaded.Meta.Folder, dir)
+	}
+	if got := windowName(l); got != "chat" {
+		t.Errorf("window name %q, want chat", got)
+	}
+}
+
+// TestNewSessionBadDir: a folder the server cannot use falls back, and the
+// chat still opens.
+func TestNewSessionBadDir(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "lost", Create: true, Dir: filepath.Join(os.TempDir(), "snow-no-such-folder")})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	panes := shownPanes(l)
+	if len(panes) != 1 || panes[0].Kind != api.PaneChat {
+		t.Fatalf("panes %+v, want one chat", panes)
+	}
+	snap := c.WaitChat(panes[0].ID, func(*api.ChatSnapshot) bool { return true })
+	loaded, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !filepath.IsAbs(loaded.Meta.Folder) {
+		t.Errorf("conversation folder %q is not a usable folder", loaded.Meta.Folder)
+	}
+}
+
+// TestNewSessionWithoutChat: a server with no chat options keeps a shell as
+// the first pane.
+func TestNewSessionWithoutChat(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "plain", Create: true})
+	panes := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))
+	if len(panes) != 1 || panes[0].Kind != api.PaneTerminal {
+		t.Fatalf("panes %+v, want one terminal", panes)
+	}
+}
+
+// TestSplitStartsTerminal: after the first chat, a split opens a terminal
+// pane, as before.
+func TestSplitStartsTerminal(t *testing.T) {
+	s, _, _ := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "new", Create: true})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{api.ArgDir: api.DirRight}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	kinds := map[string]int{}
+	for _, p := range shownPanes(l) {
+		kinds[p.Kind]++
+	}
+	if kinds[api.PaneChat] != 1 || kinds[api.PaneTerminal] != 1 {
+		t.Fatalf("kinds %v, want one chat and one terminal", kinds)
+	}
+}
+
+// TestChatFolderFromFocusedPane: a chat made in a running session works in
+// the folder of the pane it was made from.
+func TestChatFolderFromFocusedPane(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	first, other := t.TempDir(), t.TempDir()
+	c.Send(&api.Attach{Session: "new", Create: true, Dir: first})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgFolder: other}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	var term api.PaneInfo
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneTerminal {
+			term = p
+		}
+	}
+	c.Send(&api.Command{Op: api.OpSplit, Target: term.ID, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgKind: api.PaneChat}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 3 })
+	var made int
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneChat && p.ID > term.ID {
+			made = p.ID
+		}
+	}
+	snap := c.WaitChat(made, func(*api.ChatSnapshot) bool { return true })
+	loaded, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Meta.Folder != other {
+		t.Errorf("conversation folder %q, want the terminal's %q", loaded.Meta.Folder, other)
+	}
+}
+
+// TestChatRecordsProfileWithPath: a conversation records the profile its
+// commands run in and the folder, so a WSL folder and its Windows view stay
+// different folders in the history.
+func TestChatRecordsProfileWithPath(t *testing.T) {
+	opts, _, store := chatOptions(t)
+	opts.Chat.Shell = &shell.Profile{Name: "pwsh", Kind: shell.KindPwsh, Path: "pwsh"}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 100, 30)
+	dir := t.TempDir()
+	c.Send(&api.Attach{Session: "new", Create: true, Dir: dir})
+	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+	snap := c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
+	loaded, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Meta.Profile != "pwsh" || loaded.Meta.Folder != dir {
+		t.Errorf("recorded profile %q folder %q, want pwsh and %q", loaded.Meta.Profile, loaded.Meta.Folder, dir)
+	}
+}

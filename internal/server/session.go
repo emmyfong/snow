@@ -53,8 +53,9 @@ func newState(s *Server) *state {
 	return st
 }
 
-// createSession starts a session with one window and one pane in dir. An
-// empty name takes the lowest free number: "0", "1", ...
+// createSession starts a session with one window and one pane in dir: a
+// chat when the server runs chats, else a shell. An empty name takes the
+// lowest free number: "0", "1", ...
 func (st *state) createSession(name string, cols, rows int, dir string) (*session, error) {
 	if name == "" {
 		name = st.freeNumber()
@@ -66,7 +67,11 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 		cols, rows = defaultCols, defaultRows
 	}
 	sess := &session{name: name, lastUsed: time.Now(), cols: cols, rows: rows}
-	w, err := st.newWindow(sess, api.PaneTerminal, "", dir)
+	kind := api.PaneTerminal
+	if st.srv.opts.Chat != nil {
+		kind = api.PaneChat
+	}
+	w, err := st.newWindow(sess, kind, "", dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
