@@ -355,10 +355,10 @@ func TestChatCloseInterruptsTurn(t *testing.T) {
 	})
 }
 
-// TestChatSessionSavesWithoutError: a saved session leaves its chat panes
-// out: a mixed window keeps its terminal panes, and a window of chats is
-// not saved.
-func TestChatSessionSavesWithoutError(t *testing.T) {
+// TestChatSessionSaves: a saved session holds its chat panes, each by its
+// conversation ID and with no scrollback. A window with a chat and a shell
+// keeps both, and a window of chats is saved too.
+func TestChatSessionSaves(t *testing.T) {
 	opts, _, _ := chatOptions(t)
 	opts.SessionsDir = t.TempDir()
 	s := New(opts)
@@ -369,47 +369,41 @@ func TestChatSessionSavesWithoutError(t *testing.T) {
 	nextLayout(t, c, func(*api.Layout) bool { return true })
 	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneChat}})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
-	var windows, terminals, active int
+	var active int
 	s.call(func(st *state) {
 		sess := st.sessions["work"]
-		snap := st.snapshot(sess)
-		windows, active = len(snap.Windows), sess.active
-		for _, w := range snap.Windows {
-			terminals += len(w.Panes)
-		}
+		active = sess.active
 		st.save(sess)
 	})
-	if windows != 1 || terminals != 1 {
-		t.Fatalf("saved %d windows with %d panes, want 1 with 1", windows, terminals)
-	}
-	// The active window is the chat-only one the file leaves out; the
-	// session must still load and restore.
 	var saved store.Snapshot
 	eventually(t, "the session file", func() bool {
 		var err error
 		saved, err = openStore(t, opts.SessionsDir).Load("work")
 		return err == nil
 	})
-	if len(saved.Windows) != 1 || saved.Active != active || saved.Windows[0].Index == active {
-		t.Fatalf("file has %d windows, active %d (session's %d)", len(saved.Windows), saved.Active, active)
+	if len(saved.Windows) != 2 || saved.Active != active {
+		t.Fatalf("file has %d windows, active %d (session's %d), want 2", len(saved.Windows), saved.Active, active)
+	}
+	chats, shells := 0, 0
+	for _, w := range saved.Windows {
+		for _, p := range w.Panes {
+			switch {
+			case p.Kind == store.KindChat && p.Conversation != "" && len(p.Scrollback) == 0:
+				chats++
+			case p.Kind == "":
+				shells++
+			default:
+				t.Errorf("saved pane %+v", p)
+			}
+		}
+	}
+	if chats != 2 || shells != 1 {
+		t.Fatalf("saved %d chats and %d shells, want 2 and 1", chats, shells)
 	}
 	var problem string
 	s.call(func(st *state) { problem = st.saveProblem })
 	if problem != "" {
 		t.Fatalf("save problem: %s", problem)
-	}
-	var restored, restoredActive int
-	s.call(func(st *state) {
-		sess, err := st.restore(&saved, 100, 30)
-		if err != nil {
-			t.Errorf("restore: %v", err)
-			return
-		}
-		restored, restoredActive = len(sess.windows), sess.active
-		st.closeSession(sess)
-	})
-	if restored != 1 || restoredActive != saved.Windows[0].Index {
-		t.Fatalf("restored %d windows, active %d", restored, restoredActive)
 	}
 }
 

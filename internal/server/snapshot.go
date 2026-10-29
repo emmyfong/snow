@@ -5,69 +5,38 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/store"
 )
 
 // snapshot describes sess for the store: its windows, each one's layout
-// and focus, and each pane's profile, folder, and last lines.
+// and focus, and each pane's kind, profile, and folder, with a terminal's
+// last lines or a chat's conversation ID.
 func (st *state) snapshot(sess *session) store.Snapshot {
 	snap := store.Snapshot{Name: sess.name, Active: sess.active}
 	for _, w := range sess.windows {
 		sw := store.Window{Index: w.index, Name: w.name, Focused: w.focused}
-		tree := terminalTree(w)
-		if tree == nil {
-			continue // only chats; they are not saved yet
-		}
-		if tree, err := json.Marshal(tree); err == nil {
+		if tree, err := json.Marshal(w.tree); err == nil {
 			sw.Layout = tree
 		} else {
 			st.srv.log.Warn("save layout failed", "session", sess.name, "err", err)
 		}
-		for _, id := range tree.Panes() {
+		for _, id := range w.tree.Panes() {
 			p := w.panes[int(id)]
 			if p == nil {
 				continue
 			}
-			sw.Panes = append(sw.Panes, store.Pane{
-				ID: p.id, Profile: p.profile, Folder: p.folder(), Scrollback: lastLines(p, st.srv.savedLines()),
-			})
+			sp := store.Pane{ID: p.id, Profile: p.profile, Folder: p.folder()}
+			if p.chat != nil {
+				// The conversation file holds the transcript.
+				sp.Kind, sp.Conversation = store.KindChat, p.chat.conv.ID()
+			} else {
+				sp.Scrollback = lastLines(p, st.srv.savedLines())
+			}
+			sw.Panes = append(sw.Panes, sp)
 		}
 		snap.Windows = append(snap.Windows, sw)
 	}
 	return snap
-}
-
-// terminalTree returns w's layout without its chat panes, which a restore
-// cannot bring back yet, or nil when w holds only chats. A window without
-// chats gives its own tree.
-func terminalTree(w *window) *layout.Tree {
-	var chats []layout.PaneID
-	for id, p := range w.panes {
-		if p.chat != nil {
-			chats = append(chats, layout.PaneID(id))
-		}
-	}
-	if len(chats) == 0 {
-		return w.tree
-	}
-	if len(chats) == len(w.panes) {
-		return nil
-	}
-	b, err := json.Marshal(w.tree)
-	if err != nil {
-		return nil
-	}
-	tree := &layout.Tree{}
-	if err := json.Unmarshal(b, tree); err != nil {
-		return nil
-	}
-	tree.Unzoom()
-	for _, id := range chats {
-		// A terminal pane is left, so no close is of the last pane.
-		_ = tree.Close(id)
-	}
-	return tree
 }
 
 // savedLines is how many lines of each pane a snapshot keeps.

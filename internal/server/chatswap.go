@@ -187,6 +187,10 @@ func (s *Server) adopt(c *client, pane int, conv *agent.Conversation, snap api.C
 		before := p.agentNow()
 		p.chat = &chatPane{conv: conv, snap: snap, folder: dir, profile: p.chat.profile}
 		p.dir = dir
+		// The session file names the pane's conversation.
+		if sess := st.sessions[c.session]; sess != nil {
+			st.save(sess)
+		}
 		for cl := range st.clients {
 			if cl.session == c.session {
 				delete(cl.chatLive, pane)

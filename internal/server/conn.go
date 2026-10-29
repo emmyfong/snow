@@ -107,7 +107,9 @@ func (s *Server) read(c *client) {
 				s.reply(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 				continue
 			}
-			s.call(func(st *state) { st.attach(c, m, snap) })
+			chats := s.resumeChats(snap)
+			s.call(func(st *state) { st.attach(c, m, snap, chats) })
+			closeUnused(chats)
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:

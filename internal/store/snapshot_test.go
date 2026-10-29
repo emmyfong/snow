@@ -88,3 +88,51 @@ func TestDecodeErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestSnapshotChatPaneRoundTrip: a chat pane's kind and conversation ID
+// survive save and load. A chat saves no scrollback: its conversation file
+// is the source of truth.
+func TestSnapshotChatPaneRoundTrip(t *testing.T) {
+	in := Snapshot{Name: "work", Windows: []Window{{
+		Index: 1, Name: "chat", Focused: 1,
+		Panes: []Pane{
+			{ID: 1, Kind: KindChat, Profile: "bash", Folder: "/home/emmy/api", Conversation: "20261029-220201-f91d9d0d"},
+			{ID: 2, Profile: "bash", Folder: "/home/emmy/api", Scrollback: []string{"$ ls"}},
+		},
+	}}}
+	b, err := encode(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := decode(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in.Version = Version
+	if !reflect.DeepEqual(out, in) {
+		t.Fatalf("round trip changed the snapshot:\n got %#v\nwant %#v", out, in)
+	}
+}
+
+// TestDecodeFormatOne: a file the previous format wrote has no pane kinds
+// and still loads. Its panes are terminals.
+func TestDecodeFormatOne(t *testing.T) {
+	old := `{"version":1,"name":"api","saved":"2026-10-09T09:14:00Z","active":1,` +
+		`"windows":[{"index":1,"name":"dev","panes":[{"id":1,"profile":"bash","folder":"/home/emmy"}]}]}`
+	s, err := decode([]byte(old))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p := s.Windows[0].Panes[0]; p.Kind != "" || p.Conversation != "" || p.Profile != "bash" {
+		t.Fatalf("pane %+v, want a plain terminal pane", p)
+	}
+}
+
+// TestFormatTwo: Version is 2, so a Snow that
+// reads up to 1 refuses a file with chat panes instead of turning them into
+// shells.
+func TestFormatTwo(t *testing.T) {
+	if Version != 2 {
+		t.Fatalf("Version %d: chat panes need format 2", Version)
+	}
+}

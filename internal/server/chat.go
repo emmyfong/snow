@@ -145,6 +145,13 @@ func (s *Server) chatFolder(profile, dir string) tool.Folder {
 // events reach the pane by its ID, and chatEvent drops the ones of a
 // conversation the pane replaced.
 func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
+	return s.chatConfigFor(func() int { return id }, profile, dir)
+}
+
+// chatConfigFor is chatConfig for a pane whose ID is not known yet, as with
+// a restored session: pane returns it, or 0 while the pane does not exist,
+// and events of that time are dropped.
+func (s *Server) chatConfigFor(pane func() int, profile, dir string) agent.Config {
 	o := s.opts.Chat
 	sh := shell.Profile{}
 	if o.Shell != nil {
@@ -156,6 +163,10 @@ func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
 		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: s.chatFolder(profile, dir), Shell: sh,
 		HideEnv: o.HideEnv, System: o.System,
 		Events: func(e agent.Event) {
+			id := pane()
+			if id == 0 {
+				return
+			}
 			if ce := chatEvent(id, e); ce != nil {
 				s.send(func(st *state) { st.chatEvent(ce) })
 			}
