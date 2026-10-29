@@ -37,6 +37,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    │           │                       │    (the server runs agents; agents never import server,
    │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
+   │           │                       ├──► worktree ──► shell  (a git worktree per coding
+   │           │                       │    agent: runs git, in the WSL distribution for a
+   │           │                       │    WSL folder; imports no other Snow package)
    ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
    │           │                       │    hooks and settings only, never its login)
    ├──► mcp ──► pkg/api, transport     (snow mcp: the pane tools Claude Code

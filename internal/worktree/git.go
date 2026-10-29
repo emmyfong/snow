@@ -1,0 +1,133 @@
+// Package worktree creates, lists, and removes the git worktrees that give
+// each coding agent a folder of its own. Git runs through the git command,
+// as the user would run it, in the repository's own distribution for a WSL
+// folder. Snow never writes git config.
+//
+// The functions block while git runs. A caller on the server's goroutine
+// must run them somewhere else.
+package worktree
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"runtime"
+	"strings"
+
+	"github.com/emmyfong/snow/internal/shell"
+)
+
+// Repo is a git repository: a folder in it, and the WSL distribution it
+// belongs to, if any. Path may be any folder of the repository, in the
+// repository's own form: a Linux path for WSL.
+type Repo struct {
+	Path   string
+	Distro string // empty for a repository of the OS Snow runs on
+}
+
+// gitEnv keeps git from asking questions no one can answer, and keeps its
+// messages in English, which classify reads.
+var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C"}
+
+// command builds the git process for args, started in dir. A WSL
+// repository runs through wsl.exe, which does not pass the environment on,
+// so env sets it inside the distribution.
+func (r Repo) command(ctx context.Context, dir string, args ...string) *exec.Cmd {
+	var cmd *exec.Cmd
+	if r.Distro == "" {
+		cmd = exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
+		cmd.Env = append(os.Environ(), gitEnv...)
+	} else {
+		wsl := []string{"-d", r.Distro, "--cd", dir, "--exec", "env"}
+		wsl = append(append(append(wsl, gitEnv...), "git"), args...)
+		cmd = exec.CommandContext(ctx, "wsl.exe", wsl...)
+	}
+	shell.HideWindow(cmd)
+	return cmd
+}
+
+// failure is a git command that did not succeed.
+type failure struct {
+	sub    string // the git subcommand
+	code   int    // the exit code, or -1 if git did not run
+	stderr string
+	cause  error
+}
+
+func (f *failure) Error() string {
+	if f.stderr != "" {
+		return "git " + f.sub + ": " + f.stderr
+	}
+	return "git " + f.sub + ": " + f.cause.Error()
+}
+
+func (f *failure) Unwrap() error { return f.cause }
+
+// git runs git in dir and returns what it wrote to its standard output.
+// A failure comes back as a *failure; classify turns it into a typed error.
+func (r Repo) git(ctx context.Context, dir string, args ...string) (string, error) {
+	cmd := r.command(ctx, dir, args...)
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &stdout, &stderr
+	if err := cmd.Run(); err != nil {
+		f := &failure{sub: args[0], code: -1, stderr: strings.TrimSpace(stderr.String()), cause: err}
+		var exit *exec.ExitError
+		if errors.As(err, &exit) {
+			f.code = exit.ExitCode()
+		}
+		return "", f
+	}
+	return stdout.String(), nil
+}
+
+// classify gives a failure that says what is wrong with the repository or
+// with git itself a typed error. Any other failure passes through.
+func (r Repo) classify(err error) error {
+	var f *failure
+	if !errors.As(err, &f) {
+		return err
+	}
+	switch {
+	case errors.Is(f.cause, exec.ErrNotFound),
+		r.Distro != "" && f.code == 127 && strings.Contains(f.stderr, "No such file"):
+		return fmt.Errorf("%w: %w", ErrNoGit, err)
+	case f.code == 128 && (strings.Contains(f.stderr, "not a git repository") || strings.Contains(f.stderr, "cannot change to")):
+		return fmt.Errorf("%w: %w", ErrNotRepo, err)
+	}
+	return err
+}
+
+// join joins path elements in the repository's own form.
+func (r Repo) join(elem ...string) string {
+	if r.Distro == "" {
+		return filepath.Join(elem...)
+	}
+	return path.Join(elem...)
+}
+
+// same reports whether a and b are one path. Windows and macOS file
+// systems ignore case.
+func (r Repo) same(a, b string) bool {
+	if r.Distro != "" {
+		return path.Clean(a) == path.Clean(b)
+	}
+	a, b = filepath.Clean(a), filepath.Clean(b)
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
+}
+
+// osPath is where Snow opens a path of the repository: the path, or for a
+// WSL repository on Windows, its \\wsl.localhost path.
+func (r Repo) osPath(p string) string {
+	if r.Distro != "" && runtime.GOOS == "windows" {
+		return shell.WSLToUNC(r.Distro, p)
+	}
+	return p
+}

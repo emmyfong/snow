@@ -67,6 +67,14 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "the agent saves results; tools only return them" }
             - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "tools do not talk to models" }
             - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "tools never see keys" }
+        worktree-runs-git-through-shell:
+          # An allow list: the worktree package runs git and edits one file in
+          # .git, so it needs no other Snow package but shell.
+          list-mode: strict
+          files: ["**/internal/worktree/**", "!$test"]
+          allow:
+            - $gostd
+            - github.com/emmyfong/snow/internal/shell
         mcp-uses-api-and-transport:
           # An allow list: snow mcp speaks the protocol and nothing that
           # holds keys or server state.
