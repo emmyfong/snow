@@ -130,7 +130,8 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	notice := ""
 	if mode == agent.ModeAuto && loaded.Meta.Folder != f.dir {
 		mode = agent.ModeAsk
-		notice = "Resumed in " + loaded.Meta.Folder + " with the approval mode ask. Type /mode auto to stop the questions."
+		// The folder comes last: a narrow status bar cuts the end of a notice.
+		notice = "Resumed with the approval mode ask. Type /mode auto to stop the questions. Saved in " + loaded.Meta.Folder + "."
 		if err := conv.SetMode(mode); err != nil {
 			return errors.Join(err, conv.Close())
 		}

@@ -26,14 +26,15 @@ type StatusOptions struct {
 	Tabs    []Tab
 	Right   string // for example the pane's profile and the time
 	Message string // shown in place of Right, in the error color
+	Notice  string // shown in place of Right, in the bar's color; a Message wins
 	Prompt  string // a question for the user; takes the whole bar
 }
 
 // StatusBar draws one line of exactly Width cells: the session name and the
-// window tabs on the left, and Right, or Message, on the right. When the
-// line is too short, Right is dropped first, but a Message stays and the tabs
-// are cut to make room for it; a Message wider than the line is cut too. A
-// Prompt replaces the whole bar.
+// window tabs on the left, and Right, or Message, or Notice, on the right.
+// When the line is too short, Right is dropped first, but a Message or a
+// Notice stays and the tabs are cut to make room for it; one wider than the
+// line is cut too. A Prompt replaces the whole bar.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
@@ -126,26 +127,32 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	}
 	left := strings.Join(parts, "")
 	right := o.Right
-	if o.Message != "" {
-		right = o.Message
+	shown := o.Message
+	if shown == "" {
+		shown = o.Notice
+	}
+	if shown != "" {
+		right = shown
 	}
 	right = " " + right + " "
 	lw, rw := ansi.StringWidth(left), ansi.StringWidth(right)
+	divider := 0
 	if o.Message != "" {
-		rw++ // the divider StatusBar draws before the message
+		divider = 1 // the divider StatusBar draws before the message
 	}
+	rw += divider
 	leftMax := o.Width
 	switch {
 	case lw+rw <= o.Width:
-	case o.Message != "" && rw < o.Width:
-		// A refusal is the only feedback the user gets, so the tabs make
-		// room for it.
+	case shown != "" && rw < o.Width:
+		// A refusal or a notice is the only feedback the user gets, so the
+		// tabs make room for it.
 		leftMax = o.Width - rw
-	case o.Message != "":
+	case shown != "":
 		// Too wide even alone: cut it, and give it the whole bar but the
 		// divider.
-		right = " " + ansi.Truncate(o.Message, max(o.Width-3, 0), "…") + " "
-		leftMax = max(o.Width-ansi.StringWidth(right)-1, 0)
+		right = " " + ansi.Truncate(shown, max(o.Width-2-divider, 0), "…") + " "
+		leftMax = max(o.Width-ansi.StringWidth(right)-divider, 0)
 	default:
 		right = ""
 	}

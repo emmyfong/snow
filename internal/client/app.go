@@ -258,15 +258,19 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.result, a.sessions = Result{}, nil
 			a.showHome(msg.Message)
 			return a, nil
-		case api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize, api.CodeAuthFailed:
-			// A refused request changes nothing; the screen shows why. A
-			// refused login goes to the login picker, which keeps the key,
-			// or to the status bar when no picker waits.
-			return a, a.screen.Update(msg)
-		default:
+		case api.CodeBadHandshake, api.CodeNoSession, api.CodeAttachFailed:
+			// No session is left to show: end the client with the reason.
 			a.result.Err = msg
+			return a, tea.Quit
+		default:
+			// A refused request changes nothing, and a notice is only
+			// information; the screen shows either. A refused login goes
+			// to the login picker, which keeps the key, or to the status
+			// bar when no picker waits. A code this client does not know
+			// stays here too: ending on it would turn each new code into
+			// a crash until someone listed it (#238).
+			return a, a.screen.Update(msg)
 		}
-		return a, tea.Quit
 	case connClosedMsg:
 		if !a.result.Detached && a.result.Err == nil {
 			a.result.Err = ErrConnectionLost

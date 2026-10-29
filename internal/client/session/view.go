@@ -71,12 +71,10 @@ func (m *Model) statusOptions() ui.StatusOptions {
 	if p := m.focused(); p != nil {
 		opts.Right = p.Profile + "  "
 	}
-	note := m.notice
 	if m.copy != nil && m.copy.Status() != "" {
-		note = m.copy.Status()
-	}
-	if note != "" {
-		opts.Right = note + "  "
+		opts.Right = m.copy.Status() + "  "
+	} else {
+		opts.Notice = m.notice
 	}
 	opts.Right += m.now().Format("15:04")
 	switch {

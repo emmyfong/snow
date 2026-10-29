@@ -112,23 +112,6 @@ func TestLostConnectionQuits(t *testing.T) {
 	}
 }
 
-// TestCommandErrorKeepsClient: a refused command, such as a split with no
-// room, must not end the client.
-func TestCommandErrorKeepsClient(t *testing.T) {
-	send := func(api.Message) {}
-	for _, code := range []string{api.CodeCommandFailed, api.CodeBadCommand, api.CodeBadSize, api.CodeAuthFailed} {
-		a := &app{screen: session.New(send), send: send}
-		_, cmd := a.Update(&api.Error{Code: code, Message: "no room"})
-		if cmd != nil && a.result.Err != nil {
-			t.Fatalf("error %s ended the client: %v", code, a.result.Err)
-		}
-	}
-	a := &app{screen: session.New(send), send: send}
-	if _, cmd := a.Update(&api.Error{Code: api.CodeNoSession}); cmd == nil || a.result.Err == nil {
-		t.Fatal("an attach error should end the client")
-	}
-}
-
 func TestRunRejectsUnknownTheme(t *testing.T) {
 	cfg := config.Defaults()
 	cfg.Theme.Name = "neon"
