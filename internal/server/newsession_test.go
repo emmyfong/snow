@@ -150,3 +150,41 @@ func TestChatRecordsProfileWithPath(t *testing.T) {
 		t.Errorf("recorded profile %q folder %q, want pwsh and %q", loaded.Meta.Profile, loaded.Meta.Folder, dir)
 	}
 }
+
+// TestListHidesEmptyConversations: a chat that has no message yet has a
+// conversation file, but it is not a conversation to pick up, so the list
+// leaves it out. A file that cannot be read is still listed, so the user can
+// see it.
+func TestListHidesEmptyConversations(t *testing.T) {
+	s, _, store := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	dir := t.TempDir()
+	c.Send(&api.Attach{Session: "new", Create: true, Dir: dir})
+	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+	snap := c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
+	own, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	past := saveConversation(t, store, own.Meta.Folder, pastExchange()...)
+	broken, err := store.Path("20200101-000000-badbad01")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(broken, []byte("not json\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	c.Send(&api.ConversationListRequest{Pane: id, All: true})
+	l := waitConversations(t, c, func(l *api.ConversationList) bool { return l.All })
+	got := map[string]bool{}
+	for _, it := range l.Items {
+		got[it.ID] = true
+	}
+	if got[snap.Conversation] || !got[past] || !got["20200101-000000-badbad01"] {
+		t.Fatalf("listed %v, want the past conversation and the broken file, not the empty chat %s", got, snap.Conversation)
+	}
+	if l.Truncated != 0 {
+		t.Fatalf("truncated %d, want 0: hidden conversations are not left out for room", l.Truncated)
+	}
+}
