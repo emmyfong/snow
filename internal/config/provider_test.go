@@ -133,3 +133,39 @@ func TestConfigProvidersCRLF(t *testing.T) {
 		}
 	}
 }
+
+// TestConfigProviderAPI: api picks the API a service speaks. Without it,
+// the service speaks the Responses API; a value that is neither names its
+// line (#225).
+func TestConfigProviderAPI(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		body string
+		want string // the API, when the file loads
+		line int    // of the error, when it does not
+	}{
+		{"responses", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"responses\"\n", APIResponses, 0},
+		{"chat", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"chat\"\n", APIChat, 0},
+		{"no value", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\n", APIResponses, 0},
+		{"bad value", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"completions\"\n", "", 4},
+		{"wrong case", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"Chat\"\n", "", 4},
+		{"empty value is the default", "\n[provider.gw]\nbase_url = \"http://localhost:1/v1\"\napi = \"\"\n", APIResponses, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg, err := Load(writeConfig(t, tt.body))
+			if tt.line == 0 {
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := cfg.Providers["gw"].Protocol(); got != tt.want {
+					t.Fatalf("API %q, want %q", got, tt.want)
+				}
+				return
+			}
+			var ce *Error
+			if !errors.As(err, &ce) || ce.Line != tt.line || ce.Key != "provider.gw.api" {
+				t.Fatalf("error %v (%+v), want line %d key provider.gw.api", err, ce, tt.line)
+			}
+		})
+	}
+}

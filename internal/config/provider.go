@@ -21,6 +21,26 @@ type Endpoint struct {
 	// NoKey marks an endpoint that takes no key, such as a local server:
 	// requests go without one.
 	NoKey bool `toml:"no_key"`
+	// API is the API the service speaks: APIResponses (the default when
+	// empty) or APIChat. Snow never tries the other one by itself.
+	API string `toml:"api"`
+}
+
+// The APIs a service can speak.
+const (
+	// APIResponses is the OpenAI Responses API, POST <base_url>/responses.
+	APIResponses = "responses"
+	// APIChat is the Chat Completions API, POST <base_url>/chat/completions,
+	// which Ollama, LM Studio, llama.cpp, vLLM, and many gateways serve.
+	APIChat = "chat"
+)
+
+// Protocol returns the API the endpoint speaks, with the default filled in.
+func (e Endpoint) Protocol() string {
+	if e.API == "" {
+		return APIResponses
+	}
+	return e.API
 }
 
 // maxProviderName bounds a provider's name, which starts every model name
@@ -44,6 +64,10 @@ func (c Config) validateProviders() (*Error, []string) {
 		}
 		if msg := baseURL(e.BaseURL); msg != "" {
 			return &Error{Key: key + ".base_url", Msg: msg}, []string{"provider", name, "base_url"}
+		}
+		if e.API != "" && e.API != APIResponses && e.API != APIChat {
+			return &Error{Key: key + ".api", Msg: fmt.Sprintf("must be %q or %q, got %q", APIResponses, APIChat, e.API)},
+				[]string{"provider", name, "api"}
 		}
 		for _, m := range e.Models {
 			if strings.TrimSpace(m) == "" || strings.ContainsAny(m, " \t\r\n") {
