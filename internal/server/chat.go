@@ -133,8 +133,15 @@ func newSnapshot(id int, conv *agent.Conversation, model, effort string, mode ag
 
 // chatFolder returns the folder a chat opened from a pane running profile
 // works in: dir if it is usable, else the home folder. A WSL profile's
-// folder lives in its distribution, out of reach of a stat.
+// folder lives in its distribution, out of reach of a stat. A session names
+// no profile for its first chat, so "" means the default profile, as it does
+// for the shell. Without that, a WSL default gets a Windows folder.
 func (s *Server) chatFolder(profile, dir string) tool.Folder {
+	if profile == "" && s.launch.shell != nil {
+		if sh, ok := s.launch.shell(""); ok {
+			profile = sh.Name
+		}
+	}
 	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
 		return tool.Folder{Path: dir, Distro: distro}
 	}

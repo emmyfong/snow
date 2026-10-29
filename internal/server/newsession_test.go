@@ -188,3 +188,48 @@ func TestListHidesEmptyConversations(t *testing.T) {
 		t.Fatalf("truncated %d, want 0: hidden conversations are not left out for room", l.Truncated)
 	}
 }
+
+// TestFirstChatKeepsTheDefaultProfilesDistro: when the default profile is a
+// WSL distribution, the first chat works in a folder of that distribution.
+// The folder and the shell must come from the same profile, though the
+// session names none.
+func TestFirstChatKeepsTheDefaultProfilesDistro(t *testing.T) {
+	s, _, store := newChatServer(t)
+	s.launch.shell = func(string) (shell.Profile, bool) {
+		return shell.Profile{Name: "Ubuntu", Distro: "Ubuntu"}, true
+	}
+	s.launch.distro = func(profile string) (string, bool) { return "Ubuntu", profile == "Ubuntu" }
+	c := connect(t, s, 100, 30)
+	const dir = "/home/snow-test-user/project" // in the distribution, not on this host
+	c.Send(&api.Attach{Session: "wsl", Create: true, Dir: dir})
+	panes := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))
+	if len(panes) != 1 || panes[0].Kind != api.PaneChat {
+		t.Fatalf("panes %+v, want one chat", panes)
+	}
+	snap := c.WaitChat(panes[0].ID, func(*api.ChatSnapshot) bool { return true })
+	loaded, err := store.Load(snap.Conversation)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Meta.Folder != dir || loaded.Meta.Profile != "Ubuntu" {
+		t.Errorf("conversation in %q with profile %q, want %q with Ubuntu", loaded.Meta.Folder, loaded.Meta.Profile, dir)
+	}
+}
+
+// TestResumeInDefaultProfilesDistro: /resume in the first chat of a WSL
+// default takes a conversation saved in a folder of the distribution.
+func TestResumeInDefaultProfilesDistro(t *testing.T) {
+	s, _, store := newChatServer(t)
+	s.launch.shell = func(string) (shell.Profile, bool) {
+		return shell.Profile{Name: "Ubuntu", Distro: "Ubuntu"}, true
+	}
+	s.launch.distro = func(profile string) (string, bool) { return "Ubuntu", profile == "Ubuntu" }
+	c := connect(t, s, 100, 30)
+	const dir = "/home/snow-test-user/project" // in the distribution, not on this host
+	past := saveConversation(t, store, dir, pastExchange()...)
+	c.Send(&api.Attach{Session: "wsl", Create: true, Dir: dir})
+	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
+	chatInputOf(c, id, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
+	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Conversation == past })
+}

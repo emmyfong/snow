@@ -11,6 +11,7 @@ import (
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/provider/providertest"
+	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -242,5 +243,41 @@ func TestResumeChangesSavedSession(t *testing.T) {
 	})
 	if before.Conversation == other {
 		t.Fatal("the test resumed the conversation the pane already had")
+	}
+}
+
+// TestRestoreChatInDefaultProfilesDistro: a chat made in a session that
+// names no profile, with a WSL default, comes back in the same folder of the
+// distribution, not as a missing folder.
+func TestRestoreChatInDefaultProfilesDistro(t *testing.T) {
+	d := newChatDirs(t)
+	wsl := func(s *Server) {
+		s.launch.shell = func(string) (shell.Profile, bool) {
+			return shell.Profile{Name: "Ubuntu", Distro: "Ubuntu"}, true
+		}
+		s.launch.distro = func(profile string) (string, bool) { return "Ubuntu", profile == "Ubuntu" }
+	}
+	const dir = "/home/snow-test-user/project" // in the distribution, not on this host
+	first, _, cs := chatServerIn(t, d)
+	wsl(first)
+	c1 := connect(t, first, 100, 30)
+	c1.Send(&api.Attach{Session: "wsl", Create: true, Dir: dir})
+	nextLayout(t, c1, func(l *api.Layout) bool { return chatIn(l) != 0 })
+	saved := chatPaneOf(t, d, "wsl")
+	// Without this, the restore below passes for the wrong reason: a chat
+	// that fell back to the home folder resumes there.
+	if loaded, err := cs.Load(saved.Conversation); err != nil || loaded.Meta.Folder != dir {
+		t.Fatalf("conversation folder %q, %v; want %q", loaded.Meta.Folder, err, dir)
+	}
+	stopBySignal(first)
+
+	second, _, _ := chatServerIn(t, d)
+	wsl(second)
+	c2 := connect(t, second, 100, 30)
+	c2.Send(&api.Attach{Session: "wsl"})
+	l := nextLayout(t, c2, func(l *api.Layout) bool { return chatIn(l) != 0 })
+	got := c2.WaitChat(chatIn(l), func(*api.ChatSnapshot) bool { return true })
+	if got.Conversation != saved.Conversation {
+		t.Fatalf("restored conversation %q, want %q: the chat did not resume", got.Conversation, saved.Conversation)
 	}
 }
