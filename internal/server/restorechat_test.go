@@ -281,3 +281,88 @@ func TestRestoreChatInDefaultProfilesDistro(t *testing.T) {
 		t.Fatalf("restored conversation %q, want %q: the chat did not resume", got.Conversation, saved.Conversation)
 	}
 }
+
+// savedChatID waits until the saver has written session "work" again after
+// since, and returns the conversation its chat pane names.
+func savedChatID(t *testing.T, d chatDirs, since time.Time) string {
+	t.Helper()
+	var id string
+	eventually(t, "the session to be saved again", func() bool {
+		snap, err := openStore(t, d.sessions).Load("work")
+		if err != nil || !snap.Saved.After(since) {
+			return false
+		}
+		id = snap.Windows[0].Panes[0].Conversation
+		return true
+	})
+	return id
+}
+
+// TestRestoreFailureKeepsSavedConversation: a conversation that cannot be
+// resumed gives an empty chat, but the session file keeps naming the
+// conversation until the chat has a message of its own, so a later restart
+// can still reach it.
+func TestRestoreFailureKeepsSavedConversation(t *testing.T) {
+	const gone = "20200101-000000-deadbeef"
+	for name, damage := range map[string]func(t *testing.T, cs *convstore.Store){
+		"missing": func(*testing.T, *convstore.Store) {},
+		"unreadable": func(t *testing.T, cs *convstore.Store) {
+			p, err := cs.Path(gone)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(p, []byte("not json\n"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			d := newChatDirs(t)
+			writeSnapshot(t, d.sessions, chatSnapshot(gone, t.TempDir()))
+			since := time.Now()
+			s, _, cs := chatServerIn(t, d, reply("ok"))
+			damage(t, cs)
+			c := connect(t, s, 100, 30)
+			c.Send(&api.Attach{Session: "work"})
+			id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+			got := c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
+			if got.Conversation == gone {
+				t.Fatalf("the chat resumed %s", gone)
+			}
+			if saved := savedChatID(t, d, since); saved != gone {
+				t.Fatalf("session names %s, want %s until the chat has a message", saved, gone)
+			}
+
+			say(c, id, "hello")
+			c.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "ok" && idle(s) })
+			eventually(t, "the session to name the new conversation", func() bool {
+				snap, err := openStore(t, d.sessions).Load("work")
+				return err == nil && snap.Windows[0].Panes[0].Conversation == got.Conversation
+			})
+		})
+	}
+}
+
+// TestRestoreChatThatCannotStart: when even an empty conversation cannot
+// start, the pane opens as a terminal and the user is told why.
+func TestRestoreChatThatCannotStart(t *testing.T) {
+	d := newChatDirs(t)
+	writeSnapshot(t, d.sessions, chatSnapshot("20200101-000000-deadbeef", t.TempDir()))
+	s, _, _ := chatServerIn(t, d)
+	// A file where the conversation folder was: nothing can be created in it.
+	if err := os.RemoveAll(d.convs); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(d.convs, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "work"})
+	panes := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))
+	if len(panes) != 1 || panes[0].Kind != api.PaneTerminal {
+		t.Fatalf("panes %+v, want the chat to open as a terminal", panes)
+	}
+	if e := nextError(t, c); e.Code != api.CodeNotice || !strings.Contains(e.Message, "20200101-000000-deadbeef") {
+		t.Fatalf("error %+v, want a notice that names the conversation", e)
+	}
+}

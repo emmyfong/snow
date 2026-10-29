@@ -24,6 +24,7 @@ type restoredChat struct {
 	// replays the state they would have shown.
 	pane   *atomic.Int64
 	notice string // says why the chat is empty, when its conversation could not be resumed
+	kept   string // the saved conversation that conv replaces; see chatPane.kept
 	used   bool   // a pane took conv; owned by the model goroutine
 }
 
@@ -95,18 +96,20 @@ func (s *Server) conversationFile(id string) string {
 }
 
 // freshChat starts an empty conversation for a saved pane whose own could not
-// resume. It returns nil if that fails too.
+// resume. If that fails too, the result has no conversation and only a
+// notice: the pane opens as a terminal and the user is told why.
 func (s *Server) freshChat(sp store.Pane, pane *atomic.Int64, cfg agent.Config, notice string) *restoredChat {
 	var model, effort string
 	s.call(func(st *state) { model, effort = st.defaultModel, st.defaultEffort })
 	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
 	if err != nil {
 		s.log.Warn("restore chat failed", "conversation", sp.Conversation, "err", err)
-		return nil
+		notice = fmt.Sprintf("Could not start a chat for %s: %v. This pane is a terminal. The file stays as it is.", s.conversationFile(sp.Conversation), err)
+		return &restoredChat{notice: plain(notice)}
 	}
 	return &restoredChat{
 		conv: conv, snap: newSnapshot(0, conv, model, effort, conv.Mode()),
-		folder: cfg.Folder.Path, profile: cfg.Shell.Name, pane: pane, notice: plain(notice),
+		folder: cfg.Folder.Path, profile: cfg.Shell.Name, pane: pane, notice: plain(notice), kept: sp.Conversation,
 	}
 }
 
@@ -115,7 +118,7 @@ func (rc *restoredChat) paneFor(id int, profile string) *pane {
 	rc.used = true
 	rc.pane.Store(int64(id))
 	rc.snap.Pane = id
-	return &pane{id: id, profile: profile, dir: rc.folder, chat: &chatPane{conv: rc.conv, snap: rc.snap, folder: rc.folder, profile: rc.profile}}
+	return &pane{id: id, profile: profile, dir: rc.folder, chat: &chatPane{conv: rc.conv, snap: rc.snap, folder: rc.folder, profile: rc.profile, kept: rc.kept}}
 }
 
 // closeUnused closes the conversations that no pane took, for an attach
@@ -123,7 +126,7 @@ func (rc *restoredChat) paneFor(id int, profile string) *pane {
 // the model goroutine, after the attach.
 func closeUnused(chats map[int]*restoredChat) {
 	for _, rc := range chats {
-		if !rc.used {
+		if !rc.used && rc.conv != nil {
 			_ = rc.conv.Close()
 		}
 	}

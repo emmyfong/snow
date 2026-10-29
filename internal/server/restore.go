@@ -122,7 +122,7 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string, c
 		r := rects[id]
 		var p *pane
 		var err error
-		if rc := chats[sp.ID]; sp.Kind == store.KindChat && rc != nil {
+		if rc := chats[sp.ID]; sp.Kind == store.KindChat && rc != nil && rc.conv != nil {
 			p = rc.paneFor(int(id), sp.Profile)
 		} else {
 			p, err = st.srv.startPane(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider))

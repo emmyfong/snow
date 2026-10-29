@@ -38,7 +38,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats ma
 		st.save(sess)
 		st.srv.log.Info("session restored", "session", sess.name)
 		for _, rc := range chats {
-			if rc.used && rc.notice != "" {
+			if rc.notice != "" && (rc.used || rc.conv == nil) {
 				notices = append(notices, rc.notice)
 			}
 		}
