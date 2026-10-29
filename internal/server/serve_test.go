@@ -15,8 +15,9 @@ import (
 )
 
 // connect runs the handshake over an in-memory connection served by s and
-// reads the session list the server sends every new client, so a test's
-// next message is the answer to its own request.
+// reads the session list and the agent list the server sends every new
+// client, so a test's next message is the answer to its own request. The
+// client keeps the agent list (apitest.Client.Agents).
 func connect(t testing.TB, s *Server, cols, rows int) *apitest.Client {
 	t.Helper()
 	a, b := net.Pipe()
@@ -26,8 +27,13 @@ func connect(t testing.TB, s *Server, cols, rows int) *apitest.Client {
 	if _, ok := m.(*api.SessionList); !ok {
 		t.Fatalf("first message %#v (%v), want the session list", m, err)
 	}
+	if m, err := c.Next(5 * time.Second); !isAgentList(m) {
+		t.Fatalf("second message %#v (%v), want the agent list", m, err)
+	}
 	return c
 }
+
+func isAgentList(m api.Message) bool { _, ok := m.(*api.AgentList); return ok }
 
 func TestAttachSendsScreen(t *testing.T) {
 	s := newTestServer(t)

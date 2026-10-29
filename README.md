@@ -103,6 +103,24 @@ not say when you answer its question, so a key or a paste you send to a
 pane that needs you shows it as working until its next hook. Snow's own chat panes
 show the same marks. A terminal with no colors shows `-`, `~`, and `!`.
 
+`Ctrl+b w` opens the agents board: every agent in the session, with its
+folder, state, and wait time. `Ctrl+b i` opens the needs-you inbox: every
+agent in every session that waits for you, oldest first. Enter jumps to the
+selected agent's pane, and you answer there.
+
+### Desktop notifications
+
+Snow shows a desktop notification when an agent starts to need you or
+finishes a turn. It skips the notification when the agent's pane is the
+focused pane of a Snow window whose terminal has focus, because you already
+see the result. Turn the events off in `[notify]`:
+
+```toml
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
+```
+
 ### Provider keys
 
 Snow connects to Anthropic (Claude) and OpenAI with your API key.
@@ -194,6 +212,8 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
 | `s` | Switch to another session from a list |
+| `w` | Agents board: every agent in this session |
+| `i` | Needs-you inbox: every agent that waits for you |
 | `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `theme` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
@@ -304,6 +324,10 @@ model = ""            # "provider/model"; empty: the default of the first
 effort = ""           # for example "high"; empty: the provider's choice
 usage = true          # false hides the context gauge and the cost
 
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
+
 # [provider.omniroute]                  # a service that speaks the OpenAI API;
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
@@ -316,7 +340,7 @@ Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),
 `resize-left-5` and the others (by 5), `copy-mode`, `sessions`,
-`command-prompt`, `detach`, `send-prefix`.
+`choose-agent`, `inbox`, `command-prompt`, `detach`, `send-prefix`.
 
 A mistake in the file stops Snow with the line and the setting at fault.
 `/theme` on the home page, or `theme` in `Ctrl+b :`, changes `[theme] name`

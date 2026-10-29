@@ -7,10 +7,13 @@ import (
 
 // SwitchMsg asks the client to leave this session, which keeps running, and
 // attach to Session instead, creating it when Create is set. An empty
-// Session with Create starts a numbered session.
+// Session with Create starts a numbered session. Pane, when set, is a pane
+// of Session to focus, as when the user picks an agent in the needs-you
+// inbox.
 type SwitchMsg struct {
 	Session string
 	Create  bool
+	Pane    int
 }
 
 // openSessions shows the session list over the window, with this session

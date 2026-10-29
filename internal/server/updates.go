@@ -40,6 +40,7 @@ func (st *state) changed(sess *session) {
 	// one that sent no hooks.
 	st.syncNeedsYou(sess)
 	st.syncHint()
+	st.syncAgents()
 }
 
 // repaint makes the next frame send every visible row to the clients of
