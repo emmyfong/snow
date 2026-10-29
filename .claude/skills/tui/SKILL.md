@@ -28,7 +28,7 @@ internal/client/
   authpick/      the provider key picker (`/login`)
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
-  agents/        the agents board (Ctrl+b w): every agent of the session from api.AgentList over the whole window area, with kind, state, how long, folder, and a chat's model and cost; Enter focuses the agent's pane
+  agents/        the agents board (Ctrl+b w) and needs-you inbox (Ctrl+b i): the board lists every agent of the session from api.AgentList over the whole window area, with kind, state, how long, folder, and a chat's model and cost; the inbox lists every agent that waits for the user in every session; Enter focuses the agent's pane in both
   sessionlist/   session rows (name, state, last used, a "needs you" alert) for the home page, and the session list popup (Ctrl+b s)
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
