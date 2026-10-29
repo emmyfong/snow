@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -18,6 +20,27 @@ func TestNoticeKeepsClient(t *testing.T) {
 	}
 	if s := a.screenText(); !strings.Contains(s, text) {
 		t.Fatalf("the status bar does not show the notice:\n%s", s)
+	}
+	// An error shows the same text in its own strip, so the bar must differ.
+	e := newAuthApp()
+	e.Update(&api.Error{Code: api.CodeCommandFailed, Message: text})
+	if a.View().Content == e.View().Content {
+		t.Fatal("the notice is drawn like an error")
+	}
+}
+
+// TestResumeNoticeFits: the notice the server sends on a resume shows on an
+// ordinary terminal, not only on a wide one (#238). The text is the
+// server's, from internal/server/chatswap.go, with a typical folder.
+func TestResumeNoticeFits(t *testing.T) {
+	const text = "Resumed with the approval mode ask. Type /mode auto to stop the questions. Saved in /home/emmyf/projects/snow."
+	for _, width := range []int{80, 100, 120} {
+		a := newAuthApp()
+		a.Update(tea.WindowSizeMsg{Width: width, Height: 30})
+		a.Update(&api.Error{Code: api.CodeNotice, Message: text})
+		if s := a.screenText(); !strings.Contains(s, "Type /mode auto") {
+			t.Fatalf("width %d: the status bar hides the notice:\n%s", width, s)
+		}
 	}
 }
 
@@ -52,13 +75,23 @@ func TestErrorCodesEndClient(t *testing.T) {
 		{api.CodeNotTerminal, false},
 		{api.CodeAuthFailed, false},
 		{api.CodeNotice, false},
+		{api.CodeSessionEnded, false},
 		{"a-code-from-a-newer-server", false},
 	} {
 		t.Run(tc.code, func(t *testing.T) {
 			a := newAuthApp()
-			a.Update(&api.Error{Code: tc.code, Message: "why"})
+			_, cmd := a.Update(&api.Error{Code: tc.code, Message: "why"})
 			if got := a.result.Err != nil; got != tc.ends {
 				t.Fatalf("ends the client = %v, want %v", got, tc.ends)
+			}
+			if tc.ends {
+				// Only a quit is safe to call: another command may be a timer.
+				if cmd == nil {
+					t.Fatal("the client has an error but does not quit")
+				}
+				if _, ok := cmd().(tea.QuitMsg); !ok {
+					t.Fatalf("the command is not a quit: %T", cmd())
+				}
 			}
 		})
 	}
