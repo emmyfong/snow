@@ -162,6 +162,16 @@ func (c *snow) call(ctx context.Context, req api.Message, match func(api.Message
 		return fmt.Errorf("snow mcp: send %T to Snow: %w", req, err)
 	}
 	if err := raw.SetDeadline(time.Time{}); err != nil {
+		// Snow may answer and hang up before the deadline is cleared. A
+		// closed socket then fails this call, but the answer is already in.
+		select {
+		case err := <-done:
+			if err != nil {
+				return fmt.Errorf("snow mcp: %w", err)
+			}
+			return nil
+		default:
+		}
 		_ = raw.Close()
 		return fmt.Errorf("snow mcp: clear the Snow socket deadline: %w", err)
 	}

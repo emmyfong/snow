@@ -174,3 +174,38 @@ func TestSnowListNoServer(t *testing.T) {
 		t.Fatalf("err = %v", err)
 	}
 }
+
+// hangsUpOnClear is a connection that closes when the client clears its
+// deadline after sending the request, once the answer has had time to
+// arrive. The handshake clears the deadline once first. It is the order a
+// fast Snow server and a slow client make on a real socket.
+type hangsUpOnClear struct {
+	net.Conn
+	clears *int
+}
+
+func (c hangsUpOnClear) SetDeadline(t time.Time) error {
+	if t.IsZero() {
+		*c.clears++
+		if *c.clears == 2 {
+			time.Sleep(200 * time.Millisecond)
+			_ = c.Close()
+		}
+	}
+	return c.Conn.SetDeadline(t)
+}
+
+// TestSnowAnswerBeforeDeadlineClear: an answer that arrives before the
+// client clears its socket deadline is the call's result, not an error.
+func TestSnowAnswerBeforeDeadlineClear(t *testing.T) {
+	ours, theirs := net.Pipe()
+	go fakeSnow(t, theirs, func(api.Message) api.Message { return &api.SendKeys{Pane: 2} })
+	c := &snow{caller: 7, dial: func() (net.Conn, error) { return hangsUpOnClear{ours, new(int)}, nil }}
+	sent, err := c.Send(context.Background(), 2, "go", nil)
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if sent.Pane != 2 {
+		t.Fatalf("sent = %+v", sent)
+	}
+}
