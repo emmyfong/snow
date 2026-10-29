@@ -1,7 +1,9 @@
 package openai
 
 import (
+	"cmp"
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"io"
 	"slices"
@@ -27,20 +29,23 @@ type chatStream struct {
 	key    string // the key the request sent, which errors must not repeat
 
 	started bool
-	finish  string // finish_reason, once the model has stopped
-	refused bool   // the reply holds a refusal
-	calls   map[int64]*chatCall
+	finish  string              // finish_reason, once the model has stopped
+	refused bool                // the reply holds a refusal
+	calls   []*chatCall         // in order of arrival
+	open    map[int64]*chatCall // the call each index adds to now
 	usage   *provider.Usage
+	prefix  string // makes the ids Snow gives to calls unique to this reply
 }
 
 // chatCall is a tool call being joined from its pieces.
 type chatCall struct {
+	index    int64
 	id, name string
 	args     []byte
 }
 
 func newChatStream(ctx context.Context, sse *ssestream.Stream[sdk.ChatCompletionChunk], key string) *chatStream {
-	return &chatStream{ctx: ctx, sse: sse, key: key, calls: map[int64]*chatCall{}}
+	return &chatStream{ctx: ctx, sse: sse, key: key, open: map[int64]*chatCall{}}
 }
 
 // Next implements provider.Stream.
@@ -91,6 +96,9 @@ func (s *chatStream) handle(c sdk.ChatCompletionChunk) {
 		s.started = true
 		s.queue = append(s.queue, &provider.Start{Model: c.Model})
 	}
+	if s.prefix == "" && c.ID != "" {
+		s.prefix = "call_" + c.ID + "_"
+	}
 	if u := c.Usage; u.PromptTokens > 0 || u.CompletionTokens > 0 || u.TotalTokens > 0 {
 		cached, written := int(u.PromptTokensDetails.CachedTokens), int(u.PromptTokensDetails.CacheWriteTokens)
 		s.usage = &provider.Usage{
@@ -114,10 +122,16 @@ func (s *chatStream) handle(c sdk.ChatCompletionChunk) {
 			s.queue = append(s.queue, &provider.TextDelta{Text: ch.Delta.Refusal})
 		}
 		for _, tc := range ch.Delta.ToolCalls {
-			call := s.calls[tc.Index]
+			call := s.open[tc.Index]
+			if call != nil && tc.ID != "" && call.id != "" && tc.ID != call.id {
+				// A new id on an index in use starts a new call: some services
+				// send no index, or the same one for every call.
+				call = nil
+			}
 			if call == nil {
-				call = &chatCall{}
-				s.calls[tc.Index] = call
+				call = &chatCall{index: tc.Index}
+				s.open[tc.Index] = call
+				s.calls = append(s.calls, call)
 			}
 			if tc.ID != "" {
 				call.id = tc.ID
@@ -136,25 +150,30 @@ func (s *chatStream) handle(c sdk.ChatCompletionChunk) {
 // end queues what waited for the reply to finish: the tool calls in order
 // of their index, the usage, and the stop reason.
 func (s *chatStream) end() {
-	indexes := make([]int64, 0, len(s.calls))
-	for i := range s.calls {
-		indexes = append(indexes, i)
-	}
-	slices.Sort(indexes)
-	for _, i := range indexes {
-		call := s.calls[i]
+	slices.SortStableFunc(s.calls, func(a, b *chatCall) int { return cmp.Compare(a.index, b.index) })
+	for _, call := range s.calls {
 		id := call.id
 		if id == "" {
 			// A service that sends no ID still needs one to pair the result.
-			id = "call_" + strconv.FormatInt(i, 10)
+			id = s.callID(call.index)
 		}
 		s.queue = append(s.queue, &provider.ToolUse{ID: id, Name: call.name, Input: validArguments(call.args)})
 	}
 	if s.usage != nil {
 		s.queue = append(s.queue, s.usage)
 	}
-	s.queue = append(s.queue, &provider.Stop{Reason: s.stopReason(len(indexes) > 0)})
+	s.queue = append(s.queue, &provider.Stop{Reason: s.stopReason(len(s.calls) > 0)})
 	s.done = true
+}
+
+// callID makes an ID for the call at index. It holds the reply's own ID, or
+// a random one when the service sends none, so no two replies share an ID
+// and a later result cannot pair with an old call.
+func (s *chatStream) callID(index int64) string {
+	if s.prefix == "" {
+		s.prefix = "call_" + rand.Text()[:8] + "_"
+	}
+	return s.prefix + strconv.FormatInt(index, 10)
 }
 
 // validArguments returns args as JSON the conversation file can hold. A

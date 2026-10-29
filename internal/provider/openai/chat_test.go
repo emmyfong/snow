@@ -200,6 +200,49 @@ func TestChatBadArguments(t *testing.T) {
 	}
 }
 
+// TestChatToolCallsWithoutIndex: a service that sends no index, or the same
+// one for every call, still gets its calls told apart by their ids.
+func TestChatToolCallsWithoutIndex(t *testing.T) {
+	cs := newChatServer(t, "chat_no_index.sse")
+	evs, err := collectChat(t, chatProvider(cs.URL, false), provider.Request{Model: "m", Messages: []provider.Message{user("Hi")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, u := range providertest.Only[*provider.ToolUse](evs) {
+		got = append(got, fmt.Sprintf("%s %s %s", u.ID, u.Name, u.Input))
+	}
+	want := []string{`call_a read_file {"path":"a.go"}`, `call_b run {"cmd":"ls"}`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("calls %q, want %q", got, want)
+	}
+}
+
+// TestChatToolCallIDs: a call the service gave no id gets one that pairs
+// its result, and no two replies share one.
+func TestChatToolCallIDs(t *testing.T) {
+	ids := func(fixture string) []string {
+		cs := newChatServer(t, fixture)
+		evs, err := collectChat(t, chatProvider(cs.URL, false), provider.Request{Model: "m", Messages: []provider.Message{user("Hi")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, u := range providertest.Only[*provider.ToolUse](evs) {
+			out = append(out, u.ID)
+		}
+		return out
+	}
+	if got, want := ids("chat_no_id.sse"), []string{"call_chatcmpl-77_0", "call_chatcmpl-77_1"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("ids %q, want %q", got, want)
+	}
+	// With no response id either, the ids still differ from reply to reply.
+	a, b := ids("chat_no_id_no_response.sse"), ids("chat_no_id_no_response.sse")
+	if len(a) != 2 || a[0] == a[1] || a[0] == b[0] || !strings.HasPrefix(a[0], "call_") {
+		t.Fatalf("ids %q and %q", a, b)
+	}
+}
+
 // TestChatCutStream: a stream that ends before finish_reason is a cut
 // reply, not a finished one.
 func TestChatCutStream(t *testing.T) {
@@ -374,6 +417,22 @@ func TestChatErrors(t *testing.T) {
 		var pe *provider.Error
 		if !errors.As(err, &pe) || pe.Kind != provider.KindNetwork {
 			t.Fatalf("error = %v, want KindNetwork", err)
+		}
+	})
+	t.Run("bare string error inside the stream", func(t *testing.T) {
+		// Ollama and llama.cpp send {"error": "text"}, not an object.
+		cs := newChatServer(t, "chat_error_string.sse")
+		_, err := collectChat(t, chatProvider(cs.URL, false), provider.Request{Model: "m"})
+		var pe *provider.Error
+		if !errors.As(err, &pe) || !strings.Contains(err.Error(), "model 'x' not found") {
+			t.Fatalf("error = %v (%#v)", err, pe)
+		}
+	})
+	t.Run("bare string error echoing the key", func(t *testing.T) {
+		srv := rawServer(t, 200, "text/event-stream", "data: {\"error\":\"bad key "+compatKey+"\"}\n\n", nil)
+		_, err := collectChat(t, chatProvider(strings.TrimSuffix(srv.URL, "/"), false), provider.Request{Model: "m"})
+		if err == nil || !strings.Contains(err.Error(), "bad key") || strings.Contains(fmt.Sprintf("%v %+v %#v", err, err, err), compatKey) {
+			t.Fatalf("error = %v", err)
 		}
 	})
 	t.Run("error inside the stream", func(t *testing.T) {

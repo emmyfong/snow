@@ -36,20 +36,39 @@ func mapErr(ctx context.Context, err error, key string) error {
 	}
 	var streamErr *ssestream.StreamError
 	if errors.As(err, &streamErr) {
-		var body struct {
-			Error struct {
-				Code    string `json:"code"`
-				Type    string `json:"type"`
-				Message string `json:"message"`
-			} `json:"error"`
-		}
-		_ = json.Unmarshal(streamErr.Event.Data, &body)
-		return failure(0, body.Error.Code, body.Error.Type, body.Error.Message, key)
+		code, typ, msg := streamErrorFields(streamErr.Event.Data)
+		return failure(0, code, typ, msg, key)
 	}
 	if key != "" && strings.Contains(err.Error(), key) {
 		err = errors.New(strings.ReplaceAll(err.Error(), key, keyMark))
 	}
 	return &provider.Error{Kind: provider.KindNetwork, Err: err}
+}
+
+// streamErrorFields reads the error a service sends inside a stream. The
+// API sends an object with a code, a type, and a message. Ollama and
+// llama.cpp send a bare string. Anything else gives no fields, and the
+// caller shows that there was no message.
+func streamErrorFields(data []byte) (code, typ, msg string) {
+	var body struct {
+		Error json.RawMessage `json:"error"`
+	}
+	if json.Unmarshal(data, &body) != nil {
+		return "", "", ""
+	}
+	var obj struct {
+		Code    string `json:"code"`
+		Type    string `json:"type"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(body.Error, &obj) == nil {
+		return obj.Code, obj.Type, obj.Message
+	}
+	var text string
+	if json.Unmarshal(body.Error, &text) == nil {
+		return "", "", text
+	}
+	return "", "", ""
 }
 
 // keyMark replaces a key in a message.
