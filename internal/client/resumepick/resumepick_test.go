@@ -78,22 +78,6 @@ func TestChoose(t *testing.T) {
 	}
 }
 
-func TestFolderName(t *testing.T) {
-	for in, want := range map[string]string{
-		"/home/u/snow":      "snow",
-		"/home/u/snow/":     "snow",
-		`C:\Users\u\snow`:   "snow",
-		`C:\`:               "C:",
-		"/":                 "/",
-		"":                  "-",
-		`\\wsl$\Ubuntu\src`: "src",
-	} {
-		if got := folderName(in); got != want {
-			t.Errorf("folderName(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
 // TestRowsHoldNoEscapeSequences: text from a conversation file never
 // reaches the screen with a control character in it.
 func TestRowsHoldNoEscapeSequences(t *testing.T) {

@@ -63,13 +63,3 @@ func span(d time.Duration) string {
 	}
 	return strconv.Itoa(int(d.Hours()/24)) + "d"
 }
-
-// folderName is the last element of a folder path, on any OS: the server
-// may run on another one than the client, such as in WSL.
-func folderName(path string) string {
-	path = strings.TrimRight(path, `/\`)
-	if i := strings.LastIndexAny(path, `/\`); i >= 0 {
-		return path[i+1:]
-	}
-	return path
-}

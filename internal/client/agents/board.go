@@ -172,7 +172,7 @@ func (b *Board) items(g theme.Glyphs) []ui.ListItem {
 	now := b.now()
 	items := make([]ui.ListItem, len(b.agents))
 	for i, a := range b.agents {
-		cols := []string{place(a), kindName(a.Kind), stateText(a.State, g), span(now.Sub(a.Since)), folderName(a.Folder)}
+		cols := []string{place(a), kindName(a.Kind), stateText(a.State, g), span(now.Sub(a.Since)), ui.FolderName(a.Folder)}
 		if a.Kind == api.AgentKindChat {
 			model := a.Model
 			if b.usage && a.Cost > 0 {

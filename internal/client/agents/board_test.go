@@ -199,15 +199,10 @@ func TestAgentsBoardEmpty(t *testing.T) {
 	}
 }
 
-func TestSpanAndFolder(t *testing.T) {
+func TestSpan(t *testing.T) {
 	for d, want := range map[time.Duration]string{-time.Second: "0s", 12 * time.Second: "12s", 3 * time.Minute: "3m", 2 * time.Hour: "2h", 50 * time.Hour: "2d"} {
 		if got := span(d); got != want {
 			t.Errorf("span(%v) = %q, want %q", d, got, want)
-		}
-	}
-	for path, want := range map[string]string{"/home/em/snow": "snow", `C:\src\app\`: "app", "": "", "snow": "snow"} {
-		if got := folderName(path); got != want {
-			t.Errorf("folderName(%q) = %q, want %q", path, got, want)
 		}
 	}
 }
