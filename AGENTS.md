@@ -17,8 +17,8 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool, claudecode, notify, mcp,
-                     later: skills, gate, editor, worktree
+                     convstore, agent, tool, claudecode, notify, mcp, worktree,
+                     later: skills, gate, editor
 pkg/api/             the only public package: API types for other clients
 ```
 

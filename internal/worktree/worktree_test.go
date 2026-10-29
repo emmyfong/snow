@@ -70,6 +70,9 @@ func TestGitConfigUntouched(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if err := r.Remove(context.Background(), filepath.Join(r.Path, ".worktrees", "feat-a")); err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Equal(before, readFile(t, cfg)) {
 		t.Errorf("the repository config changed:\n%s", readFile(t, cfg))
 	}

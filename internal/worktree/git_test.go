@@ -3,7 +3,10 @@ package worktree
 import (
 	"context"
 	"reflect"
+	"runtime"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/shell"
 )
 
 // TestCommand: a WSL repository runs git inside its distribution through
@@ -37,8 +40,8 @@ func containsAll(env []string, want ...string) bool {
 	return true
 }
 
-// TestWSLPaths: a WSL repository's paths stay Linux paths, and the exclude
-// file is opened through its \\wsl.localhost path only on Windows.
+// TestWSLPaths: a WSL repository's paths stay Linux paths when Snow joins
+// and compares them.
 func TestWSLPaths(t *testing.T) {
 	r := Repo{Path: "/home/u/proj", Distro: "Ubuntu"}
 	if got := r.join("/home/u/proj", ".worktrees", "feat-a"); got != "/home/u/proj/.worktrees/feat-a" {
@@ -46,5 +49,23 @@ func TestWSLPaths(t *testing.T) {
 	}
 	if !r.same("/home/u/proj/", "/home/u/proj") || r.same("/home/u/Proj", "/home/u/proj") {
 		t.Error("same compares WSL paths as Linux paths: exact")
+	}
+}
+
+// TestOSPath: a WSL repository's files are opened through their
+// \\wsl.localhost path on Windows, which is the only OS that has one, and
+// by their own path anywhere else. A native repository's path never changes.
+func TestOSPath(t *testing.T) {
+	wsl := Repo{Path: "/home/u/p", Distro: "Ubuntu"}
+	want := "/home/u/p/.git/info/exclude"
+	if runtime.GOOS == "windows" {
+		want = shell.WSLToUNC("Ubuntu", want)
+	}
+	if got := wsl.osPath("/home/u/p/.git/info/exclude"); got != want {
+		t.Errorf("WSL osPath = %q, want %q", got, want)
+	}
+	native := Repo{Path: "x"}
+	if got := native.osPath("some/path"); got != "some/path" {
+		t.Errorf("native osPath = %q", got)
 	}
 }

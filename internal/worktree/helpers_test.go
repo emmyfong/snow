@@ -18,6 +18,17 @@ func isolate(t *testing.T) {
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "gitconfig"))
 	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(home, "gitconfig-system"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	// A git run inside a hook or a wrapper leaves these set, and they point
+	// every command at the wrong repository. Setenv first, so the old value
+	// comes back when the test ends.
+	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"} {
+		t.Setenv(name, "")
+		if err := os.Unsetenv(name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// A repository above the temp folder must not be found by accident.
+	t.Setenv("GIT_CEILING_DIRECTORIES", os.TempDir())
 	for _, who := range []string{"AUTHOR", "COMMITTER"} {
 		t.Setenv("GIT_"+who+"_NAME", "Test")
 		t.Setenv("GIT_"+who+"_EMAIL", "test@example.com")
