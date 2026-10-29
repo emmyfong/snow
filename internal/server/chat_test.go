@@ -24,7 +24,14 @@ const chatModel = "fake/model-1"
 // that plays replies.
 func chatOptions(t *testing.T, replies ...providertest.Reply) (Options, *providertest.Fake, *convstore.Store) {
 	t.Helper()
-	store, err := convstore.Open(filepath.Join(t.TempDir(), "conversations"))
+	return chatOptionsIn(t, filepath.Join(t.TempDir(), "conversations"), replies...)
+}
+
+// chatOptionsIn is chatOptions with its conversation store in dir, so two
+// servers in one test can share it, as a restart does.
+func chatOptionsIn(t *testing.T, dir string, replies ...providertest.Reply) (Options, *providertest.Fake, *convstore.Store) {
+	t.Helper()
+	store, err := convstore.Open(dir)
 	if err != nil {
 		t.Fatal(err)
 	}

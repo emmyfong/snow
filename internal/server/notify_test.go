@@ -1,14 +1,17 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,22 +22,26 @@ import (
 )
 
 // notifyHelper returns a notifier that starts this test binary as its
-// helper, and the file the helper appends each notice to.
-func notifyHelper(t *testing.T) (*notify.Notifier, string) {
+// helper, and the file the helper appends each notice to. change adjusts
+// the options before the notifier is built.
+func notifyHelper(t *testing.T, change func(*notify.Options)) (*notify.Notifier, string) {
 	t.Helper()
 	exe, err := os.Executable()
 	if err != nil {
 		t.Fatal(err)
 	}
 	file := filepath.Join(t.TempDir(), "notices")
-	n := notify.New(notify.Options{
+	opts := notify.Options{
 		NeedsYou: true, TurnEnd: true,
 		Helper: func(ctx context.Context, n notify.Notice) *exec.Cmd {
 			return exec.CommandContext(ctx, exe, "-test.run=TestNotifyHelperProcess", "--",
 				n.Kind.String(), n.Agent, n.Session, file)
 		},
-	})
-	return n, file
+	}
+	if change != nil {
+		change(&opts)
+	}
+	return notify.New(opts), file
 }
 
 // TestNotifyHelperProcess is not a test: it is the helper the notifier
@@ -104,7 +111,7 @@ func expectNoNotice(t *testing.T, file string, count int) {
 // opens one chat in session "work".
 func notifyChat(t *testing.T, replies ...providertest.Reply) (*Server, *apitest.Client, int, string) {
 	t.Helper()
-	n, file := notifyHelper(t)
+	n, file := notifyHelper(t, nil)
 	s, _, c, id := chatInFolderOpts(t, func(o *Options) { o.Notify = n }, t.TempDir(), replies...)
 	return s, c, id, file
 }
@@ -121,9 +128,9 @@ func TestNotifyOnNeedsYou(t *testing.T) {
 	expectNoNotice(t, file, 1)
 }
 
-// TestNotifyDropsQuestionText: a question starts the notification, and its
-// text and the message the user sent never reach the notification.
-func TestNotifyDropsQuestionText(t *testing.T) {
+// TestNotifyTextHasNoQuestionText: a question starts the notification, and
+// its text and the message the user sent never reach the notification.
+func TestNotifyTextHasNoQuestionText(t *testing.T) {
 	_, c, id, file := notifyChat(t, askReply("q1"), reply("done"))
 	say(c, id, "pick a store")
 	nextAgents(t, c, hasAgentState(id, api.AgentNeedsYou))
@@ -183,5 +190,96 @@ func TestNotifyWhenAnotherSessionHasFocus(t *testing.T) {
 	nextAgents(t, c, hasAgentState(id, api.AgentNeedsYou))
 	if got := waitNotices(t, file, 1); got[0] != "needs-you|Snow chat|work" {
 		t.Fatalf("notice %q, want the chat in the session the user does not look at", got[0])
+	}
+}
+
+// TestNotifyWhenAnotherPaneHasFocus: a focused client that shows another
+// pane of the same session does not silence the notification.
+func TestNotifyWhenAnotherPaneHasFocus(t *testing.T) {
+	_, c, first, file := notifyChat(t, writeReply("t1"), reply("done"))
+	second := openSecondChat(t, c, first)
+	c.Send(&api.Command{Op: api.OpFocus, Target: first})
+	nextLayout(t, c, func(l *api.Layout) bool {
+		for _, p := range shownPanes(l) {
+			if p.ID == first {
+				return p.Focused
+			}
+		}
+		return false
+	})
+	c.Send(&api.ClientFocus{Focused: true})
+	say(c, second, "write it")
+	nextAgents(t, c, hasAgentState(second, api.AgentNeedsYou))
+	if got := waitNotices(t, file, 1); got[0] != "needs-you|Snow chat|work" {
+		t.Fatalf("notice %q, want the chat in the pane the user does not look at", got[0])
+	}
+}
+
+// TestNotifyOff: both events off starts no helper.
+func TestNotifyOff(t *testing.T) {
+	n, file := notifyHelper(t, func(o *notify.Options) {
+		o.NeedsYou, o.TurnEnd = false, false
+	})
+	_, _, c, id := chatInFolderOpts(t, func(o *Options) { o.Notify = n }, t.TempDir(), writeReply("t1"), reply("done"))
+	say(c, id, "write it")
+	nextAgents(t, c, hasAgentState(id, api.AgentNeedsYou))
+	expectNoNotice(t, file, 0)
+}
+
+// logBuffer is a log writer that the notifier's goroutine and the test can
+// use at the same time.
+type logBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
+}
+
+// TestNotifyHelperMissing: a helper that cannot start logs one line and
+// leaves the notice unsent.
+func TestNotifyHelperMissing(t *testing.T) {
+	var log logBuffer
+	missing := filepath.Join(t.TempDir(), "no-such-helper")
+	n, file := notifyHelper(t, func(o *notify.Options) {
+		o.Log = slog.New(slog.NewTextHandler(&log, nil))
+		o.Helper = func(ctx context.Context, _ notify.Notice) *exec.Cmd {
+			return exec.CommandContext(ctx, missing)
+		}
+	})
+	_, _, c, id := chatInFolderOpts(t, func(o *Options) { o.Notify = n }, t.TempDir(), writeReply("t1"), reply("done"))
+	say(c, id, "write it")
+	nextAgents(t, c, hasAgentState(id, api.AgentNeedsYou))
+	deadline := time.Now().Add(apitest.Wait)
+	for time.Now().Before(deadline) && !strings.Contains(log.String(), "desktop notification failed") {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if got := strings.Count(log.String(), "desktop notification failed"); got != 1 {
+		t.Fatalf("logged %d failures, want 1: %s", got, log.String())
+	}
+	expectNoNotice(t, file, 0)
+}
+
+// TestAgentWord: an unknown agent kind gets a neutral word, never another
+// agent's name.
+func TestAgentWord(t *testing.T) {
+	for kind, want := range map[string]string{
+		api.AgentKindChat:       "Snow chat",
+		api.AgentKindClaudeCode: "Claude Code",
+		"":                      "An agent",
+		"gemini":                "An agent",
+	} {
+		if got := agentWord(kind); got != want {
+			t.Errorf("agentWord(%q) = %q, want %q", kind, got, want)
+		}
 	}
 }

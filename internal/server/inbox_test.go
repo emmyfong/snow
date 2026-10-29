@@ -2,14 +2,15 @@ package server
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
-	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/internal/provider/providertest"
+	"github.com/emmyfong/snow/internal/tool"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -31,6 +32,9 @@ func twoWaitingChats(t *testing.T) (*apitest.Client, [2]int, []api.AgentInfo) {
 	second := openSecondChat(t, c, first)
 	say(c, first, "write one")
 	nextAgents(t, c, hasAgentState(first, api.AgentNeedsYou))
+	// The Windows clock ticks about every 15.6 ms, and two approvals in one
+	// tick would share Since.
+	time.Sleep(20 * time.Millisecond)
 	say(c, second, "write two")
 	list := nextAgents(t, c, func(l []api.AgentInfo) bool {
 		return hasAgentState(first, api.AgentNeedsYou)(l) && hasAgentState(second, api.AgentNeedsYou)(l)
@@ -67,22 +71,39 @@ func TestInboxItemLeavesOnAnswer(t *testing.T) {
 	}
 }
 
-// TestInboxSurvivesRestart: a conversation Snow stopped while a question
-// waited, as a server restart does, is listed as needing the user again
-// once a chat opens it.
+// TestInboxSurvivesRestart: a conversation with an open question, saved by
+// one server, is listed as needing the user again when a second server
+// resumes it after the first stops.
 func TestInboxSurvivesRestart(t *testing.T) {
-	dir := t.TempDir()
-	_, store, c, id := chatInFolder(t, dir)
-	at := time.Now()
-	in := json.RawMessage(`{"question":"Which store?","options":[{"label":"A"},{"label":"B"}]}`)
-	past := saveConversation(t, store, dir,
-		&convstore.User{At: at, Text: "pick a store"},
-		&convstore.Assistant{At: at, Stop: convstore.StopToolUse, Blocks: []convstore.Block{{Kind: convstore.BlockToolUse, ID: "q1", Name: "ask", Input: in}}},
-		&convstore.Question{At: at, ToolUseID: "q1", Text: "Which store?", Options: []convstore.QuestionOption{{Label: "A"}, {Label: "B"}}},
-	)
-	nextAgents(t, c, hasAgentState(id, api.AgentIdle))
-	chatInputOf(c, id, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = past })
-	a := mustAgent(t, nextAgents(t, c, hasAgentState(id, api.AgentNeedsYou)), id)
+	folder := t.TempDir()
+	convs := filepath.Join(t.TempDir(), "conversations")
+
+	// The first server saves the question, then stops as a restart does.
+	opts, _, _ := chatOptionsIn(t, convs, askReply("q1"), reply("done"))
+	opts.Chat.Tools = tool.Builtin()
+	first := New(opts)
+	t.Cleanup(first.Close)
+	c1 := connect(t, first, 100, 30)
+	id1 := splitChat(t, c1, folder)
+	say(c1, id1, "pick a store")
+	c1.WaitChat(id1, func(s *api.ChatSnapshot) bool {
+		return s.Question != nil && s.State == api.ChatStateApproval
+	})
+	conv := c1.Chat(id1).Conversation
+	if conv == "" {
+		t.Fatal("the first server saved no conversation")
+	}
+	first.Close()
+
+	// The second server opens the same conversation folder and resumes it.
+	opts, _, _ = chatOptionsIn(t, convs)
+	opts.Chat.Tools = tool.Builtin()
+	second := New(opts)
+	t.Cleanup(second.Close)
+	c2 := connect(t, second, 100, 30)
+	id2 := splitChat(t, c2, folder)
+	chatInputOf(c2, id2, api.ChatInputResume, func(in *api.ChatInput) { in.Conversation = conv })
+	a := mustAgent(t, nextAgents(t, c2, hasAgentState(id2, api.AgentNeedsYou)), id2)
 	if a.Waits != api.AgentWaitsQuestion {
 		t.Fatalf("resumed agent %+v, want it waiting for its question", a)
 	}
