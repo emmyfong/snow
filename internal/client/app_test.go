@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
@@ -173,15 +174,24 @@ func TestHomeOpensASession(t *testing.T) {
 // TestFocusReportsReachTheServer: the terminal's focus events go to the
 // server, so it skips a desktop notification for a pane the user already
 // sees. A client that opens a session says where the terminal stands right
-// away.
+// away, and asks the terminal whether it reports focus first.
 func TestFocusReportsReachTheServer(t *testing.T) {
 	var sent []api.Message
 	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
 	if !a.focused {
-		t.Fatal("a program starts in the foreground")
+		t.Fatal("a terminal starts in the foreground")
 	}
+	if a.View().ReportFocus {
+		t.Fatal("the app must wait for the terminal to report focus support")
+	}
+	msg := a.Init()()
+	raw, ok := msg.(tea.RawMsg)
+	if !ok || raw.Msg != ansi.RequestModeFocusEvent {
+		t.Fatalf("Init sent %#v, want the focus mode query", msg)
+	}
+	a.Update(tea.ModeReportMsg{Mode: ansi.ModeFocusEvent, Value: ansi.ModeSet})
 	if !a.View().ReportFocus {
-		t.Fatal("the app must ask Bubble Tea for focus events")
+		t.Fatal("a terminal that reports focus support must get View.ReportFocus")
 	}
 
 	a.Update(home.OpenMsg{Session: "api", Create: true})
@@ -200,6 +210,39 @@ func TestFocusReportsReachTheServer(t *testing.T) {
 	a.Update(tea.FocusMsg{})
 	if f, ok := sent[len(sent)-1].(*api.ClientFocus); !ok || !f.Focused {
 		t.Fatalf("sent %#v, want ClientFocus{Focused: true}", sent[len(sent)-1])
+	}
+}
+
+// TestUnsupportedFocusReportsNotFocused: a terminal that does not recognize
+// the focus mode leaves the app unfocused, so the server never skips a
+// notification for a pane nobody watches.
+func TestUnsupportedFocusReportsNotFocused(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	a.Update(tea.ModeReportMsg{Mode: ansi.ModeFocusEvent, Value: ansi.ModeNotRecognized})
+	if a.focused || a.View().ReportFocus {
+		t.Fatalf("focused %v, ReportFocus %v; want both false", a.focused, a.View().ReportFocus)
+	}
+	if f, ok := sent[len(sent)-1].(*api.ClientFocus); !ok || f.Focused {
+		t.Fatalf("sent %#v, want ClientFocus{Focused: false}", sent[len(sent)-1])
+	}
+}
+
+// TestStartupAttachReportsFocus: the path a client takes without the home
+// page attaches and reports focus, so the pane it shows does not notify.
+func TestStartupAttachReportsFocus(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/src", theme.Default())
+	a.attachStart("work")
+	if len(sent) != 2 {
+		t.Fatalf("sent %#v, want Attach and the focus report", sent)
+	}
+	at, ok := sent[0].(*api.Attach)
+	if !ok || at.Session != "work" || !at.Create || at.Dir != "/src" {
+		t.Fatalf("sent %#v, want Attach{work, create, /src}", sent[0])
+	}
+	if f, ok := sent[1].(*api.ClientFocus); !ok || !f.Focused {
+		t.Fatalf("sent %#v, want ClientFocus{Focused: true}", sent[1])
 	}
 }
 
@@ -324,7 +367,7 @@ func TestSwitchAttachesOtherSession(t *testing.T) {
 	openSession(t, a, "api")
 	old := a.screen
 	n := len(sent)
-	a.Update(session.SwitchMsg{Session: "web"})
+	a.Update(session.SwitchMsg{Session: "web", Pane: 9})
 	if len(sent) != n+3 {
 		t.Fatalf("sent %v, want Detach, Attach, then the focus report", sent[n:])
 	}
@@ -332,8 +375,8 @@ func TestSwitchAttachesOtherSession(t *testing.T) {
 		t.Fatalf("first sent %#v, want Detach", sent[n])
 	}
 	at, ok := sent[n+1].(*api.Attach)
-	if !ok || at.Session != "web" || at.Create || at.Dir != "/src" {
-		t.Fatalf("then sent %#v, want Attach{web, /src}", sent[n+1])
+	if !ok || at.Session != "web" || at.Create || at.Dir != "/src" || at.Pane != 9 {
+		t.Fatalf("then sent %#v, want Attach{web, /src, pane 9}", sent[n+1])
 	}
 	if _, ok := sent[n+2].(*api.ClientFocus); !ok {
 		t.Fatalf("last sent %#v, want the focus report", sent[n+2])

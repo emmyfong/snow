@@ -7,6 +7,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/command"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
@@ -30,30 +31,33 @@ type connClosedMsg struct{}
 // app is the root model. It routes messages to the current screen and ends
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
-	screen     Screen
-	send       func(api.Message)
-	result     Result
-	dir        string           // the folder a session opened from the home page starts in
-	version    string           // Snow's version, for the home page
-	theme      theme.Theme      // the theme from the config, for the home page
-	sessOpts   []session.Option // what a session screen gets besides the theme, such as keys
-	saveTheme  func(name string) error
-	configPath string    // the config file to watch for a new theme; "" watches nothing
-	configMod  time.Time // when the config file last changed, as last seen
-	profile    *tea.ColorProfileMsg
-	sessions   *api.SessionList // the last list, for a screen opened later
-	agents     *api.AgentList   // the last agent list, for a screen opened later
-	opening    bool             // a session is being opened; its Layout has not come
-	openName   string           // the session being opened; "" for a new numbered one
-	leftName   string           // the session shown when the opening began
-	focused    bool             // the terminal reports focus; see api.ClientFocus
-	cols, rows int
+	screen      Screen
+	send        func(api.Message)
+	result      Result
+	dir         string           // the folder a session opened from the home page starts in
+	version     string           // Snow's version, for the home page
+	theme       theme.Theme      // the theme from the config, for the home page
+	sessOpts    []session.Option // what a session screen gets besides the theme, such as keys
+	saveTheme   func(name string) error
+	configPath  string    // the config file to watch for a new theme; "" watches nothing
+	configMod   time.Time // when the config file last changed, as last seen
+	profile     *tea.ColorProfileMsg
+	sessions    *api.SessionList // the last list, for a screen opened later
+	agents      *api.AgentList   // the last agent list, for a screen opened later
+	opening     bool             // a session is being opened; its Layout has not come
+	openName    string           // the session being opened; "" for a new numbered one
+	leftName    string           // the session shown when the opening began
+	focused     bool             // the terminal has focus
+	focusReport bool             // the terminal reports focus changes; see api.ClientFocus
+	cols, rows  int
 }
 
 // newHomeApp returns an app that starts on the home page. Opening a session
-// there attaches and switches to the session screen. A program starts in
-// the foreground, and Bubble Tea reports only later changes, so the terminal
-// starts focused.
+// there attaches and switches to the session screen. A terminal starts in the
+// foreground, and many send no event when Bubble Tea starts reporting focus,
+// so the app starts focused. It asks the terminal whether it reports focus
+// before it sets View.ReportFocus; an unsupported terminal reports that it is
+// not focused, so the server never mistakes it for a watching user.
 func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
 	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts, focused: true}
 }
@@ -119,15 +123,20 @@ func (a *app) showHome(notice string) {
 	}
 }
 
-// open attaches to session, creating it when create is set, and shows a
-// new session screen for it. Pane, when set, is a pane of that session to
-// focus, as when the user picks an agent in the needs-you inbox.
-func (a *app) open(session string, create bool, pane int) {
+// attach asks the server for session, creating it when create is set, and
+// then reports where the terminal stands. The server skips a notification
+// for a pane a focused client shows, so it must not wait for a later focus
+// event: many terminals send none until the focus changes.
+func (a *app) attach(session string, create bool, pane int) {
 	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir, Pane: pane})
-	// The new session screen hears about focus changes from now on; say
-	// where the terminal stands so a notification does not go to a user
-	// who looks at the pane.
 	a.send(&api.ClientFocus{Focused: a.focused})
+}
+
+// open attaches to session and shows a new session screen for it. Pane,
+// when set, is a pane of that session to focus, as when the user picks an
+// agent in the needs-you inbox.
+func (a *app) open(session string, create bool, pane int) {
+	a.attach(session, create, pane)
 	a.opening, a.openName, a.leftName = true, session, a.result.Session
 	a.result.Detached = false
 	s := a.newSession()
@@ -140,6 +149,14 @@ func (a *app) open(session string, create bool, pane int) {
 	if a.agents != nil {
 		s.Update(a.agents)
 	}
+}
+
+// attachStart attaches to the session Run started for and shows its screen.
+// It reports focus too, so a client started in the foreground never gets a
+// notification for the pane it shows.
+func (a *app) attachStart(session string) {
+	a.attach(session, true, 0)
+	a.screen = a.newSession()
 }
 
 // staleLayout reports whether l belongs to another session than the one
@@ -170,10 +187,14 @@ func (a *app) refusedOpen(e *api.Error) bool {
 }
 
 func (a *app) Init() tea.Cmd {
-	if a.configPath == "" {
-		return nil
+	// Ask whether the terminal reports focus events. Some do not, and some
+	// multiplexers need them turned on. Until an answer says otherwise, the
+	// app keeps View.ReportFocus false.
+	cmds := []tea.Cmd{tea.Raw(ansi.RequestModeFocusEvent)}
+	if a.configPath != "" {
+		cmds = append(cmds, watchTheme(a.configPath, a.configMod))
 	}
-	return watchTheme(a.configPath, a.configMod)
+	return tea.Batch(cmds...)
 }
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -187,6 +208,18 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.ColorProfileMsg:
 		a.profile = &msg
+	case tea.ModeReportMsg:
+		if msg.Mode != ansi.ModeFocusEvent {
+			return a, nil
+		}
+		a.focusReport = !msg.Value.IsNotRecognized()
+		if !a.focusReport {
+			// Without focus reports a smart terminal cannot be told from a
+			// background one, so the server must never skip a notification.
+			a.focused = false
+			a.send(&api.ClientFocus{Focused: false})
+		}
+		return a, nil
 	case tea.FocusMsg:
 		a.focused = true
 		a.send(&api.ClientFocus{Focused: true})
@@ -292,8 +325,9 @@ func (a *app) View() tea.View {
 	v := a.screen.View()
 	v.AltScreen = true
 	// Focus and blur events tell the server whether the user looks at an
-	// agent's pane, so it can skip a notification for it.
-	v.ReportFocus = true
+	// agent's pane, so it can skip a notification for it. Ask for them only
+	// once the terminal says it reports them.
+	v.ReportFocus = a.focusReport
 	v.WindowTitle = "snow"
 	if a.result.Session != "" {
 		v.WindowTitle = "snow: " + a.result.Session
