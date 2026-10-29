@@ -47,6 +47,8 @@ type Model struct {
 	cmdOpen  bool               // the slash command list shows
 	cmdSel   int                // the highlighted command in the list
 	cmdQuery string             // the filter the selection belongs to
+
+	recent recentList // the past conversations an empty chat offers
 }
 
 // New returns the chat pane for snap. now is the clock for the elapsed
@@ -110,6 +112,7 @@ func (m *Model) Snapshot(snap *api.ChatSnapshot) {
 	if !snap.Running {
 		m.started = time.Time{}
 	}
+	m.syncRecent()
 }
 
 // Event applies one change from the server.
@@ -121,6 +124,7 @@ func (m *Model) Event(e *api.ChatEvent) {
 	case api.ChatEventTurnEnded:
 		m.started = time.Time{}
 	}
+	m.syncRecent()
 }
 
 // keepPlace runs change, which changes the transcript. While the user is

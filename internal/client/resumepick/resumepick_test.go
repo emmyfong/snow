@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/convrow"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -91,7 +92,7 @@ func TestRowsHoldNoEscapeSequences(t *testing.T) {
 		ID: "c1", Title: "a\x1b]52;c;AAAA\x07b", Model: "m\x1b[2Jx", Folder: "/f\x1b[H",
 		LastActivity: now, Turns: 1,
 	}}})
-	for _, c := range m.row(m.items[0]) {
+	for _, c := range convrow.Columns(m.items[0], now, true) {
 		if strings.ContainsAny(c, "\x1b\x07") {
 			t.Fatalf("cell %q holds a control character", c)
 		}

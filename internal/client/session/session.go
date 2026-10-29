@@ -140,6 +140,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		m.setModelList(msg)
 	case *api.ConversationList:
 		m.setConversationList(msg)
+		if p := m.own[msg.Pane]; p != nil {
+			p.Feed(msg)
+		}
 	case *api.AuthList:
 		return m.setAuthList(msg)
 	case *api.Login:

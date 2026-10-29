@@ -24,6 +24,7 @@ internal/client/
   listpick/      the list popup (rows, keys, click mapping) that the mode and resume pickers share
   modepick/      the approval mode picker (`/mode`)
   resumepick/    the past-conversation picker (`/resume`; `Ctrl+a` toggles every folder)
+  convrow/       the cells of one past-conversation row (`convrow.Columns`): the resume picker and an empty chat's list of recent conversations share it
   modelpick/     the model and effort picker (`/model`)
   authpick/      the provider key picker (`/login`)
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys
@@ -36,7 +37,7 @@ internal/client/
   mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
-  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
+  chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, the recent conversations of its folder while it is empty (`recent.go`: Up, Down, Enter or a click resumes, typing starts a new one, `Ctrl+a` shows every folder), tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
 ```
 
