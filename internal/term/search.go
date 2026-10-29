@@ -2,6 +2,7 @@ package term
 
 import (
 	"slices"
+	"strings"
 	"unicode"
 
 	"github.com/charmbracelet/x/ansi"
@@ -24,9 +25,30 @@ const MaxMatches = 5000
 // newest MaxMatches, nearest the screen, and sets truncated. Dropped is as in
 // History, for the same lines. An empty query matches nothing.
 func (p *Pane) Search(query string) (matches []Match, truncated bool, dropped int) {
+	matches, _, truncated, dropped = p.search(query)
+	return matches, truncated, dropped
+}
+
+// SearchLines returns the plain text of every line Search finds query in, in
+// line order, one entry per match, without the blank cells that pad a screen
+// row. The text is copied under the same lock as the search, so each one
+// belongs to the line that matched: a line that scrolls away between two
+// calls cannot report another line's text.
+func (p *Pane) SearchLines(query string) []string {
+	matches, lines, _, _ := p.search(query)
+	out := make([]string, len(matches))
+	for i, m := range matches {
+		out[i] = strings.TrimRight(lines[m.Line], " ")
+	}
+	return out
+}
+
+// search finds the matches of query and keeps the plain lines they came
+// from, so a caller can read a matched line under the same lock.
+func (p *Pane) search(query string) (matches []Match, lines []string, truncated bool, dropped int) {
 	q := []rune(query)
 	if len(q) == 0 {
-		return nil, false, 0
+		return nil, nil, false, 0
 	}
 	fold := true
 	for _, r := range q {
@@ -34,7 +56,7 @@ func (p *Pane) Search(query string) (matches []Match, truncated bool, dropped in
 			fold = false
 		}
 	}
-	lines, dropped := p.plainHistory()
+	lines, dropped = p.plainHistory()
 	// Scan from the newest line, so the cap drops the oldest matches.
 	for i := len(lines) - 1; i >= 0; i-- {
 		found := findAll([]rune(lines[i]), q, fold)
@@ -51,7 +73,7 @@ func (p *Pane) Search(query string) (matches []Match, truncated bool, dropped in
 		}
 	}
 	slices.Reverse(matches)
-	return matches, truncated, dropped
+	return matches, lines, truncated, dropped
 }
 
 // plainHistory copies the history's lines without styles. It holds mu only

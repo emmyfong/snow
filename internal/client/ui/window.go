@@ -8,12 +8,13 @@ import (
 	"github.com/emmyfong/snow/internal/client/theme"
 )
 
-// WindowPane is one pane to draw: its rectangle in cells, its rows, and
-// whether it has the focus.
+// WindowPane is one pane to draw: its rectangle in cells, its rows, whether
+// it has the focus, and whether an agent types into it.
 type WindowPane struct {
 	X, Y, W, H int
 	Lines      []string
 	Focused    bool
+	Driven     bool
 }
 
 // WindowOptions configures Window.
@@ -25,8 +26,9 @@ type WindowOptions struct {
 // Window draws panes into exactly Width by Height cells. The panes tile an
 // area from the top-left corner; every cell of that area that no pane covers
 // is a border, drawn with the junction its neighbors call for. Borders that
-// touch the focused pane use the focus color. Cells outside the area are
-// blank, for a client larger than the session.
+// touch the focused pane use the focus color, and borders of a pane an agent
+// types into use the accent color, which wins over the focus color. Cells
+// outside the area are blank, for a client larger than the session.
 func Window(th theme.Theme, o WindowOptions) string {
 	if o.Width <= 0 || o.Height <= 0 {
 		return ""
@@ -34,6 +36,7 @@ func Window(th theme.Theme, o WindowOptions) string {
 	g := newGrid(o)
 	plain := lipgloss.NewStyle().Foreground(th.Border)
 	focus := lipgloss.NewStyle().Foreground(th.FocusBorder)
+	accent := lipgloss.NewStyle().Foreground(th.Accent)
 	var b strings.Builder
 	for y := range o.Height {
 		if y > 0 {
@@ -50,7 +53,10 @@ func Window(th theme.Theme, o WindowOptions) string {
 				continue
 			case g.inArea(x, y):
 				style := plain
-				if g.touchesFocus(x, y) {
+				switch {
+				case g.touchesDriven(x, y):
+					style = accent
+				case g.touchesFocus(x, y):
 					style = focus
 				}
 				row.WriteString(style.Render(g.glyph(th.Glyphs, x, y)))
@@ -70,10 +76,11 @@ type grid struct {
 	areaW, areaH int
 	cells        []int // pane index per cell, or -1
 	focused      int
+	driven       map[int]bool
 }
 
 func newGrid(o WindowOptions) *grid {
-	g := &grid{w: o.Width, h: o.Height, cells: make([]int, o.Width*o.Height), focused: -1}
+	g := &grid{w: o.Width, h: o.Height, cells: make([]int, o.Width*o.Height), focused: -1, driven: map[int]bool{}}
 	for i := range g.cells {
 		g.cells[i] = -1
 	}
@@ -81,6 +88,9 @@ func newGrid(o WindowOptions) *grid {
 		g.areaW, g.areaH = max(g.areaW, p.X+p.W), max(g.areaH, p.Y+p.H)
 		if p.Focused {
 			g.focused = i
+		}
+		if p.Driven {
+			g.driven[i] = true
 		}
 		for y := max(p.Y, 0); y < min(p.Y+p.H, o.Height); y++ {
 			for x := max(p.X, 0); x < min(p.X+p.W, o.Width); x++ {
@@ -109,6 +119,19 @@ func (g *grid) touchesFocus(x, y int) bool {
 	for dy := -1; dy <= 1; dy++ {
 		for dx := -1; dx <= 1; dx++ {
 			if g.owner(x+dx, y+dy) == g.focused {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// touchesDriven reports whether a cell next to or in a pane an agent types
+// into is a border, so that pane's borders show the accent color.
+func (g *grid) touchesDriven(x, y int) bool {
+	for dy := -1; dy <= 1; dy++ {
+		for dx := -1; dx <= 1; dx++ {
+			if i := g.owner(x+dx, y+dy); i >= 0 && g.driven[i] {
 				return true
 			}
 		}

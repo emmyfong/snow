@@ -3,6 +3,7 @@
 package term
 
 import (
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -63,5 +64,26 @@ func TestUnixControllingTerminal(t *testing.T) {
 	waitForPrompt(t, p, "$ ")
 	if strings.Contains(p.Text(), "job control turned off") {
 		t.Fatalf("shell has no controlling terminal:\n%s", p.Text())
+	}
+}
+
+// TestUnixExitStatus: a program's exit status is kept, and a non-zero one is
+// an ExitError, not a failure of the pane.
+func TestUnixExitStatus(t *testing.T) {
+	p := startReal(t, Spec{Path: "/bin/sh", Args: []string{"-c", "exit 3"}})
+	waitDone(t, p, "exit 3")
+	code, ok := p.ExitStatus()
+	if !ok || code != 3 {
+		t.Fatalf("ExitStatus = %d, %v; want 3, true", code, ok)
+	}
+	var exit *ExitError
+	if !errors.As(p.Err(), &exit) || exit.Code != 3 {
+		t.Fatalf("Err = %v, want an ExitError with code 3", p.Err())
+	}
+
+	ok0 := startReal(t, Spec{Path: "/bin/sh", Args: []string{"-c", "exit 0"}})
+	waitDone(t, ok0, "exit 0")
+	if code, ok := ok0.ExitStatus(); !ok || code != 0 {
+		t.Fatalf("successful ExitStatus = %d, %v; want 0, true", code, ok)
 	}
 }

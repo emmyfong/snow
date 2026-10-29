@@ -188,6 +188,11 @@ func FindClaude(host Profile) (Profile, bool) {
 // it was left out.
 func ClaudeDistros() ([]Profile, error) { return claudeDistros(currentSystem()) }
 
+// ClaudeProgram returns this machine's Claude Code program as a command to
+// run, or false when claude is not on PATH. On Windows the npm install runs
+// through cmd.exe.
+func ClaudeProgram() (Profile, bool) { return nativeClaude(currentSystem()) }
+
 func claudeDistros(sys system) ([]Profile, error) {
 	if sys.goos != "windows" {
 		return nil, nil

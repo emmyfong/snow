@@ -238,6 +238,32 @@ func (c *Client) Drain(quiet time.Duration) {
 	}
 }
 
+// Reply reads c until a message of type T or an Error arrives, and returns
+// whichever came first; other messages, such as the session lists every
+// connection gets, are skipped. It fails the test after Wait.
+func Reply[T api.Message](c *Client) (T, *api.Error) {
+	c.t.Helper()
+	var zero T
+	deadline := time.Now().Add(Wait)
+	for time.Now().Before(deadline) {
+		m, err := c.Next(time.Second)
+		if errors.Is(err, ErrTimeout) {
+			continue
+		}
+		if err != nil {
+			c.t.Fatalf("waiting for %T: %v", zero, err)
+		}
+		switch m := m.(type) {
+		case T:
+			return m, nil
+		case *api.Error:
+			return zero, m
+		}
+	}
+	c.t.Fatalf("no %T in %v", zero, Wait)
+	return zero, nil
+}
+
 // Agents returns the last agent list, or nil before the first.
 func (c *Client) Agents() []api.AgentInfo {
 	if c.agents == nil {

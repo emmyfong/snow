@@ -67,6 +67,15 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "the agent saves results; tools only return them" }
             - { pkg: "github.com/emmyfong/snow/internal/provider", desc: "tools do not talk to models" }
             - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "tools never see keys" }
+        mcp-uses-api-and-transport:
+          # An allow list: snow mcp speaks the protocol and nothing that
+          # holds keys or server state.
+          list-mode: strict
+          files: ["**/internal/mcp/**", "!$test"]
+          allow:
+            - $gostd
+            - github.com/emmyfong/snow/pkg/api
+            - github.com/emmyfong/snow/internal/transport
 
 formatters:
   enable:

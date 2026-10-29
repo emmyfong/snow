@@ -34,6 +34,10 @@ type pane struct {
 	// agentSince when the pane entered it; owned by the model goroutine.
 	agentWas   string
 	agentSince time.Time
+
+	// drivenUntil is when the mark that an agent types into this pane
+	// ends; owned by the model goroutine.
+	drivenUntil time.Time
 }
 
 // startPane starts profile's program in dir at cols by rows, below

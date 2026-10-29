@@ -244,9 +244,28 @@ func (p *Pane) ScrollbackLines(from, n int) []string {
 func (p *Pane) Done() <-chan struct{} { return p.done }
 
 // Err returns why the program exited. It is valid after Done is closed.
+// A non-zero exit status is an *ExitError.
 func (p *Pane) Err() error {
 	<-p.done
 	return p.exitErr
+}
+
+// ExitStatus returns the program's exit status and whether it is known. The
+// status is unknown while the program runs and after Snow killed it.
+func (p *Pane) ExitStatus() (int, bool) {
+	select {
+	case <-p.done:
+	default:
+		return 0, false
+	}
+	var exit *ExitError
+	if errors.As(p.exitErr, &exit) {
+		return exit.Code, true
+	}
+	if p.exitErr == nil {
+		return 0, true
+	}
+	return 0, false
 }
 
 // Close kills the program and stops the pane's goroutines. It is safe to call

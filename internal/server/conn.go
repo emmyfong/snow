@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 
@@ -31,6 +32,10 @@ type client struct {
 	// focused is set while c's terminal reports focus. The server skips a
 	// desktop notification for the pane such a client shows.
 	focused bool
+	// tools is canceled when the connection ends, so a wait that has no
+	// reader stops at once.
+	tools   context.Context
+	stop    context.CancelFunc
 	dropped bool
 }
 
@@ -49,6 +54,8 @@ func (s *Server) serveConn(raw net.Conn) {
 		return
 	}
 	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}}
+	c.tools, c.stop = context.WithCancel(context.Background())
+	defer c.stop()
 	// A bad size is not fatal: the client gets the default size until it
 	// sends a valid Resize.
 	if err := hello.Validate(); err == nil {
@@ -135,6 +142,14 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.agentState(m) })
 		case *api.ClientFocus:
 			s.call(func(st *state) { st.clientFocus(c, m) })
+		case *api.PanesRequest:
+			s.panes(c, m)
+		case *api.ReadPaneRequest:
+			s.readPane(c, m)
+		case *api.SendKeysRequest:
+			s.sendKeys(c, m)
+		case *api.WaitForRequest:
+			s.waitFor(c, m)
 		case *api.Shutdown:
 			s.shutdown()
 		}

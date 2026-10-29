@@ -65,6 +65,12 @@ type Options struct {
 	// afterHookWait runs f when an agent pane has had defaultHookWait to
 	// send its first hook; nil means a timer. Tests fire it by hand.
 	afterHookWait func(f func())
+	// afterDriven runs f when a pane's driven mark has lasted drivenFor;
+	// nil means a timer. Tests fire it by hand.
+	afterDriven func(f func())
+	// afterWait runs when a wait_for call stops; nil in production. Tests
+	// use it to see that a wait ended.
+	afterWait func()
 }
 
 func (o Options) logger() *slog.Logger {

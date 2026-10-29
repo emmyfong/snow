@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/transport"
 )
 
 func TestParseArgs(t *testing.T) {
@@ -23,6 +25,7 @@ func TestParseArgs(t *testing.T) {
 		{[]string{"help"}, command{kind: kindHelp}, ""},
 		{[]string{"--help"}, command{kind: kindHelp}, ""},
 		{[]string{"server"}, command{kind: kindServer}, ""},
+		{[]string{"mcp"}, command{kind: kindMCP}, ""},
 		{[]string{"auth", "status"}, command{kind: kindAuth, auth: authCommand{action: authStatus}}, ""},
 		{[]string{"auth", "--help"}, command{kind: kindAuthHelp}, ""},
 		{[]string{"auth"}, command{kind: kindAuthHelp}, "auth needs"},
@@ -35,6 +38,31 @@ func TestParseArgs(t *testing.T) {
 		if got != tt.want || (err == nil) != (tt.problem == "") || (err != nil && !strings.Contains(err.Error(), tt.problem)) {
 			t.Errorf("parseArgs(%q) = %+v, %v; want %+v, %q", tt.args, got, err, tt.want, tt.problem)
 		}
+	}
+}
+
+// TestRunMCPOutsideSnow: outside a Snow pane, snow mcp speaks MCP, offers
+// no tools, and says why on stderr.
+func TestRunMCPOutsideSnow(t *testing.T) {
+	t.Setenv(transport.EnvPane, "")
+	t.Setenv(transport.EnvSocket, "")
+	old := stdin
+	stdin = strings.NewReader(
+		`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}` + "\n" +
+			`{"jsonrpc":"2.0","id":2,"method":"tools/list"}` + "\n")
+	t.Cleanup(func() { stdin = old })
+	var out, errOut bytes.Buffer
+	if code := run([]string{"mcp"}, &out, &errOut); code != 0 {
+		t.Fatalf("code %d, stderr %q", code, errOut.String())
+	}
+	if !strings.Contains(out.String(), `"tools":[]`) {
+		t.Errorf("no empty tool list: %s", out.String())
+	}
+	if !strings.Contains(out.String(), transport.EnvPane) {
+		t.Errorf("instructions do not say why: %s", out.String())
+	}
+	if !strings.Contains(errOut.String(), transport.EnvPane) {
+		t.Errorf("stderr does not say why: %q", errOut.String())
 	}
 }
 
