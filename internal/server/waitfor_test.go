@@ -28,7 +28,7 @@ func TestWaitForText(t *testing.T) {
 	c, first, second := splitTwo(t, s)
 	// Build the marker from a variable, so the typed command does not hold
 	// the text itself: only the output can match.
-	setup, delay := "", "x=snow-wait-; sleep 0.4; echo ${x}new"
+	setup, delay := "", "x=snow-wait-; sleep 1; echo ${x}new"
 	if runtime.GOOS == "windows" {
 		setup, delay = "set x=snow-wait-", "ping -n 2 127.0.0.1 >nul & echo %x%new"
 	}
@@ -107,7 +107,7 @@ func TestWaitForExit(t *testing.T) {
 	tool := connect(t, s, 80, 24)
 	tool.Send(&api.WaitForRequest{Caller: first, Pane: second, Text: "snow-never-printed", TimeoutMS: 10000})
 	// Let the wait find the pane before the program ends.
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(time.Second)
 	c.Send(&api.Input{Pane: second, Paste: "exit 4\r"})
 
 	got, e := apitest.Reply[*api.WaitFor](tool)

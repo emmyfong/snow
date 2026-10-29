@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"os"
-	"strconv"
 	"sync"
 )
 
@@ -28,9 +27,10 @@ type Options struct {
 	Log *log.Logger
 }
 
-// Serve runs the MCP server on in and out until the client closes in. It
-// writes only MCP messages to out. A tool call reaches the Snow server on
-// the side, so a slow tool never stops the next message from being read.
+// Serve runs the MCP server on in and out until the client closes in or
+// stdout fails. It writes only MCP messages to out. A tool call reaches the
+// Snow server on the side, so a slow tool never stops the next message from
+// being read.
 func Serve(ctx context.Context, in io.Reader, out io.Writer, o Options) error {
 	logger := o.Log
 	if logger == nil {
@@ -54,23 +54,59 @@ func Serve(ctx context.Context, in io.Reader, out io.Writer, o Options) error {
 
 	s.writeWG.Add(1)
 	go s.writeLoop(out)
+
+	// Read on its own goroutine, so a stdout that fails stops the server
+	// even while the client keeps its input open.
+	lines := make(chan []byte)
+	readErr := make(chan error, 1)
+	go func() { readErr <- readLoop(in, lines, s.ctx.Done()) }()
+	for {
+		select {
+		case line := <-lines:
+			s.handle(line)
+		case err := <-readErr:
+			return s.stop(err)
+		case <-s.ctx.Done():
+			// stdout failed, or the caller went away: no reply can reach
+			// the client.
+			return s.stop(ctx.Err())
+		}
+	}
+}
+
+// readLoop reads one message at a time from the client and hands it on. It
+// ends when the client closes its input or the server stops. A read that
+// blocks when the server stops stays blocked until the client closes its
+// input; the process exits first.
+func readLoop(in io.Reader, lines chan<- []byte, stop <-chan struct{}) error {
 	r := bufio.NewReader(in)
 	for {
 		line, err := readLine(r)
 		if err != nil {
-			s.cancel()
-			s.wg.Wait()
-			close(s.out)
-			s.writeWG.Wait()
-			if errors.Is(err, io.EOF) {
-				err = nil
-			}
-			return errors.Join(err, s.failure())
+			return err
 		}
-		if len(line) > 0 {
-			s.handle(line)
+		if len(line) == 0 {
+			continue
+		}
+		select {
+		case lines <- line:
+		case <-stop:
+			return nil
 		}
 	}
+}
+
+// stop ends the server: it stops the tool calls, lets the writer finish, and
+// reports why.
+func (s *server) stop(err error) error {
+	s.cancel()
+	s.wg.Wait()
+	close(s.out)
+	s.writeWG.Wait()
+	if errors.Is(err, io.EOF) {
+		err = nil
+	}
+	return errors.Join(err, s.failure())
 }
 
 // server is one running MCP server.
@@ -177,100 +213,6 @@ func (s *server) handle(line []byte) {
 	}
 }
 
-// startCall runs one tool call in its own goroutine, so a long wait never
-// stops a cancellation from being read.
-func (s *server) startCall(r request) {
-	var p struct {
-		Name      string          `json:"name"`
-		Arguments json.RawMessage `json:"arguments"`
-	}
-	if err := json.Unmarshal(r.Params, &p); err != nil || p.Name == "" {
-		s.send(encode(r.ID, nil, &rpcError{Code: codeInvalidParams, Message: "tools/call needs a tool name"}))
-		return
-	}
-	id := idKey(r.ID)
-	ctx, cancel := context.WithCancel(s.ctx)
-	s.mu.Lock()
-	s.calls[id] = cancel
-	s.mu.Unlock()
-	s.wg.Add(1)
-	go func() {
-		defer s.wg.Done()
-		defer cancel()
-		defer func() {
-			s.mu.Lock()
-			delete(s.calls, id)
-			s.mu.Unlock()
-		}()
-		result := s.runTool(ctx, p.Name, p.Arguments)
-		s.send(encode(r.ID, result, nil))
-	}()
-}
-
-// runTool calls one tool and turns its outcome into an MCP result. A tool
-// error goes back as a failed result, which the agent reads, not as a
-// protocol error.
-func (s *server) runTool(ctx context.Context, name string, args json.RawMessage) (result callResult) {
-	defer func() {
-		if v := recover(); v != nil {
-			result = errorResult(fmt.Sprintf("snow mcp: internal error: %v", v))
-		}
-	}()
-	text, err := s.callTool(ctx, name, args)
-	if err != nil {
-		return errorResult(err.Error())
-	}
-	return textResult(text)
-}
-
-// callTool runs the named tool.
-func (s *server) callTool(ctx context.Context, name string, args json.RawMessage) (string, error) {
-	if s.panes == nil {
-		return "", errors.New(s.outside)
-	}
-	switch name {
-	case "list_panes":
-		return s.listPanes(ctx)
-	case "read_pane":
-		return s.readPane(ctx, args)
-	case "send_keys":
-		return s.sendKeys(ctx, args)
-	case "wait_for":
-		return s.waitFor(ctx, args)
-	}
-	return "", fmt.Errorf("unknown tool %q; tools/list names the tools", name)
-}
-
-// cancelled stops the tool call the notification names, if it still runs.
-func (s *server) cancelled(params json.RawMessage) {
-	var p struct {
-		RequestID json.RawMessage `json:"requestId"`
-	}
-	if err := json.Unmarshal(params, &p); err != nil || len(p.RequestID) == 0 {
-		return
-	}
-	s.mu.Lock()
-	cancel := s.calls[idKey(p.RequestID)]
-	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-}
-
-// dialSnow builds the Snow client from the pane's environment. It returns
-// why no tools run when the caller is not in a Snow pane.
-func dialSnow(pane, socket string) (Panes, string) {
-	switch {
-	case pane == "" || socket == "":
-		return nil, "snow mcp runs inside a Snow pane, and this is not one: SNOW_PANE and SNOW_SOCKET are not set. Start Claude Code in a Snow pane."
-	}
-	caller, err := strconv.Atoi(pane)
-	if err != nil || caller < 1 {
-		return nil, fmt.Sprintf("snow mcp: SNOW_PANE %q is not a pane number; start Claude Code in a Snow pane.", pane)
-	}
-	return &snow{socket: socket, caller: caller, dial: nil}, ""
-}
-
 // initialize answers the client's opening request.
 func (s *server) initialize(params json.RawMessage) initResult {
 	var in struct {
@@ -299,49 +241,4 @@ func knownVersion(v string) string {
 		return v
 	}
 	return protocolVersion
-}
-
-// initResult is the reply to initialize.
-type initResult struct {
-	ProtocolVersion string       `json:"protocolVersion"`
-	Capabilities    capabilities `json:"capabilities"`
-	ServerInfo      serverInfo   `json:"serverInfo"`
-	Instructions    string       `json:"instructions,omitempty"`
-}
-
-type capabilities struct {
-	Tools toolsCapability `json:"tools"`
-}
-
-type toolsCapability struct {
-	ListChanged bool `json:"listChanged"`
-}
-
-type serverInfo struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-// listResult is the reply to tools/list.
-type listResult struct {
-	Tools []toolDef `json:"tools"`
-}
-
-// callResult is the reply to tools/call.
-type callResult struct {
-	Content []content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
-}
-
-type content struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
-}
-
-func textResult(text string) callResult {
-	return callResult{Content: []content{{Type: "text", Text: text}}}
-}
-
-func errorResult(text string) callResult {
-	return callResult{Content: []content{{Type: "text", Text: text}}, IsError: true}
 }

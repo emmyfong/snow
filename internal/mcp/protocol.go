@@ -29,7 +29,6 @@ const (
 	codeMethodNotFound = -32601
 	codeInvalidParams  = -32602
 	codeInternal       = -32603
-	codeCancelled      = -32800
 )
 
 // errMessageTooLarge stops the server: after an oversized message the
@@ -74,19 +73,63 @@ func encode(id json.RawMessage, result any, e *rpcError) []byte {
 	return b
 }
 
-// idKey names a request ID for the set of running calls. A client may name
-// the same ID as a number or a string, and both forms must match.
+// initResult is the reply to initialize.
+type initResult struct {
+	ProtocolVersion string       `json:"protocolVersion"`
+	Capabilities    capabilities `json:"capabilities"`
+	ServerInfo      serverInfo   `json:"serverInfo"`
+	Instructions    string       `json:"instructions,omitempty"`
+}
+
+// capabilities says what the server offers. Snow sends no list-changed
+// notifications, so it offers tools only.
+type capabilities struct {
+	Tools toolsCapability `json:"tools"`
+}
+
+type toolsCapability struct{}
+
+type serverInfo struct {
+	Name    string `json:"name"`
+	Version string `json:"version"`
+}
+
+// listResult is the reply to tools/list.
+type listResult struct {
+	Tools []toolDef `json:"tools"`
+}
+
+// callResult is the reply to tools/call.
+type callResult struct {
+	Content []content `json:"content"`
+	IsError bool      `json:"isError,omitempty"`
+}
+
+type content struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+func textResult(text string) callResult {
+	return callResult{Content: []content{{Type: "text", Text: text}}}
+}
+
+func errorResult(text string) callResult {
+	return callResult{Content: []content{{Type: "text", Text: text}}, IsError: true}
+}
+
+// idKey names a request ID for the set of running calls. A number and a
+// string that look alike are different IDs, so the key keeps the JSON form:
+// the quotes of a string and the digits of a number.
 func idKey(id json.RawMessage) string {
-	var v any
-	if err := json.Unmarshal(id, &v); err != nil {
-		return string(id)
+	trimmed := bytes.TrimSpace(id)
+	switch {
+	case len(trimmed) == 0:
+		return "null"
+	case trimmed[0] == '"':
+		return "s:" + string(trimmed)
 	}
-	switch v := v.(type) {
-	case string:
-		return v
-	default:
-		return string(id)
-	}
+	return "n:" + string(trimmed)
 }
 
 // readLine reads one newline-terminated message. A last message without a

@@ -14,18 +14,19 @@ import (
 func TestWaitForQuietResets(t *testing.T) {
 	s := newTestServer(t)
 	c, first, second := splitTwo(t, s)
-	c.Send(&api.Input{Pane: second, Paste: "sleep 0.2; echo snow-quiet-tick\r"})
-	c.WaitScreen("sleep 0.2; echo snow-quiet-tick")
-
 	tool := connect(t, s, 80, 24)
+	// Build the marker from a variable, so only the output holds it.
+	c.Send(&api.Input{Pane: second, Paste: "x=snow-quiet-; sleep 1; echo ${x}tick\r"})
+	c.WaitScreen("sleep 1; echo ${x}tick")
+
 	start := time.Now()
-	got := waitReply(t, tool, &api.WaitForRequest{Caller: first, Pane: second, QuietMS: 300, TimeoutMS: 5000})
+	got := waitReply(t, tool, &api.WaitForRequest{Caller: first, Pane: second, QuietMS: 1500, TimeoutMS: 5000})
 	if got.Result != api.WaitQuiet {
 		t.Fatalf("quiet wait = %+v, want quiet", got)
 	}
-	// The output starts the 300 ms period again, so the wait cannot end
-	// before it plus 300 ms.
-	if took := time.Since(start); took < 450*time.Millisecond {
+	// The output starts the 1500 ms period again, so the wait cannot end
+	// before the sleep plus the period.
+	if took := time.Since(start); took < 2*time.Second {
 		t.Fatalf("quiet returned after %v, before the output reset the period", took)
 	}
 }

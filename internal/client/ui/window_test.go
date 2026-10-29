@@ -6,6 +6,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
 
@@ -93,14 +94,17 @@ func TestWindowIsWidthSafe(t *testing.T) {
 // the accent color, in every built-in theme.
 func TestWindowMarksDrivenPane(t *testing.T) {
 	for _, th := range theme.Builtin() {
-		out := Window(th, WindowOptions{Width: 7, Height: 1, Panes: []WindowPane{
-			{X: 0, Y: 0, W: 3, H: 1},
-			{X: 4, Y: 0, W: 3, H: 1, Focused: true, Driven: true},
-		}})
-		accent := lipgloss.NewStyle().Foreground(th.Accent).Render("│")
-		if !strings.Contains(out, accent) {
-			t.Errorf("%s: driven pane's border %q lacks the accent color", th.Name, out)
-		}
+		t.Run(strings.ReplaceAll(th.Name, " ", "_"), func(t *testing.T) {
+			out := Window(th, WindowOptions{Width: 7, Height: 1, Panes: []WindowPane{
+				{X: 0, Y: 0, W: 3, H: 1},
+				{X: 4, Y: 0, W: 3, H: 1, Focused: true, Driven: true},
+			}})
+			golden.RequireEqual(t, out)
+			accent := lipgloss.NewStyle().Foreground(th.Accent).Render("│")
+			if !strings.Contains(out, accent) {
+				t.Errorf("%s: driven pane's border %q lacks the accent color", th.Name, out)
+			}
+		})
 	}
 }
 

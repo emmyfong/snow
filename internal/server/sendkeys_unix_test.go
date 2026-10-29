@@ -11,10 +11,10 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// TestSendKeysReportsDroppedWhenProgramStopsReading: a program in raw mode
-// never reads, so the pane's input queue fills; send_keys counts the bytes
-// that were dropped, and the owner goroutine still answers.
-func TestSendKeysReportsDroppedWhenProgramStopsReading(t *testing.T) {
+// TestSendKeysStuckProgram: a program in raw mode never reads, so the
+// pane's input queue fills; send_keys counts the bytes that were dropped,
+// and the owner goroutine still answers.
+func TestSendKeysStuckProgram(t *testing.T) {
 	if raceDetector {
 		t.Skip("filling the input queue is slow under the race detector")
 	}

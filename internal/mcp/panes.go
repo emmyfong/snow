@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/emmyfong/snow/internal/transport"
@@ -176,6 +177,20 @@ func (c *snow) call(ctx context.Context, req api.Message, match func(api.Message
 		_ = raw.Close()
 		return ctx.Err()
 	}
+}
+
+// dialSnow builds the Snow client from the pane's environment. It returns
+// why no tools run when the caller is not in a Snow pane.
+func dialSnow(pane, socket string) (Panes, string) {
+	switch {
+	case pane == "" || socket == "":
+		return nil, "snow mcp runs inside a Snow pane, and this is not one: SNOW_PANE and SNOW_SOCKET are not set. Start Claude Code in a Snow pane."
+	}
+	caller, err := strconv.Atoi(pane)
+	if err != nil || caller < 1 {
+		return nil, fmt.Sprintf("snow mcp: SNOW_PANE %q is not a pane number; start Claude Code in a Snow pane.", pane)
+	}
+	return &snow{socket: socket, caller: caller, dial: nil}, ""
 }
 
 // connect opens the socket.

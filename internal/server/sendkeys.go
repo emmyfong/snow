@@ -22,7 +22,7 @@ func (s *Server) sendKeys(c *client, r *api.SendKeysRequest) {
 		tp *term.Pane
 		e  *api.Error
 	)
-	s.call(func(st *state) {
+	if !s.call(func(st *state) {
 		sess, p, err := st.toolPane(r.Caller, r.Pane)
 		if err != nil {
 			e = err
@@ -39,7 +39,9 @@ func (s *Server) sendKeys(c *client, r *api.SendKeysRequest) {
 			tp = p.term
 			st.markDriven(sess, p)
 		}
-	})
+	}) {
+		return // the server stopped, so no reply can reach the client
+	}
 	if e != nil {
 		s.reply(c, e)
 		return

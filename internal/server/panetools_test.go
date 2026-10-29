@@ -76,3 +76,16 @@ func TestListPanesMarksAgents(t *testing.T) {
 		t.Fatalf("pane %+v; want an agent that works", p)
 	}
 }
+
+// TestToolCallsAfterServerStop: a pane tool that reaches a stopped server
+// answers nothing and never touches a pane it could not look up.
+func TestToolCallsAfterServerStop(t *testing.T) {
+	s := newTestServer(t)
+	_, first, second := splitTwo(t, s)
+	s.Close()
+
+	c := &client{}
+	s.readPane(c, &api.ReadPaneRequest{Caller: first, Pane: second})
+	s.sendKeys(c, &api.SendKeysRequest{Caller: first, Pane: second, Text: "ls"})
+	s.waitFor(c, &api.WaitForRequest{Caller: first, Pane: second, Text: "ls"})
+}

@@ -65,6 +65,25 @@ func TestSearchFindsAll(t *testing.T) {
 	}
 }
 
+// TestSearchLines: each match comes with the plain text of its own line,
+// read with the search, so a caller never has to look the line up again.
+func TestSearchLines(t *testing.T) {
+	p, f := newTestPane(t)
+	printLines(t, p, f, searchText())
+	got := p.SearchLines("error")
+	want := []string{
+		"error: disk full",
+		"an error then another error",
+		"an error then another error",
+		"Error with a capital",
+		"漢字 error after wide text",
+		"last error on the screen",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("SearchLines = %q\nwant %q", got, want)
+	}
+}
+
 func TestSearchTruncates(t *testing.T) {
 	p, f := newTestPane(t)
 	lines := make([]string, 30)

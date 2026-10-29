@@ -133,9 +133,10 @@ func TestSendKeysErrors(t *testing.T) {
 	}
 }
 
-// TestSendKeysEndedPane: an ended pane waits for the user to restore it, so
-// send_keys refuses it instead of restarting it.
-func TestSendKeysEndedPane(t *testing.T) {
+// TestSendKeysRefusesEndedPane: an ended pane waits for the user to restore
+// it, so send_keys refuses it instead of restarting it. The restart key
+// proves the text never reaches the pane.
+func TestSendKeysRefusesEndedPane(t *testing.T) {
 	s := wslServer(t, false)
 	c, first, second := splitTwo(t, s)
 	c.Send(&api.Input{Pane: second, Paste: "exit\r"})
@@ -144,8 +145,12 @@ func TestSendKeysEndedPane(t *testing.T) {
 	})
 
 	tool := connect(t, s, 80, 24)
-	tool.Send(&api.SendKeysRequest{Caller: first, Pane: second, Text: "ls"})
+	tool.Send(&api.SendKeysRequest{Caller: first, Pane: second, Text: "r"})
 	if _, e := apitest.Reply[*api.SendKeys](tool); e == nil || e.Code != api.CodePaneEnded {
 		t.Fatalf("send to an ended pane = %v, want %s", e, api.CodePaneEnded)
+	}
+	time.Sleep(300 * time.Millisecond)
+	if got := paneText(s, "work", second); !strings.Contains(got, "press r to restore") {
+		t.Fatalf("send_keys restarted the ended pane; it shows:\n%s", got)
 	}
 }

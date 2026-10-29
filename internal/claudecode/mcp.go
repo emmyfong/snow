@@ -76,23 +76,38 @@ func (m MCP) displayName() string {
 // Command is the command Claude Code runs for the server, for people.
 func (m MCP) Command() string { return shellQuote(m.Exe) + " mcp" }
 
-// Status reports whether Claude Code has Snow's MCP server registered.
+// Status reports whether Claude Code has Snow's MCP server registered at
+// user scope. A server of the same name in another scope is not Snow's, so
+// it does not count.
 func (m MCP) Status() (bool, error) {
 	if !m.Installed() {
 		return false, nil
 	}
-	_, err := m.output("mcp", "get", serverName)
+	out, err := m.output("mcp", "get", serverName)
 	switch {
 	case err == nil:
-		return true, nil
+		return userScope(out), nil
 	case errors.Is(err, ErrNoServer):
 		return false, nil
 	}
 	return false, err
 }
 
+// userScope reports whether `claude mcp get` found the server in the user
+// scope, which Snow manages. A scope Snow does not know counts as the user's,
+// so a setup does not add a second server that `get` cannot tell apart.
+func userScope(out []byte) bool {
+	for _, line := range strings.Split(string(out), "\n") {
+		if after, ok := strings.CutPrefix(strings.TrimSpace(line), "Scope:"); ok {
+			return strings.Contains(after, "User")
+		}
+	}
+	return true
+}
+
 // Add registers Snow's MCP server at user scope. A server Snow added before
-// is replaced, so a moved snow program is updated.
+// is replaced, so a moved snow program is updated. A server of the same name
+// in another scope stays: Claude Code's add puts Snow's own scope first.
 func (m MCP) Add() error {
 	if !m.Installed() {
 		return fmt.Errorf("%s: %w", m.displayName(), ErrNoServer)
@@ -102,7 +117,7 @@ func (m MCP) Add() error {
 		return err
 	}
 	if set {
-		if _, err := m.output("mcp", "remove", "--scope", "user", serverName); err != nil {
+		if _, err := m.output("mcp", "remove", "--scope", "user", serverName); err != nil && !errors.Is(err, ErrNoServer) {
 			return err
 		}
 	}
@@ -110,13 +125,15 @@ func (m MCP) Add() error {
 	return err
 }
 
-// Remove unregisters Snow's MCP server.
+// Remove unregisters Snow's MCP server from user scope.
 func (m MCP) Remove() error {
-	set, err := m.Status()
-	if err != nil || !set {
-		return err
+	if !m.Installed() {
+		return nil
 	}
-	_, err = m.output("mcp", "remove", "--scope", "user", serverName)
+	_, err := m.output("mcp", "remove", "--scope", "user", serverName)
+	if errors.Is(err, ErrNoServer) {
+		return nil
+	}
 	return err
 }
 
@@ -139,9 +156,10 @@ func (m MCP) output(args ...string) ([]byte, error) {
 		return out, nil
 	}
 	// `claude mcp get` exits nonzero when the server is not there, and
-	// that is an answer, not a failure.
-	if isGet(args) {
-		if _, exited := errors.AsType[*exec.ExitError](err); exited {
+	// `claude mcp remove` says so when the user scope has none. Both are
+	// answers, not failures.
+	if _, exited := errors.AsType[*exec.ExitError](err); exited {
+		if isGet(args) || strings.Contains(stderr.String(), "No MCP server") {
 			return nil, fmt.Errorf("%w: %s", ErrNoServer, stderrLine(stderr.String()))
 		}
 	}

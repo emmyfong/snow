@@ -9,20 +9,44 @@ import (
 	"testing"
 )
 
-// recorder stands in for the claude program: it records every call and
-// answers `mcp get` according to exists.
+// recorder stands in for the claude program: it records every call, answers
+// `mcp get` with the server's scope, and fails `mcp remove` when the user
+// scope has none.
 type recorder struct {
-	exists bool
-	calls  [][]string
-	err    error
+	// user is set while a server named snow is registered at user scope,
+	// other while one is registered at another scope only.
+	user, other bool
+	calls       [][]string
+	err         error
 }
 
 func (r *recorder) run(args []string) ([]byte, error) {
 	r.calls = append(r.calls, append([]string{}, args...))
-	if isGet(args) && !r.exists {
-		return nil, ErrNoServer
+	if r.err != nil {
+		return nil, r.err
 	}
-	return nil, r.err
+	switch {
+	case isGet(args):
+		switch {
+		case r.user:
+			return []byte("snow:\n  Scope: User config (available in all your projects)\n"), nil
+		case r.other:
+			return []byte("snow:\n  Scope: Project config (shared via .mcp.json)\n"), nil
+		}
+		return nil, ErrNoServer
+	case isRemove(args):
+		if !r.user {
+			return nil, ErrNoServer
+		}
+		r.user = false
+		return nil, nil
+	}
+	return nil, nil
+}
+
+// isRemove reports whether args remove one MCP server.
+func isRemove(args []string) bool {
+	return len(args) >= 2 && args[0] == "mcp" && args[1] == "remove"
 }
 
 // mcp returns the registration that runs through r.
@@ -44,9 +68,13 @@ func TestMCPStatus(t *testing.T) {
 	if set, err := notSet.mcp().Status(); set || err != nil {
 		t.Fatalf("Status without the server = %v, %v", set, err)
 	}
-	set := &recorder{exists: true}
+	set := &recorder{user: true}
 	if ok, err := set.mcp().Status(); !ok || err != nil {
 		t.Fatalf("Status with the server = %v, %v", ok, err)
+	}
+	other := &recorder{other: true}
+	if ok, err := other.mcp().Status(); ok || err != nil {
+		t.Fatalf("Status with the server at another scope = %v, %v", ok, err)
 	}
 }
 
@@ -62,7 +90,7 @@ func TestMCPAdd(t *testing.T) {
 		t.Fatalf("calls = %q, want %q", got, want)
 	}
 
-	again := &recorder{exists: true}
+	again := &recorder{user: true}
 	if err := again.mcp().Add(); err != nil {
 		t.Fatal(err)
 	}
@@ -72,12 +100,26 @@ func TestMCPAdd(t *testing.T) {
 	}
 }
 
+// TestMCPAddOtherScope: a server of the same name in another scope is not
+// Snow's, so setup adds Snow's own and does not fail on a remove it cannot
+// make.
+func TestMCPAddOtherScope(t *testing.T) {
+	r := &recorder{other: true}
+	if err := r.mcp().Add(); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"mcp get snow", "mcp add --scope user snow -- /opt/snow mcp"}
+	if got := r.joined(); !equalLines(got, want) {
+		t.Fatalf("calls = %q, want %q", got, want)
+	}
+}
+
 func TestMCPRemove(t *testing.T) {
-	set := &recorder{exists: true}
+	set := &recorder{user: true}
 	if err := set.mcp().Remove(); err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"mcp get snow", "mcp remove --scope user snow"}
+	want := []string{"mcp remove --scope user snow"}
 	if got := set.joined(); !equalLines(got, want) {
 		t.Fatalf("calls = %q, want %q", got, want)
 	}
@@ -85,8 +127,8 @@ func TestMCPRemove(t *testing.T) {
 	if err := none.mcp().Remove(); err != nil {
 		t.Fatal(err)
 	}
-	if got := none.joined(); !equalLines(got, []string{"mcp get snow"}) {
-		t.Fatalf("calls = %q, want one get", got)
+	if got := none.joined(); !equalLines(got, want) {
+		t.Fatalf("calls = %q, want one remove", got)
 	}
 }
 
@@ -154,7 +196,7 @@ func TestRegisterMCPAsks(t *testing.T) {
 		t.Fatalf("calls = %q", got)
 	}
 	out.Reset()
-	r.exists = true
+	r.user = true
 	if err := registerMCP(r.mcp(), answer(""), &out); err != nil || !strings.Contains(out.String(), "already set") {
 		t.Fatalf("second setup = %v, %q", err, out.String())
 	}
@@ -171,7 +213,7 @@ func TestRegisterMCPWithoutClaude(t *testing.T) {
 }
 
 func TestUnregisterMCP(t *testing.T) {
-	r := &recorder{exists: true}
+	r := &recorder{user: true}
 	var out bytes.Buffer
 	if err := unregisterMCP(r.mcp(), answer("n\n"), &out); err != nil {
 		t.Fatal(err)
@@ -194,7 +236,7 @@ func TestReportMCP(t *testing.T) {
 		t.Fatalf("report = %q, %v", out.String(), err)
 	}
 	out.Reset()
-	if err := reportMCP((&recorder{exists: true}).mcp(), &out); err != nil || !strings.Contains(out.String(), "is set") {
+	if err := reportMCP((&recorder{user: true}).mcp(), &out); err != nil || !strings.Contains(out.String(), "is set") {
 		t.Fatalf("report = %q, %v", out.String(), err)
 	}
 }

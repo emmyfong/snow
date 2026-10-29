@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -39,7 +38,7 @@ func (s *Server) waitFor(c *client, r *api.WaitForRequest) {
 		ended bool
 		e     *api.Error
 	)
-	s.call(func(st *state) {
+	if !s.call(func(st *state) {
 		_, p, err := st.toolPane(r.Caller, r.Pane)
 		if err != nil {
 			e = err
@@ -50,13 +49,12 @@ func (s *Server) waitFor(c *client, r *api.WaitForRequest) {
 			return
 		}
 		tp, ended = p.term, p.ended
-	})
+	}) {
+		return // the server stopped, so no reply can reach the client
+	}
 	if e != nil {
 		s.reply(c, e)
 		return
-	}
-	if tp == nil {
-		return // the server stopped
 	}
 	if ended {
 		s.reply(c, exitedWait(tp, r.Pane))
@@ -87,36 +85,25 @@ func (s *Server) awaitPane(c *client, tp *term.Pane, r *api.WaitForRequest) {
 // awaitText waits until the pane prints text not seen when the wait began,
 // or for IncludeExisting, any text. It returns nil when ctx ends.
 func awaitText(ctx context.Context, tp *term.Pane, r *api.WaitForRequest, deadline time.Time) *api.WaitFor {
-	// New output can land on a line that already held the prompt, so the
-	// line number alone does not say whether the text is new. Keep the text
-	// of every line that matched when the wait began: a match on a line
-	// whose text did not change was already there.
-	var seen map[int]string
+	// New output can land on a line that already held the prompt, so a line
+	// number does not say whether the text is new. Count the matching lines
+	// by their text when the wait begins: text that appears more often than
+	// it did then is new. Line numbers would fail when the history's dropped
+	// count overcounts (term.History), which moves every line.
+	seen := map[string]int{}
 	if !r.IncludeExisting {
-		seen = map[int]string{}
-		matches, _, dropped := tp.Search(r.Text)
-		for _, m := range matches {
-			abs := m.Line + dropped
-			if _, ok := seen[abs]; ok {
-				continue
-			}
-			if lines, _, _ := tp.History(m.Line, 1); len(lines) > 0 {
-				seen[abs] = ansi.Strip(lines[0])
-			}
+		for _, line := range tp.SearchLines(r.Text) {
+			seen[line]++
 		}
 	}
 	check := func() (string, bool) {
-		matches, _, dropped := tp.Search(r.Text)
-		for i := len(matches) - 1; i >= 0; i-- { // newest first
-			lines, _, _ := tp.History(matches[i].Line, 1)
-			if len(lines) == 0 {
-				continue
+		lines := tp.SearchLines(r.Text)
+		counts := make(map[string]int, len(lines))
+		for i := len(lines) - 1; i >= 0; i-- { // newest first
+			counts[lines[i]]++
+			if counts[lines[i]] > seen[lines[i]] {
+				return lines[i], true
 			}
-			line := ansi.Strip(lines[0])
-			if old, ok := seen[matches[i].Line+dropped]; ok && old == line {
-				continue
-			}
-			return line, true
 		}
 		return "", false
 	}

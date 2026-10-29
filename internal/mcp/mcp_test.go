@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"reflect"
@@ -599,5 +600,41 @@ func TestServeEndsAtEOF(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `"result":{}`) {
 		t.Fatalf("output = %q", out.String())
+	}
+}
+
+// failingWriter is a stdout that has gone away.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("broken pipe") }
+
+// TestServeStopsWhenStdoutFails: a stdout that fails stops the server even
+// while the client keeps its input open, so snow mcp does not linger.
+func TestServeStopsWhenStdoutFails(t *testing.T) {
+	inR, inW := io.Pipe()
+	t.Cleanup(func() { _ = inW.Close() })
+	done := make(chan error, 1)
+	go func() { done <- Serve(context.Background(), inR, failingWriter{}, Options{Panes: &fakePanes{}}) }()
+	if _, err := io.WriteString(inW, `{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	select {
+	case err := <-done:
+		if err == nil || !strings.Contains(err.Error(), "stdout") {
+			t.Fatalf("Serve = %v, want the write error", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("snow mcp kept reading after its stdout died")
+	}
+}
+
+// TestMCPIDsKeepTheirType: a number ID and a string ID that look alike are
+// different calls, so a cancellation reaches only the one it names.
+func TestMCPIDsKeepTheirType(t *testing.T) {
+	if idKey(json.RawMessage("1")) == idKey(json.RawMessage(`"1"`)) {
+		t.Fatal("a number and a string ID share a key")
+	}
+	if got, want := idKey(json.RawMessage("1")), idKey(json.RawMessage(" 1 ")); got != want {
+		t.Fatalf("the same number ID has two keys: %q, %q", got, want)
 	}
 }

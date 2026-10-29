@@ -33,7 +33,7 @@ func (s *Server) readPane(c *client, r *api.ReadPaneRequest) {
 		ended       bool
 		e           *api.Error
 	)
-	s.call(func(st *state) {
+	if !s.call(func(st *state) {
 		sess, p, err := st.toolPane(r.Caller, r.Pane)
 		if err != nil {
 			e = err
@@ -41,7 +41,9 @@ func (s *Server) readPane(c *client, r *api.ReadPaneRequest) {
 		}
 		tp = p.term
 		sessionName, profile, dir, ended = sess.name, p.profile, p.folder(), p.ended
-	})
+	}) {
+		return // the server stopped, so no reply can reach the client
+	}
 	if e != nil {
 		s.reply(c, e)
 		return
