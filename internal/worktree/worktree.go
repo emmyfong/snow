@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strings"
 )
@@ -28,15 +29,28 @@ func (r Repo) Create(ctx context.Context, branch string) (Worktree, error) {
 	if err != nil {
 		return Worktree{}, err
 	}
-	if _, err := r.git(ctx, main.Path, "check-ref-format", "--branch", branch); err != nil {
+	if badBranch(branch) {
 		return Worktree{}, fmt.Errorf("%w: %q", ErrBadBranch, branch)
+	}
+	// check-ref-format --branch would take @{-1} for "the previous branch".
+	if _, err := r.git(ctx, main.Path, "check-ref-format", "refs/heads/"+branch); err != nil {
+		if declined(err) {
+			return Worktree{}, fmt.Errorf("%w: %q", ErrBadBranch, branch)
+		}
+		return Worktree{}, r.classify(err)
 	}
 	head, err := r.git(ctx, main.Path, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
 	if err != nil {
-		return Worktree{}, fmt.Errorf("%w: %w", ErrNoCommits, err)
+		if declined(err) {
+			return Worktree{}, fmt.Errorf("%w: %w", ErrNoCommits, err)
+		}
+		return Worktree{}, r.classify(err)
 	}
-	if _, err := r.git(ctx, main.Path, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
+	switch _, err := r.git(ctx, main.Path, "show-ref", "--verify", "--quiet", "refs/heads/"+branch); {
+	case err == nil:
 		return Worktree{}, fmt.Errorf("%w: %s", ErrBranchExists, branch)
+	case !declined(err):
+		return Worktree{}, r.classify(err)
 	}
 	dir := r.join(main.Path, dirName, slug(branch))
 	if occupied(r.osPath(dir)) {
@@ -77,23 +91,13 @@ func (r Repo) Remove(ctx context.Context, path string) error {
 	case !r.same(r.dir(target.Path), r.join(list[0].Path, dirName)):
 		// A worktree the user made is theirs to remove.
 		return fmt.Errorf("%w: %s is not in %s", ErrNotWorktree, path, dirName)
+	case target.Locked:
+		return fmt.Errorf("%w: %s", ErrLocked, target.Path)
 	}
-	status, err := r.git(ctx, target.Path, "status", "--porcelain", "--untracked-files=all")
-	if err != nil {
-		return r.classify(err)
-	}
-	if strings.TrimSpace(status) != "" {
-		return fmt.Errorf("%w: %s", ErrDirty, target.Path)
-	}
-	if target.Detached || target.Branch == "" {
-		// A branch keeps its commits when the worktree goes. A detached HEAD
-		// does not: its new commits are reachable from nothing else.
-		out, err := r.git(ctx, target.Path, "rev-list", "-n1", "HEAD", "--not", "--branches", "--remotes", "--tags")
-		if err != nil {
-			return r.classify(err)
-		}
-		if strings.TrimSpace(out) != "" {
-			return fmt.Errorf("%w: %s", ErrUnreachableCommits, target.Path)
+	// A folder deleted by hand leaves only git's entry, and nothing to lose.
+	if _, err := os.Stat(r.osPath(target.Path)); !errors.Is(err, fs.ErrNotExist) {
+		if err := r.checkNoWorkLost(ctx, *target); err != nil {
+			return err
 		}
 	}
 	// From the main checkout: the worktree's own folder is about to go.
@@ -101,6 +105,36 @@ func (r Repo) Remove(ctx context.Context, path string) error {
 		return r.classify(err)
 	}
 	return nil
+}
+
+// checkNoWorkLost returns ErrDirty or ErrUnreachableCommits when removing
+// the worktree would lose work.
+func (r Repo) checkNoWorkLost(ctx context.Context, wt Worktree) error {
+	status, err := r.git(ctx, wt.Path, "status", "--porcelain", "--untracked-files=all")
+	if err != nil {
+		return r.classify(err)
+	}
+	if strings.TrimSpace(status) != "" {
+		return fmt.Errorf("%w: %s", ErrDirty, wt.Path)
+	}
+	if wt.Detached || wt.Branch == "" {
+		// A branch keeps its commits when the worktree goes. A detached HEAD
+		// does not: its new commits are reachable from nothing else.
+		out, err := r.git(ctx, wt.Path, "rev-list", "-n1", "HEAD", "--not", "--branches", "--remotes", "--tags")
+		if err != nil {
+			return r.classify(err)
+		}
+		if strings.TrimSpace(out) != "" {
+			return fmt.Errorf("%w: %s", ErrUnreachableCommits, wt.Path)
+		}
+	}
+	return nil
+}
+
+// badBranch reports a name that git takes for something else: nothing, the
+// name @, or an option.
+func badBranch(name string) bool {
+	return name == "" || name == "@" || strings.HasPrefix(name, "-")
 }
 
 // undoBranch deletes the branch that a failed worktree add made, so the next

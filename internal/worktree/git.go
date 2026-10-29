@@ -18,6 +18,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/emmyfong/snow/internal/shell"
 )
@@ -47,6 +48,9 @@ func (r Repo) command(ctx context.Context, dir string, args ...string) *exec.Cmd
 		wsl = append(append(append(wsl, gitEnv...), "git"), args...)
 		cmd = exec.CommandContext(ctx, "wsl.exe", wsl...)
 	}
+	// A child of git, such as a hook, can hold the output pipes after git
+	// is killed. Run gives up on them after this long.
+	cmd.WaitDelay = 2 * time.Second
 	shell.HideWindow(cmd)
 	return cmd
 }
@@ -76,6 +80,10 @@ func (r Repo) git(ctx context.Context, dir string, args ...string) (string, erro
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
 		f := &failure{sub: args[0], code: -1, stderr: strings.TrimSpace(stderr.String()), cause: err}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			// A killed git says "signal: killed"; the caller wants to know why.
+			f.cause = fmt.Errorf("%w: %w", ctxErr, err)
+		}
 		var exit *exec.ExitError
 		if errors.As(err, &exit) {
 			f.code = exit.ExitCode()
@@ -83,6 +91,13 @@ func (r Repo) git(ctx context.Context, dir string, args ...string) (string, erro
 		return "", f
 	}
 	return stdout.String(), nil
+}
+
+// declined reports whether err is git answering "no" to a yes-or-no command,
+// which it does with exit code 1, and not git failing to answer.
+func declined(err error) bool {
+	var f *failure
+	return errors.As(err, &f) && f.code == 1
 }
 
 // classify gives a failure that says what is wrong with the repository or

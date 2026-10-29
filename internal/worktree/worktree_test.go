@@ -143,6 +143,8 @@ func TestCreateErrors(t *testing.T) {
 		{"bad name", newRepo, "bad..name", ErrBadBranch},
 		{"name with a dash first", newRepo, "-x", ErrBadBranch},
 		{"empty name", newRepo, "", ErrBadBranch},
+		{"previous branch shorthand", newRepo, "@{-1}", ErrBadBranch},
+		{"at sign alone", newRepo, "@", ErrBadBranch},
 		{"branch exists", newRepo, "main", ErrBranchExists},
 		{"folder exists", func(t *testing.T) Repo {
 			r := newRepo(t)

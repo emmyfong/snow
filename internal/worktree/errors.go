@@ -24,6 +24,9 @@ var (
 	ErrDirty = errors.New("the worktree has uncommitted changes")
 	// ErrNotWorktree means the path is not a worktree of the repository.
 	ErrNotWorktree = errors.New("not a worktree of this repository")
+	// ErrLocked means git has locked the worktree, which a user or a tool
+	// does to keep it. Snow leaves it alone.
+	ErrLocked = errors.New("the worktree is locked")
 	// ErrMainWorktree means the path is the main checkout, which Snow
 	// never removes.
 	ErrMainWorktree = errors.New("the main checkout is not a worktree to remove")
