@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 
 	"github.com/emmyfong/snow/internal/shell"
 )
@@ -27,7 +28,46 @@ $toast = [Windows.UI.Notifications.ToastNotification]::new($t)
 func toastCommand(ctx context.Context, n Notice, powershell string) *exec.Cmd {
 	title, body := message(n)
 	cmd := exec.CommandContext(ctx, powershell, "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", toastScript)
-	cmd.Env = append(os.Environ(), "SNOW_NOTIFY_TITLE="+title, "SNOW_NOTIFY_BODY="+body)
+	env := append(os.Environ(), "SNOW_NOTIFY_TITLE="+title, "SNOW_NOTIFY_BODY="+body)
+	// WSL passes only the variables WSLENV names to a Windows program. The
+	// script reads the text from the environment, so both names must be
+	// listed there; an existing WSLENV stays, with its other entries.
+	cmd.Env = withWSLEnv(env, "SNOW_NOTIFY_TITLE", "SNOW_NOTIFY_BODY")
 	shell.HideWindow(cmd)
 	return cmd
+}
+
+// withWSLEnv returns env with names added to WSLENV, so WSL passes them to
+// the Windows program. Other entries keep their order.
+func withWSLEnv(env []string, names ...string) []string {
+	var value string
+	out := make([]string, 0, len(env)+1)
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, "WSLENV="); ok {
+			value = v
+			continue
+		}
+		out = append(out, e)
+	}
+	var entries []string
+	if value != "" {
+		entries = strings.Split(value, ":")
+	}
+	for _, name := range names {
+		if !hasWSLEntry(entries, name) {
+			entries = append(entries, name)
+		}
+	}
+	return append(out, "WSLENV="+strings.Join(entries, ":"))
+}
+
+// hasWSLEntry reports whether entries names entry, with or without WSLENV
+// flags such as /p.
+func hasWSLEntry(entries []string, entry string) bool {
+	for _, e := range entries {
+		if e == entry || strings.HasPrefix(e, entry+"/") {
+			return true
+		}
+	}
+	return false
 }

@@ -5,6 +5,7 @@ package notify
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os/exec"
 	"sync"
@@ -51,8 +52,8 @@ type Options struct {
 }
 
 // Notifier starts the desktop helper for the events the config turns on. It
-// is safe to use from the server's owner goroutine: Notify only builds a
-// command and starts it in another goroutine.
+// is safe to use from the server's owner goroutine: Notify only starts a
+// goroutine.
 type Notifier struct {
 	opts Options
 	once sync.Once // logs the first failure only
@@ -65,8 +66,12 @@ func New(opts Options) *Notifier { return &Notifier{opts: opts} }
 // around.
 const runTimeout = 5 * time.Second
 
+// errNoCommand reports a helper that returned no command.
+var errNoCommand = errors.New("helper returned no command")
+
 // Notify shows n on the desktop unless its event is off. It returns at
-// once; the helper runs in its own goroutine.
+// once; the helper is built and run in its own goroutine, so resolving a
+// program on PATH never holds the caller.
 func (n *Notifier) Notify(notice Notice) {
 	if notice.Kind == NeedsYou && !n.opts.NeedsYou || notice.Kind == TurnEnd && !n.opts.TurnEnd {
 		return
@@ -75,10 +80,14 @@ func (n *Notifier) Notify(notice Notice) {
 	if helper == nil {
 		helper = command
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
-	cmd := helper(ctx, notice)
 	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), runTimeout)
 		defer cancel()
+		cmd := helper(ctx, notice)
+		if cmd == nil {
+			n.once.Do(func() { n.log().Info("desktop notification failed", "err", errNoCommand) })
+			return
+		}
 		if err := cmd.Run(); err != nil {
 			n.once.Do(func() { n.log().Info("desktop notification failed", "err", err) })
 		}

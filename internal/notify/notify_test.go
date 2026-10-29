@@ -156,6 +156,25 @@ func TestNotifyHelperMissing(t *testing.T) {
 	}
 }
 
+// TestNotifyNilCommand: a helper that returns no command logs a failure
+// instead of panicking the server.
+func TestNotifyNilCommand(t *testing.T) {
+	var log lockedBuffer
+	n := New(Options{
+		NeedsYou: true,
+		Log:      slog.New(slog.NewTextHandler(&log, nil)),
+		Helper:   func(context.Context, Notice) *exec.Cmd { return nil },
+	})
+	n.Notify(Notice{Kind: NeedsYou, Agent: "Claude Code", Session: "work"})
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(log.String(), "desktop notification failed") {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if !strings.Contains(log.String(), "helper returned no command") {
+		t.Fatalf("log %q, want the missing command failure", log.String())
+	}
+}
+
 // TestMessage: the body names the agent and the session, and nothing else.
 func TestMessage(t *testing.T) {
 	tests := []struct {
