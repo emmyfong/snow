@@ -67,8 +67,13 @@ func toChatMessages(m provider.Message) ([]sdk.ChatCompletionMessageParamUnion, 
 	for _, b := range m.Content {
 		switch b := b.(type) {
 		case *provider.Text:
-			texts = append(texts, b.Text)
+			if b.Text != "" {
+				texts = append(texts, b.Text)
+			}
 		case *provider.ToolUse:
+			if m.Role != provider.RoleAssistant {
+				return nil, fmt.Errorf("a tool use in a %s message", m.Role)
+			}
 			args := string(b.Input)
 			if args == "" {
 				args = "{}"
@@ -78,6 +83,9 @@ func toChatMessages(m provider.Message) ([]sdk.ChatCompletionMessageParamUnion, 
 				Function: sdk.ChatCompletionMessageFunctionToolCallFunctionParam{Name: b.Name, Arguments: args},
 			}})
 		case *provider.ToolResult:
+			if m.Role != provider.RoleUser {
+				return nil, fmt.Errorf("a tool result in a %s message", m.Role)
+			}
 			out := b.Content
 			if b.IsError {
 				// The API has no error flag on a tool result.

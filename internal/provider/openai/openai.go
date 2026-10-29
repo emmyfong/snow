@@ -1,5 +1,6 @@
-// Package openai is the provider for OpenAI's Responses API, by API key. It
-// streams replies with reasoning summaries and tool calls, lists models,
+// Package openai is the provider for OpenAI's Responses API, by API key, and
+// for a compatible service that serves the Responses or the Chat Completions
+// API. It streams replies with reasoning summaries and tool calls, lists models,
 // and checks a key. It reads the key through provider.KeySource on every
 // request and never puts it in an error.
 package openai

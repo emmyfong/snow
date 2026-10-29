@@ -13,6 +13,7 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -449,9 +450,9 @@ func TestChatErrors(t *testing.T) {
 // TestChatRefusesRedirect: a chat service that redirects to another host
 // does not get the key there.
 func TestChatRefusesRedirect(t *testing.T) {
-	var gotKey bool
+	var gotKey atomic.Bool
 	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		gotKey = r.Header.Get("Authorization") != ""
+		gotKey.Store(r.Header.Get("Authorization") != "")
 		_, _ = io.WriteString(w, "data: [DONE]\n\n")
 	}))
 	t.Cleanup(other.Close)
@@ -460,7 +461,151 @@ func TestChatRefusesRedirect(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 	_, err := collectChat(t, chatProvider(srv.URL, false), provider.Request{Model: "m"})
-	if err == nil || gotKey {
-		t.Fatalf("redirect followed: err %v, key sent %v", err, gotKey)
+	if err == nil || gotKey.Load() {
+		t.Fatalf("redirect followed: err %v, key sent %v", err, gotKey.Load())
+	}
+}
+
+// sseChunk is one chunk of a reply: choices is its JSON, and extra more
+// top-level fields, such as usage.
+func sseChunk(choices, extra string) string {
+	if extra != "" {
+		extra = "," + extra
+	}
+	return `data: {"id":"chatcmpl-1","object":"chat.completion.chunk","model":"m","choices":` + choices + extra + "}\n\n"
+}
+
+// inlineChat streams the reply in body, which a test writes in place.
+func inlineChat(t *testing.T, body string) []provider.Event {
+	t.Helper()
+	srv := rawServer(t, 200, "text/event-stream", body, nil)
+	evs, err := collectChat(t, chatProvider(strings.TrimSuffix(srv.URL, "/"), false), provider.Request{Model: "m", Messages: []provider.Message{user("Hi")}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return evs
+}
+
+// TestChatStreamShapes: replies that services send in their own way, each
+// still one Usage, one Stop, and the text and calls once.
+func TestChatStreamShapes(t *testing.T) {
+	text := func(s, finish string) string {
+		return sseChunk(`[{"index":0,"delta":{"content":"`+s+`"},"finish_reason":`+finish+`}]`, `"usage":{"prompt_tokens":5,"completion_tokens":2}`)
+	}
+	for _, tt := range []struct {
+		name  string
+		body  string
+		text  string
+		usage []provider.Usage
+		stop  provider.StopReason
+	}{
+		{"usage in every chunk", text("a", "null") + text("b", "null") + text("", `"stop"`) + "data: [DONE]\n\n", "ab", []provider.Usage{{Input: 5, Output: 2}}, provider.StopEndTurn},
+		{"no usage at all", sseChunk(`[{"index":0,"delta":{"content":"a"},"finish_reason":"stop"}]`, "") + "data: [DONE]\n\n", "a", nil, provider.StopEndTurn},
+		{"content filter", sseChunk(`[{"index":0,"delta":{"content":"a"},"finish_reason":"content_filter"}]`, "") + "data: [DONE]\n\n", "a", nil, provider.StopRefusal},
+		{"refusal text", sseChunk(`[{"index":0,"delta":{"refusal":"No."},"finish_reason":"stop"}]`, "") + "data: [DONE]\n\n", "No.", nil, provider.StopRefusal},
+		{"unknown reason", sseChunk(`[{"index":0,"delta":{"content":"a"},"finish_reason":"function_call"}]`, "") + "data: [DONE]\n\n", "a", nil, provider.StopOther},
+		{"second choice ignored", sseChunk(`[{"index":0,"delta":{"content":"a"},"finish_reason":"stop"},{"index":1,"delta":{"content":"z"},"finish_reason":"stop"}]`, "") + "data: [DONE]\n\n", "a", nil, provider.StopEndTurn},
+		{"empty choices first", sseChunk(`[]`, "") + sseChunk(`[{"index":0,"delta":{"content":"a"},"finish_reason":"stop"}]`, "") + "data: [DONE]\n\n", "a", nil, provider.StopEndTurn},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			evs := inlineChat(t, tt.body)
+			var got strings.Builder
+			for _, d := range providertest.Only[*provider.TextDelta](evs) {
+				got.WriteString(d.Text)
+			}
+			var usage []provider.Usage
+			for _, u := range providertest.Only[*provider.Usage](evs) {
+				usage = append(usage, *u)
+			}
+			if got.String() != tt.text || !reflect.DeepEqual(usage, tt.usage) {
+				t.Fatalf("text %q usage %+v, want %q %+v", got.String(), usage, tt.text, tt.usage)
+			}
+			if stops := providertest.Only[*provider.Stop](evs); len(stops) != 1 || stops[0].Reason != tt.stop || evs[len(evs)-1] != provider.Event(stops[0]) {
+				t.Fatalf("stops %+v, want %v last", stops, tt.stop)
+			}
+		})
+	}
+}
+
+// TestChatToolCallWithoutName: a call that arrives with no name still comes
+// out whole, with an id, and the tool layer answers that no such tool
+// exists.
+func TestChatToolCallWithoutName(t *testing.T) {
+	evs := inlineChat(t, sseChunk(`[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":"tool_calls"}]`, "")+"data: [DONE]\n\n")
+	uses := providertest.Only[*provider.ToolUse](evs)
+	if len(uses) != 1 || uses[0].Name != "" || uses[0].ID != "call_chatcmpl-1_0" || string(uses[0].Input) != "{}" {
+		t.Fatalf("tool uses %+v", uses)
+	}
+}
+
+// TestChatMessageShapes: text blocks join into one message, an empty text
+// block sends nothing, and a block in the wrong role is an error, not a
+// silent drop.
+func TestChatMessageShapes(t *testing.T) {
+	textBlocks := func(texts ...string) []provider.Block {
+		var bs []provider.Block
+		for _, s := range texts {
+			bs = append(bs, &provider.Text{Text: s})
+		}
+		return bs
+	}
+	roles := func(msgs ...provider.Message) []string {
+		params, err := toChatParams(provider.Request{Model: "m", Messages: msgs})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(params.Messages)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []map[string]any
+		if err := json.Unmarshal(raw, &out); err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, m := range out {
+			got = append(got, fmt.Sprintf("%v|%v", m["role"], m["content"]))
+		}
+		return got
+	}
+	if got, want := roles(provider.Message{Role: provider.RoleUser, Content: textBlocks("one", "two")}), []string{"user|one\n\ntwo"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("joined %q, want %q", got, want)
+	}
+	if got := roles(provider.Message{Role: provider.RoleUser, Content: textBlocks("", "")}); len(got) != 0 {
+		t.Fatalf("an empty text sent %q", got)
+	}
+	for _, tt := range []struct {
+		name string
+		msg  provider.Message
+	}{
+		{"tool use from the user", provider.Message{Role: provider.RoleUser, Content: []provider.Block{&provider.ToolUse{ID: "c", Name: "run"}}}},
+		{"tool result from the assistant", provider.Message{Role: provider.RoleAssistant, Content: []provider.Block{&provider.ToolResult{ToolUseID: "c"}}}},
+	} {
+		if _, err := toChatParams(provider.Request{Model: "m", Messages: []provider.Message{tt.msg}}); err == nil {
+			t.Errorf("%s: no error", tt.name)
+		}
+	}
+}
+
+// TestChatNoRetry: a failed request is sent once. Snow never retries by
+// itself, so a 429 or a 500 reaches the user after one request.
+func TestChatNoRetry(t *testing.T) {
+	for _, status := range []int{429, 500, 503} {
+		t.Run(fmt.Sprint(status), func(t *testing.T) {
+			var n atomic.Int32
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				n.Add(1)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(status)
+				_, _ = io.WriteString(w, errBody("x", "x", "no"))
+			}))
+			t.Cleanup(srv.Close)
+			if _, err := collectChat(t, chatProvider(srv.URL, false), provider.Request{Model: "m"}); err == nil {
+				t.Fatal("no error")
+			}
+			if got := n.Load(); got != 1 {
+				t.Fatalf("%d requests, want 1", got)
+			}
+		})
 	}
 }

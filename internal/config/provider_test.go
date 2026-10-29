@@ -125,6 +125,7 @@ func TestConfigProvidersCRLF(t *testing.T) {
 	}{
 		{"\n[provider.omniroute]\nno_key = true\n", 2},
 		{"\n[provider.omniroute]\nbase_url = \"http://localhost:20128/v1\"\napi_key = \"x\"\n", 4},
+		{"\n[provider.omniroute]\nbase_url = \"http://localhost:20128/v1\"\napi = \"completions\"\n", 4},
 	} {
 		_, err := Load(writeConfig(t, strings.ReplaceAll(tt.body, "\n", "\r\n")))
 		var ce *Error
