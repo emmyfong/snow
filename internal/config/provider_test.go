@@ -97,8 +97,8 @@ base_url = "ftp://a"
 					t.Fatal(err)
 				}
 				want := map[string]Endpoint{
-					"omniroute":   {BaseURL: "http://localhost:20128/v1", NoKey: true},
-					"open-router": {BaseURL: "https://openrouter.ai/api/v1", Models: []string{"qwen/qwen3-coder:free"}},
+					"omniroute":   {BaseURL: "http://localhost:20128/v1", NoKey: true, API: APIResponses},
+					"open-router": {BaseURL: "https://openrouter.ai/api/v1", Models: []string{"qwen/qwen3-coder:free"}, API: APIResponses},
 				}
 				if !reflect.DeepEqual(cfg.Providers, want) {
 					t.Fatalf("providers %+v, want %+v", cfg.Providers, want)
@@ -158,7 +158,7 @@ func TestConfigProviderAPI(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if got := cfg.Providers["gw"].Protocol(); got != tt.want {
+				if got := cfg.Providers["gw"].API; got != tt.want {
 					t.Fatalf("API %q, want %q", got, tt.want)
 				}
 				return

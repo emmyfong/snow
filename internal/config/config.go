@@ -178,6 +178,7 @@ func parse(data string) (Config, *Error) {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}
+	cfg.defaultProviders()
 	return cfg, nil
 }
 

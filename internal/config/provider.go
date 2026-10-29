@@ -21,8 +21,9 @@ type Endpoint struct {
 	// NoKey marks an endpoint that takes no key, such as a local server:
 	// requests go without one.
 	NoKey bool `toml:"no_key"`
-	// API is the API the service speaks: APIResponses (the default when
-	// empty) or APIChat. Snow never tries the other one by itself.
+	// API is the API the service speaks: APIResponses or APIChat. Load
+	// fills in APIResponses when the file leaves it out. Snow never tries
+	// the other one by itself.
 	API string `toml:"api"`
 }
 
@@ -35,17 +36,19 @@ const (
 	APIChat = "chat"
 )
 
-// Protocol returns the API the endpoint speaks, with the default filled in.
-func (e Endpoint) Protocol() string {
-	if e.API == "" {
-		return APIResponses
-	}
-	return e.API
-}
-
 // maxProviderName bounds a provider's name, which starts every model name
 // of the provider.
 const maxProviderName = 32
+
+// defaultProviders fills in what a provider table leaves out.
+func (c Config) defaultProviders() {
+	for name, e := range c.Providers {
+		if e.API == "" {
+			e.API = APIResponses
+			c.Providers[name] = e
+		}
+	}
+}
 
 // validateProviders rejects endpoints that can never work. It returns the
 // error and the setting's path in the file. The first problem in name
