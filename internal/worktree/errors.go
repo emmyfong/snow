@@ -28,3 +28,7 @@ var (
 	// never removes.
 	ErrMainWorktree = errors.New("the main checkout is not a worktree to remove")
 )
+
+// ErrUnreachableCommits means a worktree on a detached HEAD holds commits
+// that no branch, remote branch, or tag reaches. Removing it would lose them.
+var ErrUnreachableCommits = errors.New("the worktree holds commits that no branch has")

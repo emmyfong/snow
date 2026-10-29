@@ -110,17 +110,36 @@ func (r Repo) join(elem ...string) string {
 	return path.Join(elem...)
 }
 
-// same reports whether a and b are one path. Windows and macOS file
-// systems ignore case.
+// dir returns the folder that holds p, in the repository's own form.
+func (r Repo) dir(p string) string {
+	if r.Distro == "" {
+		return filepath.Dir(p)
+	}
+	return path.Dir(p)
+}
+
+// same reports whether a and b are one path. git lists real paths, so a
+// path through a symlink, or a Windows short name, is resolved first. A WSL
+// path cannot be resolved from here, so the caller passes the path that
+// Create or List returned. Windows and macOS file systems ignore case.
 func (r Repo) same(a, b string) bool {
 	if r.Distro != "" {
 		return path.Clean(a) == path.Clean(b)
 	}
-	a, b = filepath.Clean(a), filepath.Clean(b)
+	a, b = resolve(a), resolve(b)
 	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
 		return strings.EqualFold(a, b)
 	}
 	return a == b
+}
+
+// resolve returns the real path of p, or its clean form when p is gone.
+func resolve(p string) string {
+	p = filepath.Clean(p)
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return p
 }
 
 // osPath is where Snow opens a path of the repository: the path, or for a
