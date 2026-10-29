@@ -161,7 +161,20 @@ no_key = true                  # the service takes no key
 [provider.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 # models = ["qwen/qwen3-coder:free"]   # only for a service with no model list
+
+[provider.ollama]
+base_url = "http://localhost:11434/v1"
+no_key = true
+api = "chat"                   # the service serves Chat Completions only
 ```
+
+Snow speaks the Responses API to a service by default. Ollama, LM Studio,
+llama.cpp, vLLM, and some gateways serve only the Chat Completions API.
+For such a service, set `api = "chat"`, and Snow sends each turn to
+`<base_url>/chat/completions`. The two APIs are not tried in turn: the
+table says which one the service speaks. On the `chat` API Snow sends no
+reasoning effort and shows no reasoning, and a service that does not report
+token use shows no cost.
 
 Its models show in `/model` as `<name>/<model>`, for example
 `openrouter/qwen/qwen3-coder:free`. Save its key with
@@ -332,6 +345,7 @@ turn_end = true       # false: no notification when a turn ends
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
+# api = "responses"                     # or "chat", for a Chat Completions service
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
