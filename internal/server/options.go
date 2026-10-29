@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/emmyfong/snow/internal/notify"
 	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/term"
 )
@@ -45,6 +46,9 @@ type Options struct {
 	// Chat is what chat panes need. Nil means the server cannot open them:
 	// a split or a new window of kind chat fails with ErrNoChat.
 	Chat *ChatOptions
+	// Notify shows a desktop notification when an agent needs the user or
+	// finishes a turn. Nil means no notifications, as in most tests.
+	Notify *notify.Notifier
 
 	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 

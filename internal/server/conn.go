@@ -29,6 +29,9 @@ type client struct {
 	// wantsModels says c asked for the model list and hears when a fetch
 	// finishes.
 	wantsModels bool
+	// focused is set while c's terminal reports focus. The server skips a
+	// desktop notification for the pane such a client shows.
+	focused bool
 	// tools is canceled when the connection ends, so a wait that has no
 	// reader stops at once.
 	tools   context.Context
@@ -66,6 +69,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
 		st.enqueue(c, st.listMessage())
+		st.enqueue(c, &api.AgentList{Agents: st.agents()})
 	}) {
 		_ = raw.Close()
 		return
@@ -136,6 +140,8 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.renameRequest(c, m) })
 		case *api.AgentState:
 			s.call(func(st *state) { st.agentState(m) })
+		case *api.ClientFocus:
+			s.call(func(st *state) { st.clientFocus(c, m) })
 		case *api.PanesRequest:
 			s.panes(c, m)
 		case *api.ReadPaneRequest:

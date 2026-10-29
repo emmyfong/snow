@@ -37,8 +37,12 @@ type RenameSession struct {
 }
 
 // Validate checks the session name when one is given, by the rules of
-// ValidSessionName. An empty name asks for a numbered session.
+// ValidSessionName, and that Pane is not negative. An empty name asks for
+// a numbered session.
 func (a *Attach) Validate() error {
+	if a.Pane < 0 {
+		return fmt.Errorf("%w: pane %d", ErrInvalidSessionRequest, a.Pane)
+	}
 	if a.Session == "" {
 		return nil
 	}

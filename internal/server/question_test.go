@@ -27,15 +27,11 @@ func askReply(id string) providertest.Reply {
 	}}
 }
 
-// chatInFolder starts a server with replies and the built-in tools, and
-// opens a chat in folder dir in session "work".
-func chatInFolder(t *testing.T, dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
+// splitChat attaches c to a new session "work", splits its terminal pane
+// with a chat in folder dir, and returns the chat pane's ID once c has its
+// snapshot.
+func splitChat(t *testing.T, c *apitest.Client, dir string) int {
 	t.Helper()
-	opts, _, store := chatOptions(t, replies...)
-	opts.Chat.Tools = tool.Builtin()
-	s := New(opts)
-	t.Cleanup(s.Close)
-	c := connect(t, s, 100, 30)
 	c.Send(&api.Attach{Session: "work", Create: true, Dir: dir})
 	l := nextLayout(t, c, func(*api.Layout) bool { return true })
 	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{
@@ -43,7 +39,29 @@ func chatInFolder(t *testing.T, dir string, replies ...providertest.Reply) (*Ser
 	}})
 	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
 	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
-	return s, store, c, id
+	return id
+}
+
+// chatInFolder starts a server with replies and the built-in tools, and
+// opens a chat in folder dir in session "work".
+func chatInFolder(t *testing.T, dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
+	t.Helper()
+	return chatInFolderOpts(t, nil, dir, replies...)
+}
+
+// chatInFolderOpts is chatInFolder with change applied to the server's
+// options first, for tests that turn an option on.
+func chatInFolderOpts(t *testing.T, change func(*Options), dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
+	t.Helper()
+	opts, _, store := chatOptions(t, replies...)
+	opts.Chat.Tools = tool.Builtin()
+	if change != nil {
+		change(&opts)
+	}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 100, 30)
+	return s, store, c, splitChat(t, c, dir)
 }
 
 // askingChat starts a server whose model asks a question, opens a chat in

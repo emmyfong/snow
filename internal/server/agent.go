@@ -45,6 +45,7 @@ func (st *state) agentState(m *api.AgentState) {
 func (st *state) agentChanged(sess *session) {
 	st.sendLayout(sess)
 	st.syncNeedsYou(sess)
+	st.syncAgents()
 }
 
 // syncNeedsYou sends the session list to every client when the count of

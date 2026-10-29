@@ -204,8 +204,11 @@ func (st *state) chatEvent(e *api.ChatEvent) {
 	}
 	before := p.agentNow()
 	p.chat.snap.Apply(e)
-	if p.agentNow() != before {
+	switch {
+	case p.agentNow() != before:
 		st.agentChanged(sess)
+	case e.Kind == api.ChatEventUsage, e.Kind == api.ChatEventModel:
+		st.syncAgents() // the list shows the chat's model and cost
 	}
 	for c := range st.clients {
 		if c.session != sess.name || !c.chatLive[e.Pane] {

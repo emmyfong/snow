@@ -121,7 +121,7 @@ func claudeInDistro(wsl, distro string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), claudeProbeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, wsl, "-d", distro, "-e", "sh", "-c", claudeWhich)
-	hideWindow(cmd)
+	HideWindow(cmd)
 	out, err := cmd.Output()
 	if _, exited := errors.AsType[*exec.ExitError](err); exited && ctx.Err() == nil {
 		return foundClaude(string(out)), nil

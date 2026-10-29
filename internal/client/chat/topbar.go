@@ -47,7 +47,7 @@ func (m *Model) barOptions() ui.TopBarOptions {
 	}
 	switch {
 	case m.snap.Cost > 0 || u.Priced:
-		o.Cost = dollars(m.snap.Cost) + " est."
+		o.Cost = ui.Dollars(m.snap.Cost) + " est."
 	case u.Window > 0:
 		o.Cost = ui.ShortCount(used) + " tok"
 	}
@@ -62,13 +62,4 @@ func modelSpanAt(spans []ui.TopBarSpan, x int) bool {
 		}
 	}
 	return false
-}
-
-// dollars shows a cost in US dollars to the cent; a cost below a cent
-// shows as "<$0.01".
-func dollars(c float64) string {
-	if c > 0 && c < 0.005 {
-		return "<$0.01"
-	}
-	return fmt.Sprintf("$%.2f", c)
 }

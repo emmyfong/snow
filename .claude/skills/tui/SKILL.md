@@ -28,6 +28,7 @@ internal/client/
   authpick/      the provider key picker (`/login`)
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
+  agents/        the agents board (Ctrl+b w) and needs-you inbox (Ctrl+b i): the board lists every agent of the session from api.AgentList over the whole window area, with kind, state, how long, folder, and a chat's model and cost; the inbox lists every agent that waits for the user in every session; Enter focuses the agent's pane in both
   sessionlist/   session rows (name, state, last used, a "needs you" alert) for the home page, and the session list popup (Ctrl+b s)
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
@@ -88,6 +89,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Panel | `Panel(th theme.Theme, o PanelOptions) string` | A frame exactly `Width` wide around `Body` rows, `Title` in the top edge. Shares its frame with `Popup`. Nothing below 4 cells. |
 | Input | `Input(th theme.Theme, o InputOptions) string` | A one-line text field exactly `Width` wide: `Prompt` in the accent color, then `Value` (its end shows when too long) or a muted `Placeholder`; `Focused` draws a cursor. |
 | List | `List(th theme.Theme, o ListOptions) string` | Rows of `ListItem` cells with aligned columns, `Selected` marked with the pointer glyph and highlighted; `Height` shows a window scrolled to the selection. An item's `Alert` (for example "● needs you") sits at the row's right end in `PromptFG`/`PromptBG`, selected or not; the columns are cut to keep it. |
+| Dollars | `Dollars(c float64) string` | A cost in US dollars to the cent (`$0.42`); below a cent `<$0.01`. The chat top bar and the agents board share it, beside `ShortCount` for tokens. |
 | KeyHints | `KeyHints(th theme.Theme, hints []Hint, width int) string` | One row of `Hint`s (key in accent, description muted); hints that do not fit whole are dropped from the end. |
 | Wordmark | `Wordmark(th theme.Theme, width int) string` | "snow" in half-block pixels, `WordmarkHeight` rows, centered in `width`, bold in the terminal's own text color (`WordmarkWidth` columns); nothing when too narrow. |
 | Transcript | `Transcript(th theme.Theme, o TranscriptOptions) string` | `TranscriptIndent(width)` is the column its text starts at, for rows drawn beside it. A chat transcript at most `Width` wide: `TranscriptEntry` rows (`Kind`: user, agent, thinking, note, error, queued) with a blank row between them. User, agent, and error entries start with a 6-cell badge (`UserFG`/`UserBG`, `AgentFG`/`AgentBG`, `ErrorFG`/`Error`; a `model` entry, for a reply from another model than asked for, uses the error badge too); wrapped lines line up after it. `Cut` adds "(cut off)". Escape sequences and control characters in the text are dropped. Below 15 cells the badge takes its own row. |
