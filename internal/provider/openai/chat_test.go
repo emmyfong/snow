@@ -146,6 +146,9 @@ func TestChatStopReasons(t *testing.T) {
 		{"chat_tool_calls.sse", provider.StopToolUse},
 		{"chat_tool_stop.sse", provider.StopToolUse},
 		{"chat_length.sse", provider.StopMaxTokens},
+		// A reply cut by the token limit is cut, whatever it holds: the agent
+		// answers its calls as lost instead of running them.
+		{"chat_length_tool.sse", provider.StopMaxTokens},
 	} {
 		t.Run(tt.fixture, func(t *testing.T) {
 			cs := newChatServer(t, tt.fixture)
@@ -156,6 +159,42 @@ func TestChatStopReasons(t *testing.T) {
 			stops := providertest.Only[*provider.Stop](evs)
 			if len(stops) != 1 || stops[0].Reason != tt.want {
 				t.Fatalf("stops %+v, want %v", stops, tt.want)
+			}
+		})
+	}
+}
+
+// TestChatBadArguments: arguments that are not JSON, because the model
+// wrote them badly or the reply was cut, still reach the agent as JSON. A
+// conversation file holds only valid JSON, and the tool layer then answers
+// the model with an error it can act on (#225).
+func TestChatBadArguments(t *testing.T) {
+	for _, tt := range []struct {
+		fixture string
+		stop    provider.StopReason
+		inputs  []string // each Input as the agent receives it
+	}{
+		{"chat_bad_args.sse", provider.StopToolUse, []string{`"{\"path\":"`}},
+		{"chat_length_tool.sse", provider.StopMaxTokens, []string{`{"path":"a.go"}`, `"{\"cmd\":\"l"`}},
+	} {
+		t.Run(tt.fixture, func(t *testing.T) {
+			cs := newChatServer(t, tt.fixture)
+			evs, err := collectChat(t, chatProvider(cs.URL, false), provider.Request{Model: "m", Messages: []provider.Message{user("Hi")}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			var got []string
+			for _, u := range providertest.Only[*provider.ToolUse](evs) {
+				if !json.Valid(u.Input) {
+					t.Fatalf("input %q is not JSON", u.Input)
+				}
+				got = append(got, string(u.Input))
+			}
+			if !reflect.DeepEqual(got, tt.inputs) {
+				t.Fatalf("inputs %q, want %q", got, tt.inputs)
+			}
+			if stops := providertest.Only[*provider.Stop](evs); len(stops) != 1 || stops[0].Reason != tt.stop {
+				t.Fatalf("stops %+v, want %v", stops, tt.stop)
 			}
 		})
 	}

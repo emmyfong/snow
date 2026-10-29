@@ -2,6 +2,7 @@ package openai
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"slices"
 	"strconv"
@@ -147,11 +148,7 @@ func (s *chatStream) end() {
 			// A service that sends no ID still needs one to pair the result.
 			id = "call_" + strconv.FormatInt(i, 10)
 		}
-		args := call.args
-		if len(args) == 0 {
-			args = []byte("{}")
-		}
-		s.queue = append(s.queue, &provider.ToolUse{ID: id, Name: call.name, Input: args})
+		s.queue = append(s.queue, &provider.ToolUse{ID: id, Name: call.name, Input: validArguments(call.args)})
 	}
 	if s.usage != nil {
 		s.queue = append(s.queue, s.usage)
@@ -160,18 +157,36 @@ func (s *chatStream) end() {
 	s.done = true
 }
 
+// validArguments returns args as JSON the conversation file can hold. A
+// model, a small local one above all, can write arguments that are not
+// JSON, and a reply cut by the token limit ends in the middle of them. Such
+// text goes on as a JSON string: no tool takes a string, so the tool layer
+// answers the model with an error that it can act on.
+func validArguments(args []byte) json.RawMessage {
+	if len(args) == 0 {
+		return json.RawMessage("{}")
+	}
+	if json.Valid(args) {
+		return args
+	}
+	quoted, _ := json.Marshal(string(args)) // a string always marshals
+	return quoted
+}
+
 // stopReason maps finish_reason. A reply that holds a tool call stops for
-// the tool whatever the service says: Ollama reports "stop" for it.
+// the tool whatever the service says, because Ollama reports "stop" for
+// it. A reply cut off or filtered says so first: the agent does not run the
+// calls of a reply that did not finish.
 func (s *chatStream) stopReason(tools bool) provider.StopReason {
 	switch {
-	case tools:
-		return provider.StopToolUse
-	case s.refused || s.finish == "content_filter":
-		return provider.StopRefusal
-	case s.finish == "stop":
-		return provider.StopEndTurn
 	case s.finish == "length":
 		return provider.StopMaxTokens
+	case s.refused || s.finish == "content_filter":
+		return provider.StopRefusal
+	case tools:
+		return provider.StopToolUse
+	case s.finish == "stop":
+		return provider.StopEndTurn
 	}
 	return provider.StopOther
 }
