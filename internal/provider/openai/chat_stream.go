@@ -100,13 +100,8 @@ func (s *chatStream) handle(c sdk.ChatCompletionChunk) {
 		s.prefix = "call_" + c.ID + "_"
 	}
 	if u := c.Usage; u.PromptTokens > 0 || u.CompletionTokens > 0 || u.TotalTokens > 0 {
-		cached, written := int(u.PromptTokensDetails.CachedTokens), int(u.PromptTokensDetails.CacheWriteTokens)
-		s.usage = &provider.Usage{
-			Input:      max(int(u.PromptTokens)-cached-written, 0),
-			Output:     int(u.CompletionTokens),
-			CacheRead:  cached,
-			CacheWrite: written,
-		}
+		usage := usageOf(u.PromptTokens, u.CompletionTokens, u.PromptTokensDetails.CachedTokens, u.PromptTokensDetails.CacheWriteTokens)
+		s.usage = &usage
 	}
 	// One choice is asked for. A service that sends more has the first one
 	// read and the rest ignored.
@@ -182,9 +177,7 @@ func (s *chatStream) callID(index int64) string {
 // text goes on as a JSON string: no tool takes a string, so the tool layer
 // answers the model with an error that it can act on.
 func validArguments(args []byte) json.RawMessage {
-	if len(args) == 0 {
-		return json.RawMessage("{}")
-	}
+	args = []byte(orEmptyObject(string(args)))
 	if json.Valid(args) {
 		return args
 	}

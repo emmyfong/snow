@@ -135,11 +135,7 @@ func (s *stream) itemDone(item responses.ResponseOutputItemUnion) {
 		}
 	case responses.ResponseFunctionToolCall:
 		s.toolCalls = true
-		input := json.RawMessage(it.Arguments)
-		if len(input) == 0 {
-			input = json.RawMessage("{}")
-		}
-		s.queue = append(s.queue, &provider.ToolUse{ID: it.CallID, Name: it.Name, Input: input})
+		s.queue = append(s.queue, &provider.ToolUse{ID: it.CallID, Name: it.Name, Input: json.RawMessage(orEmptyObject(it.Arguments))})
 	}
 }
 
@@ -150,16 +146,9 @@ func (s *stream) finish(u responses.ResponseUsage, reason provider.StopReason) {
 	s.done = true
 }
 
-// toUsage converts the API's counts. Its input total includes cached and
-// cache-written tokens; provider.Usage keeps them apart.
+// toUsage converts the API's counts.
 func toUsage(u responses.ResponseUsage) provider.Usage {
-	cached, written := int(u.InputTokensDetails.CachedTokens), int(u.InputTokensDetails.CacheWriteTokens)
-	return provider.Usage{
-		Input:      max(int(u.InputTokens)-cached-written, 0),
-		Output:     int(u.OutputTokens),
-		CacheRead:  cached,
-		CacheWrite: written,
-	}
+	return usageOf(u.InputTokens, u.OutputTokens, u.InputTokensDetails.CachedTokens, u.InputTokensDetails.CacheWriteTokens)
 }
 
 func incompleteReason(r string) provider.StopReason {

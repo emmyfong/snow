@@ -2,7 +2,6 @@ package openai
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -74,24 +73,15 @@ func toChatMessages(m provider.Message) ([]sdk.ChatCompletionMessageParamUnion, 
 			if m.Role != provider.RoleAssistant {
 				return nil, fmt.Errorf("a tool use in a %s message", m.Role)
 			}
-			args := string(b.Input)
-			if args == "" {
-				args = "{}"
-			}
 			calls = append(calls, sdk.ChatCompletionMessageToolCallUnionParam{OfFunction: &sdk.ChatCompletionMessageFunctionToolCallParam{
 				ID:       b.ID,
-				Function: sdk.ChatCompletionMessageFunctionToolCallFunctionParam{Name: b.Name, Arguments: args},
+				Function: sdk.ChatCompletionMessageFunctionToolCallFunctionParam{Name: b.Name, Arguments: orEmptyObject(string(b.Input))},
 			}})
 		case *provider.ToolResult:
 			if m.Role != provider.RoleUser {
 				return nil, fmt.Errorf("a tool result in a %s message", m.Role)
 			}
-			out := b.Content
-			if b.IsError {
-				// The API has no error flag on a tool result.
-				out = "Error: " + out
-			}
-			results = append(results, sdk.ToolMessage(out, b.ToolUseID))
+			results = append(results, sdk.ToolMessage(toolOutput(b), b.ToolUseID))
 		case *provider.Thinking, *provider.RedactedThinking:
 			// Reasoning goes out only to the API that made it.
 		default:
@@ -122,12 +112,9 @@ func toChatMessages(m provider.Message) ([]sdk.ChatCompletionMessageParamUnion, 
 // toChatTool turns a tool definition into a function tool. strict is off:
 // it needs every property required, which Snow's schemas do not promise.
 func toChatTool(t provider.ToolDef) (sdk.ChatCompletionToolUnionParam, error) {
-	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	if len(t.Schema) > 0 {
-		schema = map[string]any{}
-		if err := json.Unmarshal(t.Schema, &schema); err != nil {
-			return sdk.ChatCompletionToolUnionParam{}, fmt.Errorf("schema: %w", err)
-		}
+	schema, err := toolSchema(t)
+	if err != nil {
+		return sdk.ChatCompletionToolUnionParam{}, err
 	}
 	def := shared.FunctionDefinitionParam{Name: t.Name, Parameters: schema}
 	if t.Description != "" {
