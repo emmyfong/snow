@@ -10,12 +10,13 @@ import (
 
 // attach shows a session to c: a running one, a saved one restored from
 // snap, or a new one when asked.
-func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
+func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats map[int]*restoredChat) {
 	if err := m.Validate(); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
 	}
 	sess, ok := st.sessions[m.Session]
+	var notices []string // what a restore wants the user to know, shown after the layout
 	// The snapshot was read outside this goroutine; a kill or rename since
 	// then makes it stale.
 	if _, saved := st.saved[m.Session]; !saved {
@@ -27,7 +28,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 			cols, rows = defaultCols, defaultRows
 		}
 		var err error
-		if sess, err = st.restore(snap, cols, rows); err != nil {
+		if sess, err = st.restore(snap, chats, cols, rows); err != nil {
 			st.srv.log.Warn("restore failed", "session", m.Session, "err", err)
 			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 			return
@@ -36,6 +37,11 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 		st.served = true
 		st.save(sess)
 		st.srv.log.Info("session restored", "session", sess.name)
+		for _, rc := range chats {
+			if rc.notice != "" && (rc.used || rc.conv == nil) {
+				notices = append(notices, rc.notice)
+			}
+		}
 		ok = true
 	}
 	if !ok && !m.Create {
@@ -66,6 +72,9 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot) {
 	sess.lastUsed = time.Now()
 	st.enqueue(c, st.layout(sess))
 	st.syncChats(c)
+	for _, n := range notices {
+		st.enqueue(c, &api.Error{Code: api.CodeNotice, Message: n})
+	}
 	st.enqueue(c, st.profileList())
 	st.fitSession(sess)
 	st.sessionsChanged()

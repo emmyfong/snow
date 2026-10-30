@@ -101,6 +101,18 @@ type chatPane struct {
 	// records them: the history list shows the conversations of the same
 	// folder and profile.
 	folder, profile string
+	// kept is the conversation the saved session named before a restore could
+	// not resume it and gave this pane an empty one. The session keeps naming
+	// it until this chat has a message.
+	kept string
+}
+
+// savedID is the conversation the session file names for the pane.
+func (c *chatPane) savedID() string {
+	if c.kept != "" && len(c.snap.Entries) == 0 {
+		return c.kept
+	}
+	return c.conv.ID()
 }
 
 // startChat starts a conversation in dir for a new chat pane id, opened
@@ -133,8 +145,15 @@ func newSnapshot(id int, conv *agent.Conversation, model, effort string, mode ag
 
 // chatFolder returns the folder a chat opened from a pane running profile
 // works in: dir if it is usable, else the home folder. A WSL profile's
-// folder lives in its distribution, out of reach of a stat.
+// folder lives in its distribution, out of reach of a stat. A session names
+// no profile for its first chat, so "" means the default profile, as it does
+// for the shell. Without that, a WSL default gets a Windows folder.
 func (s *Server) chatFolder(profile, dir string) tool.Folder {
+	if profile == "" && s.launch.shell != nil {
+		if sh, ok := s.launch.shell(""); ok {
+			profile = sh.Name
+		}
+	}
 	if distro, ok := s.distroOf(profile); ok && path.IsAbs(dir) {
 		return tool.Folder{Path: dir, Distro: distro}
 	}
@@ -145,6 +164,13 @@ func (s *Server) chatFolder(profile, dir string) tool.Folder {
 // events reach the pane by its ID, and chatEvent drops the ones of a
 // conversation the pane replaced.
 func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
+	return s.chatConfigFor(func() int { return id }, profile, dir)
+}
+
+// chatConfigFor is chatConfig for a pane whose ID is not known yet, as with
+// a restored session: pane returns it, or 0 while the pane does not exist,
+// and events of that time are dropped.
+func (s *Server) chatConfigFor(pane func() int, profile, dir string) agent.Config {
 	o := s.opts.Chat
 	sh := shell.Profile{}
 	if o.Shell != nil {
@@ -156,6 +182,10 @@ func (s *Server) chatConfig(id int, profile, dir string) agent.Config {
 		Store: o.Store, Providers: o.Providers, Tools: o.Tools, Folder: s.chatFolder(profile, dir), Shell: sh,
 		HideEnv: o.HideEnv, System: o.System,
 		Events: func(e agent.Event) {
+			id := pane()
+			if id == 0 {
+				return
+			}
 			if ce := chatEvent(id, e); ce != nil {
 				s.send(func(st *state) { st.chatEvent(ce) })
 			}
@@ -204,6 +234,11 @@ func (st *state) chatEvent(e *api.ChatEvent) {
 	}
 	before := p.agentNow()
 	p.chat.snap.Apply(e)
+	if p.chat.kept != "" && len(p.chat.snap.Entries) > 0 {
+		// The chat has a message of its own: the session names it now.
+		p.chat.kept = ""
+		st.save(sess)
+	}
 	switch {
 	case p.agentNow() != before:
 		st.agentChanged(sess)

@@ -63,15 +63,19 @@ func TestListIsBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := w.Append(&convstore.User{At: time.Now(), Text: "a question"}); err != nil {
+		t.Fatal(err)
+	}
 	_ = w.Close()
 	for i := 0; i < 40; i++ {
-		saveConversation(t, store, entries[0].Folder)
+		saveConversation(t, store, entries[0].Folder, pastExchange()...)
 	}
 
 	c.Send(&api.ConversationListRequest{Pane: id, All: true})
 	l := waitConversations(t, c, func(l *api.ConversationList) bool { return l.All })
-	if l.Truncated == 0 || len(l.Items)+l.Truncated != 42 {
-		t.Fatalf("%d items, %d left out; want 42 in all", len(l.Items), l.Truncated)
+	// The pane's own chat has no message yet, so the list does not count it.
+	if l.Truncated == 0 || len(l.Items)+l.Truncated != 41 {
+		t.Fatalf("%d items, %d left out; want 41 in all", len(l.Items), l.Truncated)
 	}
 	var frame bytes.Buffer
 	if err := api.WriteFrame(&frame, l); err != nil {

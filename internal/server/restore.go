@@ -60,12 +60,13 @@ func (s *Server) loadSaved(session string) (*store.Snapshot, error) {
 // windows with their numbers, names, layouts, and focus, and each pane
 // running its profile in its folder below its saved lines. Panes get new
 // IDs. A profile that no longer exists runs the default; a folder that is
-// gone falls back as for any new pane.
-func (st *state) restore(snap *store.Snapshot, cols, rows int) (*session, error) {
+// gone falls back as for any new pane. A chat pane takes its conversation
+// from chats, which resumeChats made off this goroutine.
+func (st *state) restore(snap *store.Snapshot, chats map[int]*restoredChat, cols, rows int) (*session, error) {
 	sess := &session{name: snap.Name, lastUsed: time.Now(), cols: cols, rows: rows}
 	divider := restoredDivider(snap.Saved)
 	for _, sw := range snap.Windows {
-		w, err := st.restoreWindow(sess, sw, divider)
+		w, err := st.restoreWindow(sess, sw, divider, chats)
 		if err != nil {
 			st.closeSession(sess)
 			return nil, fmt.Errorf("restore %s: %w", snap.Name, err)
@@ -73,7 +74,7 @@ func (st *state) restore(snap *store.Snapshot, cols, rows int) (*session, error)
 		sess.windows = append(sess.windows, w)
 	}
 	if len(sess.windows) == 0 {
-		if _, err := st.newWindow(sess, api.PaneTerminal, "", ""); err != nil {
+		if _, err := st.newWindow(sess, st.firstKind(), "", ""); err != nil {
 			return nil, fmt.Errorf("restore %s: %w", snap.Name, err)
 		}
 	}
@@ -86,7 +87,7 @@ func (st *state) restore(snap *store.Snapshot, cols, rows int) (*session, error)
 }
 
 // restoreWindow starts the panes of sw in a tree with new pane IDs.
-func (st *state) restoreWindow(sess *session, sw store.Window, divider string) (*window, error) {
+func (st *state) restoreWindow(sess *session, sw store.Window, divider string, chats map[int]*restoredChat) (*window, error) {
 	saved := map[int]store.Pane{}
 	for _, p := range sw.Panes {
 		saved[p.ID] = p
@@ -119,9 +120,15 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string) (
 	for _, id := range tree.Panes() {
 		sp := saved[int(olds[id])]
 		r := rects[id]
-		p, err := st.srv.startPane(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider))
-		if errors.Is(err, ErrUnknownProfile) {
-			p, err = st.srv.startPane(int(id), r.W, r.H, "", sp.Folder, preamble(sp.Scrollback, divider))
+		var p *pane
+		var err error
+		if rc := chats[sp.ID]; sp.Kind == store.KindChat && rc != nil && rc.conv != nil {
+			p = rc.paneFor(int(id), sp.Profile)
+		} else {
+			p, err = st.srv.startPane(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider))
+			if errors.Is(err, ErrUnknownProfile) {
+				p, err = st.srv.startPane(int(id), r.W, r.H, "", sp.Folder, preamble(sp.Scrollback, divider))
+			}
 		}
 		if err != nil {
 			for _, started := range w.panes {

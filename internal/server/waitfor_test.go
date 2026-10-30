@@ -147,11 +147,8 @@ func TestWaitForEndedPane(t *testing.T) {
 // pane of another session, a pane that is not there, and a bad request.
 func TestWaitForErrors(t *testing.T) {
 	s, _, _ := newChatServer(t)
-	a, first := sessionWith(t, s, "a")
-	a.Send(split(first, api.DirRight))
-	second := shownPanes(nextLayout(t, a, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 }))[1].ID
-	a.Send(&api.Command{Op: api.OpSplit, Target: second, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat}})
-	chat := chatIn(nextLayout(t, a, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+	_, chat, shells := sessionShells(t, s, "a", 2)
+	first, second := shells[0], shells[1]
 	_, other := sessionWith(t, s, "b")
 
 	tool := connect(t, s, 80, 24)

@@ -202,15 +202,8 @@ func TestPickModelSavesDefault(t *testing.T) {
 	}
 
 	// A chat opened after the save starts with the new default.
-	l := currentLayout(s)
-	term := 0
-	for _, p := range shownPanes(l) {
-		if p.Kind == api.PaneTerminal {
-			term = p.ID
-		}
-	}
-	c.Send(&api.Command{Op: api.OpSplit, Target: term, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgKind: api.PaneChat}})
-	l = nextLayout(t, c, func(l *api.Layout) bool {
+	c.Send(&api.Command{Op: api.OpSplit, Target: id, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgKind: api.PaneChat}})
+	l := nextLayout(t, c, func(l *api.Layout) bool {
 		n := 0
 		for _, p := range shownPanes(l) {
 			if p.Kind == api.PaneChat {

@@ -18,6 +18,23 @@ func sessionWith(t *testing.T, s *Server, name string) (*apitest.Client, int) {
 	return c, l.Windows[0].Panes[0].ID
 }
 
+// sessionShells attaches a client to a new session on a chat server. The
+// session starts with a chat; sessionShells splits n terminal panes off it,
+// each below the one before, and returns the client, the chat's ID, and the
+// terminals' IDs.
+func sessionShells(t *testing.T, s *Server, name string, n int) (c *apitest.Client, chat int, shells []int) {
+	t.Helper()
+	c, chat = sessionWith(t, s, name)
+	from := chat
+	for i := range n {
+		c.Send(split(from, api.DirRight))
+		l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == i+2 })
+		from = shownPanes(l)[i+1].ID
+		shells = append(shells, from)
+	}
+	return c, chat, shells
+}
+
 // TestListPanesSameSession: a PanesRequest lists the terminal panes of the
 // caller's session only, the caller's own included, and an unknown caller
 // gets CodeNoPane.

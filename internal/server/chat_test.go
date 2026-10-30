@@ -76,17 +76,36 @@ func chatIn(l *api.Layout) int {
 	return 0
 }
 
-// openChat attaches c to a new session "work" and splits its terminal
-// pane with a chat on the right. It returns the chat pane's ID once c has
-// the chat's snapshot.
+// openChat attaches c to a new session "work", which starts with a chat. It
+// returns that chat pane's ID once c has the chat's snapshot.
 func openChat(t *testing.T, c *apitest.Client) int {
 	t.Helper()
 	c.Send(&api.Attach{Session: "work", Create: true})
-	l := nextLayout(t, c, func(*api.Layout) bool { return true })
-	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat}})
 	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
 	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
 	return id
+}
+
+// terminalIn returns the ID of the first terminal pane of l's shown window,
+// or 0.
+func terminalIn(l *api.Layout) int {
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneTerminal {
+			return p.ID
+		}
+	}
+	return 0
+}
+
+// openChatBesideShell is openChat for a test that needs a shell too: it
+// splits a terminal pane off the session's chat, on its left, and returns
+// the chat pane's ID and the terminal's.
+func openChatBesideShell(t *testing.T, c *apitest.Client) (chat, shell int) {
+	t.Helper()
+	chat = openChat(t, c)
+	c.Send(&api.Command{Op: api.OpSplit, Target: chat, Args: map[string]string{api.ArgDir: api.DirLeft}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return terminalIn(l) != 0 })
+	return chat, terminalIn(l)
 }
 
 // say sends text to chat pane id.
@@ -132,12 +151,8 @@ func TestChatTurn(t *testing.T) {
 func TestChatPaneLayout(t *testing.T) {
 	s, _, _ := newChatServer(t)
 	c := connect(t, s, 100, 30)
-	id := openChat(t, c)
-	term := 0
+	id, term := openChatBesideShell(t, c)
 	for _, p := range shownPanes(currentLayout(s)) {
-		if p.Kind == api.PaneTerminal {
-			term = p.ID
-		}
 		if p.ID == id && (p.Folder == "" || p.Rect.W == 0) {
 			t.Fatalf("chat pane %+v", p)
 		}
@@ -320,7 +335,7 @@ func TestChatPaneIgnoresTerminalInput(t *testing.T) {
 func TestChatCloseInterruptsTurn(t *testing.T) {
 	s, _, store := newChatServer(t, providertest.Reply{Events: []provider.Event{&provider.Start{Model: "m"}, &provider.TextDelta{Text: "part"}}, Wait: true})
 	c := connect(t, s, 100, 30)
-	id := openChat(t, c)
+	id, _ := openChatBesideShell(t, c) // a session ends with its last pane
 	conv := c.Chat(id).Conversation
 	say(c, id, "hi")
 	c.WaitChat(id, func(s *api.ChatSnapshot) bool { return lastReply(s) == "part" })
@@ -340,61 +355,55 @@ func TestChatCloseInterruptsTurn(t *testing.T) {
 	})
 }
 
-// TestChatSessionSavesWithoutError: a saved session leaves its chat panes
-// out: a mixed window keeps its terminal panes, and a window of chats is
-// not saved.
-func TestChatSessionSavesWithoutError(t *testing.T) {
+// TestChatSessionSaves: a saved session holds its chat panes, each by its
+// conversation ID and with no scrollback. A window with a chat and a shell
+// keeps both, and a window of chats is saved too.
+func TestChatSessionSaves(t *testing.T) {
 	opts, _, _ := chatOptions(t)
 	opts.SessionsDir = t.TempDir()
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 100, 30)
-	id := openChat(t, c)
+	id, _ := openChatBesideShell(t, c)
 	c.Send(&api.Command{Op: api.OpZoom, Target: id})
 	nextLayout(t, c, func(*api.Layout) bool { return true })
 	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneChat}})
 	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
-	var windows, terminals, active int
+	var active int
 	s.call(func(st *state) {
 		sess := st.sessions["work"]
-		snap := st.snapshot(sess)
-		windows, active = len(snap.Windows), sess.active
-		for _, w := range snap.Windows {
-			terminals += len(w.Panes)
-		}
+		active = sess.active
 		st.save(sess)
 	})
-	if windows != 1 || terminals != 1 {
-		t.Fatalf("saved %d windows with %d panes, want 1 with 1", windows, terminals)
-	}
-	// The active window is the chat-only one the file leaves out; the
-	// session must still load and restore.
 	var saved store.Snapshot
 	eventually(t, "the session file", func() bool {
 		var err error
 		saved, err = openStore(t, opts.SessionsDir).Load("work")
 		return err == nil
 	})
-	if len(saved.Windows) != 1 || saved.Active != active || saved.Windows[0].Index == active {
-		t.Fatalf("file has %d windows, active %d (session's %d)", len(saved.Windows), saved.Active, active)
+	if len(saved.Windows) != 2 || saved.Active != active {
+		t.Fatalf("file has %d windows, active %d (session's %d), want 2", len(saved.Windows), saved.Active, active)
+	}
+	chats, shells := 0, 0
+	for _, w := range saved.Windows {
+		for _, p := range w.Panes {
+			switch {
+			case p.Kind == store.KindChat && p.Conversation != "" && len(p.Scrollback) == 0:
+				chats++
+			case p.Kind == "":
+				shells++
+			default:
+				t.Errorf("saved pane %+v", p)
+			}
+		}
+	}
+	if chats != 2 || shells != 1 {
+		t.Fatalf("saved %d chats and %d shells, want 2 and 1", chats, shells)
 	}
 	var problem string
 	s.call(func(st *state) { problem = st.saveProblem })
 	if problem != "" {
 		t.Fatalf("save problem: %s", problem)
-	}
-	var restored, restoredActive int
-	s.call(func(st *state) {
-		sess, err := st.restore(&saved, 100, 30)
-		if err != nil {
-			t.Errorf("restore: %v", err)
-			return
-		}
-		restored, restoredActive = len(sess.windows), sess.active
-		st.closeSession(sess)
-	})
-	if restored != 1 || restoredActive != saved.Windows[0].Index {
-		t.Fatalf("restored %d windows, active %d", restored, restoredActive)
 	}
 }
 

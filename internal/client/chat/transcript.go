@@ -16,6 +16,7 @@ type hit struct {
 	// failure is, for a row of a failure's box, the entry index plus one,
 	// and errTop its first row plus one.
 	failure, errTop int
+	recent          int // for a row of the recent conversations, its index plus one
 }
 
 // rendered is the transcript drawn at one width. Drawing is the costly
@@ -24,6 +25,7 @@ type hit struct {
 type rendered struct {
 	valid bool
 	width int
+	room  int // the transcript's height: the list of recent conversations fills what is left
 	rows  []string
 	hits  []hit // one per row
 }
@@ -39,10 +41,10 @@ func (m *Model) transcriptRows() []string {
 
 // draw draws the transcript unless the drawn one is current.
 func (m *Model) draw() {
-	if m.drawn.valid && m.drawn.width == m.width {
+	if m.drawn.valid && m.drawn.width == m.width && m.drawn.room == m.transcriptHeight() {
 		return
 	}
-	m.drawn = rendered{valid: true, width: m.width}
+	m.drawn = rendered{valid: true, width: m.width, room: m.transcriptHeight()}
 	if m.width <= 0 || !m.loaded {
 		return
 	}
@@ -90,6 +92,9 @@ func (m *Model) draw() {
 		text(ui.EntryNote, "No messages yet. Type /model to choose one.", false)
 	default:
 		text(ui.EntryNote, "No messages yet. Model: "+m.snap.Model, false)
+	}
+	if m.empty() {
+		m.drawRecent(indent)
 	}
 	live := m.liveError()
 	for i, e := range m.snap.Entries {
@@ -190,6 +195,10 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 	}
 	h := m.drawn.hits[start+row]
 	switch {
+	case h.recent > 0:
+		m.recent.sel = h.recent - 1
+		m.invalidate()
+		return m.resumeRow(m.recent.sel)
 	case h.tool != "":
 		m.selected = h.tool
 		m.expanded[h.tool] = !m.expanded[h.tool]

@@ -13,8 +13,15 @@ import (
 )
 
 // Version is the snapshot format version that Save writes. Load rejects
-// files with a newer or missing version.
-const Version = 1
+// files with a newer or missing version, and reads every older one.
+//
+// Format 2 adds Pane.Kind and Pane.Conversation. A reader of format 1 would
+// turn a chat pane into a shell, so it must refuse the file instead.
+const Version = 2
+
+// KindChat is the Pane.Kind of a chat pane. A pane with no kind, as every
+// pane of a format 1 file, is a terminal.
+const KindChat = "chat"
 
 // MaxScrollback is how many scrollback lines Save keeps per pane: the last
 // ones, the newest at the end.
@@ -42,11 +49,17 @@ type Window struct {
 
 // Pane is one pane of a window. ID matches the pane's leaf in the layout.
 type Pane struct {
-	ID      int    `json:"id"`
+	ID int `json:"id"`
+	// Kind is KindChat for a chat pane, and empty for a terminal.
+	Kind    string `json:"kind,omitempty"`
 	Profile string `json:"profile"` // the shell profile's name
 	Folder  string `json:"folder,omitempty"`
-	// Scrollback holds the pane's last lines, oldest first, with styles as
-	// ANSI escape sequences: its history, the scrollback then the screen.
+	// Conversation is the ID of a chat pane's conversation file, which holds
+	// its transcript. It is empty for a terminal.
+	Conversation string `json:"conversation,omitempty"`
+	// Scrollback holds a terminal pane's last lines, oldest first, with
+	// styles as ANSI escape sequences: its history, the scrollback then the
+	// screen. A chat pane has none.
 	Scrollback []string `json:"scrollback,omitempty"`
 }
 

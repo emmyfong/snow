@@ -31,7 +31,8 @@ func TestMain(m *testing.M) {
 }
 
 // TestRealDetachedServer starts the server the way snow does, as a detached
-// process, then talks to it and ends it by ending its only session.
+// process, then talks to it and ends it by closing its only pane, which ends
+// its only session.
 func TestRealDetachedServer(t *testing.T) {
 	dir, err := os.MkdirTemp("", "snow")
 	if err != nil {
@@ -41,6 +42,10 @@ func TestRealDetachedServer(t *testing.T) {
 	// The server finds its socket folder from these; the child inherits them.
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 	t.Setenv("LOCALAPPDATA", dir)
+	// A new session opens a chat, which saves its conversation under the
+	// home folder; the child must not write into the real one.
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
 	t.Setenv(asSnow, "1")
 	path, err := transport.DefaultPath()
 	if err != nil {
@@ -74,27 +79,19 @@ func TestRealDetachedServer(t *testing.T) {
 		t.Fatalf("server log: %v", err)
 	}
 
-	// Typing exit ends the shell, the only session. The user's real shell
-	// runs here, with an unknown prompt, and shells discard input while they
-	// start, so type it again until the session ends. Then the client
-	// leaves, and with no session and no client the server exits.
+	// Closing the only pane ends the only session. Then the client leaves,
+	// and with no session and no client the server exits.
 	deadline := time.Now().Add(apitest.Wait)
+	c.Send(&api.Command{Op: api.OpClose, Target: 1})
 	ended := false
 	for !ended && time.Now().Before(deadline) {
-		for _, r := range "exit" {
-			c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: string(r), Text: string(r)}})
-		}
-		c.Send(&api.Input{Pane: 1, Key: &api.Key{Code: api.KeyEnter}})
-		for range 20 {
-			m, _ := c.Next(50 * time.Millisecond)
-			if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
-				ended = true
-				break
-			}
+		m, _ := c.Next(50 * time.Millisecond)
+		if e, ok := m.(*api.Error); ok && e.Code == api.CodeSessionEnded {
+			ended = true
 		}
 	}
 	if !ended {
-		t.Fatal("the session did not end after exit")
+		t.Fatal("the session did not end after its pane closed")
 	}
 	c.Close()
 	for time.Now().Before(deadline.Add(apitest.Wait)) {
