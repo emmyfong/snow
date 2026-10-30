@@ -103,20 +103,7 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	if err := f.busy(); err != nil {
 		return err
 	}
-	s.awaitRelease(id)
-	loaded, err := s.opts.Chat.Store.Load(id)
-	if err != nil {
-		return fmt.Errorf("resume: %w", err)
-	}
-	folder := s.chatFolder(f.profile, loaded.Meta.Folder)
-	if folder.Distro == "" {
-		if err := checkFolder(loaded.Meta.Folder); err != nil {
-			return err
-		}
-	}
-	cfg := s.chatConfig(pane, f.profile, loaded.Meta.Folder)
-	cfg.Folder = folder
-	conv, loaded, err := agent.ResumeLoaded(cfg, loaded)
+	r, err := s.reopenConversation(func() int { return pane }, f.profile, id)
 	if errors.Is(err, convstore.ErrInUse) {
 		return errors.New("that conversation is already open")
 	}
@@ -126,18 +113,18 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	// A mode that stops all questions comes back only in the folder the user
 	// chose it for: a file from another folder, or one copied in, starts
 	// asking again.
-	model, effort, mode := agent.StateOf(loaded)
+	model, effort, mode := agent.StateOf(r.loaded)
 	notice := ""
-	if mode == agent.ModeAuto && loaded.Meta.Folder != f.dir {
+	if mode == agent.ModeAuto && r.loaded.Meta.Folder != f.dir {
 		mode = agent.ModeAsk
 		// The folder comes last: a narrow status bar cuts the end of a notice.
-		notice = "Resumed with the approval mode ask. Type /mode auto to stop the questions. Saved in " + loaded.Meta.Folder + "."
-		if err := conv.SetMode(mode); err != nil {
-			return errors.Join(err, conv.Close())
+		notice = "Resumed with the approval mode ask. Type /mode auto to stop the questions. Saved in " + r.loaded.Meta.Folder + "."
+		if err := r.conv.SetMode(mode); err != nil {
+			return errors.Join(err, r.conv.Close())
 		}
 	}
-	snap := replaySnapshot(pane, conv, loaded, model, effort, mode)
-	if err := s.adopt(c, pane, conv, snap, folder.Path); err != nil {
+	snap := replaySnapshot(pane, r.conv, r.loaded, model, effort, mode)
+	if err := s.adopt(c, pane, r.conv, snap, r.folder.Path); err != nil {
 		return err
 	}
 	if notice != "" {

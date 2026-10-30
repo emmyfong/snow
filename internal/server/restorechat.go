@@ -55,36 +55,21 @@ func (s *Server) resumeChats(snap *store.Snapshot) map[int]*restoredChat {
 // session still restores and the file stays as it is. It returns nil when
 // even an empty conversation cannot start.
 func (s *Server) resumeSavedChat(sp store.Pane) *restoredChat {
-	o := s.opts.Chat
 	pane := new(atomic.Int64)
-	cfgFor := func(dir string) agent.Config {
-		return s.chatConfigFor(func() int { return int(pane.Load()) }, sp.Profile, dir)
-	}
-	loaded, err := o.Store.Load(sp.Conversation)
+	paneID := func() int { return int(pane.Load()) }
+	r, err := s.reopenConversation(paneID, sp.Profile, sp.Conversation)
 	if err == nil {
-		folder := s.chatFolder(sp.Profile, loaded.Meta.Folder)
-		if folder.Distro == "" {
-			err = checkFolder(loaded.Meta.Folder)
+		model, effort, mode := agent.StateOf(r.loaded)
+		return &restoredChat{
+			conv: r.conv, snap: replaySnapshot(0, r.conv, r.loaded, model, effort, mode),
+			folder: r.folder.Path, profile: r.cfg.Shell.Name, pane: pane,
 		}
-		if err == nil {
-			s.awaitRelease(sp.Conversation)
-			cfg := cfgFor(loaded.Meta.Folder)
-			cfg.Folder = folder
-			var conv *agent.Conversation
-			if conv, loaded, err = agent.ResumeLoaded(cfg, loaded); err == nil {
-				model, effort, mode := agent.StateOf(loaded)
-				return &restoredChat{
-					conv: conv, snap: replaySnapshot(0, conv, loaded, model, effort, mode),
-					folder: folder.Path, profile: cfg.Shell.Name, pane: pane,
-				}
-			}
-			if errors.Is(err, convstore.ErrInUse) {
-				err = errors.New("it is open in another pane")
-			}
-		}
+	}
+	if errors.Is(err, convstore.ErrInUse) {
+		err = errors.New("it is open in another pane")
 	}
 	notice := fmt.Sprintf("Could not resume the conversation in %s: %v. This chat is empty. The file stays as it is.", s.conversationFile(sp.Conversation), err)
-	return s.freshChat(sp, pane, cfgFor(sp.Folder), notice)
+	return s.freshChat(sp, pane, s.chatConfigFor(paneID, sp.Profile, sp.Folder), notice)
 }
 
 // conversationFile names the file of conversation id for a notice.
