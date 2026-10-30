@@ -232,6 +232,10 @@ var emptyChatStates = map[string]func(*Model){
 		m.Key(key(tea.KeyDown, 0, ""))
 	},
 	"none": func(m *Model) { m.Conversations(&api.ConversationList{Pane: 2}) },
+	"noprovider": func(m *Model) {
+		m.Snapshot(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", State: api.ChatStateIdle})
+		m.Conversations(sampleList())
+	},
 	"unreadable": func(m *Model) {
 		m.Conversations(&api.ConversationList{Pane: 2, Items: []api.ConversationInfo{
 			{ID: "bad", Err: "line 3: unexpected end", LastActivity: start}, conv("c1", "fine one", 1, time.Hour)}})
@@ -257,6 +261,54 @@ func TestEmptyChatGolden(t *testing.T) {
 					golden.RequireEqual(t, strings.Join(m.View(), "\n"))
 				})
 			}
+		}
+	}
+}
+
+// TestEmptyChatMoreRowKeepsItsRoom: when the server left conversations out
+// but every row it sent fits, the "more" row still has a place of its own.
+// It does not push the first line of the transcript out of the pane.
+func TestEmptyChatMoreRowKeepsItsRoom(t *testing.T) {
+	for h := 8; h <= 16; h++ {
+		m, _ := newChat(100, h)
+		l := sampleList()
+		l.Truncated = 7
+		m.Conversations(l)
+		s := screen(m)
+		if strings.Contains(s, "7 more") && !strings.Contains(s, "No messages yet") {
+			t.Fatalf("height %d: the \"more\" row pushed the transcript up:\n%s", h, s)
+		}
+	}
+}
+
+// TestEmptyChatTinyPaneActsOnNothingHidden: a pane too small to show the
+// list draws none, and then Enter sends the typed message, not a resume of a
+// row nobody can see.
+func TestEmptyChatTinyPaneActsOnNothingHidden(t *testing.T) {
+	m, _ := newChat(100, 5)
+	m.Conversations(sampleList())
+	if s := screen(m); strings.Contains(s, "Recent conversations") {
+		t.Fatalf("the list drew in a pane with no room for it:\n%s", s)
+	}
+	if in := m.Key(key(tea.KeyEnter, 0, "")); in != nil {
+		t.Fatalf("Enter sent %+v with no list on screen", in)
+	}
+	typeText(m, "hi")
+	if in := m.Key(key(tea.KeyEnter, 0, "")); in == nil || in.Kind != api.ChatInputMessage || in.Text != "hi" {
+		t.Fatalf("Enter sent %+v, want the message", in)
+	}
+}
+
+// TestEmptyChatHeadingOnlyActsOnNothingHidden: with room for the heading but
+// not for one row, Enter still does not resume a row that is not drawn.
+func TestEmptyChatHeadingOnlyActsOnNothingHidden(t *testing.T) {
+	for h := 5; h <= 12; h++ {
+		m, _ := newChat(100, h)
+		m.Conversations(sampleList())
+		s := screen(m)
+		in := m.Key(key(tea.KeyEnter, 0, ""))
+		if in != nil && !strings.Contains(s, "fix the rename command") {
+			t.Fatalf("height %d: Enter sent %+v, but no row is on screen:\n%s", h, in, s)
 		}
 	}
 }

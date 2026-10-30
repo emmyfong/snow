@@ -21,6 +21,7 @@ type recentList struct {
 	loaded bool // the server answered for the current scope
 	sel    int
 	want   *api.ConversationListRequest // what the session sends next, once
+	shown  bool                         // the last draw had room for the list; keys act only on a list on screen
 }
 
 // empty reports whether the conversation has no message yet, so the chat
@@ -71,6 +72,10 @@ func (m *Model) recentKey(k tea.Key) (*api.ChatInput, bool) {
 	if !m.empty() || m.cmdOpen {
 		return nil, false
 	}
+	m.draw() // so shown tells the list on screen now
+	if !r.shown {
+		return nil, false
+	}
 	switch {
 	case k.Code == 'a' && k.Mod == tea.ModCtrl:
 		*r = recentList{agent: r.agent, all: !r.all, want: &api.ConversationListRequest{Pane: m.snap.Pane, All: !r.all}}
@@ -111,6 +116,7 @@ func (m *Model) resumeRow(i int) *api.ChatInput {
 // a heading and one row.
 func (m *Model) drawRecent(indent int) {
 	r := &m.recent
+	r.shown = false
 	width := m.width - indent
 	room := m.transcriptHeight() - len(m.drawn.rows) - 1 // 1: the blank row above
 	if !r.loaded || width < 10 || room < 3 {
@@ -131,8 +137,7 @@ func (m *Model) drawRecent(indent int) {
 	}
 	emit("", hit{})
 	emit(muted.Render("Recent conversations in "+scope), hit{})
-	switch {
-	case len(r.items) == 0:
+	if len(r.items) == 0 {
 		if r.all {
 			emit(muted.Render("No conversations yet."), hit{})
 		} else {
@@ -146,12 +151,13 @@ func (m *Model) drawRecent(indent int) {
 		items[i] = ui.ListItem{Cols: convrow.Columns(it, m.now(), r.all)}
 	}
 	fit := room - 2 // the heading and the keys
-	if len(items) > fit {
+	if len(items) > fit || r.left > 0 {
 		fit-- // the "more" row
 	}
 	if fit < 1 {
 		return
 	}
+	r.shown = true
 	view, idx := ui.ListRows(m.th, ui.ListOptions{Items: items, Selected: r.sel, Width: width, Height: fit})
 	for i, row := range strings.Split(view, "\n") {
 		emit(row, hit{recent: idx[i] + 1})
