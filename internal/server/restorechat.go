@@ -109,10 +109,13 @@ func (rc *restoredChat) paneFor(id int, profile string) *pane {
 // closeUnused closes the conversations that no pane took, for an attach
 // that restored nothing: it keeps their files free. It waits, so it runs off
 // the model goroutine, after the attach.
-func closeUnused(chats map[int]*restoredChat) {
-	for _, rc := range chats {
-		if !rc.used && rc.conv != nil {
-			_ = rc.conv.Close()
+func (s *Server) closeUnused(chats map[int]*restoredChat) {
+	for id, rc := range chats {
+		if rc.used || rc.conv == nil {
+			continue
+		}
+		if err := rc.conv.Close(); err != nil && !errors.Is(err, agent.ErrClosed) {
+			s.log.Warn("close unused conversation", "pane", id, "err", err)
 		}
 	}
 }

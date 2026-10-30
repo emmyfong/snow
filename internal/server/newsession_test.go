@@ -47,6 +47,9 @@ func TestNewSessionOpensChat(t *testing.T) {
 // TestNewSessionBadDir: a folder the server cannot use falls back, and the
 // chat still opens.
 func TestNewSessionBadDir(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	s, _, store := newChatServer(t)
 	c := connect(t, s, 100, 30)
 	c.Send(&api.Attach{Session: "lost", Create: true, Dir: filepath.Join(os.TempDir(), "snow-no-such-folder")})
@@ -60,8 +63,8 @@ func TestNewSessionBadDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !filepath.IsAbs(loaded.Meta.Folder) {
-		t.Errorf("conversation folder %q is not a usable folder", loaded.Meta.Folder)
+	if loaded.Meta.Folder != home {
+		t.Errorf("conversation folder %q, want the home folder %q", loaded.Meta.Folder, home)
 	}
 }
 

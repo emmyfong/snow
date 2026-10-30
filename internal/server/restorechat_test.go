@@ -2,12 +2,14 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/provider/providertest"
@@ -28,7 +30,18 @@ func newChatDirs(t *testing.T) chatDirs {
 // chatServerIn starts a chat server over d, saving sessions at once.
 func chatServerIn(t *testing.T, d chatDirs, replies ...providertest.Reply) (*Server, *providertest.Fake, *convstore.Store) {
 	t.Helper()
+	return chatServerPrepared(t, d, nil, replies...)
+}
+
+// chatServerPrepared is chatServerIn that calls prepare with the server's
+// conversation store before the server starts. A writer held through that
+// store is a writer the server finds in use.
+func chatServerPrepared(t *testing.T, d chatDirs, prepare func(*convstore.Store), replies ...providertest.Reply) (*Server, *providertest.Fake, *convstore.Store) {
+	t.Helper()
 	opts, fake, cs := chatOptionsIn(t, d.convs, replies...)
+	if prepare != nil {
+		prepare(cs)
+	}
 	opts.SessionsDir = d.sessions
 	opts.saveDelay = 20 * time.Millisecond
 	opts.busyEvery = time.Hour
@@ -365,4 +378,128 @@ func TestRestoreChatThatCannotStart(t *testing.T) {
 	if e := nextError(t, c); e.Code != api.CodeNotice || !strings.Contains(e.Message, "20200101-000000-deadbeef") {
 		t.Fatalf("error %+v, want a notice that names the conversation", e)
 	}
+}
+
+// TestRestoreChatFailures: a conversation that cannot be resumed gives an
+// empty chat and a notice that says why, whatever the reason, and the session
+// keeps naming the conversation.
+func TestRestoreChatFailures(t *testing.T) {
+	cases := []struct {
+		name, notice string
+		// prepare returns the conversation the saved pane names.
+		prepare func(t *testing.T, cs *convstore.Store) string
+	}{
+		{"folder gone", "is gone", func(t *testing.T, cs *convstore.Store) string {
+			gone := filepath.Join(t.TempDir(), "project")
+			if err := os.Mkdir(gone, 0o700); err != nil {
+				t.Fatal(err)
+			}
+			id := saveConversation(t, cs, gone, pastExchange()...)
+			if err := os.Remove(gone); err != nil {
+				t.Fatal(err)
+			}
+			return id
+		}},
+		{"another writer", "another pane", func(t *testing.T, cs *convstore.Store) string {
+			id := saveConversation(t, cs, t.TempDir(), pastExchange()...)
+			w, err := cs.Writer(id)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = w.Close() })
+			return id
+		}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			d := newChatDirs(t)
+			var named string
+			since := time.Now()
+			s, _, _ := chatServerPrepared(t, d, func(cs *convstore.Store) {
+				named = tt.prepare(t, cs)
+				loaded, err := cs.Load(named)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeSnapshot(t, d.sessions, chatSnapshot(named, loaded.Meta.Folder))
+			})
+			c := connect(t, s, 100, 30)
+			c.Send(&api.Attach{Session: "work"})
+			l := nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 })
+			got := c.WaitChat(chatIn(l), func(*api.ChatSnapshot) bool { return true })
+			if got.Conversation == named || len(got.Entries) != 0 {
+				t.Fatalf("restored chat %+v, want an empty new conversation", got)
+			}
+			if e := nextError(t, c); e.Code != api.CodeNotice || !strings.Contains(e.Message, tt.notice) {
+				t.Fatalf("error %+v, want a notice with %q", e, tt.notice)
+			}
+			if saved := savedChatID(t, d, since); saved != named {
+				t.Fatalf("session names %s, want %s", saved, named)
+			}
+		})
+	}
+}
+
+// TestRestoreChatWithoutChatOptions: a server that runs no chats opens a
+// saved chat pane as a terminal, as an old Snow would for a shell.
+func TestRestoreChatWithoutChatOptions(t *testing.T) {
+	d := newChatDirs(t)
+	writeSnapshot(t, d.sessions, chatSnapshot("20200101-000000-deadbeef", t.TempDir()))
+	opts := testOptions()
+	opts.SessionsDir = d.sessions
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "work"})
+	panes := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))
+	if len(panes) != 1 || panes[0].Kind != api.PaneTerminal {
+		t.Fatalf("panes %+v, want one terminal", panes)
+	}
+}
+
+// TestCloseUnused: an attach that restored nothing lets go of the
+// conversations it resumed for nothing, so their files stay free. A
+// conversation a pane took stays held, and a chat that failed to start has
+// nothing to close.
+func TestCloseUnused(t *testing.T) {
+	s, _, cs := newChatServer(t)
+	start := func() *agent.Conversation {
+		t.Helper()
+		conv, err := agent.Start(s.chatConfigFor(func() int { return 0 }, "", t.TempDir()), convstore.Meta{Model: chatModel})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = conv.Close() })
+		return conv
+	}
+	unused, taken := start(), start()
+	s.closeUnused(map[int]*restoredChat{
+		1: {conv: unused},
+		2: {conv: taken, used: true},
+		3: {notice: "a chat that failed to start"},
+	})
+	if w, err := cs.Writer(unused.ID()); err != nil {
+		t.Errorf("the unused conversation is still held: %v", err)
+	} else {
+		_ = w.Close()
+	}
+	if _, err := cs.Writer(taken.ID()); !errors.Is(err, convstore.ErrInUse) {
+		t.Errorf("the conversation a pane took was let go: %v", err)
+	}
+}
+
+// TestNewChangesSavedSession: after /new, the saved session holds the new
+// conversation ID.
+func TestNewChangesSavedSession(t *testing.T) {
+	d := newChatDirs(t)
+	s, _, _ := chatServerIn(t, d)
+	c := connect(t, s, 100, 30)
+	id := attachChat(t, c, t.TempDir())
+	before := chatPaneOf(t, d, "work")
+	chatInputOf(c, id, api.ChatInputNew, nil)
+	got := c.WaitChat(id, func(s *api.ChatSnapshot) bool { return s.Conversation != before.Conversation })
+	eventually(t, "the session file to name the new conversation", func() bool {
+		snap, err := openStore(t, d.sessions).Load("work")
+		return err == nil && snap.Windows[0].Panes[0].Conversation == got.Conversation
+	})
 }

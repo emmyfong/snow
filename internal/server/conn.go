@@ -109,7 +109,7 @@ func (s *Server) read(c *client) {
 			}
 			chats := s.resumeChats(snap)
 			s.call(func(st *state) { st.attach(c, m, snap, chats) })
-			closeUnused(chats)
+			s.closeUnused(chats)
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:

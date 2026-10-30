@@ -128,11 +128,11 @@ func TestDecodeFormatOne(t *testing.T) {
 	}
 }
 
-// TestFormatTwo: Version is 2, so a Snow that
-// reads up to 1 refuses a file with chat panes instead of turning them into
-// shells.
-func TestFormatTwo(t *testing.T) {
-	if Version != 2 {
-		t.Fatalf("Version %d: chat panes need format 2", Version)
+// TestDecodeNewerFormat: a file in a format newer than this Snow reads is
+// refused with ErrNewerVersion, not read as far as it goes.
+func TestDecodeNewerFormat(t *testing.T) {
+	raw := fmt.Sprintf(`{"version":%d,"name":"api","windows":[]}`, Version+1)
+	if _, err := decode([]byte(raw)); !errors.Is(err, ErrNewerVersion) {
+		t.Fatalf("decode error %v, want ErrNewerVersion", err)
 	}
 }
