@@ -184,6 +184,7 @@ Get-CimInstance Win32_Process -Filter "Name='snow.exe'" | Where-Object CommandLi
 [provider.omniroute]
 base_url = "http://localhost:20128/v1"
 no_key = true                  # the service takes no key
+start = ["npx", "omniroute"]   # run this when the address answers nothing
 
 [provider.openrouter]
 base_url = "https://openrouter.ai/api/v1"
@@ -197,6 +198,22 @@ A key never goes in `config.toml`. A model with no known price shows tokens
 instead of a cost. A service with no model list cannot check a key, so
 Snow saves it unchecked and says so. Over `http://` the key goes in clear
 text, so use `http://` only for a service on your own machine or network.
+
+#### Starting a gateway
+
+With `start`, Snow runs the program when the server starts and the address
+does not answer. It writes the program's output to
+`~/.snow/logs/<name>.log`, waits up to two minutes for the address, and
+stops the program's process tree when the server exits. Snow never stops a
+gateway it did not start: a service you started by hand is used as it is
+and left running. `/model` shows `starting` or `failed, see <log>` for the
+gateway. `snow auth status` asks the address and shows `ready` or `not
+answering yet`.
+
+`start` runs a command from `config.toml`, so keep the file your own:
+anyone who can write it can run a program as you. Snow allows `start` only
+when `base_url` names this machine: `localhost`, `127.0.0.1`, or `::1`. A
+remote service is not Snow's to start.
 
 Use only accounts that the service's vendor allows in other apps.
 Anthropic states that apps other than Claude Code and Claude.ai may not
@@ -353,6 +370,7 @@ usage = true          # false hides the context gauge and the cost
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
+# start = ["npx", "omniroute"]          # run when the address answers nothing
 
 # [agent.claude-free]                   # a program for a pane, with its own
 # title = "Claude Code (free)"          # environment; see "Agent profiles"

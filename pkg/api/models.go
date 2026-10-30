@@ -30,6 +30,9 @@ type ProviderModels struct {
 	Err string `json:"err,omitempty"`
 	// Refreshing says a fetch runs now; a later ModelList has the result.
 	Refreshing bool `json:"refreshing,omitempty"`
+	// Status is a gateway's state, for a [provider.<name>] table with
+	// start: "starting", "ready", or "failed". Empty for other providers.
+	Status string `json:"status,omitempty"`
 }
 
 // ModelInfo is one model a provider offers.

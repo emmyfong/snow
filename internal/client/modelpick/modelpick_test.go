@@ -308,6 +308,33 @@ func TestEffortLimitedToModel(t *testing.T) {
 	}
 }
 
+// TestGatewayStatusInPicker: a gateway that Snow is starting says so, and a
+// failed one says where its log is. A ready gateway has no status mark.
+func TestGatewayStatusInPicker(t *testing.T) {
+	m := New("", "")
+	m.SetList([]api.ProviderModels{{Name: "omniroute", Title: "OmniRoute", Connected: true, Status: "starting", Err: "starting"}})
+	box, _, _ := m.View(theme.Default(), 120, 30)
+	if !strings.Contains(box, "OmniRoute (starting)") || !strings.Contains(box, "starting") {
+		t.Fatalf("starting view:\n%s", box)
+	}
+	m.SetList([]api.ProviderModels{{
+		Name: "omniroute", Title: "OmniRoute", Connected: true,
+		Status: "failed", Err: "failed, see /home/u/.snow/logs/omniroute.log",
+	}})
+	box, _, _ = m.View(theme.Default(), 120, 30)
+	if !strings.Contains(box, "OmniRoute (error)") || !strings.Contains(box, "failed, see") {
+		t.Fatalf("failed view:\n%s", box)
+	}
+	m.SetList([]api.ProviderModels{{
+		Name: "omniroute", Title: "OmniRoute", Connected: true, Status: "ready",
+		Models: []api.ModelInfo{{ID: "m"}},
+	}})
+	box, _, _ = m.View(theme.Default(), 120, 30)
+	if strings.Contains(box, "(starting)") || strings.Contains(box, "(error)") {
+		t.Fatalf("ready view:\n%s", box)
+	}
+}
+
 // TestModelPickerGolden draws both columns, a filter, and the effort row,
 // in a dark and a light theme.
 func TestModelPickerGolden(t *testing.T) {

@@ -96,6 +96,41 @@ func TestModelListCache(t *testing.T) {
 	}
 }
 
+// TestModelListGateway: a gateway that is starting is not asked for
+// models, so the reason it is not ready stays in the list. Once it is
+// ready, the list is fetched.
+func TestModelListGateway(t *testing.T) {
+	opts, fake, _ := chatOptions(t)
+	var status atomic.Value
+	status.Store([]api.ProviderModels{{Name: "fake", Title: "Fake", Connected: true, Status: "starting", Err: "starting"}})
+	opts.Chat.ProviderStatuses = func() []api.ProviderModels {
+		return status.Load().([]api.ProviderModels)
+	}
+	fake.SetModels([]provider.Model{{ID: "model-1"}}, nil)
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 80, 24)
+
+	c.Send(&api.ModelListRequest{})
+	first := waitModels(t, c, func(*api.ModelList) bool { return true })
+	if p := first.Providers[0]; p.Status != "starting" || p.Err != "starting" || p.Refreshing {
+		t.Fatalf("starting gateway %+v", p)
+	}
+	if n := fake.ModelCalls(); n != 0 {
+		t.Fatalf("Models calls = %d for a starting gateway, want 0", n)
+	}
+
+	status.Store([]api.ProviderModels{{Name: "fake", Title: "Fake", Connected: true, Status: "ready"}})
+	c.Send(&api.ModelListRequest{})
+	ready := waitModels(t, c, func(l *api.ModelList) bool { return len(l.Providers[0].Models) == 1 })
+	if p := ready.Providers[0]; p.Status != "ready" || p.Err != "" {
+		t.Fatalf("ready gateway %+v", p)
+	}
+	if n := fake.ModelCalls(); n != 1 {
+		t.Fatalf("Models calls = %d for a ready gateway, want 1", n)
+	}
+}
+
 // TestModelListFailureKeepsTheList: a failed refresh serves the list it had
 // with the error, and does not ask again within the TTL.
 func TestModelListFailureKeepsTheList(t *testing.T) {

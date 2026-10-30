@@ -8,12 +8,14 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 	"time"
 
 	"golang.org/x/term"
 
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/gateway"
 	"github.com/emmyfong/snow/internal/signin"
 )
 
@@ -200,6 +202,7 @@ func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) i
 	for _, p := range ps {
 		width = max(width, len(p.Name))
 	}
+	gws := authGateways()
 	for _, s := range signin.Statuses(ps, store) {
 		var line string
 		switch {
@@ -213,6 +216,9 @@ func authStatusCmd(ps []signin.Provider, store signin.Store, stdout io.Writer) i
 			line = fmt.Sprintf("no %s. Run: snow auth login %s", keyNoun(s.Provider), s.Provider.Name)
 		default:
 			line = fmt.Sprintf("cannot read the key: %v", s.Err)
+		}
+		if i := slices.IndexFunc(gws, func(g gateway.Spec) bool { return g.Name == s.Provider.Name }); i >= 0 {
+			line += "; gateway " + gatewayText(gws[i])
 		}
 		_, _ = fmt.Fprintf(stdout, "%-*s  %s\n", width, s.Provider.Name, line)
 	}

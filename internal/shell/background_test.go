@@ -4,9 +4,30 @@ import (
 	"bytes"
 	"path/filepath"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 )
+
+// lockedWriter is an output buffer the program and the test share: the
+// program writes while the test reads, so every access takes the lock.
+type lockedWriter struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (w *lockedWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.b.Write(p)
+}
+
+// bytes returns a copy of what was written.
+func (w *lockedWriter) bytes() []byte {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return bytes.Clone(w.b.Bytes())
+}
 
 // TestStartBackgroundStopsTree: Stop ends the program and the processes
 // it started.

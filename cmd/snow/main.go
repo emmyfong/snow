@@ -199,6 +199,15 @@ func serve(stderr io.Writer) int {
 	if err != nil {
 		log.Warn("agent profiles", "err", err)
 	}
+	// A gateway starts in the background, so a slow one never holds the
+	// server. Stop ends only the trees Snow started.
+	gateways := startGateways(cfg, log)
+	if gateways != nil {
+		defer gateways.Stop()
+		if chat != nil {
+			chat.ProviderStatuses = withGatewayStatuses(chat.ProviderStatuses, gateways)
+		}
+	}
 	opts := server.Options{
 		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default, Chat: chat,

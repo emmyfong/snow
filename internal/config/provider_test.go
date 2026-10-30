@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -88,6 +89,16 @@ base_url = "ftp://z"
 [provider.alpha]
 base_url = "ftp://a"
 `, 6, "provider.alpha.base_url"},
+		{"start with no program", `
+[provider.omniroute]
+base_url = "http://localhost:20128/v1"
+start = [" "]
+`, 4, "provider.omniroute.start"},
+		{"start for a remote gateway", `
+[provider.openrouter]
+base_url = "https://openrouter.ai/api/v1"
+start = ["npx", "omniroute"]
+`, 4, "provider.openrouter.start"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -113,6 +124,28 @@ base_url = "ftp://a"
 				t.Fatalf("the error shows the key: %v", err)
 			}
 		})
+	}
+}
+
+// TestProviderStart: start is kept as written, and only a gateway on this
+// machine may have one.
+func TestProviderStart(t *testing.T) {
+	for _, base := range []string{
+		"http://localhost:20128/v1",
+		"http://127.0.0.1:20128/v1",
+		"http://[::1]:20128/v1",
+	} {
+		cfg, err := Load(writeConfig(t, `
+[provider.omniroute]
+base_url = "`+base+`"
+start = ["npx", "omniroute"]
+`))
+		if err != nil {
+			t.Fatalf("%s: %v", base, err)
+		}
+		if got := cfg.Providers["omniroute"].Start; !slices.Equal(got, []string{"npx", "omniroute"}) {
+			t.Errorf("%s: start %q, want npx omniroute", base, got)
+		}
 	}
 }
 

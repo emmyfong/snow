@@ -13,6 +13,7 @@ import (
 	"github.com/zalando/go-keyring"
 
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/gateway"
 	"github.com/emmyfong/snow/internal/provider/providertest"
 	"github.com/emmyfong/snow/internal/signin"
 )
@@ -66,10 +67,12 @@ func authTest(t *testing.T) string {
 	srv := providertest.NewKeyServer(t, goodKey)
 	keyServer = srv
 	old, oldIn := authProviders, stdin
+	oldGateways := authGateways
 	authProviders = func() ([]signin.Provider, error) {
 		return signin.ProvidersAt(signin.BaseURLs{Anthropic: srv.URL, OpenAI: srv.URL}), nil
 	}
-	t.Cleanup(func() { authProviders, stdin = old, oldIn })
+	authGateways = func() []gateway.Spec { return nil }
+	t.Cleanup(func() { authProviders, stdin, authGateways = old, oldIn, oldGateways })
 	return filepath.Join(home, ".snow")
 }
 
