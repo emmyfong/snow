@@ -116,7 +116,12 @@ func TestRestoreChatBesideShell(t *testing.T) {
 	first, _, _ := chatServerIn(t, d, reply("ok"))
 	c1 := connect(t, first, 100, 30)
 	openChatBesideShell(t, c1)
-	chatPaneOf(t, d, "work")
+	// The saver may write the session with the chat alone before it writes the
+	// split; stopping then would save one pane.
+	eventually(t, "both panes to be saved", func() bool {
+		snap, err := openStore(t, d.sessions).Load("work")
+		return err == nil && len(snap.Windows) == 1 && len(snap.Windows[0].Panes) == 2
+	})
 	stopBySignal(first)
 
 	second, _, _ := chatServerIn(t, d)
