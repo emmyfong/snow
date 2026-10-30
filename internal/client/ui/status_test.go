@@ -174,6 +174,49 @@ func TestTabSpansForPromptAndNoWidth(t *testing.T) {
 	}
 }
 
+// TestStatusBarHint: the reminder sits before Right, and the bar drops it
+// before Right or a window tab, so it never costs a tab or a message.
+func TestStatusBarHint(t *testing.T) {
+	hint := "right-click: menu"
+	tabs := []Tab{{Index: 0, Name: "dev", Active: true}}
+	tests := []struct {
+		name      string
+		o         StatusOptions
+		wantHint  bool
+		wantRight bool
+		wantTabs  []string
+	}{
+		{"room for all", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, true, true, []string{" 0 dev* "}},
+		{"drops before right", StatusOptions{Width: 30, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, false, true, []string{" 0 dev* "}},
+		{"drops before a tab", StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}, false, false, []string{" 0 dev* "}},
+		{"a message wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Message: "no room", Hint: hint}, false, false, []string{" 0 dev* "}},
+		{"a notice wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Notice: "copied", Hint: hint}, false, false, []string{" 0 dev* "}},
+	}
+	for _, tt := range tests {
+		out := StatusBar(theme.Default(), tt.o)
+		got := ansi.Strip(out)
+		if w := ansi.StringWidth(out); w != tt.o.Width {
+			t.Errorf("%s: width %d, want %d", tt.name, w, tt.o.Width)
+		}
+		if has := strings.Contains(got, hint); has != tt.wantHint {
+			t.Errorf("%s: hint shown %v, want %v (bar %q)", tt.name, has, tt.wantHint, got)
+		}
+		if has := strings.Contains(got, "pwsh  14:02"); has != tt.wantRight {
+			t.Errorf("%s: right shown %v, want %v (bar %q)", tt.name, has, tt.wantRight, got)
+		}
+		if tt.wantHint && strings.Index(got, hint) > strings.Index(got, "pwsh") {
+			t.Errorf("%s: the hint follows Right: %q", tt.name, got)
+		}
+		var spans []string
+		for _, sp := range TabSpans(theme.Default(), tt.o) {
+			spans = append(spans, ansi.Cut(got, sp.X, sp.X+sp.W))
+		}
+		if !slices.Equal(spans, tt.wantTabs) {
+			t.Errorf("%s: spans %q, want %q", tt.name, spans, tt.wantTabs)
+		}
+	}
+}
+
 // TestStatusBarCutsLongMessage: a message wider than the bar is cut to
 // fit, never dropped; it is the only feedback the user gets.
 func TestStatusBarCutsLongMessage(t *testing.T) {

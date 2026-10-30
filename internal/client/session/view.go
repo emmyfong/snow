@@ -58,10 +58,14 @@ func (m *Model) View() tea.View {
 	return v
 }
 
+// menuHint tells mouse users how to reach the pane menu. The status bar drops
+// it before it drops Right or cuts a window tab.
+const menuHint = "right-click: pane menu"
+
 // statusOptions describes the status bar. The view draws it, and a click on
 // a tab is matched against it.
 func (m *Model) statusOptions() ui.StatusOptions {
-	opts := ui.StatusOptions{Width: m.cols, Message: m.message}
+	opts := ui.StatusOptions{Width: m.cols, Message: m.message, Hint: menuHint}
 	if m.layout != nil {
 		opts.Session = m.layout.Session
 		for _, w := range m.layout.Windows {

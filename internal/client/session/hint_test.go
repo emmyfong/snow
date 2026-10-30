@@ -12,6 +12,26 @@ import (
 
 func hintShown(m *Model) bool { return strings.Contains(m.View().Content, "Split right") }
 
+// TestStatusBarShowsThePaneMenuHint: the mouse hint reaches the drawn bar,
+// and a refusal replaces it.
+func TestStatusBarShowsThePaneMenuHint(t *testing.T) {
+	m := screen(80, 24)
+	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{
+		{Index: 1, Name: "dev", Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 23}, Focused: true}}},
+	}})
+	bar := func() string {
+		rows := strings.Split(m.View().Content, "\n")
+		return ansi.Strip(rows[len(rows)-1])
+	}
+	if got := bar(); !strings.Contains(got, menuHint) {
+		t.Fatalf("status bar %q, want %q", got, menuHint)
+	}
+	m.ShowError("no room to split")
+	if got := bar(); strings.Contains(got, menuHint) || !strings.Contains(got, "no room to split") {
+		t.Fatalf("status bar %q, want the refusal without the hint", got)
+	}
+}
+
 // TestWhichKeyDelayed: a fast second key never shows the popup, and the
 // timer of an earlier prefix press never shows it for a later one.
 func TestWhichKeyDelayed(t *testing.T) {
