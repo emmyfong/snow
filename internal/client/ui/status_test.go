@@ -165,6 +165,38 @@ func TestTabSpansMatchTheDrawnBar(t *testing.T) {
 	}
 }
 
+// TestSessionSpanMatchesTheDrawnBar: the span covers exactly the session
+// name, clipped the same way the bar clips it.
+func TestSessionSpanMatchesTheDrawnBar(t *testing.T) {
+	tabs := []Tab{{Index: 1, Name: "dev", Active: true}}
+	tests := []struct {
+		name string
+		o    StatusOptions
+		want string // the text under the span; "" when there is no span
+	}{
+		{"room", StatusOptions{Width: 80, Session: "api", Tabs: tabs}, " [api] "},
+		{"long name", StatusOptions{Width: 80, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-long-session-name] "},
+		{"cut short", StatusOptions{Width: 10, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-l"},
+		{"a message clips it", StatusOptions{Width: 24, Session: "a-very-long-session-name", Tabs: tabs, Message: "no room to split"}, " [a-v"},
+		{"a prompt hides it", StatusOptions{Width: 80, Session: "api", Prompt: "close? y/n"}, ""},
+		{"no width", StatusOptions{Session: "api"}, ""},
+	}
+	for _, tt := range tests {
+		bar := StatusBar(theme.Default(), tt.o)
+		x, w, ok := SessionSpan(theme.Default(), tt.o)
+		got := ""
+		if ok {
+			if x != 0 {
+				t.Errorf("%s: span starts at %d, want 0", tt.name, x)
+			}
+			got = ansi.Strip(ansi.Cut(bar, x, x+w))
+		}
+		if got != tt.want {
+			t.Errorf("%s: span text %q, want %q (bar %q)", tt.name, got, tt.want, ansi.Strip(bar))
+		}
+	}
+}
+
 func TestTabSpansForPromptAndNoWidth(t *testing.T) {
 	if got := TabSpans(theme.Default(), StatusOptions{Width: 40, Tabs: []Tab{{Name: "a"}}, Prompt: "close? y/n"}); got != nil {
 		t.Errorf("a prompt leaves spans %v", got)

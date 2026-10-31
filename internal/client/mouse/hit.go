@@ -7,11 +7,12 @@ type Kind int
 
 // What a cell can hold.
 const (
-	None   Kind = iota // blank space beyond the panes, or off the screen
-	Pane               // a pane's cell
-	Border             // a line between panes
-	Tab                // a window's tab in the status bar
-	Bar                // the status bar outside the tabs
+	None    Kind = iota // blank space beyond the panes, or off the screen
+	Pane                // a pane's cell
+	Border              // a line between panes
+	Tab                 // a window's tab in the status bar
+	Session             // the session name in the status bar
+	Bar                 // the status bar outside the session name and tabs
 )
 
 // Axis is the direction a border runs.
@@ -39,6 +40,11 @@ type Hit struct {
 	Before, After int
 }
 
+// Span is a run of columns in the status bar, such as the session name.
+type Span struct {
+	X, W int
+}
+
 // TabSpan is the columns a window's tab covers in the status bar.
 type TabSpan struct {
 	Index int // the window index
@@ -46,14 +52,18 @@ type TabSpan struct {
 }
 
 // HitTest says what lies under cell x, y of a screen of cols by rows cells.
-// The last row is the status bar; panes cover the rows above it. Cells in
-// the panes' area that no pane covers are borders. A client larger than
-// the session leaves blank cells beyond the panes, which are None.
-func HitTest(panes []api.PaneInfo, tabs []TabSpan, x, y, cols, rows int) Hit {
+// The last row is the status bar: the session name at session, the window
+// tabs, and Bar elsewhere. Panes cover the rows above it. Cells in the panes'
+// area that no pane covers are borders. A client larger than the session
+// leaves blank cells beyond the panes, which are None.
+func HitTest(panes []api.PaneInfo, session Span, tabs []TabSpan, x, y, cols, rows int) Hit {
 	if x < 0 || y < 0 || x >= cols || y >= rows {
 		return Hit{Kind: None}
 	}
 	if y == rows-1 {
+		if session.W > 0 && x >= session.X && x < session.X+session.W {
+			return Hit{Kind: Session}
+		}
 		for _, t := range tabs {
 			if x >= t.X && x < t.X+t.W {
 				return Hit{Kind: Tab, Window: t.Index}

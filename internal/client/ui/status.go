@@ -93,13 +93,26 @@ func TabSpans(th theme.Theme, o StatusOptions) []TabSpan {
 	return out
 }
 
+// SessionSpan returns the columns the session name covers in the bar
+// StatusBar draws for o, and whether any of it shows. A bar cut short clips
+// the name like a tab, and a Prompt takes the whole bar, so it leaves none.
+func SessionSpan(th theme.Theme, o StatusOptions) (x, w int, ok bool) {
+	if o.Width <= 0 || o.Prompt != "" {
+		return 0, 0, false
+	}
+	l := layoutStatus(th, o)
+	w = min(l.sessionW, l.leftMax)
+	return 0, w, w > 0
+}
+
 // statusLayout is the bar's pieces before they are cut to the width.
 type statusLayout struct {
-	left    string    // the session and tabs, untruncated
-	spans   []TabSpan // each tab's columns inside left
-	hint    string    // the muted reminder, with its padding; "" when dropped
-	right   string    // with its padding; "" when dropped
-	leftMax int       // how much of left fits
+	left     string    // the session and tabs, untruncated
+	sessionW int       // the width of the session name's block
+	spans    []TabSpan // each tab's columns inside left
+	hint     string    // the faint reminder, with its padding; "" when dropped
+	right    string    // with its padding; "" when dropped
+	leftMax  int       // how much of left fits
 }
 
 func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
@@ -108,6 +121,7 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight + " ")
 	parts := []string{first}
 	x := ansi.StringWidth(first)
+	sessionW := x
 	var spans []TabSpan
 	for _, t := range o.Tabs {
 		label := strconv.Itoa(t.Index) + " " + t.Name
@@ -171,5 +185,5 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		// Too wide for Right too: drop it, and the hint with it.
 		right, hint = "", ""
 	}
-	return statusLayout{left: left, spans: spans, hint: hint, right: right, leftMax: leftMax}
+	return statusLayout{left: left, sessionW: sessionW, spans: spans, hint: hint, right: right, leftMax: leftMax}
 }

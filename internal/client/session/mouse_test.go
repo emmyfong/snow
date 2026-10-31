@@ -82,9 +82,44 @@ func TestClickTabSelectsWindow(t *testing.T) {
 	}
 	r.sent = nil
 	m.Update(click(70, 23)) // the bar, not a tab
-	m.Update(click(2, 23))  // the session name
+	m.Update(click(6, 23))  // just past the session name
 	if len(r.sent) != 0 {
 		t.Fatalf("sent %v for clicks outside the tabs", r.sent)
+	}
+}
+
+// TestClickSessionNameOpensTheList: a left click on [api] opens the same
+// list as Ctrl+b s.
+func TestClickSessionNameOpensTheList(t *testing.T) {
+	m, _ := switchScreen(t, 80, 24)
+	m.Update(click(2, 23))
+	if m.switcher == nil {
+		t.Fatal("the click did not open the session list")
+	}
+	byMouse := plain(m)
+	key, _ := switchScreen(t, 80, 24)
+	openSessions(key)
+	if key.switcher == nil {
+		t.Fatal("Ctrl+b s did not open the session list")
+	}
+	if byMouse != plain(key) {
+		t.Fatalf("the click and the key drew different lists:\n%s\n---\n%s", byMouse, plain(key))
+	}
+}
+
+// TestClickSessionNameIgnoredWhileAPopupIsOpen: a popup or a prompt keeps
+// the click, so the list never opens behind it.
+func TestClickSessionNameIgnoredWhileAPopupIsOpen(t *testing.T) {
+	for name, open := range map[string]func(*Model){
+		"picker": func(m *Model) { m.Update(ctrlB); m.Update(press('%', 0, "%")) },
+		"prompt": func(m *Model) { m.Update(ctrlB); m.Update(press(':', 0, ":")) },
+	} {
+		m, _ := switchScreen(t, 80, 24)
+		open(m)
+		m.Update(click(2, 23))
+		if m.switcher != nil {
+			t.Errorf("%s: the click opened the session list", name)
+		}
 	}
 }
 
