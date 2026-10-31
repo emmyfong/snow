@@ -27,8 +27,9 @@ type WindowOptions struct {
 // area from the top-left corner; every cell of that area that no pane covers
 // is a border, drawn with the junction its neighbors call for. Borders that
 // touch the focused pane use the focus color, and borders of a pane an agent
-// types into use the accent color, which wins over the focus color. Cells
-// outside the area are blank, for a client larger than the session.
+// types into use the accent color, which wins over the focus color. The
+// focused pane's close mark sits on its top border corner when it has one.
+// Cells outside the area are blank, for a client larger than the session.
 func Window(th theme.Theme, o WindowOptions) string {
 	if o.Width <= 0 || o.Height <= 0 {
 		return ""
@@ -37,6 +38,12 @@ func Window(th theme.Theme, o WindowOptions) string {
 	plain := lipgloss.NewStyle().Foreground(th.Border)
 	focus := lipgloss.NewStyle().Foreground(th.FocusBorder)
 	accent := lipgloss.NewStyle().Foreground(th.Accent)
+	markX, markY := -1, -1
+	if g.focused >= 0 {
+		if x, y, ok := g.closeCell(o.Panes[g.focused]); ok {
+			markX, markY = x, y
+		}
+	}
 	var b strings.Builder
 	for y := range o.Height {
 		if y > 0 {
@@ -52,14 +59,18 @@ func Window(th theme.Theme, o WindowOptions) string {
 				x += w
 				continue
 			case g.inArea(x, y):
-				style := plain
-				switch {
-				case g.touchesDriven(x, y):
-					style = accent
-				case g.touchesFocus(x, y):
-					style = focus
+				if x == markX && y == markY {
+					row.WriteString(lipgloss.NewStyle().Foreground(th.Error).Bold(true).Render(th.Glyphs.Close))
+				} else {
+					style := plain
+					switch {
+					case g.touchesDriven(x, y):
+						style = accent
+					case g.touchesFocus(x, y):
+						style = focus
+					}
+					row.WriteString(style.Render(g.glyph(th.Glyphs, x, y)))
 				}
-				row.WriteString(style.Render(g.glyph(th.Glyphs, x, y)))
 			default:
 				row.WriteByte(' ')
 			}
@@ -137,6 +148,36 @@ func (g *grid) touchesDriven(x, y int) bool {
 		}
 	}
 	return false
+}
+
+// closeCell returns the border cell that carries p's close mark: the cell at
+// its top-right corner when one is a border, else the top of its right border
+// or the right end of its top border, else the top of its left border.
+func (g *grid) closeCell(p WindowPane) (x, y int, ok bool) {
+	cells := [][2]int{
+		{p.X + p.W, p.Y - 1},
+		{p.X + p.W, p.Y},
+		{p.X + p.W - 1, p.Y - 1},
+		{p.X - 1, p.Y},
+		{p.X, p.Y - 1},
+	}
+	for _, c := range cells {
+		if g.border(c[0], c[1]) {
+			return c[0], c[1], true
+		}
+	}
+	return 0, 0, false
+}
+
+// CloseCell returns the border cell where Window draws the focused pane's
+// close mark, and whether the focused pane has one. A pane with no border at
+// its top corner, such as the only pane in a window, has no mark.
+func CloseCell(panes []WindowPane, width, height int) (x, y int, ok bool) {
+	g := newGrid(WindowOptions{Width: width, Height: height, Panes: panes})
+	if g.focused < 0 {
+		return 0, 0, false
+	}
+	return g.closeCell(panes[g.focused])
 }
 
 // glyph picks the border character from which neighbors are borders too.

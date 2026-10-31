@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -95,6 +96,33 @@ func TestOnlyTheLeftButtonSelectsAndFocuses(t *testing.T) {
 	m.Update(motion(30, 5))
 	if len(r.sent) != 0 {
 		t.Fatalf("sent %v for non-left clicks", r.sent)
+	}
+}
+
+// TestClickCloseMarkAsksToClose: the × on the focused pane's border asks
+// before it closes, like the menu item, and does not start a resize drag.
+func TestClickCloseMarkAsksToClose(t *testing.T) {
+	m, r := threePaneScreen(t)
+	m.Update(click(40, 0)) // pane 2's top-right corner, on the divider
+	if m.confirm == nil || m.drag != nil || len(r.sent) != 0 {
+		t.Fatalf("confirm %v, drag %v, sent %v; want a question and no drag", m.confirm != nil, m.drag != nil, r.sent)
+	}
+	if got := content(m); !strings.Contains(got, "Close this pane") {
+		t.Fatalf("no close question:\n%s", got)
+	}
+	m.Update(press('y', 0, "y"))
+	if c := lastCommand(t, r); c.Op != api.OpClose || c.Target != 2 {
+		t.Fatalf("sent %+v, want close pane 2", c)
+	}
+}
+
+// TestClickBelowCloseMarkStillResizes: the mark takes one cell, not the whole
+// border.
+func TestClickBelowCloseMarkStillResizes(t *testing.T) {
+	m, _ := threePaneScreen(t)
+	m.Update(click(40, 1))
+	if m.drag == nil {
+		t.Fatal("the border below the mark no longer starts a drag")
 	}
 }
 

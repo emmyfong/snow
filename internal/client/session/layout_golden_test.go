@@ -65,3 +65,19 @@ func TestZoomedGolden80x24(t *testing.T)        { goldenZoomed(t, 80, 24) }
 func TestZoomedGolden120x40(t *testing.T)       { goldenZoomed(t, 120, 40) }
 func TestThreeWindowsGolden80x24(t *testing.T)  { goldenThreeWindows(t, 80, 24) }
 func TestThreeWindowsGolden120x40(t *testing.T) { goldenThreeWindows(t, 120, 40) }
+
+// goldenCloseMark shows the × on the bottom-right pane's top border, the
+// clearest place it lands.
+func goldenCloseMark(t *testing.T, cols, rows int) {
+	m := screen(cols, rows)
+	panes := threePanes(cols, rows)
+	for i := range panes {
+		panes[i].Focused = panes[i].ID == 3
+	}
+	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
+	fill(m, panes)
+	golden.RequireEqual(t, m.View().Content)
+}
+
+func TestCloseMarkGolden80x24(t *testing.T)  { goldenCloseMark(t, 80, 24) }
+func TestCloseMarkGolden120x40(t *testing.T) { goldenCloseMark(t, 120, 40) }

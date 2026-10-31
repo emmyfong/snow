@@ -78,6 +78,8 @@ type Glyphs struct {
 	// Driven follows a window's name while an agent types into one of its
 	// panes. One cell.
 	Driven string
+	// Close marks a pane or window the mouse can close. One cell.
+	Close string
 }
 
 // Default returns the default theme, Frost.
@@ -99,6 +101,7 @@ func defaultGlyphs() Glyphs {
 		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
 		AgentIdle: "○", AgentWorking: "◐", AgentNeedsYou: "●",
 		Driven: "✎",
+		Close:  "×",
 	}
 }
 
