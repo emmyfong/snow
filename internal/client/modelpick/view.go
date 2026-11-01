@@ -196,9 +196,9 @@ func (m *Model) providerItems() []ui.ListItem {
 			status = "loading"
 		case !p.Connected:
 			status = "no key"
-		case p.Status == "starting":
+		case p.Status == api.GatewayStarting:
 			status = "starting"
-		case p.Status == "failed" || p.Err != "":
+		case p.Status == api.GatewayFailed || p.Err != "":
 			status = "error"
 		}
 		if status != "" {

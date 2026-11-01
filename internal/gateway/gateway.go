@@ -21,6 +21,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/private"
 	"github.com/emmyfong/snow/internal/shell"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // State is what Snow knows about a gateway.
@@ -64,11 +65,11 @@ type Status struct {
 func (s Status) Word() string {
 	switch s.State {
 	case StateReady:
-		return "ready"
+		return api.GatewayReady
 	case StateStarting:
-		return "starting"
+		return api.GatewayStarting
 	}
-	return "failed"
+	return api.GatewayFailed
 }
 
 // Detail is what the user reads in the model picker: "starting", or
@@ -115,10 +116,10 @@ type Manager struct {
 	entries []*entry
 
 	mu       sync.Mutex
-	procs    []*shell.Process
+	idle     *sync.Cond // wakes a Stop when the last start goroutine returns
+	running  int        // start goroutines that have not returned
 	started  bool
 	stopping bool
-	wg       sync.WaitGroup
 }
 
 // entry is one gateway. Its fields other than spec change only under the
@@ -128,6 +129,13 @@ type entry struct {
 	state   State
 	logPath string
 	err     error
+	proc    *shell.Process // the tree Snow started, or nil
+}
+
+// runningGateway is a tree Snow started, on its way to Stop.
+type runningGateway struct {
+	name string
+	proc *shell.Process
 }
 
 // New returns a manager for specs, which Start starts. A spec without a
@@ -140,6 +148,7 @@ func New(specs []Spec, opts Options) *Manager {
 		opts.Poll = DefaultPoll
 	}
 	m := &Manager{opts: opts}
+	m.idle = sync.NewCond(&m.mu)
 	for _, s := range specs {
 		if s.Name == "" || strings.ContainsAny(s.Name, `/\`) || len(s.Start) == 0 {
 			continue
@@ -153,22 +162,42 @@ func New(specs []Spec, opts Options) *Manager {
 
 // Start asks each gateway whether it answers, and starts the ones that do
 // not. It returns at once; each gateway is ready, starting, or failed
-// later, as Statuses reports.
+// later, as Statuses reports. A Start after Stop does nothing.
 func (m *Manager) Start() {
 	m.mu.Lock()
-	if m.started {
+	if m.started || m.stopping {
 		m.mu.Unlock()
 		return
 	}
 	m.started = true
+	m.running = len(m.entries)
 	m.mu.Unlock()
 	for _, e := range m.entries {
-		m.wg.Add(1)
 		go func(e *entry) {
-			defer m.wg.Done()
+			defer m.finished()
 			m.startOne(e)
 		}(e)
 	}
+}
+
+// finished records that one start goroutine returned, and wakes a waiting
+// Stop when it was the last.
+func (m *Manager) finished() {
+	m.mu.Lock()
+	m.running--
+	if m.running == 0 {
+		m.idle.Broadcast()
+	}
+	m.mu.Unlock()
+}
+
+// waitForStarts waits until every start goroutine returned.
+func (m *Manager) waitForStarts() {
+	m.mu.Lock()
+	for m.running > 0 {
+		m.idle.Wait()
+	}
+	m.mu.Unlock()
 }
 
 // Statuses returns every gateway's state, in name order.
@@ -183,22 +212,46 @@ func (m *Manager) Statuses() []Status {
 }
 
 // Stop stops every gateway Snow started and waits for it. A gateway that
-// already answered when Snow looked is not touched.
+// already answered when Snow looked is not touched. A second call returns
+// at once.
 func (m *Manager) Stop() {
 	m.mu.Lock()
+	if m.stopping {
+		m.mu.Unlock()
+		return
+	}
 	m.stopping = true
-	procs := slices.Clone(m.procs)
+	var running []runningGateway
+	for _, e := range m.entries {
+		if e.proc != nil {
+			running = append(running, runningGateway{name: e.spec.Name, proc: e.proc})
+		}
+	}
 	m.mu.Unlock()
 	var wg sync.WaitGroup
-	for _, p := range procs {
+	for _, r := range running {
 		wg.Add(1)
-		go func(p *shell.Process) {
+		go func(r runningGateway) {
 			defer wg.Done()
-			_ = p.Stop(stopGrace)
-		}(p)
+			m.stopProc(r)
+		}(r)
 	}
 	wg.Wait()
-	m.wg.Wait()
+	m.waitForStarts()
+}
+
+// stopProc stops one gateway's tree and notes a failure in the log.
+func (m *Manager) stopProc(r runningGateway) {
+	if err := r.proc.Stop(stopGrace); err != nil {
+		m.warn("stop a gateway", r.name, "", err)
+	}
+}
+
+// isStopping reports whether Stop has begun.
+func (m *Manager) isStopping() bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.stopping
 }
 
 // startOne decides whether e answers already, or starts it.
@@ -228,12 +281,11 @@ func (m *Manager) startOne(e *entry) {
 		return
 	}
 	m.mu.Lock()
-	m.procs = append(m.procs, proc)
+	e.proc = proc
 	stopping := m.stopping
 	m.mu.Unlock()
 	if stopping {
-		_ = proc.Stop(stopGrace)
-		m.set(e, StateFailed, logPath, errors.New("the server stopped"))
+		m.stopProc(runningGateway{name: e.spec.Name, proc: proc})
 		return
 	}
 	m.set(e, StateStarting, logPath, nil)
@@ -243,6 +295,10 @@ func (m *Manager) startOne(e *entry) {
 	for {
 		select {
 		case <-proc.Done():
+			// Stop ends this tree on purpose, so its exit is not a failure.
+			if m.isStopping() {
+				return
+			}
 			err := proc.Err()
 			if err == nil {
 				err = errors.New("the program exited before the gateway answered")
@@ -277,9 +333,21 @@ func (m *Manager) set(e *entry, state State, logPath string, err error) {
 	m.mu.Lock()
 	e.state, e.logPath, e.err = state, logPath, err
 	m.mu.Unlock()
-	if state == StateFailed && m.opts.Log != nil {
-		m.opts.Log.Warn("gateway failed", "gateway", e.spec.Name, "log", logPath, "err", err)
+	if state == StateFailed {
+		m.warn("gateway failed", e.spec.Name, logPath, err)
 	}
+}
+
+// warn writes a line about gateway name when a logger is set.
+func (m *Manager) warn(msg, name, logPath string, err error) {
+	if m.opts.Log == nil {
+		return
+	}
+	if logPath == "" {
+		m.opts.Log.Warn(msg, "gateway", name, "err", err)
+		return
+	}
+	m.opts.Log.Warn(msg, "gateway", name, "log", logPath, "err", err)
 }
 
 // openLog opens the gateway's log file in the log folder, private to the

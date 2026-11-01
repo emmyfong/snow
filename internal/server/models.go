@@ -134,7 +134,7 @@ func (st *state) refreshModels(force bool) []string {
 		}
 		// A gateway that is starting or failed cannot answer, so asking
 		// it would only replace the reason with a connection error.
-		if p.Status == "starting" || p.Status == "failed" {
+		if p.Status == api.GatewayStarting || p.Status == api.GatewayFailed {
 			continue
 		}
 		if !force && st.models.fresh(p.Name, now, ttl) {

@@ -1,15 +1,18 @@
 package gateway
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -30,6 +33,8 @@ func TestGatewayHelper(t *testing.T) {
 	case "exit":
 		fmt.Println(args[1])
 		os.Exit(3)
+	case "wait":
+		waitHelper(args[1:])
 	default:
 		fmt.Fprintf(os.Stderr, "unknown helper mode %q\n", args[0])
 		os.Exit(2)
@@ -66,6 +71,19 @@ func markHelper(args []string) {
 	}
 }
 
+// waitHelper records that Snow ran the start command, then runs until Snow
+// stops it. It never listens, so a test can stop Snow while the gateway is
+// still starting.
+func waitHelper(args []string) {
+	if err := os.WriteFile(args[0], []byte("started\n"), 0o600); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	for {
+		time.Sleep(time.Second)
+	}
+}
+
 // TestGatewayStart: Snow starts a gateway whose address answers nothing,
 // waits for it, and stops its tree on exit.
 func TestGatewayStart(t *testing.T) {
@@ -75,6 +93,7 @@ func TestGatewayStart(t *testing.T) {
 		Start: helperArgs(t, "serve", addr, marker),
 	}
 	m := New([]Spec{spec}, Options{Wait: 15 * time.Second, Poll: 25 * time.Millisecond, LogDir: t.TempDir()})
+	t.Cleanup(m.Stop)
 	m.Start()
 	st := waitStatus(t, m, StateReady)
 	if st.LogPath == "" {
@@ -101,6 +120,7 @@ func TestGatewayAlreadyRunning(t *testing.T) {
 		Name: "omniroute", BaseURL: srv.URL,
 		Start: helperArgs(t, "mark", marker),
 	}}, Options{Wait: 5 * time.Second, Poll: 25 * time.Millisecond, LogDir: t.TempDir()})
+	t.Cleanup(m.Stop)
 	m.Start()
 	if st := waitStatus(t, m, StateReady); st.LogPath != "" {
 		t.Fatalf("Snow opened a log for a gateway it did not start: %q", st.LogPath)
@@ -126,6 +146,7 @@ func TestGatewayFails(t *testing.T) {
 		Name: "omniroute", BaseURL: "http://" + freeAddr(t) + "/v1",
 		Start: helperArgs(t, "exit", "boom"),
 	}}, Options{Wait: 10 * time.Second, Poll: 25 * time.Millisecond, LogDir: dir})
+	t.Cleanup(m.Stop)
 
 	done := make(chan struct{})
 	go func() {
@@ -151,6 +172,78 @@ func TestGatewayFails(t *testing.T) {
 		t.Fatalf("log %q, want the program's output", data)
 	}
 	m.Stop()
+}
+
+// TestGatewayStopWhileStarting: a server that exits while a gateway starts
+// stops the tree it started and does not report a failure.
+func TestGatewayStopWhileStarting(t *testing.T) {
+	var log syncBuffer
+	m := New([]Spec{{
+		Name: "omniroute", BaseURL: "http://" + freeAddr(t) + "/v1",
+		Start: helperArgs(t, "wait", filepath.Join(t.TempDir(), "started")),
+	}}, Options{
+		Wait: 30 * time.Second, Poll: 25 * time.Millisecond, LogDir: t.TempDir(),
+		Log: slog.New(slog.NewTextHandler(&log, nil)),
+	})
+	t.Cleanup(m.Stop)
+	m.Start()
+	waitStarted(t, m)
+	m.Stop()
+	if got := log.String(); strings.Contains(got, "gateway failed") {
+		t.Fatalf("a stop during startup was logged as a failure:\n%s", got)
+	}
+}
+
+// waitStarted waits until m polls a gateway it started: the program runs and
+// a log is open, so Stop meets a running tree.
+func waitStarted(t *testing.T, m *Manager) {
+	t.Helper()
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if all := m.Statuses(); len(all) == 1 && all[0].LogPath != "" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the gateway did not start")
+}
+
+// TestManagerStopDuringStart: Stop may run while Start launches its
+// goroutines. The race detector is the real check here.
+func TestManagerStopDuringStart(t *testing.T) {
+	for range 20 {
+		var specs []Spec
+		for i := range 8 {
+			specs = append(specs, Spec{
+				Name: fmt.Sprintf("gw%d", i), BaseURL: "http://127.0.0.1:1/v1",
+				Start: []string{"snow-test-no-such-program"},
+			})
+		}
+		m := New(specs, Options{Wait: 100 * time.Millisecond, Poll: time.Millisecond, LogDir: t.TempDir()})
+		var wg sync.WaitGroup
+		wg.Add(2)
+		go func() { defer wg.Done(); m.Start() }()
+		go func() { defer wg.Done(); m.Stop() }()
+		wg.Wait()
+	}
+}
+
+// syncBuffer is a buffer the start goroutines write to while the test reads.
+type syncBuffer struct {
+	mu sync.Mutex
+	b  bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.b.String()
 }
 
 // TestStatusText: the picker gets a short word, and the note names the log.

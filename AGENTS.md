@@ -40,8 +40,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
    │           │                       │    hooks and settings only, never its login)
    ├──► shell  (snow claude: the WSL distributions that have claude)
-   ├──► gateway ──► shell, private  (a configured gateway: starts it, logs it,
-   │                                 and stops only a tree Snow started)
+   ├──► gateway ──► shell, private, pkg/api  (a configured gateway: starts it,
+   │                                          logs it, and stops only a tree
+   │                                          Snow started)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;

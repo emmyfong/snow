@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -93,6 +94,47 @@ func TestModelCommandOpensThePicker(t *testing.T) {
 			t.Errorf("the picker does not show %q:\n%s", want, s)
 		}
 	}
+}
+
+// TestGatewayStartingAsksAgain: while a gateway starts, the open picker asks
+// the server again, so "starting" becomes "ready" without reopening it.
+func TestGatewayStartingAsksAgain(t *testing.T) {
+	m, r := modelScreen(t, 100, 30, "anthropic/claude-sonnet-5-5")
+	typeSlash(m, "/model")
+	m.gatewayEvery = time.Millisecond
+	starting := &api.ModelList{Providers: []api.ProviderModels{
+		{Name: "anthropic", Connected: true},
+		{Name: "omniroute", Title: "OmniRoute", Connected: true, Status: api.GatewayStarting},
+	}}
+	cmd := m.Update(starting)
+	if cmd == nil {
+		t.Fatal("a starting gateway scheduled no check")
+	}
+	before := listRequests(r)
+	m.Update(cmd())
+	if got := listRequests(r); got != before+1 {
+		t.Fatalf("list requests %d, want one more than %d", got, before)
+	}
+
+	ready := &api.ModelList{Providers: []api.ProviderModels{{Name: "omniroute", Connected: true, Status: api.GatewayReady}}}
+	if cmd := m.Update(ready); cmd != nil {
+		t.Fatal("a ready gateway scheduled another check")
+	}
+	m.modelPick = nil
+	if cmd := m.Update(starting); cmd != nil {
+		t.Fatal("a closed picker scheduled a check")
+	}
+}
+
+// listRequests counts the model list requests the session sent.
+func listRequests(r *recorder) int {
+	n := 0
+	for _, msg := range r.sent {
+		if _, ok := msg.(*api.ModelListRequest); ok {
+			n++
+		}
+	}
+	return n
 }
 
 // TestModelPickSwitchesTheChat: Enter sends the chosen model to the chat's
