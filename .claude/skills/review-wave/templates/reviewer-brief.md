@@ -1,8 +1,8 @@
-You are reviewing pull request #<pr> in the Snow repository (<owner/repo>).
+You are reviewing <branch name or PR #number> in Snow (<owner/repo>).
 
 - Reviewed SHA: <sha>
 - Worktree or checkout to read: <absolute path>
-- Diff: <absolute path to .context/reviews/pr-<pr>.diff>
+- Diff: <absolute path to .context/reviews/<artifact>.diff>
 - Linked issue: #<issue>
 
 ## Your focus

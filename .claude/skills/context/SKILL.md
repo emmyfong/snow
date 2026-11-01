@@ -31,6 +31,11 @@ startup, resume, clear, and after compaction.
 - Write facts, not narration. File paths, issue numbers, commands, and
   measured results beat descriptions.
 - Do not copy code into it. Point to the file and line.
+- Preserve user decisions, corrections, scope, unresolved choices, and verification
+  evidence. Date external findings and record the checkout revision.
+- Distinguish observed facts, proposals, and accepted decisions. A summary is not
+  authorization. Remove obsolete next steps when the user changes direction.
+- Record failed approaches only when they prevent useful work being repeated.
 
 ## Template
 

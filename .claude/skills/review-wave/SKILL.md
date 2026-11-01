@@ -10,15 +10,33 @@ one focus. You are the main reviewer: you verify, curate, and write one
 report. The change is either an epic branch before its PR (the usual case,
 from `issue-handler`) or an open PR.
 
-## 1. Ask the user
+## Environment and scope
 
-Use AskUserQuestion, one call, three questions:
+Use the active environment's question and delegation tools. Offer reviewer models
+that are actually available. Do not invent unavailable tools or model IDs. Honor review settings the
+user already supplied. For a branch without a PR, use its branch and SHA in the
+review brief and report instead of a nonexistent PR number.
 
-- The main reviewer model: this session's model, or another. If another, tell
-  the user to switch with `/model` and continue in that session.
-- The reviewer subagent model: `opus`, `sonnet`, or `haiku`. Recommend
-  `sonnet`.
-- The number of reviewers: 2, 3, or 4. Default 3.
+For documentation or skill changes, focus on instruction conflicts, user intent,
+references, tool compatibility, and scope. For prompt/context/tool-policy changes,
+inspect appropriate regression evidence, including clarification and recovery.
+Do not require paid live model runs for unrelated changes.
+
+## 1. Resolve review settings
+
+Reuse the user's settings from the current conversation or handoff. Record the
+main reviewer, subagent model, and reviewer count in the report. Ask only for
+missing choices, using the available question tool or a concise question in chat.
+A saved recommendation or an unanswered question is not a user selection.
+
+Recommend the current session as main reviewer and an available model for
+subagents. Explain any meaningful cost or capability tradeoff. Offer 2, 3, or 4
+reviewers with a recommendation suited to the change. Use the host's supported
+model-switch mechanism if the user selects a different main reviewer.
+
+If delegation or a selected model is unavailable, explain the limitation and
+agree on an available alternative. Do not silently substitute a model or describe
+a single-agent review as an independent review wave.
 
 ## 2. Collect the artifact
 
@@ -36,20 +54,24 @@ For an open PR:
 
 ```sh
 mkdir -p .context/reviews
-gh pr view <pr> --json number,title,body,headRefOid,baseRefName,files,closingIssuesReferences
+gh pr view <pr> --json number,title,body,headRefOid,baseRefName,files,state
 gh pr diff <pr> > .context/reviews/pr-<pr>.diff
 gh issue view <issue> --json title,body   # each linked issue
 ```
+
+For a merged PR, report its state and stop before launching reviewers.
+
+Fetch native closing-issue links with the GraphQL query in `.claude/skills/next-issue/SKILL.md`
+when needed; do not infer complete issue linkage from the PR body alone.
 
 Record the head SHA. Every finding refers to it. The change usually
 completes an epic and its sub-issues. Read the acceptance criteria of every
 one. Read the ADRs in `docs/decisions/` that the change
 touches.
 
-For a branch, run the local gate in `references/local-gate.md` now: lint
-for three OSes, and the touched packages' tests on Linux, with `-race`,
-and on Windows. Fix failures before the reviewers start. Reviewers read a
-branch that passes.
+Run the applicable checks in `references/local-gate.md` before review. Use its
+documentation checks for documentation-only changes. Report unavailable checks
+explicitly. Fix applicable failures before the reviewers start.
 
 Name the report `<branch-with-dashes>-<sha7>.md` for a branch and
 `pr-<n>-<sha7>.md` for a PR. If a report exists for this branch or PR in
@@ -58,17 +80,24 @@ Go to section 6 first.
 
 ## 3. Launch the reviewers
 
-Fill `templates/reviewer-brief.md` once per reviewer. Give each reviewer one
-focus, in this order:
+Fill `templates/reviewer-brief.md` once per reviewer. For code changes, distribute
+these concerns across the chosen reviewers:
 
 1. Correctness and concurrency.
 2. Cross-platform behavior and tests.
 3. API design and conformance with `AGENTS.md`.
-4. Security and failure handling (only with four reviewers).
+4. Security and failure handling where relevant.
 
-Launch all of them in one message, in parallel, with the Agent tool:
-`subagent_type: reviewer`, `model: <the chosen model>`, and the filled brief
-as the prompt. With two reviewers, give the second reviewer foci 2 and 3.
+For documentation and skills, assign user intent and instruction consistency to
+one reviewer, and workflow correctness, references, and tool compatibility to
+another. Additional reviewers can examine realistic use cases and scope coverage.
+Combine relevant concerns when there are fewer reviewers; do not drop a material
+concern solely because of reviewer count.
+
+Launch reviewers with the available delegation tool and the selected model. Give
+each the artifact, exact SHA, issue scope, and review brief. Require read-only work.
+If the host supports a reviewer role, use it; otherwise put those instructions in
+the task. Reviewers inspect the artifact independently before findings are curated.
 
 ## 4. Verify and curate
 
@@ -86,7 +115,7 @@ Reviewer findings are claims, not facts.
 ## 5. Write the report
 
 Fill `templates/report.md`. Save it to
-`.context/reviews/pr-<pr>-<sha7>.md`. Rules:
+the branch or PR path selected in section 2. Rules:
 
 - Human part first, then agent part.
 - Human part: short bullets, one table, a few ASCII diagrams, glossary last.

@@ -8,6 +8,62 @@ Design decisions live in `docs/decisions/` (local, not committed). Read the
 relevant ADR before you change a decided topic. Do not reopen a decision
 without the user.
 
+## Planning and collaboration
+
+Clarify goals, scope, and design before implementing ambiguous product work.
+Use the user's previous answers and inspect available project context first.
+Ask when an unresolved choice changes behavior, scope, cost, persistent data,
+permissions, compatibility, or a substantial design commitment. Explain the
+tradeoff and offer a recommendation. Handle routine details independently.
+
+State requirements, proposals, assumptions, and unresolved choices separately.
+Compare the smallest adequate approach with broader alternatives when it matters.
+Reuse existing components and justify new abstractions. Judge code by required
+behavior and maintainability, not a line count. Revisit the affected decision if
+new evidence invalidates the plan or materially expands scope.
+
+Keep the user informed about consequential findings. Continue independent work
+while a question is pending; leave dependent work pending. A request to explore
+or plan does not authorize implementation. Honor approval already given without
+asking for it again.
+
+## Shared skills
+
+Project skills live in `.claude/skills/`. All agents can read these Markdown
+instructions. Automatic discovery and slash commands depend on the agent host;
+if discovery is absent, open the applicable `SKILL.md` by path. Keep one shared
+copy rather than duplicate skills in agent-specific folders. Read only skills
+relevant to the current task and their needed references.
+
+- `plan-with-user`: clarify an idea and develop its scope and design.
+- `compose-issues`: turn agreed work into issues or revise existing issues.
+- `next-issue`: select ready work from current issues.
+- `issue-handler`: implement one agreed issue or epic in a worktree.
+- `review-wave`: review a branch or PR before publication.
+- `context`: save current working memory and handoffs.
+- `decision-record`: record an agreed architecture decision.
+- `tui`: design or change Snow's terminal interface.
+
+Use tools available in the active environment. A Claude-specific tool name in a
+skill is not a requirement to install a plugin or invent an unavailable tool.
+
+## Product and architecture status
+
+Snow's intended experience is its own workspace and interface backed by agents
+such as Claude Code and Codex, using supported account connections. The existing
+native agent loop remains implemented; its future priority is still open.
+Read accepted ADRs and current issue scope before changing either path. Surface
+conflicts with older decisions rather than silently treating a proposal as settled.
+
+State which runtime a capability supports. External runtimes own their model
+requests and active context. Snow controls its workspace and the tools it exposes.
+Prompt instructions alone do not enforce permissions. Show unavailable runtime
+telemetry as unavailable, and distinguish API cost estimates from account allowance.
+
+`docs/` and `.context/` are local and ignored by git. Shared rules belong here,
+shared workflows in `.claude/skills/`, and execution scope in GitHub Issues.
+A shared `DESIGN.md` is planned after the architecture discussion settles its scope.
+
 ## Code layout
 
 Go standard layout. No `src/`.
@@ -182,12 +238,10 @@ folder, without edits across the codebase.
 
 - Every commit belongs to the user: author, committer, and push all use the
   user's configured git identity and `gh` login. Never set or change them.
-- Commit messages carry no trailers that name an agent: no `Co-Authored-By`,
-  no `Generated with`. GitHub links them to accounts and lists the agent as a
-  contributor.
-- Credit the agent only in a PR description, as the plain last line
-  `Co-authored by Claude Code.` Not the trailer form `Name <email>`, because
-  the PR body becomes the squash commit message.
+- The user is the sole named author. Add no agent credit, co-author trailers,
+  or generated-by notices to commits or PR descriptions. PR descriptions can
+  become squash commit messages. Use the user's existing account for publication.
+- Do not rewrite published history or change account metadata to alter attribution.
 - Never force push. Never push to `main`. Never change git config.
 - Hooks enforce these rules. If a command is blocked, stop and tell the user.
 

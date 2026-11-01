@@ -29,6 +29,15 @@ bodies.
 - Never create an epic that exists. Never duplicate an open issue. Re-home the
   item into the existing epic instead.
 
+## Revise existing issues
+
+Preserve issue numbers and completed children. Show changes to scope, priority,
+acceptance criteria, and native links together. Replace contradictory requirements
+rather than stacking a new rescope note above them. Distinguish true blockers from
+optional UI or historical ordering. Honor structure or exact edits the user already
+approved; do not repeat approvals for the same scope. Check newly discovered
+consequential ambiguity with the user before dependent edits.
+
 ## 2. Draft the structure
 
 - **Group vertically.** An epic is one concern a user can name, for example
@@ -61,8 +70,9 @@ bodies.
 ## 3. Approve the structure
 
 Present one message: the epics, every sub-issue with its labels, the DAG
-as an ASCII diagram, and any re-homed or retitled items. End the turn. In the
-next turn, ask for approval with AskUserQuestion. Apply corrections and
+as an ASCII diagram, and any re-homed or retitled items. Ask for approval unless
+that structure is already authorized. Use the active environment's question tool
+or a concise question in chat. Apply corrections and
 present again when a grouping, priority, or arrow changes. Write no bodies
 before approval.
 
@@ -80,8 +90,8 @@ before approval.
 
 ## 5. Approve the bodies
 
-Give the user the folder path. Show epic bodies inline. Ask for approval with
-AskUserQuestion. Apply corrections. Create nothing before approval. If you find
+Give the user the folder path. Show epic bodies inline. Ask for approval through an available question tool or chat unless the bodies
+are already authorized. Apply corrections. Create nothing before approval. If you find
 an ambiguity after approval, ask again before you change a body.
 
 ## 6. Create
