@@ -112,13 +112,15 @@ Bodies go only through `--body-file` and titles only in single quotes. A
 double-quoted body loses backticks and `$` text.
 
 ```sh
-gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>.md \
+gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>-allocation.md \
   --label 'Priority: Medium' --label 'feature'
 ```
 
-After all issues exist, replace every `NEW-<key>` with `#<n>` in all drafts.
-Run `grep -rn 'NEW-' .context/compose/`. It must print nothing. Re-post the
-bodies that had placeholders:
+Use the temporary allocation body above when issue numbers are unresolved. After
+all numbers exist, replace every `NEW-<key>` with `#<n>` in the final bodies selected
+for publication. Check those exact body files for unresolved placeholders; none
+may remain. Keep draft IDs in the mapping and historical plans for recovery.
+Publish the complete bodies:
 
 ```sh
 gh issue edit <n> -R "$R" --body-file .context/compose/<key>.md

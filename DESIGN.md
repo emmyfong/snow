@@ -1,6 +1,6 @@
 # Snow: product and architecture
 
-Updated 2026-11-01. This document separates agreed product direction from the
+Updated 2026-11-02. This document separates agreed product direction from the
 current implementation and proposed designs. GitHub Issues define executable
 scope. A proposal here does not authorize implementation or promise a release.
 Contributor rules live in [AGENTS.md](AGENTS.md).
@@ -38,8 +38,9 @@ open. Closing a view must not silently leave that run consuming tokens.
 
 ## Current foundation
 
-This baseline describes code through PR #251. Profiles and local gateways are
-separate work in #229 / PR #253; they are not assumed complete here.
+The architecture inspection below covers code through PR #251. Profiles and
+local gateway startup subsequently merged in PR #253. They provide the foundation
+for the broader setup experience; they do not implement rich runtime-backed chat.
 
 - One Go binary runs a local server and a Bubble Tea TUI. No cgo.
 - One goroutine owns server state. Blocking I/O runs outside it (ADR 0007).
@@ -219,8 +220,9 @@ Useful questions count positively; fewer tokens with wrong work is a regression.
 1. Publish consistent guidance and repair contradictory issue scopes. Address
    daily-use reliability (#252, #219, #240, #249) alongside independent planning.
 2. Verify supported runtime/account paths. Prove one Snow chat integration with
-   visible lifecycle and recoverable session identity. Continue #229/#200 without
-   duplicating their work. Choose the first runtime from the evidence with the user.
+   visible lifecycle and recoverable session identity. Build on the merged #229
+   profile/gateway work and finish #200 without duplicating its completed tools.
+   Choose the first runtime from the evidence with the user.
 3. Establish usage and quality baselines. Add panes through #192. Connect planning,
    skills, memory, files and git to actual runtime capabilities in small slices.
 4. Prove long-session continuation and selected efficiency changes. Add explicit
