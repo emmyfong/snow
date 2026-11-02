@@ -24,11 +24,21 @@ type Config struct {
 	Theme      Theme      `toml:"theme"`
 	Sessions   Sessions   `toml:"sessions"`
 	Chat       Chat       `toml:"chat"`
+	Notify     Notify     `toml:"notify"`
 	// Providers holds the [provider.<name>] tables, by name. Nil means
 	// none.
 	Providers map[string]Endpoint `toml:"provider"`
 	// Agents holds the [agent.<name>] tables, by name. Nil means none.
 	Agents map[string]Agent `toml:"agent"`
+}
+
+// Notify sets which events show a desktop notification.
+type Notify struct {
+	// NeedsYou notifies when an agent starts to wait for the user: an
+	// approval, a question, or a Claude Code permission prompt.
+	NeedsYou bool `toml:"needs_you"`
+	// TurnEnd notifies when an agent finishes a turn.
+	TurnEnd bool `toml:"turn_end"`
 }
 
 // Chat sets how chat panes start.
@@ -103,6 +113,7 @@ func Defaults() Config {
 		Theme:      Theme{Name: "default"},
 		Sessions:   Sessions{Save: true, Lines: MaxSessionLines},
 		Chat:       Chat{Usage: true},
+		Notify:     Notify{NeedsYou: true, TurnEnd: true},
 	}
 }
 
@@ -173,6 +184,7 @@ func parse(data string) (Config, *Error) {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}
+	cfg.defaultProviders()
 	return cfg, nil
 }
 

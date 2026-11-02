@@ -4,5 +4,5 @@ package shell
 
 import "os/exec"
 
-// hideWindow does nothing outside Windows, where programs open no window.
-func hideWindow(*exec.Cmd) {}
+// HideWindow does nothing outside Windows, where programs open no window.
+func HideWindow(*exec.Cmd) {}

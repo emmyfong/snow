@@ -37,10 +37,11 @@ func TestParseClaude(t *testing.T) {
 func TestClaudeCommand(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("CLAUDE_CONFIG_DIR", dir)
-	oldPath, oldDistros := snowPath, claudeDistros
+	oldPath, oldDistros, oldProgram := snowPath, claudeDistros, claudeProgram
 	snowPath = func() (string, error) { return "/usr/local/bin/snow", nil }
 	claudeDistros = func() ([]shell.Profile, error) { return nil, nil }
-	t.Cleanup(func() { snowPath, claudeDistros = oldPath, oldDistros })
+	claudeProgram = func() (shell.Profile, bool) { return shell.Profile{}, false }
+	t.Cleanup(func() { snowPath, claudeDistros, claudeProgram = oldPath, oldDistros, oldProgram })
 	path := filepath.Join(dir, "settings.json")
 	mine := "{\n  \"model\": \"opus\"\n}\n"
 	if err := os.WriteFile(path, []byte(mine), 0o600); err != nil {
@@ -63,7 +64,9 @@ func TestClaudeCommand(t *testing.T) {
 	if out := snow("", "claude", "status"); !strings.Contains(out, "not set") {
 		t.Fatalf("status before setup: %q", out)
 	}
-	snow("y\n", "claude", "setup")
+	if out := snow("y\n", "claude", "setup"); !strings.Contains(out, "not on PATH") {
+		t.Fatalf("setup with no claude should say so: %q", out)
+	}
 	if out := snow("", "claude", "status"); !strings.Contains(out, "are set") {
 		t.Fatalf("status after setup: %q", out)
 	}

@@ -30,8 +30,9 @@ type state struct {
 	// defaultModel and defaultEffort go to every new chat. Empty Model
 	// means the client asks the user to choose before the first message.
 	defaultModel, defaultEffort string
-	models                      modelCache // provider model lists for the picker
-	hint                        string     // the hint the clients last heard
+	models                      modelCache      // provider model lists for the picker
+	hint                        string          // the hint the clients last heard
+	agentsSent                  []api.AgentInfo // the agent list the clients last heard
 }
 
 type session struct {
@@ -52,8 +53,9 @@ func newState(s *Server) *state {
 	return st
 }
 
-// createSession starts a session with one window and one pane in dir. An
-// empty name takes the lowest free number: "0", "1", ...
+// createSession starts a session with one window and one pane in dir: a
+// chat when the server runs chats, else a shell. An empty name takes the
+// lowest free number: "0", "1", ...
 func (st *state) createSession(name string, cols, rows int, dir string) (*session, error) {
 	if name == "" {
 		name = st.freeNumber()
@@ -65,7 +67,7 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 		cols, rows = defaultCols, defaultRows
 	}
 	sess := &session{name: name, lastUsed: time.Now(), cols: cols, rows: rows}
-	w, err := st.newWindow(sess, api.PaneTerminal, "", dir)
+	w, err := st.newWindow(sess, st.firstKind(), "", dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
 	}
@@ -74,6 +76,15 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 	st.save(sess)
 	st.srv.log.Info("session created", "session", name, "profile", w.name)
 	return sess, nil
+}
+
+// firstKind is the kind of the first pane of a session: a chat when the
+// server runs chats, else a shell.
+func (st *state) firstKind() string {
+	if st.srv.opts.Chat != nil {
+		return api.PaneChat
+	}
+	return api.PaneTerminal
 }
 
 func (st *state) freeNumber() string {
@@ -175,6 +186,7 @@ func (st *state) sessionsChanged() {
 	for c := range st.clients {
 		st.enqueue(c, list)
 	}
+	st.syncAgents()
 }
 
 // listMessage is the session list every client gets, and remembers the
@@ -211,12 +223,18 @@ func (st *state) listNotes() []string {
 	// A note holds file paths and errors; a control character in one would
 	// reach the client's terminal as an escape sequence.
 	for i, n := range notes {
-		notes[i] = strings.Map(func(r rune) rune {
-			if unicode.IsControl(r) {
-				return '?'
-			}
-			return r
-		}, n)
+		notes[i] = plain(n)
 	}
 	return notes
+}
+
+// plain replaces control characters, which would reach a client's terminal
+// as escape sequences, with ?.
+func plain(s string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '?'
+		}
+		return r
+	}, s)
 }

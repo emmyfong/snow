@@ -110,9 +110,9 @@ func TestGatewayStartingAsksAgain(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("a starting gateway scheduled no check")
 	}
-	before := listRequests(r)
+	before := modelListRequests(r)
 	m.Update(cmd())
-	if got := listRequests(r); got != before+1 {
+	if got := modelListRequests(r); got != before+1 {
 		t.Fatalf("list requests %d, want one more than %d", got, before)
 	}
 
@@ -126,8 +126,8 @@ func TestGatewayStartingAsksAgain(t *testing.T) {
 	}
 }
 
-// listRequests counts the model list requests the session sent.
-func listRequests(r *recorder) int {
+// modelListRequests counts the model list requests the session sent.
+func modelListRequests(r *recorder) int {
 	n := 0
 	for _, msg := range r.sent {
 		if _, ok := msg.(*api.ModelListRequest); ok {

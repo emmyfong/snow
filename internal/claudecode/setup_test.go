@@ -24,7 +24,7 @@ func TestClaudeSetupAsks(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer(no), &out); err != nil {
+		if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer(no), &out); err != nil {
 			t.Fatal(err)
 		}
 		if got, _ := os.ReadFile(path); string(got) != otherHooks {
@@ -43,7 +43,7 @@ func TestClaudeSetupAsks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer("y\n"), &out); err != nil {
+	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer("y\n"), &out); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -57,7 +57,7 @@ func TestClaudeSetupAsks(t *testing.T) {
 		t.Fatalf("mode %v, want the file's own 0640", fi.Mode().Perm())
 	}
 	out.Reset()
-	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer(""), &out); err != nil || !strings.Contains(out.String(), "already set") {
+	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer(""), &out); err != nil || !strings.Contains(out.String(), "already set") {
 		t.Fatalf("second setup: %v, %q", err, out.String())
 	}
 }
@@ -66,7 +66,7 @@ func TestClaudeSetupAsks(t *testing.T) {
 func TestClaudeSetupNoFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), ".claude", "settings.json")
 	var out bytes.Buffer
-	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer("yes\n"), &out); err != nil {
+	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer("yes\n"), &out); err != nil {
 		t.Fatal(err)
 	}
 	if got, err := os.ReadFile(path); err != nil || !strings.Contains(string(got), snowCmd) {
@@ -85,7 +85,7 @@ func TestClaudeSetupRefusesUnreadable(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer("y\n"), &out)
+	err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer("y\n"), &out)
 	if !errors.Is(err, ErrUnreadable) {
 		t.Fatalf("Setup() = %v, want ErrUnreadable", err)
 	}
@@ -101,7 +101,7 @@ func TestClaudeRemoveAsks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Remove(FileTarget{Path: path, Cmd: snowCmd}, answer("y\n"), &out); err != nil {
+	if err := Remove(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer("y\n"), &out); err != nil {
 		t.Fatal(err)
 	}
 	if got, _ := os.ReadFile(path); string(got) != otherHooks {
@@ -124,7 +124,7 @@ func TestReport(t *testing.T) {
 			t.Fatal(err)
 		}
 		var out bytes.Buffer
-		if err := Report(FileTarget{Path: path}, &out); err != nil || !strings.Contains(out.String(), tt.want) {
+		if err := Report(FileTarget{Path: path}, MCP{}, &out); err != nil || !strings.Contains(out.String(), tt.want) {
 			t.Errorf("Report(%.20q) = %q, %v; want %q", tt.body, out.String(), err, tt.want)
 		}
 	}
@@ -150,14 +150,14 @@ func TestWSLTarget(t *testing.T) {
 	if got, err := tgt.Read(); err != nil || got != nil {
 		t.Fatalf("Read() of no file = %q, %v; want nil", got, err)
 	}
-	if err := Setup(tgt, answer("y\n"), &bytes.Buffer{}); err != nil {
+	if err := Setup(tgt, MCP{}, answer("y\n"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	got, err := tgt.Read()
 	if err != nil || !strings.Contains(string(got), `'/mnt/c/snow/snow.exe' hook`) {
 		t.Fatalf("Read() after setup = %q, %v", got, err)
 	}
-	if err := Remove(tgt, answer("y\n"), &bytes.Buffer{}); err != nil {
+	if err := Remove(tgt, MCP{}, answer("y\n"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(home, ".claude", "settings.json.snow.bak")); !bytes.Equal(b, got) {
@@ -176,7 +176,7 @@ func TestClaudeSetupShowsDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
-	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, answer("n\n"), &out); err != nil {
+	if err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, answer("n\n"), &out); err != nil {
 		t.Fatal(err)
 	}
 	s := out.String()
@@ -208,7 +208,7 @@ func TestClaudeSetupFollowsSymlink(t *testing.T) {
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
-	if err := Setup(FileTarget{Path: link, Cmd: snowCmd}, answer("y\n"), &bytes.Buffer{}); err != nil {
+	if err := Setup(FileTarget{Path: link, Cmd: snowCmd}, MCP{}, answer("y\n"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if fi, err := os.Lstat(link); err != nil || fi.Mode()&os.ModeSymlink == 0 {
@@ -230,8 +230,8 @@ func TestClaudeSetupKeepsFirstBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	tgt := FileTarget{Path: path, Cmd: snowCmd}
-	for _, f := range []func(Target, *bufio.Reader, io.Writer) error{Setup, Remove, Setup} {
-		if err := f(tgt, answer("y\n"), &bytes.Buffer{}); err != nil {
+	for _, f := range []func(Target, MCP, *bufio.Reader, io.Writer) error{Setup, Remove, Setup} {
+		if err := f(tgt, MCP{}, answer("y\n"), &bytes.Buffer{}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -265,7 +265,7 @@ func TestClaudeSetupRefusesChangedFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(otherHooks), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	err := Setup(FileTarget{Path: path, Cmd: snowCmd}, bufio.NewReader(&changingReader{path: path}), &bytes.Buffer{})
+	err := Setup(FileTarget{Path: path, Cmd: snowCmd}, MCP{}, bufio.NewReader(&changingReader{path: path}), &bytes.Buffer{})
 	if !errors.Is(err, ErrChanged) {
 		t.Fatalf("Setup() = %v, want ErrChanged", err)
 	}
@@ -299,7 +299,7 @@ func TestWSLTargetSafeWrite(t *testing.T) {
 	if err := os.WriteFile(path, []byte(otherHooks), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := Setup(tgt, answer("y\n"), &bytes.Buffer{}); err != nil {
+	if err := Setup(tgt, MCP{}, answer("y\n"), &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
 	if fi, _ := os.Stat(path); fi.Mode().Perm() != 0o600 {
@@ -307,7 +307,7 @@ func TestWSLTargetSafeWrite(t *testing.T) {
 	}
 	before, _ := os.ReadFile(path)
 	cut = true
-	if err := Remove(tgt, answer("y\n"), &bytes.Buffer{}); err == nil {
+	if err := Remove(tgt, MCP{}, answer("y\n"), &bytes.Buffer{}); err == nil {
 		t.Fatal("Remove() = nil with its input cut short")
 	}
 	if after, _ := os.ReadFile(path); !bytes.Equal(after, before) {

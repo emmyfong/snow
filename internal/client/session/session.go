@@ -38,6 +38,7 @@ type Model struct {
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	sessions   []api.SessionInfo // the server's last session list
+	agents     []api.AgentInfo   // the server's last agent list
 	cols, rows int
 	prefixed   bool    // the prefix key was pressed; the next key is a command
 	prefixKey  tea.Key // the key that started the prefix, for send-prefix
@@ -144,12 +145,17 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.checkGateways()
 	case *api.ConversationList:
 		m.setConversationList(msg)
+		if p := m.own[msg.Pane]; p != nil {
+			p.Feed(msg)
+		}
 	case *api.AuthList:
 		return m.setAuthList(msg)
 	case *api.Login:
 		return m.loginDone(msg)
 	case *api.Logout:
 		return m.logoutDone(msg)
+	case *api.AgentList:
+		m.setAgents(msg)
 	case *api.SessionList:
 		m.sessions = msg.Sessions
 		if m.switcher != nil {
@@ -162,6 +168,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if msg.Code == api.CodeNotice {
+			return m.showNotice(msg.Message)
+		}
 		if cmd, ok := m.authError(msg.Message); ok {
 			return cmd
 		}

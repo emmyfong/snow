@@ -17,8 +17,8 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool, claudecode, gateway,
-                     later: skills, gate, editor, worktree
+                     convstore, agent, tool, claudecode, gateway, notify,
+                     mcp, worktree, later: skills, gate, editor
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -31,18 +31,24 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore, notify
    │           │                       │
    │           │                       ├──► agent ──► provider, convstore, tool ──► shell
    │           │                       │    (the server runs agents; agents never import server,
    │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
+   │           │                       ├──► worktree ──► shell  (a git worktree per coding
+   │           │                       │    agent: runs git, in the WSL distribution for a
+   │           │                       │    WSL folder; imports no other Snow package)
    ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
    │           │                       │    hooks and settings only, never its login)
+   ├──► mcp ──► pkg/api, transport     (snow mcp: the pane tools Claude Code
+   │           │                       │    calls, through the Snow socket)
    ├──► shell  (snow claude: the WSL distributions that have claude)
    ├──► gateway ──► shell, private, pkg/api  (a configured gateway: starts it,
    │                                          logs it, and stops only a tree
    │                                          Snow started)
+   ├──► notify ──► shell  (snow: desktop notifications, hidden on Windows)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
                │                       │    (provider never imports credential;

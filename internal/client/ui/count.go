@@ -15,6 +15,15 @@ func ShortCount(n int) string {
 	}
 }
 
+// Dollars shows a cost in US dollars to the cent; a cost below a cent
+// shows as "<$0.01".
+func Dollars(c float64) string {
+	if c > 0 && c < 0.005 {
+		return "<$0.01"
+	}
+	return fmt.Sprintf("$%.2f", c)
+}
+
 func trimZero(s string) string {
 	if len(s) > 2 && s[len(s)-2:] == ".0" {
 		return s[:len(s)-2]

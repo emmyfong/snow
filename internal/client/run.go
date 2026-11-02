@@ -100,8 +100,7 @@ func Run(opts Options) (Result, error) {
 		}
 	}
 	if !opts.Home {
-		send(&api.Attach{Session: opts.Session, Create: true, Dir: dir})
-		a.screen = a.newSession()
+		a.attachStart(opts.Session)
 	}
 	a.cols, a.rows = cols, rows
 	a.screen.SetSize(cols, rows)

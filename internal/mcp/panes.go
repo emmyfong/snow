@@ -1,0 +1,216 @@
+package mcp
+
+import (
+	"context"
+	"fmt"
+	"net"
+	"strconv"
+	"time"
+
+	"github.com/emmyfong/snow/internal/transport"
+	"github.com/emmyfong/snow/pkg/api"
+)
+
+// Panes is the Snow side of the tools. The agent's pane is fixed when snow
+// mcp starts, so every call reaches only the panes of that pane's session.
+type Panes interface {
+	// List returns the terminal panes of the caller's session.
+	List(ctx context.Context) (*api.Panes, error)
+	// Read returns a plain-text copy of pane, with scrollback lines above
+	// the screen.
+	Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error)
+	// Send pastes text into pane, then presses keys in order.
+	Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error)
+	// Wait returns when pane prints text, or after quiet with no output.
+	// A zero timeout takes the server's default.
+	Wait(ctx context.Context, pane int, text string, quiet, timeout time.Duration, includeExisting bool) (*api.WaitFor, error)
+}
+
+// snow calls the Snow server over its socket. It opens one connection per
+// call: the server keeps no client for an idle agent, and a restarted
+// server costs nothing.
+type snow struct {
+	socket string
+	caller int
+	// dial replaces transport.DialTimeout for tests.
+	dial func() (net.Conn, error)
+}
+
+// dialTimeout bounds reaching the server; handshakeTimeout bounds the
+// opening exchange. A tool call itself may take minutes, so the connection
+// has no deadline after the handshake.
+const (
+	dialTimeout      = 5 * time.Second
+	handshakeTimeout = 10 * time.Second
+)
+
+// List implements Panes.
+func (c *snow) List(ctx context.Context) (*api.Panes, error) {
+	var out *api.Panes
+	err := c.call(ctx, &api.PanesRequest{Caller: c.caller}, func(m api.Message) bool {
+		p, ok := m.(*api.Panes)
+		if ok {
+			out = p
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Read implements Panes.
+func (c *snow) Read(ctx context.Context, pane, scrollback int) (*api.ReadPane, error) {
+	var out *api.ReadPane
+	err := c.call(ctx, &api.ReadPaneRequest{Caller: c.caller, Pane: pane, Scrollback: scrollback}, func(m api.Message) bool {
+		r, ok := m.(*api.ReadPane)
+		if ok {
+			out = r
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Send implements Panes.
+func (c *snow) Send(ctx context.Context, pane int, text string, keys []api.Key) (*api.SendKeys, error) {
+	var out *api.SendKeys
+	err := c.call(ctx, &api.SendKeysRequest{Caller: c.caller, Pane: pane, Text: text, Keys: keys}, func(m api.Message) bool {
+		r, ok := m.(*api.SendKeys)
+		if ok {
+			out = r
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Wait implements Panes.
+func (c *snow) Wait(ctx context.Context, pane int, text string, quiet, timeout time.Duration, includeExisting bool) (*api.WaitFor, error) {
+	var out *api.WaitFor
+	req := &api.WaitForRequest{
+		Caller: c.caller, Pane: pane, Text: text,
+		QuietMS: int(quiet / time.Millisecond), TimeoutMS: int(timeout / time.Millisecond),
+		IncludeExisting: includeExisting,
+	}
+	err := c.call(ctx, req, func(m api.Message) bool {
+		r, ok := m.(*api.WaitFor)
+		if ok {
+			out = r
+		}
+		return ok
+	})
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// call sends req over a new connection and waits for the reply match
+// accepts, or for an Error. Other messages, such as the session lists every
+// connection gets, are skipped.
+func (c *snow) call(ctx context.Context, req api.Message, match func(api.Message) bool) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	raw, err := c.connect()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = raw.Close() }() // the socket is done either way
+	conn := api.NewConn(raw)
+	if err := raw.SetDeadline(time.Now().Add(handshakeTimeout)); err != nil {
+		return fmt.Errorf("snow mcp: set a deadline on the Snow socket: %w", err)
+	}
+	if _, err := api.ClientHandshake(conn, api.Hello{
+		ClientVersion: "snow mcp",
+		Protocol:      api.ProtocolVersion,
+		Cols:          80,
+		Rows:          24,
+	}); err != nil {
+		return fmt.Errorf("snow mcp: open a connection to Snow: %w", err)
+	}
+	// Read before sending: the server may send the session list first, and
+	// a socket that is not drained would stop its writer.
+	done := make(chan error, 1)
+	go func() {
+		for {
+			m, err := conn.Receive()
+			if err != nil {
+				done <- err
+				return
+			}
+			if e, ok := m.(*api.Error); ok {
+				done <- fmt.Errorf("snow: %s: %s", e.Code, e.Message)
+				return
+			}
+			if match(m) {
+				done <- nil
+				return
+			}
+		}
+	}()
+	if err := conn.Send(req); err != nil {
+		_ = raw.Close()
+		return fmt.Errorf("snow mcp: send %T to Snow: %w", req, err)
+	}
+	if err := raw.SetDeadline(time.Time{}); err != nil {
+		// Snow may answer and hang up before the deadline is cleared. A
+		// closed socket then fails this call, but the answer is already in.
+		select {
+		case err := <-done:
+			if err != nil {
+				return fmt.Errorf("snow mcp: %w", err)
+			}
+			return nil
+		default:
+		}
+		_ = raw.Close()
+		return fmt.Errorf("snow mcp: clear the Snow socket deadline: %w", err)
+	}
+	select {
+	case err := <-done:
+		if err != nil {
+			return fmt.Errorf("snow mcp: %w", err)
+		}
+		return nil
+	case <-ctx.Done():
+		// Closing the connection ends the receive goroutine. Its send
+		// never blocks, because done holds one value.
+		_ = raw.Close()
+		return ctx.Err()
+	}
+}
+
+// dialSnow builds the Snow client from the pane's environment. It returns
+// why no tools run when the caller is not in a Snow pane.
+func dialSnow(pane, socket string) (Panes, string) {
+	switch {
+	case pane == "" || socket == "":
+		return nil, "snow mcp runs inside a Snow pane, and this is not one: SNOW_PANE and SNOW_SOCKET are not set. Start Claude Code in a Snow pane."
+	}
+	caller, err := strconv.Atoi(pane)
+	if err != nil || caller < 1 {
+		return nil, fmt.Sprintf("snow mcp: SNOW_PANE %q is not a pane number; start Claude Code in a Snow pane.", pane)
+	}
+	return &snow{socket: socket, caller: caller, dial: nil}, ""
+}
+
+// connect opens the socket.
+func (c *snow) connect() (net.Conn, error) {
+	if c.dial != nil {
+		return c.dial()
+	}
+	raw, err := transport.DialTimeout(c.socket, dialTimeout)
+	if err != nil {
+		return nil, fmt.Errorf("snow mcp: reach Snow at %s: %w", c.socket, err)
+	}
+	return raw, nil
+}

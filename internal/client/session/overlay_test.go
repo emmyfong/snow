@@ -43,6 +43,7 @@ func conversations(all bool) *api.ConversationList {
 // Esc sends nothing.
 func TestResumePickerFlow(t *testing.T) {
 	m, r := chatScreen(t, 120, 30)
+	r.sent = nil // the empty chat's own list request is not the picker's
 	slash(m, "/resume")
 	if reqs := sentOf[*api.ConversationListRequest](r); len(reqs) != 1 || reqs[0].Pane != 2 || reqs[0].All {
 		t.Fatalf("requests %+v", reqs)

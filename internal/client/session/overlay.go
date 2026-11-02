@@ -12,17 +12,19 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// overlay is a popup over a chat pane that takes the keys and the clicks
-// until it closes: the mode picker, the resume picker, and the help panel.
-// A feature gives it three functions, so the session holds one field for
-// all of them.
+// overlay is a popup that takes the keys and the clicks until it closes:
+// the mode picker, the resume picker, and the help panel over a chat pane,
+// and the agents board. A feature gives it three functions, so the session
+// holds one field for all of them.
 type overlay struct {
 	popup
-	pane  int // the chat pane it serves; it closes with the pane
+	pane  int // the chat pane it serves, or 0; it closes with the pane
 	key   func(k tea.Key) picker.Result
 	click func(th theme.Theme, cols, rows, x, y int) picker.Result
 	// done runs once, when key or click returns anything but Open.
 	done func(r picker.Result) tea.Cmd
+	// agents, when set, takes each new agent list from the server.
+	agents func([]api.AgentInfo)
 }
 
 // conversationPane is an own pane that has a conversation to resume into

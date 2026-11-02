@@ -1,16 +1,23 @@
 package main
 
 import (
+	"context"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/credential"
+	"github.com/emmyfong/snow/internal/provider"
+	"github.com/emmyfong/snow/internal/signin"
 )
 
 // writeUserConfig writes body to the config file in the test's home,
@@ -176,5 +183,63 @@ base_url = "`+keyServer.URL+`"
 	code, out, errOut = auth(t, goodKey+"\n", "login", "omniroute")
 	if code == 0 || !strings.Contains(errOut, "takes no key") || strings.Contains(out+errOut, "Paste the key") {
 		t.Fatalf("login omniroute: code %d, out %q, err %q; want a refusal before the prompt", code, out, errOut)
+	}
+}
+
+// TestProviderAPIFromConfig: api in a [provider.<name>] table picks the
+// path a turn goes to: the Responses API by default, Chat Completions for
+// api = "chat" (#225).
+func TestProviderAPIFromConfig(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		api  string // the line in the table
+		path string
+	}{
+		{"default", "", "/v1/responses"},
+		{"responses", `api = "responses"`, "/v1/responses"},
+		{"chat", `api = "chat"`, "/v1/chat/completions"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := authTest(t)
+			var mu sync.Mutex
+			var paths []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				paths = append(paths, r.URL.Path)
+				mu.Unlock()
+				w.Header().Set("Content-Type", "text/event-stream")
+				_, _ = io.WriteString(w, "data: [DONE]\n\n")
+			}))
+			t.Cleanup(srv.Close)
+			path := writeUserConfig(t, dir, "[provider.gw]\nbase_url = \""+srv.URL+"/v1\"\nno_key = true\n"+tt.api+"\n")
+			cfg, err := config.Load(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			ps, err := providers(cfg, path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			reg, err := signin.Registry(ps, credential.New(t.TempDir(), nil))
+			if err != nil {
+				t.Fatal(err)
+			}
+			p, ok := reg.Get("gw")
+			if !ok {
+				t.Fatal("no provider gw")
+			}
+			s, err := p.Stream(context.Background(), provider.Request{Model: "m"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			// The stream ends at once; only the path matters here.
+			_, _ = s.Next()
+			_ = s.Close()
+			mu.Lock()
+			defer mu.Unlock()
+			if len(paths) != 1 || paths[0] != tt.path {
+				t.Fatalf("request paths %v, want [%s]", paths, tt.path)
+			}
+		})
 	}
 }

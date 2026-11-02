@@ -70,18 +70,9 @@ func toItems(m provider.Message, reasoning bool) ([]responses.ResponseInputItemU
 		case *provider.Text:
 			items = append(items, responses.ResponseInputItemParamOfMessage(b.Text, role))
 		case *provider.ToolUse:
-			args := string(b.Input)
-			if args == "" {
-				args = "{}"
-			}
-			items = append(items, responses.ResponseInputItemParamOfFunctionCall(args, b.ID, b.Name))
+			items = append(items, responses.ResponseInputItemParamOfFunctionCall(orEmptyObject(string(b.Input)), b.ID, b.Name))
 		case *provider.ToolResult:
-			out := b.Content
-			if b.IsError {
-				// The API has no error flag on a tool result.
-				out = "Error: " + out
-			}
-			item := responses.ResponseInputItemParamOfFunctionCallOutput(out)
+			item := responses.ResponseInputItemParamOfFunctionCallOutput(toolOutput(b))
 			item.OfFunctionCallOutput.CallID = sdk.String(b.ToolUseID)
 			items = append(items, item)
 		case *provider.Thinking:
@@ -138,12 +129,9 @@ func reasoningItem(ref, summary string, reasoning bool) (responses.ResponseInput
 // toTool turns a tool definition into a function tool. strict is off: it
 // needs every property required, which Snow's schemas do not promise.
 func toTool(t provider.ToolDef) (responses.ToolUnionParam, error) {
-	schema := map[string]any{"type": "object", "properties": map[string]any{}}
-	if len(t.Schema) > 0 {
-		schema = map[string]any{}
-		if err := json.Unmarshal(t.Schema, &schema); err != nil {
-			return responses.ToolUnionParam{}, fmt.Errorf("schema: %w", err)
-		}
+	schema, err := toolSchema(t)
+	if err != nil {
+		return responses.ToolUnionParam{}, err
 	}
 	tool := responses.ToolParamOfFunction(t.Name, schema, false)
 	if t.Description != "" {

@@ -27,8 +27,13 @@ func CheckProgram(exe string) error {
 // commands with bash, or with Git Bash on Windows, so the path uses
 // forward slashes.
 func HookCommand(exe string) string {
-	exe = strings.ReplaceAll(exe, `\`, "/")
-	return "'" + strings.ReplaceAll(exe, "'", `'\''`) + "' hook"
+	return shellQuote(strings.ReplaceAll(exe, `\`, "/")) + " hook"
+}
+
+// quote puts s in single quotes for a shell, with an embedded quote closed,
+// escaped, and opened again.
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // IsSnowCommand reports whether cmd runs snow hook: a program named snow or

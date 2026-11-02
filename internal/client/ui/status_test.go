@@ -82,6 +82,33 @@ func TestStatusBarKeepsMessageWhenNarrow(t *testing.T) {
 	}
 }
 
+// TestStatusBarKeepsNotice: a notice stays when the line is short, as a
+// message does, and a notice wider than the line is cut. It is not drawn in
+// the error color (#238).
+func TestStatusBarKeepsNotice(t *testing.T) {
+	th := theme.Default()
+	tabs := []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}
+	const notice = "Resumed with the approval mode ask. Type /mode auto to stop the questions."
+	for _, width := range []int{20, 40, 80, 100} {
+		o := StatusOptions{Width: width, Session: "api", Tabs: tabs, Right: "sh 14:02", Notice: notice}
+		out := StatusBar(th, o)
+		if w := ansi.StringWidth(out); w != width {
+			t.Fatalf("width %d: bar is %d cells", width, w)
+		}
+		got := ansi.Strip(out)
+		if want := ansi.Truncate(notice, max(width-2, 0), "…"); width < 70 && !strings.Contains(got, want) {
+			t.Fatalf("width %d: bar %q lacks the cut notice %q", width, got, want)
+		}
+		if width >= 80 && !strings.Contains(got, "Type /mode auto") {
+			t.Fatalf("width %d: bar %q dropped the notice", width, got)
+		}
+		o.Notice, o.Message = "", notice
+		if out == StatusBar(th, o) {
+			t.Fatalf("width %d: a notice is drawn like an error", width)
+		}
+	}
+}
+
 func TestStatusBarUsesThemeGlyphs(t *testing.T) {
 	th := theme.Default()
 	th.Glyphs.ActiveTab, th.Glyphs.SessionLeft, th.Glyphs.SessionRight = "!", "<", ">"

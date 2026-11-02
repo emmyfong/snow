@@ -46,6 +46,8 @@ func TestAttachValidate(t *testing.T) {
 		{"numbered", Attach{Create: true}, true},
 		{"escape sequence", Attach{Session: "x\x1b[2J", Create: true}, false},
 		{"too long", Attach{Session: strings.Repeat("a", MaxSessionName+1), Create: true}, false},
+		{"with a pane", Attach{Session: "api", Pane: 3}, true},
+		{"negative pane", Attach{Session: "api", Pane: -1}, false},
 	}
 	for _, tt := range tests {
 		err := tt.a.Validate()

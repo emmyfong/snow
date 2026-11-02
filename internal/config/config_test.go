@@ -50,6 +50,9 @@ func TestDefaults(t *testing.T) {
 	if !d.Sessions.Save || d.Sessions.Lines != 2000 {
 		t.Errorf("Sessions = %+v, want saving on with 2000 lines", d.Sessions)
 	}
+	if !d.Notify.NeedsYou || !d.Notify.TurnEnd {
+		t.Errorf("Notify = %+v, want both events on", d.Notify)
+	}
 	if err := d.validate(); err != nil {
 		t.Errorf("Defaults().validate() = %v, want nil", err)
 	}
@@ -130,6 +133,16 @@ name = "light"
 				c.Keys.Prefix = "C-a"
 				c.Theme.Name = "light"
 			},
+		},
+		{
+			name: "notifications off by event",
+			body: "[notify]\nneeds_you = false\n",
+			want: func(c *Config) { c.Notify.NeedsYou = false },
+		},
+		{
+			name: "notifications off",
+			body: "[notify]\nneeds_you = false\nturn_end = false\n",
+			want: func(c *Config) { c.Notify = Notify{} },
 		},
 	}
 	for _, tt := range tests {

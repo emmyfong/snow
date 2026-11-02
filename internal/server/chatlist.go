@@ -3,6 +3,7 @@ package server
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/pkg/api"
@@ -72,6 +73,10 @@ func (s *Server) conversations(c *client, req *api.ConversationListRequest) {
 		s.refuse(c, api.CodeCommandFailed, err)
 		return
 	}
+	// A chat with no message yet is not a conversation to pick up: every new
+	// session and /new makes one. A file that cannot be read stays, so the
+	// user can see it.
+	entries = slices.DeleteFunc(entries, func(e convstore.Entry) bool { return e.Err == nil && e.Turns == 0 })
 	list := &api.ConversationList{Pane: req.Pane, All: req.All, Items: make([]api.ConversationInfo, 0, len(entries))}
 	size := 0
 	for _, e := range entries {

@@ -217,6 +217,9 @@ func TestListConversations(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := w.Append(&convstore.User{At: time.Now(), Text: "an older question"}); err != nil {
+		t.Fatal(err)
+	}
 	other := w.ID()
 	_ = w.Close()
 

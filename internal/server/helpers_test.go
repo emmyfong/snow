@@ -29,6 +29,14 @@ func newTestServer(t testing.TB) *Server {
 	return s
 }
 
+// shellProfile is the profile name testOptions gives the test shell.
+func shellProfile() string {
+	if runtime.GOOS == "windows" {
+		return "cmd"
+	}
+	return "sh"
+}
+
 func prompt() string {
 	if runtime.GOOS == "windows" {
 		return ">"

@@ -114,8 +114,8 @@ func TestTokens(t *testing.T) {
 		}
 	}
 	for c, want := range map[float64]string{0: "$0.00", 0.001: "<$0.01", 0.42: "$0.42", 12.345: "$12.35"} {
-		if got := dollars(c); got != want {
-			t.Errorf("dollars(%v) = %q, want %q", c, got, want)
+		if got := ui.Dollars(c); got != want {
+			t.Errorf("Dollars(%v) = %q, want %q", c, got, want)
 		}
 	}
 }

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"net"
 
@@ -28,7 +29,14 @@ type client struct {
 	// wantsModels says c asked for the model list and hears when a fetch
 	// finishes.
 	wantsModels bool
-	dropped     bool
+	// focused is set while c's terminal reports focus. The server skips a
+	// desktop notification for the pane such a client shows.
+	focused bool
+	// tools is canceled when the connection ends, so a wait that has no
+	// reader stops at once.
+	tools   context.Context
+	stop    context.CancelFunc
+	dropped bool
 }
 
 // serveConn handles one connection until it closes.
@@ -46,6 +54,8 @@ func (s *Server) serveConn(raw net.Conn) {
 		return
 	}
 	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}}
+	c.tools, c.stop = context.WithCancel(context.Background())
+	defer c.stop()
 	// A bad size is not fatal: the client gets the default size until it
 	// sends a valid Resize.
 	if err := hello.Validate(); err == nil {
@@ -59,6 +69,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		// A client that has not attached yet, such as the home page, needs
 		// the sessions to choose from.
 		st.enqueue(c, st.listMessage())
+		st.enqueue(c, &api.AgentList{Agents: st.agents()})
 	}) {
 		_ = raw.Close()
 		return
@@ -96,7 +107,9 @@ func (s *Server) read(c *client) {
 				s.reply(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 				continue
 			}
-			s.call(func(st *state) { st.attach(c, m, snap) })
+			chats := s.resumeChats(snap)
+			s.call(func(st *state) { st.attach(c, m, snap, chats) })
+			s.closeUnused(chats)
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:
@@ -129,6 +142,16 @@ func (s *Server) read(c *client) {
 			s.call(func(st *state) { st.renameRequest(c, m) })
 		case *api.AgentState:
 			s.call(func(st *state) { st.agentState(m) })
+		case *api.ClientFocus:
+			s.call(func(st *state) { st.clientFocus(c, m) })
+		case *api.PanesRequest:
+			s.panes(c, m)
+		case *api.ReadPaneRequest:
+			s.readPane(c, m)
+		case *api.SendKeysRequest:
+			s.sendKeys(c, m)
+		case *api.WaitForRequest:
+			s.waitFor(c, m)
 		case *api.Shutdown:
 			s.shutdown()
 		}

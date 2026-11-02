@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/emmyfong/snow/internal/notify"
 	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/term"
 )
@@ -54,6 +55,9 @@ type Options struct {
 	// KeyVars names the variables that hold provider keys, such as
 	// OPENAI_API_KEY. Agent profile panes do not inherit them.
 	KeyVars []string
+	// Notify shows a desktop notification when an agent needs the user or
+	// finishes a turn. Nil means no notifications, as in most tests.
+	Notify *notify.Notifier
 
 	saveDelay, busyEvery, endDelay time.Duration // tests change them; 0 means the defaults
 
@@ -73,6 +77,12 @@ type Options struct {
 	// afterHookWait runs f when an agent pane has had defaultHookWait to
 	// send its first hook; nil means a timer. Tests fire it by hand.
 	afterHookWait func(f func())
+	// afterDriven runs f when a pane's driven mark has lasted drivenFor;
+	// nil means a timer. Tests fire it by hand.
+	afterDriven func(f func())
+	// afterWait runs when a wait_for call stops; nil in production. Tests
+	// use it to see that a wait ended.
+	afterWait func()
 }
 
 func (o Options) logger() *slog.Logger {

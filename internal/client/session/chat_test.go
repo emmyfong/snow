@@ -265,3 +265,50 @@ func TestSessionChatMouse(t *testing.T) {
 		}
 	})
 }
+
+func listRequests(r *recorder) (n int, last *api.ConversationListRequest) {
+	for _, m := range r.sent {
+		if q, ok := m.(*api.ConversationListRequest); ok {
+			n, last = n+1, q
+		}
+	}
+	return n, last
+}
+
+// TestEmptyChatListsConversations: an empty chat asks the server for its
+// recent conversations, shows the reply, and Enter resumes the selected one.
+func TestEmptyChatListsConversations(t *testing.T) {
+	m, r := chatScreen(t, 100, 30)
+	if n, q := listRequests(r); n != 1 || q.Pane != 2 || q.All {
+		t.Fatalf("%d list requests, last %+v; want one for pane 2", n, q)
+	}
+	m.Update(&api.ConversationList{Pane: 2, Items: []api.ConversationInfo{
+		{ID: "c9", Title: "tidy the layout code", Model: "anthropic/claude-sonnet-5-5", LastActivity: fixedClock(), Turns: 3},
+	}})
+	if s := ansi.Strip(content(m)); !strings.Contains(s, "tidy the layout code") {
+		t.Fatalf("the list did not show:\n%s", s)
+	}
+	m.Update(press(tea.KeyEnter, 0, ""))
+	if in := lastChatInput(r); in == nil || in.Kind != api.ChatInputResume || in.Conversation != "c9" {
+		t.Fatalf("Enter sent %+v, want a resume of c9", in)
+	}
+	m.Update(press('a', tea.ModCtrl, ""))
+	if n, q := listRequests(r); n != 2 || !q.All {
+		t.Fatalf("Ctrl+a: %d list requests, last %+v; want a second one for every folder", n, q)
+	}
+}
+
+// TestEmptyChatListFollowsNewConversation: a new empty conversation in the
+// pane asks for the list again, and the same one does not.
+func TestEmptyChatListFollowsNewConversation(t *testing.T) {
+	m, r := chatScreen(t, 100, 30)
+	before, _ := listRequests(r)
+	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c2", Conversation: "c2", Model: "anthropic/claude-sonnet-5-5", State: api.ChatStateIdle})
+	if n, _ := listRequests(r); n != before+1 {
+		t.Fatalf("%d list requests after /new, want %d", n, before+1)
+	}
+	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c2", Conversation: "c2", Model: "m", State: api.ChatStateIdle})
+	if n, _ := listRequests(r); n != before+1 {
+		t.Fatalf("%d list requests after the same conversation again, want %d", n, before+1)
+	}
+}

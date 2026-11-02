@@ -114,7 +114,7 @@ func claudeInDistro(wsl, distro string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), claudeProbeTimeout)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, wsl, "-d", distro, "-e", "sh", "-c", claudeWhich)
-	hideWindow(cmd)
+	HideWindow(cmd)
 	out, err := cmd.Output()
 	if _, exited := errors.AsType[*exec.ExitError](err); exited && ctx.Err() == nil {
 		return foundClaude(string(out)), nil
@@ -180,6 +180,11 @@ func FindClaude(host Profile) (Profile, bool) {
 // The error names each distribution that gave no answer, so the user knows
 // it was left out.
 func ClaudeDistros() ([]Profile, error) { return claudeDistros(currentSystem()) }
+
+// ClaudeProgram returns this machine's Claude Code program as a command to
+// run, or false when claude is not on PATH. On Windows the npm install runs
+// through cmd.exe.
+func ClaudeProgram() (Profile, bool) { return nativeClaude(currentSystem()) }
 
 func claudeDistros(sys system) ([]Profile, error) {
 	if sys.goos != "windows" {

@@ -24,6 +24,8 @@ func (c chatPane) Feed(msg api.Message) {
 		c.Snapshot(msg)
 	case *api.ChatEvent:
 		c.Event(msg)
+	case *api.ConversationList:
+		c.Conversations(msg)
 	}
 }
 

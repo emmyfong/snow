@@ -65,8 +65,10 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
 		pick = m.maybeStartChat(msg.Pane)
+		m.sendListRequest(msg.Pane)
 	case *api.ChatEvent:
 		m.feed(api.PaneChat, msg.Pane, msg)
+		m.sendListRequest(msg.Pane)
 	case ownTickMsg:
 		m.ownTicking = false
 		for _, p := range m.own {
@@ -183,6 +185,21 @@ func (m *Model) ownKey(k tea.Key) tea.Cmd {
 // the model picker.
 type asker interface{ Asked() string }
 
+// lister is an own pane that asks for the server's list of past
+// conversations, such as an empty chat. It returns the request to send, once.
+type lister interface {
+	ListRequest() *api.ConversationListRequest
+}
+
+// sendListRequest sends the list request pane id has pending, if any.
+func (m *Model) sendListRequest(id int) {
+	if l, ok := m.own[id].(lister); ok {
+		if r := l.ListRequest(); r != nil {
+			m.send(r)
+		}
+	}
+}
+
 // providerReady is an own pane that says whether any provider has a key,
 // such as a chat's empty state.
 type providerReady interface{ SetProviderReady(bool) }
@@ -193,6 +210,7 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 	if msg != nil {
 		m.send(msg)
 	}
+	m.sendListRequest(id)
 	if a, ok := p.(asker); ok {
 		switch a.Asked() {
 		case chat.AskPickModel:

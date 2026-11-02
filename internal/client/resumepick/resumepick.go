@@ -5,15 +5,12 @@ package resumepick
 
 import (
 	"fmt"
-	"path"
-	"strconv"
-	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/convrow"
 	"github.com/emmyfong/snow/internal/client/listpick"
 	"github.com/emmyfong/snow/internal/client/picker"
-	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
@@ -78,7 +75,7 @@ func (m *Model) SetList(l *api.ConversationList) {
 	sel := m.list.Selected()
 	rows := make([][]string, len(l.Items))
 	for i, it := range l.Items {
-		rows[i] = m.row(it)
+		rows[i] = convrow.Columns(it, m.now(), m.all)
 	}
 	m.list.SetRows(rows)
 	m.list.Select(max(sel, 0))
@@ -86,50 +83,6 @@ func (m *Model) SetList(l *api.ConversationList) {
 		m.list.SetNote("No saved conversations.")
 	} else {
 		m.list.SetNote("No saved conversations in this folder. Ctrl+a shows every folder.")
-	}
-}
-
-// row is the columns of one conversation: title, model, folder (in the
-// every-folder list), age, turns, and whether a pane shows it.
-func (m *Model) row(it api.ConversationInfo) []string {
-	name := it.Title
-	switch {
-	case it.Err != "":
-		name = "(cannot read this file)"
-	case name == "":
-		name = "(no messages yet)"
-	}
-	cols := []string{name, it.Model}
-	if m.all {
-		cols = append(cols, folderName(it.Folder))
-	}
-	turns := strconv.Itoa(it.Turns) + " turns"
-	if it.Turns == 1 {
-		turns = "1 turn"
-	}
-	open := ""
-	if it.Open {
-		open = "open"
-	}
-	cols = append(cols, sessionlist.Ago(max(m.now().Sub(it.LastActivity), 0)), turns, open)
-	// The text comes from files the user may not have written.
-	for i, c := range cols {
-		cols[i] = ui.PlainLine(c)
-	}
-	return cols
-}
-
-// folderName is the last part of a folder path, as Linux, macOS, WSL, or
-// Windows writes it, or "-" for no folder.
-func folderName(folder string) string {
-	s := strings.TrimRight(strings.ReplaceAll(folder, `\`, "/"), "/")
-	switch {
-	case s != "":
-		return path.Base(s)
-	case folder != "":
-		return "/"
-	default:
-		return "-"
 	}
 }
 

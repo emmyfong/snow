@@ -31,6 +31,8 @@ func TestDefaultBindings(t *testing.T) {
 		{"M-Left", "resize-left-5"}, {"M-Right", "resize-right-5"}, {"M-Up", "resize-up-5"}, {"M-Down", "resize-down-5"},
 		{"d", "detach"},
 		{"s", "sessions"},
+		{"w", "choose-agent"},
+		{"i", "inbox"},
 		{":", "command-prompt"},
 		{"[", "copy-mode"},
 		{"C-b", "send-prefix"},
@@ -292,5 +294,20 @@ func TestNewChatKeepsItsAction(t *testing.T) {
 	}
 	if ks := Default().KeysOf("new-chat"); len(ks) != 0 {
 		t.Fatalf("new-chat has default keys %q, want none", ks)
+	}
+}
+
+// TestChooseAgentKey: Ctrl+b w opens the agents board and Ctrl+b i the
+// needs-you inbox, and which-key lists both.
+func TestChooseAgentKey(t *testing.T) {
+	tab := Default()
+	if a, ok := tab.Action("w"); !ok || a.Name != "choose-agent" {
+		t.Fatalf("w = %q %v, want choose-agent", a.Name, ok)
+	}
+	if a, ok := tab.Action("i"); !ok || a.Name != "inbox" {
+		t.Fatalf("i = %q %v, want inbox", a.Name, ok)
+	}
+	if got := entryFor(t, tab.Entries(), "Agents").Keys; got != "w/i" {
+		t.Fatalf("which-key lists the agent views on %q, want w/i", got)
 	}
 }

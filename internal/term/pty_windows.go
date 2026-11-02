@@ -62,8 +62,5 @@ func (w *windowsPTY) Resize(cols, rows int) error {
 // Wait uses xpty.WaitProcess because exec.Cmd.Wait never returns for ConPTY
 // processes.
 func (w *windowsPTY) Wait(ctx context.Context) error {
-	if err := xpty.WaitProcess(ctx, w.cmd); err != nil {
-		return fmt.Errorf("wait for %s: %w", w.cmd.Path, err)
-	}
-	return nil
+	return exitErr(xpty.WaitProcess(ctx, w.cmd))
 }

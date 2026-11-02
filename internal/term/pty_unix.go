@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -107,13 +106,4 @@ func (u *unixPTY) Wait(ctx context.Context) error {
 		func() error { return exitErr(u.cmd.Wait()) },
 		func() { _ = syscall.Kill(-u.cmd.Process.Pid, syscall.SIGKILL) },
 		killWait)
-}
-
-// exitErr treats a program's non-zero exit status as a normal exit.
-func exitErr(err error) error {
-	var exit *exec.ExitError
-	if err == nil || errors.As(err, &exit) {
-		return nil
-	}
-	return fmt.Errorf("wait: %w", err)
 }

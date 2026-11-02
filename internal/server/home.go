@@ -7,6 +7,10 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
+func (st *state) clientFocus(c *client, m *api.ClientFocus) {
+	c.focused = m.Focused
+}
+
 // detach takes c out of its session without closing the connection, as the
 // home page needs. The session keeps running.
 func (st *state) detach(c *client) {
@@ -23,6 +27,7 @@ func (st *state) detach(c *client) {
 // sent, so a later attach sends every screen in full.
 func unattach(c *client) {
 	c.session = ""
+	c.focused = false
 	c.last, c.seen = nil, nil
 }
 

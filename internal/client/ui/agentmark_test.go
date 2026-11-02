@@ -146,3 +146,19 @@ func TestListAlert(t *testing.T) {
 		t.Fatalf("narrow list %q", out)
 	}
 }
+
+// TestStatusBarDrivenMark: a window an agent types into shows the driven
+// glyph after its name, in every built-in theme.
+func TestStatusBarDrivenMark(t *testing.T) {
+	for _, th := range theme.Builtin() {
+		t.Run(strings.ReplaceAll(th.Name, " ", "_"), func(t *testing.T) {
+			out := StatusBar(th, StatusOptions{Width: 40, Session: "api", Tabs: []Tab{
+				{Index: 1, Name: "dev", Driven: true},
+			}})
+			golden.RequireEqual(t, out)
+			if want := "dev " + th.Glyphs.Driven; !strings.Contains(ansi.Strip(out), want) {
+				t.Errorf("%s: status %q lacks %q", th.Name, ansi.Strip(out), want)
+			}
+		})
+	}
+}

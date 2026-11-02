@@ -103,6 +103,24 @@ not say when you answer its question, so a key or a paste you send to a
 pane that needs you shows it as working until its next hook. Snow's own chat panes
 show the same marks. A terminal with no colors shows `-`, `~`, and `!`.
 
+`Ctrl+b w` opens the agents board: every agent in the session, with its
+folder, state, and wait time. `Ctrl+b i` opens the needs-you inbox: every
+agent in every session that waits for you, oldest first. Enter jumps to the
+selected agent's pane, and you answer there.
+
+### Desktop notifications
+
+Snow shows a desktop notification when an agent starts to need you or
+finishes a turn. It skips the notification when the agent's pane is the
+focused pane of a Snow window whose terminal has focus, because you already
+see the result. Turn the events off in `[notify]`:
+
+```toml
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
+```
+
 ### Agent profiles
 
 An agent profile runs a program in a pane with its own environment, for
@@ -164,8 +182,9 @@ only by you) where the system has none. `ANTHROPIC_API_KEY` or
 
 ### Other providers
 
-Snow also connects to any service that speaks the OpenAI Responses API,
-such as OmniRoute, OpenRouter, or a local server. Add a
+Snow also connects to any service that speaks the OpenAI Responses or
+Chat Completions API, such as OmniRoute, OpenRouter, Ollama, or a local
+server. Add a
 `[provider.<name>]` table to `~/.snow/config.toml`, then restart the
 Snow server so it reads the file: stop it and run `snow`. Your sessions
 come back as saved sessions. On Linux and macOS:
@@ -189,6 +208,11 @@ start = ["npx", "omniroute"]   # run this when the address answers nothing
 [provider.openrouter]
 base_url = "https://openrouter.ai/api/v1"
 # models = ["qwen/qwen3-coder:free"]   # only for a service with no model list
+
+[provider.ollama]
+base_url = "http://localhost:11434/v1"
+no_key = true
+api = "chat"                   # the service serves Chat Completions only
 ```
 
 Its models show in `/model` as `<name>/<model>`, for example
@@ -199,6 +223,12 @@ instead of a cost. A service with no model list cannot check a key, so
 Snow saves it unchecked and says so. Over `http://` the key goes in clear
 text, so use `http://` only for a service on your own machine or network.
 
+A service speaks the Responses API unless its table says otherwise.
+Ollama, LM Studio, llama.cpp, vLLM, and some gateways serve only the Chat
+Completions API. For such a service, set `api = "chat"`, and Snow sends
+each turn to `<base_url>/chat/completions`. Snow does not try the other
+API when one fails: the table says which one the service speaks. On the
+`chat` API Snow sends no reasoning effort and shows no reasoning.
 #### Starting a gateway
 
 With `start`, Snow runs the program when the server starts and the address
@@ -256,6 +286,8 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
 | `s` | Switch to another session from a list |
+| `w` | Agents board: every agent in this session |
+| `i` | Needs-you inbox: every agent that waits for you |
 | `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `theme` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
@@ -366,11 +398,16 @@ model = ""            # "provider/model"; empty: the default of the first
 effort = ""           # for example "high"; empty: the provider's choice
 usage = true          # false hides the context gauge and the cost
 
+[notify]
+needs_you = true      # false: no notification when an agent waits
+turn_end = true       # false: no notification when a turn ends
+
 # [provider.omniroute]                  # a service that speaks the OpenAI API;
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
 # start = ["npx", "omniroute"]          # run when the address answers nothing
+# api = "responses"                     # or "chat", for a Chat Completions service
 
 # [agent.claude-free]                   # a program for a pane, with its own
 # title = "Claude Code (free)"          # environment; see "Agent profiles"
@@ -384,7 +421,7 @@ Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),
 `resize-left-5` and the others (by 5), `copy-mode`, `sessions`,
-`command-prompt`, `detach`, `send-prefix`.
+`choose-agent`, `inbox`, `command-prompt`, `detach`, `send-prefix`.
 
 A mistake in the file stops Snow with the line and the setting at fault.
 `/theme` on the home page, or `theme` in `Ctrl+b :`, changes `[theme] name`

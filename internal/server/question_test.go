@@ -27,23 +27,36 @@ func askReply(id string) providertest.Reply {
 	}}
 }
 
+// attachChat attaches c to a new session "work" in folder dir and returns
+// the ID of the chat the session starts with, once c has its snapshot.
+func attachChat(t *testing.T, c *apitest.Client, dir string) int {
+	t.Helper()
+	c.Send(&api.Attach{Session: "work", Create: true, Dir: dir})
+	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
+	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
+	return id
+}
+
 // chatInFolder starts a server with replies and the built-in tools, and
 // opens a chat in folder dir in session "work".
 func chatInFolder(t *testing.T, dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
 	t.Helper()
+	return chatInFolderOpts(t, nil, dir, replies...)
+}
+
+// chatInFolderOpts is chatInFolder with change applied to the server's
+// options first, for tests that turn an option on.
+func chatInFolderOpts(t *testing.T, change func(*Options), dir string, replies ...providertest.Reply) (*Server, *convstore.Store, *apitest.Client, int) {
+	t.Helper()
 	opts, _, store := chatOptions(t, replies...)
 	opts.Chat.Tools = tool.Builtin()
+	if change != nil {
+		change(&opts)
+	}
 	s := New(opts)
 	t.Cleanup(s.Close)
 	c := connect(t, s, 100, 30)
-	c.Send(&api.Attach{Session: "work", Create: true, Dir: dir})
-	l := nextLayout(t, c, func(*api.Layout) bool { return true })
-	c.Send(&api.Command{Op: api.OpSplit, Target: shownPanes(l)[0].ID, Args: map[string]string{
-		api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat, api.ArgFolder: dir,
-	}})
-	id := chatIn(nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 }))
-	c.WaitChat(id, func(*api.ChatSnapshot) bool { return true })
-	return s, store, c, id
+	return s, store, c, attachChat(t, c, dir)
 }
 
 // askingChat starts a server whose model asks a question, opens a chat in

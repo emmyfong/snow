@@ -31,6 +31,7 @@ type Client struct {
 	incoming chan received
 	rows     map[int]string
 	chats    map[int]*api.ChatSnapshot // pane ID → rebuilt chat
+	agents   *api.AgentList            // the last agent list
 
 	// Updates counts PaneUpdates received; LastLen is the number of rows
 	// in the most recent one.
@@ -122,6 +123,8 @@ func (c *Client) Next(timeout time.Duration) (api.Message, error) {
 			if s, ok := c.chats[m.Pane]; ok {
 				s.Apply(m)
 			}
+		case *api.AgentList:
+			c.agents = m
 		}
 		return r.m, r.err
 	case <-time.After(timeout):
@@ -263,4 +266,60 @@ func (r *recorder) bytes() []byte {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return bytes.Clone(r.buf.Bytes())
+}
+
+// Reply reads c until a message of type T or an Error arrives, and returns
+// whichever came first; other messages, such as the session lists every
+// connection gets, are skipped. It fails the test after Wait.
+func Reply[T api.Message](c *Client) (T, *api.Error) {
+	c.t.Helper()
+	var zero T
+	deadline := time.Now().Add(Wait)
+	for time.Now().Before(deadline) {
+		m, err := c.Next(time.Second)
+		if errors.Is(err, ErrTimeout) {
+			continue
+		}
+		if err != nil {
+			c.t.Fatalf("waiting for %T: %v", zero, err)
+		}
+		switch m := m.(type) {
+		case T:
+			return m, nil
+		case *api.Error:
+			return zero, m
+		}
+	}
+	c.t.Fatalf("no %T in %v", zero, Wait)
+	return zero, nil
+}
+
+// Agents returns the last agent list, or nil before the first.
+func (c *Client) Agents() []api.AgentInfo {
+	if c.agents == nil {
+		return nil
+	}
+	return c.agents.Agents
+}
+
+// WaitAgents reads messages until ok reports true for the last agent
+// list, and returns that list. It asks ok about the list it already has
+// first, then about each new one in order.
+func (c *Client) WaitAgents(ok func([]api.AgentInfo) bool) []api.AgentInfo {
+	c.t.Helper()
+	if c.agents != nil && ok(c.agents.Agents) {
+		return c.agents.Agents
+	}
+	deadline := time.Now().Add(Wait)
+	for time.Now().Before(deadline) {
+		m, err := c.Next(100 * time.Millisecond)
+		if err != nil && !errors.Is(err, ErrTimeout) {
+			c.t.Fatalf("waiting for an agent list: %v", err)
+		}
+		if l, is := m.(*api.AgentList); is && ok(l.Agents) {
+			return l.Agents
+		}
+	}
+	c.t.Fatalf("no matching agent list; last: %+v", c.Agents())
+	return nil
 }

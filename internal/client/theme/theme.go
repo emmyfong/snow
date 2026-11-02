@@ -75,6 +75,9 @@ type Glyphs struct {
 	// the status bar while an agent in it waits for a task, runs a turn,
 	// or waits for the user. One cell each.
 	AgentIdle, AgentWorking, AgentNeedsYou string
+	// Driven follows a window's name while an agent types into one of its
+	// panes. One cell.
+	Driven string
 }
 
 // Default returns the default theme, Frost.
@@ -95,6 +98,7 @@ func defaultGlyphs() Glyphs {
 		Mask:    "•",
 		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
 		AgentIdle: "○", AgentWorking: "◐", AgentNeedsYou: "●",
+		Driven: "✎",
 	}
 }
 
