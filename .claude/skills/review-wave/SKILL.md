@@ -29,6 +29,16 @@ main reviewer, subagent model, and reviewer count in the report. Ask only for
 missing choices, using the available question tool or a concise question in chat.
 A saved recommendation or an unanswered question is not a user selection.
 
+Keep review preferences separate from model IDs. The user changes providers, so
+discover the current host's delegation capabilities and available models before
+resolving reviewers. A previous model choice is reusable only if it is available
+through the current environment and still matches the user's intended account
+and usage. Do not install or switch providers to reproduce an old review setup.
+Prefer a current-provider option when recommending reviewers. Ask about a model
+only when a meaningful choice remains; do not require a permanent model preference.
+If delegation is absent, explain the available review approach and its independence
+limits. Do not invent an equivalent reviewer or claim a review wave ran.
+
 Recommend the current session as main reviewer and an available model for
 subagents. Explain any meaningful cost or capability tradeoff. Offer 2, 3, or 4
 reviewers with a recommendation suited to the change. Use the host's supported
