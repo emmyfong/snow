@@ -79,7 +79,8 @@ packages as that work. Parallel work in one package causes merge conflicts.
 
 ## 4. Offer
 
-Ask the user with AskUserQuestion. Offer the top three. Each option has:
+Ask through the available question tool or chat. Offer up to three ready choices.
+If the user already selected the work, retain that choice. Each option has:
 
 - Label: `#<n> <short title>` and its priority, for example
   `#12 Shell in a pane (High)`.

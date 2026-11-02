@@ -100,10 +100,13 @@ Work one sub-issue at a time, in the approved order.
   go vet ./internal/<pkg>/...
   go test ./internal/<pkg>/...
   ```
+  For documentation-only work, use the documentation checks in
+  `review-wave/references/local-gate.md`; Go checks are not applicable.
 - Update `CONTEXT.md` when a sub-issue is done.
 - Investigate unexplained failures systematically. Use a debugging skill if one
   is available; do not require an absent plugin. Repeated attempts should add evidence.
-- Scope grows: stop and ask the user. Put new work in a new sub-issue or a new
+- Scope grows: pause the affected work and ask about the consequential change.
+  Continue independent authorized work. Put new scope in an agreed sub-issue or
   epic, not silently in this PR.
 
 ## 5. Review the branch

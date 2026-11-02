@@ -147,7 +147,7 @@ old checklist at the top of the agent part.
 
 ## 7. Fix, then post
 
-For a branch: show the user the report and ask, with AskUserQuestion, which
+For a branch: show the user the report and ask through the available question tool or chat which
 findings to fix. The `issue-handler` session fixes them, each with a test
 where behavior changes, runs the local gate again, then opens the PR. Do not
 open the PR or say it is ready while a gate check fails. After the PR exists, offer to post

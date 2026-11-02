@@ -96,7 +96,17 @@ an ambiguity after approval, ask again before you change a body.
 
 ## 6. Create
 
-Order: sub-issues, then placeholder substitution, then epics, then links.
+Re-read existing issues and active PRs before applying approved edits. Preserve
+intervening changes instead of replacing them with stale drafts. Record the mapping
+from draft IDs to issue numbers and the completed operations so an interrupted
+publication can resume without duplicate issues.
+
+Allocate issue numbers before publishing bodies with cross-references. For new
+issues that refer to each other, create each with its approved title/labels and a
+short temporary body stating that the approved description is being linked. Once
+all numbers exist, substitute every placeholder and publish the complete approved
+bodies. Then apply parent and blocker links. Never leave temporary bodies as the
+reported finished result.
 
 Bodies go only through `--body-file` and titles only in single quotes. A
 double-quoted body loses backticks and `$` text.
@@ -114,7 +124,8 @@ bodies that had placeholders:
 gh issue edit <n> -R "$R" --body-file .context/compose/<key>.md
 ```
 
-Then create the epics the same way, with `--label epic` added. Then link:
+Allocate epics with `--label epic` as part of the same mapping. After all complete
+bodies are published, link:
 
 ```sh
 CHILD_ID=$(gh api "repos/$R/issues/<child>" --jq .id)
@@ -124,6 +135,8 @@ gh api -X POST "repos/$R/issues/<later>/dependencies/blocked_by" -F issue_id="$B
 ```
 
 Every arrow in the DAG becomes a blocked-by link. State it in the body too.
+Remove obsolete blockers only when that removal was approved. Preserve closed
+children and verify the final native links, not only the rendered issue body.
 
 Fix labels later with `gh issue edit <n> -R "$R" --add-label '<label>'`. A
 needed label that does not exist is a question for the user. Never create a
@@ -144,4 +157,6 @@ file if not.
 
 One message: the epics with numbers and priorities, the DAG with real
 numbers, the labels applied, and the counts of created and retitled issues.
-Every epic is ready for `issue-handler`.
+Identify which epics are ready for `issue-handler`, which are blocked, and which
+remain parked or require an unresolved product decision. Publication does not
+authorize implementation.
