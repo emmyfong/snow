@@ -14,6 +14,10 @@ Read relevant project guidance, existing issues, and accepted decisions. Reuse
 answers already supplied. Distinguish the user's requirements from your proposals
 and assumptions. Explain contradictions that affect the plan.
 
+For architecture work, read the relevant sections of DESIGN.md. Distinguish
+existing behavior from intended product behavior and untested proposals. Identify
+the component that can enforce each promise, especially for external runtimes.
+
 Frame the user problem and a concrete example of success. Ask about the ambiguity
 that most affects the next decision. Explain the consequence of the choice and
 offer a recommendation when evidence supports one. Do not ask the user to supply

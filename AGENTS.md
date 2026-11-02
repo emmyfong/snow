@@ -42,6 +42,7 @@ relevant to the current task and their needed references.
 - `review-wave`: review a branch or PR before publication.
 - `context`: save current working memory and handoffs.
 - `decision-record`: record an agreed architecture decision.
+- `evaluate-context`: evaluate context policies by task quality and total usage.
 - `tui`: design or change Snow's terminal interface.
 
 Use tools available in the active environment. A Claude-specific tool name in a
@@ -49,9 +50,11 @@ skill is not a requirement to install a plugin or invent an unavailable tool.
 
 ## Product and architecture status
 
-Snow's intended experience is its own workspace and interface backed by agents
-such as Claude Code and Codex, using supported account connections. The existing
-native agent loop remains implemented; its future priority is still open.
+Snow's primary direction is its own workspace and interface backed by runtimes
+such as Claude Code, Codex, and OpenCode, using supported account connections.
+Snow sends the user's task and selected context and supplies shared tools. The
+runtime owns its agent loop and model requests. The existing direct-API agent
+loop is secondary; no decision has been made to remove it.
 Read accepted ADRs and current issue scope before changing either path. Surface
 conflicts with older decisions rather than silently treating a proposal as settled.
 
@@ -60,9 +63,16 @@ requests and active context. Snow controls its workspace and the tools it expose
 Prompt instructions alone do not enforce permissions. Show unavailable runtime
 telemetry as unavailable, and distinguish API cost estimates from account allowance.
 
+Evaluate context changes by task quality and total usage, including preparation,
+coordination, and rework. Preserve the user's original request and agreed decisions.
+Do not assume JSON prompts save tokens, rewrite every prompt with another model,
+or promise control over an external runtime's caching. Measure before adopting a
+context policy. Keep unresolved requirements explicit.
+
 `docs/` and `.context/` are local and ignored by git. Shared rules belong here,
 shared workflows in `.claude/skills/`, and execution scope in GitHub Issues.
-A shared `DESIGN.md` is planned after the architecture discussion settles its scope.
+Read [DESIGN.md](DESIGN.md) for shared product direction, current architecture,
+proposed boundaries, and open decisions. Its proposals do not authorize work.
 
 ## Code layout
 

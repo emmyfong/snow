@@ -1,6 +1,7 @@
 ---
 name: tui
-description: Build or change Snow's terminal UI in internal/client: views, panes, borders, status bar, home page, pickers, menus, popups, themes, or any layout. Covers the theme-token and pure-component rules, the component catalog, the visual review gate (goldens and Freeze screenshots), and terminal compatibility on Windows Terminal, conhost, and WSL. Do not use for server, PTY, protocol, or storage work with no rendered effect.
+description: >-
+  Build or change Snow's terminal UI in internal/client: views, panes, borders, status bar, home page, pickers, menus, popups, themes, or any layout. Covers the theme-token and pure-component rules, the component catalog, the visual review gate (goldens and Freeze screenshots), and terminal compatibility on Windows Terminal, conhost, and WSL. Do not use for server, PTY, protocol, or storage work with no rendered effect.
 ---
 
 # Snow TUI
@@ -50,6 +51,11 @@ internal/client/
 
 ## Rules
 
+- **Beginner discoverability.** Use DESIGN.md's cockpit journey. Check whether a
+  new user can find the relevant action without knowing a shortcut. Show running,
+  waiting, stopping, saved, and unavailable states accurately. Do not label a run
+  stopped solely because its pane vanished. The minimal-chrome rule below remains;
+  propose a change through the relevant design issue if it prevents a usable flow.
 - **Theme tokens only.** A view never contains a literal color, border glyph,
   icon, or spacing value. Read them from the resolved theme (`th.Resolve()`).
   A new visual value is a new token in `theme`, with a default.
@@ -145,7 +151,7 @@ not be used).
 Run for every change with a rendered effect.
 
 1. **Goldens.** Add or update `teatest` golden tests for each changed state at
-   `80x24` and `120x40`. Update goldens with `go test ./internal/client/... -update`
+   `80x24` and `120x40`. Update goldens with `go test <touched-packages> -update`
    only after you have looked at the new output.
 2. **Screenshots.** Render each changed golden to PNG with Freeze
    (`go install github.com/charmbracelet/freeze@latest`) into
@@ -186,5 +192,5 @@ Snow runs inside another terminal. Test against these:
 ## Verification
 
 ```sh
-go test ./internal/client/...
+go test <touched-packages>
 ```
