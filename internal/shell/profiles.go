@@ -30,6 +30,10 @@ const (
 	// KindClaude runs Claude Code, natively or, when Distro is set, inside
 	// a WSL distribution. It is an agent profile: no folder hook.
 	KindClaude
+	// KindCommand runs a program the user names, such as the command of
+	// an agent profile in config.toml, with its arguments as they are: no
+	// folder hook, and no Snow additions.
+	KindCommand
 )
 
 // Profile is one shell Snow can start in a pane.
@@ -57,15 +61,18 @@ func Find(profiles []Profile, name string) (Profile, bool) {
 	return Profile{}, false
 }
 
+// IsShell reports whether p runs a shell that can run command lines.
+func (p Profile) IsShell() bool { return p.Kind != KindClaude && p.Kind != KindCommand }
+
 // HostShell returns the shell that commands for a pane running p go
-// through: p itself for a shell, and for a Claude Code profile the WSL
-// profile of its distribution, or the first shell on this machine.
+// through: p itself for a shell, and for a Claude Code or command profile
+// the WSL profile of its distribution, or the first shell on this machine.
 func HostShell(profiles []Profile, p Profile) (Profile, bool) {
-	if !p.IsAgent() {
+	if p.IsShell() {
 		return p, true
 	}
 	for _, s := range profiles {
-		if s.IsAgent() {
+		if !s.IsShell() {
 			continue
 		}
 		if p.Distro == "" && s.Kind != KindWSL || p.Distro != "" && s.Kind == KindWSL && s.Distro == p.Distro {

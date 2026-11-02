@@ -28,6 +28,8 @@ type Config struct {
 	// Providers holds the [provider.<name>] tables, by name. Nil means
 	// none.
 	Providers map[string]Endpoint `toml:"provider"`
+	// Agents holds the [agent.<name>] tables, by name. Nil means none.
+	Agents map[string]Agent `toml:"agent"`
 }
 
 // Notify sets which events show a desktop notification.
@@ -157,9 +159,9 @@ func parse(data string) (Config, *Error) {
 		if errors.As(err, &pe) {
 			return Config{}, &Error{Line: pe.Position.Line, Key: pe.LastKey, Msg: pe.Message, Err: err}
 		}
-		// Type mismatches arrive as plain errors whose text already names
-		// the line and the key.
-		return Config{}, &Error{Msg: err.Error(), Err: err}
+		// Type mismatches arrive as plain errors whose text names the line
+		// and the key.
+		return Config{}, typeError(err)
 	}
 	if keys := md.Undecoded(); len(keys) > 0 {
 		k := keys[0]
@@ -175,6 +177,10 @@ func parse(data string) (Config, *Error) {
 		return Config{}, verr
 	}
 	if verr, path := cfg.validateProviders(); verr != nil {
+		verr.Line = keyLine(data, path)
+		return Config{}, verr
+	}
+	if verr, path := cfg.validateAgents(); verr != nil {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}

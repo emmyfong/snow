@@ -17,6 +17,7 @@ import (
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/notify"
 	"github.com/emmyfong/snow/internal/server"
+	"github.com/emmyfong/snow/internal/signin"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
@@ -111,17 +112,20 @@ func nested() error {
 }
 
 // loadConfig reads ~/.snow/config.toml. A missing file gives the defaults;
-// a bad one is reported with its line and key. Key bindings and provider
-// names are checked too, so their mistakes stop snow before any server
-// starts.
+// a bad one is reported with its line and key. Key bindings, provider
+// names, and agent profiles are checked too, so their mistakes stop snow
+// before any server starts.
 func loadConfig(stderr io.Writer) (config.Config, bool) {
 	path, err := config.DefaultPath()
 	if err == nil {
 		var cfg config.Config
 		if cfg, err = config.Load(path); err == nil {
 			if err = checkKeys(path, cfg); err == nil {
-				if _, err = providers(cfg, path); err == nil {
-					return cfg, true
+				var ps []signin.Provider
+				if ps, err = providers(cfg, path); err == nil {
+					if _, _, err = agentProfiles(cfg, path, ps); err == nil {
+						return cfg, true
+					}
 				}
 			}
 		}
@@ -195,14 +199,29 @@ func serve(stderr io.Writer) int {
 	if err != nil {
 		log.Warn("chat panes are off", "err", err)
 	}
+	agents, err := agentOptions(cfg)
+	if err != nil {
+		log.Warn("agent profiles", "err", err)
+	}
+	// A gateway starts in the background, so a slow one never holds the
+	// server. Stop ends only the trees Snow started.
+	gateways := startGateways(cfg, log)
+	if gateways != nil {
+		defer gateways.Stop()
+		if chat != nil {
+			chat.ProviderStatuses = withGatewayStatuses(chat.ProviderStatuses, gateways)
+		}
+	}
 	// The notifier starts one helper per event; a kind the config turns off
 	// starts none.
 	desktop := notify.New(notify.Options{NeedsYou: cfg.Notify.NeedsYou, TurnEnd: cfg.Notify.TurnEnd, Log: log})
-	if err := server.Run(ctx, server.Options{
+	opts := server.Options{
 		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default, Chat: chat,
 		Notify: desktop,
-	}, path); err != nil {
+	}
+	opts.Agents, opts.Secrets, opts.KeyVars = agents.profiles, agents.secrets, agents.keyVars
+	if err := server.Run(ctx, opts, path); err != nil {
 		log.Error("server stopped", "err", err)
 		_, _ = fmt.Fprintln(stderr, "snow:", err)
 		return 1

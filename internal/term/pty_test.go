@@ -1,6 +1,9 @@
 package term
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestWithTerm(t *testing.T) {
 	t.Setenv("TERM", "tmux-256color")
@@ -15,7 +18,7 @@ func TestWithTerm(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := withTerm(tt.env)
+			got := withTerm(tt.env, nil)
 			// exec.Cmd keeps the last value of a duplicated key.
 			last := ""
 			for _, kv := range got {
@@ -27,5 +30,20 @@ func TestWithTerm(t *testing.T) {
 				t.Fatalf("effective TERM %q, want %q", last, tt.want)
 			}
 		})
+	}
+}
+
+// TestWithTermHides: a hidden variable is left out of the inherited
+// environment, and an addition can set it again.
+func TestWithTermHides(t *testing.T) {
+	t.Setenv("SNOW_TEST_HIDDEN", "inherited")
+	for _, kv := range withTerm(nil, []string{"SNOW_TEST_HIDDEN"}) {
+		if strings.HasPrefix(kv, "SNOW_TEST_HIDDEN=") {
+			t.Fatalf("hidden variable kept: %q", kv)
+		}
+	}
+	got := withTerm([]string{"SNOW_TEST_HIDDEN=set"}, []string{"SNOW_TEST_HIDDEN"})
+	if got[len(got)-1] != "SNOW_TEST_HIDDEN=set" {
+		t.Fatalf("addition lost: %q", got[len(got)-1])
 	}
 }

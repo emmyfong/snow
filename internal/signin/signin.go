@@ -30,6 +30,9 @@ type Provider struct {
 	// NoKey marks a provider that takes no key, such as a local server. It
 	// counts as connected.
 	NoKey bool
+	// Token marks a secret that only agent profiles use, such as a
+	// gateway's token: it has no models, and Snow cannot check it.
+	Token bool
 	check func(ctx context.Context, key string) error
 	open  func(keys provider.KeySource) provider.Provider
 }
@@ -88,6 +91,9 @@ func openaiOpts(urls BaseURLs) []openai.Option {
 func Registry(ps []Provider, keys provider.KeySource) (*provider.Registry, error) {
 	reg := provider.NewRegistry()
 	for _, p := range ps {
+		if p.open == nil {
+			continue // a token has no models
+		}
 		if err := reg.Register(p.open(keys)); err != nil {
 			return nil, fmt.Errorf("connect %s: %w", p.Name, err)
 		}
@@ -125,14 +131,17 @@ const UncheckedText = "The service has no model list, so Snow could not check th
 // overload) saves nothing either and says so. A service with no model list
 // cannot check a key: it is saved, and Result.Unchecked says so.
 func (p Provider) Login(ctx context.Context, s Store, k credential.Key) (Result, error) {
-	if p.check == nil {
+	if p.check == nil && !p.Token {
 		return Result{}, fmt.Errorf("%w %q", ErrUnknownProvider, p.Name)
 	}
 	if p.NoKey {
 		return Result{}, fmt.Errorf("%s: %w; its config table has no_key = true", p.Title, ErrNoKeyNeeded)
 	}
-	err := p.check(ctx, k.Reveal())
-	unchecked := errors.Is(err, openai.ErrKeyNotChecked)
+	var err error
+	if p.check != nil {
+		err = p.check(ctx, k.Reveal())
+	}
+	unchecked := p.Token || errors.Is(err, openai.ErrKeyNotChecked)
 	if err != nil && !unchecked {
 		var pe *provider.Error
 		if errors.As(err, &pe) && pe.Kind == provider.KindBadKey {

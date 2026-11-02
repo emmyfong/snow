@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"slices"
 	"strings"
@@ -21,6 +22,11 @@ type Endpoint struct {
 	// NoKey marks an endpoint that takes no key, such as a local server:
 	// requests go without one.
 	NoKey bool `toml:"no_key"`
+	// Start is the program and arguments Snow runs when BaseURL answers
+	// nothing, for example ["npx", "omniroute"]. Empty means Snow never
+	// starts it. Snow stops the process tree it started when the server
+	// exits. Start runs a command from this file, so keep the file yours.
+	Start []string `toml:"start"`
 	// API is the API the service speaks: APIResponses or APIChat. Load
 	// fills in APIResponses when the file leaves it out. Snow never tries
 	// the other one by itself.
@@ -78,8 +84,34 @@ func (c Config) validateProviders() (*Error, []string) {
 					[]string{"provider", name, "models"}
 			}
 		}
+		if len(e.Start) > 0 {
+			if strings.TrimSpace(e.Start[0]) == "" {
+				return &Error{Key: key + ".start", Msg: `must name a program, for example ["npx", "omniroute"]`},
+					[]string{"provider", name, "start"}
+			}
+			if !loopbackURL(e.BaseURL) {
+				return &Error{Key: key + ".start",
+						Msg: fmt.Sprintf("runs a program on this machine, so base_url must name localhost, 127.0.0.1, or ::1, got %q", e.BaseURL)},
+					[]string{"provider", name, "start"}
+			}
+		}
 	}
 	return nil, nil
+}
+
+// loopbackURL reports whether s names this machine. baseURL has already
+// checked that s parses.
+func loopbackURL(s string) bool {
+	u, err := url.Parse(s)
+	if err != nil {
+		return false
+	}
+	host := u.Hostname()
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // providerName says what is wrong with a provider's name, or "". The name

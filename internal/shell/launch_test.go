@@ -70,6 +70,9 @@ func TestLaunch(t *testing.T) {
 		{"other shells start as login shells without a hook",
 			Profile{Kind: KindOther, Path: "/usr/bin/fish"}, "",
 			[]string{"-l"}, nil, ""},
+		{"a command runs with its own arguments only",
+			Profile{Kind: KindCommand, Path: "/usr/bin/aider", Args: []string{"--no-auto-commits"}}, "/src",
+			[]string{"--no-auto-commits"}, nil, "/src"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

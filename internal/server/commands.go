@@ -34,7 +34,7 @@ func (st *state) command(c *client, cmd *api.Command) {
 		st.agentSplit(c, sess, cmd)
 		return
 	}
-	st.run(c, sess, cmd)
+	st.runWithSecrets(c, sess, cmd)
 }
 
 // run applies a validated cmd to sess, as command does.

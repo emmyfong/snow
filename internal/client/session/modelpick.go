@@ -1,6 +1,9 @@
 package session
 
 import (
+	"slices"
+	"time"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/modelpick"
 	"github.com/emmyfong/snow/internal/client/picker"
@@ -111,11 +114,35 @@ func (m *Model) overlayModelPick(content string, rows int) string {
 	return m.overlayPopup(content, m.modelPick, rows)
 }
 
+// gatewayCheckEvery is how often an open picker asks again while a gateway
+// starts. The server does not tell the client when a gateway becomes ready,
+// and it fetches the gateway's models only after that.
+const gatewayCheckEvery = time.Second
+
+// gatewayCheckMsg asks the server for the provider list again while the
+// picker waits for a gateway.
+type gatewayCheckMsg struct{}
+
 // setModelList keeps the server's list for the next picker and updates the
-// open one.
-func (m *Model) setModelList(list *api.ModelList) {
+// open one. While a gateway starts, it asks again until the gateway is ready
+// or failed.
+func (m *Model) setModelList(list *api.ModelList) tea.Cmd {
 	m.modelList = *list
-	if m.modelPick != nil {
-		m.modelPick.SetList(list.Providers)
+	if m.modelPick == nil {
+		return nil
 	}
+	m.modelPick.SetList(list.Providers)
+	if !slices.ContainsFunc(list.Providers, func(p api.ProviderModels) bool { return p.Status == api.GatewayStarting }) {
+		return nil
+	}
+	return tea.Tick(m.gatewayEvery, func(time.Time) tea.Msg { return gatewayCheckMsg{} })
+}
+
+// checkGateways asks for the provider list again, while the picker is open.
+func (m *Model) checkGateways() tea.Cmd {
+	if m.modelPick == nil {
+		return nil
+	}
+	m.send(&api.ModelListRequest{})
+	return nil
 }

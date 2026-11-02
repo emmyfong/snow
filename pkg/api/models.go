@@ -30,7 +30,24 @@ type ProviderModels struct {
 	Err string `json:"err,omitempty"`
 	// Refreshing says a fetch runs now; a later ModelList has the result.
 	Refreshing bool `json:"refreshing,omitempty"`
+	// Status is a gateway's state, for a [provider.<name>] table with
+	// start: GatewayStarting, GatewayReady, or GatewayFailed. Empty for
+	// other providers.
+	Status string `json:"status,omitempty"`
 }
+
+// A gateway's state, as ProviderModels.Status reports it. A server skips
+// the model fetch for a gateway that is starting or failed.
+const (
+	// GatewayStarting means Snow started the program and waits for the
+	// address.
+	GatewayStarting = "starting"
+	// GatewayReady means the address answers.
+	GatewayReady = "ready"
+	// GatewayFailed means the program exited, or the address did not
+	// answer in time. The log says why.
+	GatewayFailed = "failed"
+)
 
 // ModelInfo is one model a provider offers.
 type ModelInfo struct {

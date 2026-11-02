@@ -149,8 +149,9 @@ func TestHostShell(t *testing.T) {
 		{Name: "Ubuntu", Kind: KindWSL, Distro: "Ubuntu"},
 		{Name: "Claude Code", Kind: KindClaude},
 		{Name: "Claude Code (Ubuntu)", Kind: KindClaude, Distro: "Ubuntu"},
+		{Name: "aider", Kind: KindCommand},
 	}
-	for host, want := range map[string]string{"Claude Code": "bash", "Claude Code (Ubuntu)": "Ubuntu", "bash": "bash", "Ubuntu": "Ubuntu"} {
+	for host, want := range map[string]string{"Claude Code": "bash", "Claude Code (Ubuntu)": "Ubuntu", "bash": "bash", "Ubuntu": "Ubuntu", "aider": "bash"} {
 		p, _ := Find(profiles, host)
 		if got, ok := HostShell(profiles, p); !ok || got.Name != want {
 			t.Errorf("HostShell(%q) = %q, %v; want %q", host, got.Name, ok, want)

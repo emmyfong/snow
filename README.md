@@ -121,6 +121,51 @@ needs_you = true      # false: no notification when an agent waits
 turn_end = true       # false: no notification when a turn ends
 ```
 
+### Agent profiles
+
+An agent profile runs a program in a pane with its own environment, for
+example Claude Code through a gateway such as OmniRoute. Add an
+`[agent.<name>]` table to `~/.snow/config.toml` and restart the Snow
+server (see "Other providers"). The profile picker lists each profile
+after "Claude Code", by its `title`, or by its name when it has none.
+
+```toml
+[provider.omniroute]
+base_url = "http://localhost:20128/v1"
+
+[agent.claude-free]
+title = "Claude Code (free)"
+command = ["claude"]
+
+[agent.claude-free.env]
+ANTHROPIC_BASE_URL = "http://localhost:20128"
+ANTHROPIC_AUTH_TOKEN = "$secret:omniroute"
+```
+
+A value `"$secret:<name>"` is read from the credential store when the
+pane starts, so a token never goes in `config.toml`. Save it with
+`snow auth login <name>`. When `<name>` is a `[provider.<name>]` table,
+the profile uses that provider's key; another name is saved as a token
+that Snow cannot check. `<NAME>_API_KEY` in the environment takes
+precedence, as for providers. Snow refuses a literal value for a variable
+whose name ends in `_KEY`, `_TOKEN`, `_SECRET`, or `_PASSWORD` (`""` is
+allowed), and a profile that sets `ANTHROPIC_BASE_URL` with no
+`ANTHROPIC_AUTH_TOKEN` or `ANTHROPIC_API_KEY`: Claude Code would send
+your own login to the other host.
+
+A profile's pane does not inherit `ANTHROPIC_API_KEY`,
+`ANTHROPIC_AUTH_TOKEN`, `ANTHROPIC_BASE_URL`, or a provider key variable
+such as `OPENAI_API_KEY` from the Snow server; only the profile's own
+`env` sets them. A profile whose program is `claude` shows agent states
+like the built-in "Claude Code" profile. Other programs run as they are.
+Profiles run on the server's machine, not inside a WSL distribution. The
+built-in "Claude Code" profile always uses your own `claude` login.
+
+Never connect a Claude Free, Pro, or Max login inside the gateway.
+Anthropic allows those logins only in Claude Code and Claude.ai, and a
+gateway that forwards one breaks that rule and puts your account at risk.
+Connect the gateway to API keys or to other providers' free tiers.
+
 ### Provider keys
 
 Snow connects to Anthropic (Claude) and OpenAI with your API key.
@@ -158,6 +203,7 @@ Get-CimInstance Win32_Process -Filter "Name='snow.exe'" | Where-Object CommandLi
 [provider.omniroute]
 base_url = "http://localhost:20128/v1"
 no_key = true                  # the service takes no key
+start = ["npx", "omniroute"]   # run this when the address answers nothing
 
 [provider.openrouter]
 base_url = "https://openrouter.ai/api/v1"
@@ -183,6 +229,21 @@ Completions API. For such a service, set `api = "chat"`, and Snow sends
 each turn to `<base_url>/chat/completions`. Snow does not try the other
 API when one fails: the table says which one the service speaks. On the
 `chat` API Snow sends no reasoning effort and shows no reasoning.
+#### Starting a gateway
+
+With `start`, Snow runs the program when the server starts and the address
+does not answer. It writes the program's output to
+`~/.snow/logs/<name>.log`, waits up to two minutes for the address, and
+stops the program's process tree when the server exits. Snow never stops a
+gateway it did not start: a service you started by hand is used as it is
+and left running. `/model` shows `starting` or `failed, see <log>` for the
+gateway. `snow auth status` asks the address and shows `ready` or `not
+answering yet`.
+
+`start` runs a command from `config.toml`, so keep the file your own:
+anyone who can write it can run a program as you. Snow allows `start` only
+when `base_url` names this machine: `localhost`, `127.0.0.1`, or `::1`. A
+remote service is not Snow's to start.
 
 Use only accounts that the service's vendor allows in other apps.
 Anthropic states that apps other than Claude Code and Claude.ai may not
@@ -345,7 +406,13 @@ turn_end = true       # false: no notification when a turn ends
 # base_url = "http://localhost:20128/v1"  # see "Other providers"
 # no_key = true
 # models = []
+# start = ["npx", "omniroute"]          # run when the address answers nothing
 # api = "responses"                     # or "chat", for a Chat Completions service
+
+# [agent.claude-free]                   # a program for a pane, with its own
+# title = "Claude Code (free)"          # environment; see "Agent profiles"
+# command = ["claude"]
+# env = { ANTHROPIC_BASE_URL = "http://localhost:20128", ANTHROPIC_AUTH_TOKEN = "$secret:omniroute" }
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,

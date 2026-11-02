@@ -8,7 +8,10 @@ type Spec struct {
 	Path string   // program to run, looked up in PATH if not absolute
 	Args []string // arguments, without the program name
 	Env  []string // KEY=value pairs added to the inherited environment; later wins
-	Dir  string   // working directory; empty means the current one
+	// Hide names inherited variables the program does not get, such as
+	// the ones that hold keys. Env can still set them.
+	Hide []string
+	Dir  string // working directory; empty means the current one
 	// CmdLine, when set, is the whole command line on Windows, passed to
 	// the program as it is instead of joined from Path and Args: cmd reads
 	// its own quoting. Other systems ignore it.

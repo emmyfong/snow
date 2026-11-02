@@ -23,7 +23,7 @@ func (st *state) agentSplit(c *client, sess *session, cmd *api.Command) {
 	}
 	launch := st.srv.launch
 	if name, ok := launch.claude(p.profile); ok {
-		st.run(c, sess, withProfile(cmd, name))
+		st.runWithSecrets(c, sess, withProfile(cmd, name))
 		return
 	}
 	host := p.profile
@@ -39,7 +39,7 @@ func (st *state) agentSplit(c *client, sess *session, cmd *api.Command) {
 				st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: claudeMissing(distro)})
 				return
 			}
-			st.run(c, sess, withProfile(cmd, name))
+			st.runWithSecrets(c, sess, withProfile(cmd, name))
 		})
 	}()
 }

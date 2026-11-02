@@ -67,16 +67,19 @@ type Model struct {
 	modelPick  *modelpick.Model          // the model picker, when open
 	modelList  api.ModelList             // the server's last model list
 	modelPane  int                       // the pane modelPick chooses a model for
-	firstRun   map[int]bool              // panes the first-run flow ran for
-	over       *overlay                  // the mode picker, resume picker, or help, when open
-	resume     *resumepick.Model         // the resume picker, when over is it
-	authPick   *authpick.Model           // the login picker, when open
-	authPane   int                       // the pane authPick serves
-	authList   api.AuthList              // the server's last provider key list
-	authWait   map[int]bool              // panes waiting for the first-run key list
-	authAfter  map[int]bool              // panes to open the model picker for after a login
-	loginPane  int                       // the pane whose login check runs, or 0
-	logoutPane int                       // the pane whose /logout waits for a key list, or 0
+	// gatewayEvery is how often an open picker asks again while a gateway
+	// starts. Tests shorten it.
+	gatewayEvery time.Duration
+	firstRun     map[int]bool      // panes the first-run flow ran for
+	over         *overlay          // the mode picker, resume picker, or help, when open
+	resume       *resumepick.Model // the resume picker, when over is it
+	authPick     *authpick.Model   // the login picker, when open
+	authPane     int               // the pane authPick serves
+	authList     api.AuthList      // the server's last provider key list
+	authWait     map[int]bool      // panes waiting for the first-run key list
+	authAfter    map[int]bool      // panes to open the model picker for after a login
+	loginPane    int               // the pane whose login check runs, or 0
+	logoutPane   int               // the pane whose /logout waits for a key list, or 0
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
@@ -101,7 +104,7 @@ type clockMsg struct{}
 
 // New returns a session screen that sends input through send.
 func New(send func(api.Message), opts ...Option) *Model {
-	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, now: time.Now,
+	m := &Model{send: send, theme: theme.Default(), base: theme.Default(), keys: keys.Default(), hintDelay: hintDelay, gatewayEvery: gatewayCheckEvery, now: time.Now,
 		panes: map[int]*paneState{}, own: map[int]ownPane{}, firstRun: map[int]bool{}, authWait: map[int]bool{},
 		authAfter: map[int]bool{}, setClip: clipboard.Set}
 	for _, o := range opts {
@@ -137,7 +140,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.ModelList:
-		m.setModelList(msg)
+		return m.setModelList(msg)
+	case gatewayCheckMsg:
+		return m.checkGateways()
 	case *api.ConversationList:
 		m.setConversationList(msg)
 		if p := m.own[msg.Pane]; p != nil {

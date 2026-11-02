@@ -43,7 +43,10 @@ func (c *modelCache) setStatuses(in []api.ProviderModels) {
 		if p.Name == "" {
 			continue
 		}
-		c.statuses = append(c.statuses, api.ProviderModels{Name: p.Name, Title: p.Title, Connected: p.Connected})
+		c.statuses = append(c.statuses, api.ProviderModels{
+			Name: p.Name, Title: p.Title, Connected: p.Connected,
+			Status: p.Status, Err: p.Err,
+		})
 	}
 }
 
@@ -127,6 +130,11 @@ func (st *state) refreshModels(force bool) []string {
 	var fetch []string
 	for _, p := range st.models.statuses {
 		if !p.Connected || st.models.fetching[p.Name] {
+			continue
+		}
+		// A gateway that is starting or failed cannot answer, so asking
+		// it would only replace the reason with a connection error.
+		if p.Status == api.GatewayStarting || p.Status == api.GatewayFailed {
 			continue
 		}
 		if !force && st.models.fresh(p.Name, now, ttl) {

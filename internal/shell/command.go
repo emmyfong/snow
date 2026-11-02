@@ -48,18 +48,9 @@ const waitDelay = 2 * time.Second
 // command and every process it started, and returns ctx's error. When the
 // command exits, processes it left running are killed too.
 func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
-	cmd := exec.CommandContext(ctx, l.Path, l.Args...)
-	cmd.Dir = l.Dir
-	cmd.Env = append(hideVars(os.Environ(), l.Hide), l.Env...)
-	cmd.Stdout, cmd.Stderr = out, out
-	cmd.WaitDelay = waitDelay
-	tree, err := newTree(cmd, l.CmdLine)
+	cmd, tree, err := l.start(ctx, out)
 	if err != nil {
-		return -1, fmt.Errorf("start %s: %w", l.Path, err)
-	}
-	if err := tree.start(); err != nil {
-		tree.close()
-		return -1, fmt.Errorf("start %s: %w", l.Path, err)
+		return -1, err
 	}
 	err = cmd.Wait()
 	// Processes the command left running are killed. The command's own
@@ -80,6 +71,25 @@ func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
 		return -1, fmt.Errorf("run %s: %w", l.Path, err)
 	}
 	return 0, nil
+}
+
+// start starts l with stdin closed and its output written to out, as the
+// leader of a process tree that a cancel of ctx kills.
+func (l Launch) start(ctx context.Context, out io.Writer) (*exec.Cmd, *tree, error) {
+	cmd := exec.CommandContext(ctx, l.Path, l.Args...)
+	cmd.Dir = l.Dir
+	cmd.Env = append(hideVars(os.Environ(), l.Hide), l.Env...)
+	cmd.Stdout, cmd.Stderr = out, out
+	cmd.WaitDelay = waitDelay
+	tree, err := newTree(cmd, l.CmdLine)
+	if err != nil {
+		return nil, nil, fmt.Errorf("start %s: %w", l.Path, err)
+	}
+	if err := tree.start(); err != nil {
+		tree.close()
+		return nil, nil, fmt.Errorf("start %s: %w", l.Path, err)
+	}
+	return cmd, tree, nil
 }
 
 // hideVars returns env without the variables named in hide.

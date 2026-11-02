@@ -17,8 +17,8 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool, claudecode, notify, mcp, worktree,
-                     later: skills, gate, editor
+                     convstore, agent, tool, claudecode, gateway, notify,
+                     mcp, worktree, later: skills, gate, editor
 pkg/api/             the only public package: API types for other clients
 ```
 
@@ -45,6 +45,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    ├──► mcp ──► pkg/api, transport     (snow mcp: the pane tools Claude Code
    │           │                       │    calls, through the Snow socket)
    ├──► shell  (snow claude: the WSL distributions that have claude)
+   ├──► gateway ──► shell, private, pkg/api  (a configured gateway: starts it,
+   │                                          logs it, and stops only a tree
+   │                                          Snow started)
    ├──► notify ──► shell  (snow: desktop notifications, hidden on Windows)
    └──► signin ──► provider, credential   (snow auth; later /login on the server)
                │                       │
