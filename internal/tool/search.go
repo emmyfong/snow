@@ -69,21 +69,25 @@ func (searchTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(p.OS)
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return "", fmt.Errorf("search %s: %w", in.Path, err)
+	}
+	info, err := os.Stat(osPath)
 	if err != nil {
 		return "", fmt.Errorf("search %s: %w", in.Path, err)
 	}
 	s := searcher{re: re, glob: in.Glob, out: capped{limit: searchBytes}}
 	if !info.IsDir() {
-		err = s.file(ctx, p.OS, in.Path)
+		err = s.file(ctx, osPath, in.Path)
 	} else {
-		err = walk(ctx, p.OS, func(rel string, d fs.DirEntry) error {
+		err = walk(ctx, osPath, func(rel string, d fs.DirEntry) error {
 			// Only plain files: a link could lead outside the folder,
 			// where reading needs the user's approval.
 			if !d.Type().IsRegular() {
 				return nil
 			}
-			return s.file(ctx, filepath.Join(p.OS, filepath.FromSlash(rel)), path.Join(strings.ReplaceAll(in.Path, `\`, "/"), rel))
+			return s.file(ctx, filepath.Join(osPath, filepath.FromSlash(rel)), path.Join(strings.ReplaceAll(in.Path, `\`, "/"), rel))
 		})
 	}
 	if err != nil && !errors.Is(err, errStop) {

@@ -4,10 +4,7 @@ import (
 	"errors"
 	"path"
 	"path/filepath"
-	"runtime"
 	"strings"
-
-	"github.com/emmyfong/snow/internal/shell"
 )
 
 // Folder is a conversation folder: a path, and the WSL distribution it
@@ -24,7 +21,8 @@ type Path struct {
 	// for a WSL folder. The folder boundary is checked on it.
 	Logical string
 	// OS is where Snow opens the path: the same as Logical, or for a WSL
-	// folder on Windows, its \\wsl.localhost path.
+	// folder on Windows, its \\wsl.localhost path. RealPath resolves the
+	// links inside a WSL distro before it opens.
 	OS string
 }
 
@@ -49,9 +47,5 @@ func (f Folder) Resolve(p string) (Path, error) {
 		p = path.Join(f.Path, p)
 	}
 	p = path.Clean(p)
-	os := p
-	if runtime.GOOS == "windows" {
-		os = shell.WSLToUNC(f.Distro, p)
-	}
-	return Path{Logical: p, OS: os}, nil
+	return Path{Logical: p, OS: wslOSPath(f.Distro, p)}, nil
 }

@@ -12,11 +12,12 @@ type Result struct {
 	IsError bool
 }
 
-// Approver is the step before a tool runs. It gets the tool and the input,
-// and returns whether the call may run and, when it may not, the reason
-// that goes back to the model. It may wait, for example for the user, and
-// must stop when ctx ends.
-type Approver func(ctx context.Context, t Tool, input json.RawMessage) (allowed bool, reason string)
+// Approver is the step before a tool runs. It gets the tool, the input, and
+// the env, and returns whether the call may run and, when it may not, the
+// reason that goes back to the model. It may wait, for example for the user,
+// and must stop when ctx ends. It records where it resolved a path in
+// env.Approved.
+type Approver func(ctx context.Context, env Env, t Tool, input json.RawMessage) (allowed bool, reason string)
 
 // Call runs the tool called name. An unknown name, a denial, and a tool
 // error all come back as a failed Result for the model, never as a Go
@@ -29,8 +30,9 @@ func (r *Registry) Call(ctx context.Context, env Env, name string, input json.Ra
 	if len(input) == 0 {
 		input = json.RawMessage("{}")
 	}
+	env.Approved = make(map[string]string)
 	if approve != nil {
-		if allowed, reason := approve(ctx, t, input); !allowed {
+		if allowed, reason := approve(ctx, env, t, input); !allowed {
 			return Result{Content: "denied: " + reason, IsError: true}
 		}
 	}

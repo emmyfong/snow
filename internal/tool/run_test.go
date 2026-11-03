@@ -108,9 +108,8 @@ func TestRunWSL(t *testing.T) {
 	}
 }
 
-// TestReadWSL reads a file in a real distro through its Windows path. It
-// runs only on Windows with WSL. The file is a plain one the test makes:
-// Windows cannot follow a WSL symlink through \\wsl.localhost.
+// TestReadWSL reads a plain file in a real distro through its Windows path.
+// It runs only on Windows with WSL.
 func TestReadWSL(t *testing.T) {
 	wsl := wslProfile(t)
 	dir := fmt.Sprintf("/tmp/snow-read-wsl-%d", os.Getpid())

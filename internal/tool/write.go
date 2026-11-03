@@ -28,7 +28,7 @@ func (writeTool) Def() Def {
 	}
 }
 
-func (writeTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, error) {
+func (writeTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, error) {
 	var in struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -40,16 +40,20 @@ func (writeTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, e
 	if err != nil {
 		return "", err
 	}
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return "", fmt.Errorf("write %s: %w", in.Path, err)
+	}
 	verb := "overwrote"
-	if info, err := os.Stat(p.OS); errors.Is(err, fs.ErrNotExist) {
+	if info, err := os.Stat(osPath); errors.Is(err, fs.ErrNotExist) {
 		verb = "created"
 	} else if err == nil && info.IsDir() {
 		return "", fmt.Errorf("%s is a folder", in.Path)
 	}
-	if err := os.MkdirAll(filepath.Dir(p.OS), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(osPath), 0o755); err != nil {
 		return "", fmt.Errorf("write %s: %w", in.Path, err)
 	}
-	if err := writeKeepMode(p.OS, []byte(in.Content)); err != nil {
+	if err := writeKeepMode(osPath, []byte(in.Content)); err != nil {
 		return "", fmt.Errorf("write %s: %w", in.Path, err)
 	}
 	lines := strings.Count(in.Content, "\n")
