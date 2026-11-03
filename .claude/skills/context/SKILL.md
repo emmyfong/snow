@@ -31,6 +31,11 @@ startup, resume, clear, and after compaction.
 - Write facts, not narration. File paths, issue numbers, commands, and
   measured results beat descriptions.
 - Do not copy code into it. Point to the file and line.
+- Preserve user decisions, corrections, scope, unresolved choices, and verification
+  evidence. Date external findings and record the checkout revision.
+- Distinguish observed facts, proposals, and accepted decisions. A summary is not
+  authorization. Remove obsolete next steps when the user changes direction.
+- Record failed approaches only when they prevent useful work being repeated.
 
 ## Template
 
@@ -71,10 +76,13 @@ When the user says "handoff" or switches model or effort:
 
 ## Graduation
 
-When the PR for this working copy is done, read the Decisions and Gotchas
-sections and ask the user, with AskUserQuestion, which items must outlive the
-worktree:
+When the PR for this working copy is done, read Decisions and Gotchas. Preserve
+already authorized guidance updates. Ask only about unresolved choices, through
+the active environment's question tool or chat, before deleting or graduating
+material whose intended lifetime is unclear:
 
 - A rule every agent must follow goes into `AGENTS.md` (committed).
-- A design choice goes into an ADR with the `decision-record` skill.
-- Everything else is deleted with the worktree.
+- A design choice goes into an ADR with the `decision-record` skill, with its
+  shared direction in `DESIGN.md` when needed by other contributors.
+- Temporary notes can leave with the worktree after required handoff information
+  is preserved. Do not treat an unfinished task as disposable history.

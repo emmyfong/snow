@@ -21,8 +21,9 @@ the ADR. Change it only after the user agrees, by superseding it.
 
 ## Write a new ADR
 
-1. Confirm the decision with the user in one sentence. Do not record a
-   decision the user has not made.
+1. Identify the user's decision and its source. Reuse an explicit decision already
+   made in the conversation. Ask only if the consequential choice is unresolved.
+   Do not record a proposal as an accepted decision.
 2. Find the next number:
    ```sh
    ls docs/decisions/ 2>/dev/null | grep -oE '^[0-9]{4}' | sort -n | tail -1
@@ -42,5 +43,7 @@ the ADR. Change it only after the user agrees, by superseding it.
 ## docs/ is local
 
 `docs/` is gitignored, so ADRs exist only on this machine and are not shared
-through git. If every agent must follow a rule from the decision, also add
-the rule to `AGENTS.md`, which is committed. Ask the user first.
+through git. If every agent must follow the decision, carry its agreed direction
+in `DESIGN.md`, and add a contributor rule to `AGENTS.md` only when needed. Use
+existing authorization for documentation updates. Ask before expanding the
+decision or changing documentation distribution policy.

@@ -16,6 +16,11 @@ git diff --name-only origin/main...HEAD -- '*.go' | xargs -r -n1 dirname | sort 
 Add a package whose tests exercise the changed code from outside, for
 example `./cmd/snow` (the e2e tests) for a server or client change.
 
+For documentation-only changes, check whitespace, changed links/references, skill
+frontmatter, and instruction consistency. Report Go checks as not applicable when
+no code, dependency, build, or lint configuration changes. Structural validation of
+a skill does not establish that agents follow it correctly.
+
 ## Checks
 
 Use the golangci-lint version that `.github/workflows/` pins.

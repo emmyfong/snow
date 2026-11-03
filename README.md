@@ -6,6 +6,10 @@ windows, sessions that keep running when you close the terminal, and
 sessions that survive a reboot. It runs natively on Windows, and in WSL and
 Linux, as one program.
 
+For the intended agent cockpit, architecture boundaries, and open design choices,
+see [DESIGN.md](DESIGN.md). Contributor instructions are in [AGENTS.md](AGENTS.md).
+The design distinguishes current capabilities from planned work.
+
 ## Install
 
 ### Windows

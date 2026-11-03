@@ -29,6 +29,15 @@ bodies.
 - Never create an epic that exists. Never duplicate an open issue. Re-home the
   item into the existing epic instead.
 
+## Revise existing issues
+
+Preserve issue numbers and completed children. Show changes to scope, priority,
+acceptance criteria, and native links together. Replace contradictory requirements
+rather than stacking a new rescope note above them. Distinguish true blockers from
+optional UI or historical ordering. Honor structure or exact edits the user already
+approved; do not repeat approvals for the same scope. Check newly discovered
+consequential ambiguity with the user before dependent edits.
+
 ## 2. Draft the structure
 
 - **Group vertically.** An epic is one concern a user can name, for example
@@ -61,8 +70,9 @@ bodies.
 ## 3. Approve the structure
 
 Present one message: the epics, every sub-issue with its labels, the DAG
-as an ASCII diagram, and any re-homed or retitled items. End the turn. In the
-next turn, ask for approval with AskUserQuestion. Apply corrections and
+as an ASCII diagram, and any re-homed or retitled items. Ask for approval unless
+that structure is already authorized. Use the active environment's question tool
+or a concise question in chat. Apply corrections and
 present again when a grouping, priority, or arrow changes. Write no bodies
 before approval.
 
@@ -80,31 +90,44 @@ before approval.
 
 ## 5. Approve the bodies
 
-Give the user the folder path. Show epic bodies inline. Ask for approval with
-AskUserQuestion. Apply corrections. Create nothing before approval. If you find
+Give the user the folder path. Show epic bodies inline. Ask for approval through an available question tool or chat unless the bodies
+are already authorized. Apply corrections. Create nothing before approval. If you find
 an ambiguity after approval, ask again before you change a body.
 
 ## 6. Create
 
-Order: sub-issues, then placeholder substitution, then epics, then links.
+Re-read existing issues and active PRs before applying approved edits. Preserve
+intervening changes instead of replacing them with stale drafts. Record the mapping
+from draft IDs to issue numbers and the completed operations so an interrupted
+publication can resume without duplicate issues.
+
+Allocate issue numbers before publishing bodies with cross-references. For new
+issues that refer to each other, create each with its approved title/labels and a
+short temporary body stating that the approved description is being linked. Once
+all numbers exist, substitute every placeholder and publish the complete approved
+bodies. Then apply parent and blocker links. Never leave temporary bodies as the
+reported finished result.
 
 Bodies go only through `--body-file` and titles only in single quotes. A
 double-quoted body loses backticks and `$` text.
 
 ```sh
-gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>.md \
+gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>-allocation.md \
   --label 'Priority: Medium' --label 'feature'
 ```
 
-After all issues exist, replace every `NEW-<key>` with `#<n>` in all drafts.
-Run `grep -rn 'NEW-' .context/compose/`. It must print nothing. Re-post the
-bodies that had placeholders:
+Use the temporary allocation body above when issue numbers are unresolved. After
+all numbers exist, replace every `NEW-<key>` with `#<n>` in the final bodies selected
+for publication. Check those exact body files for unresolved placeholders; none
+may remain. Keep draft IDs in the mapping and historical plans for recovery.
+Publish the complete bodies:
 
 ```sh
 gh issue edit <n> -R "$R" --body-file .context/compose/<key>.md
 ```
 
-Then create the epics the same way, with `--label epic` added. Then link:
+Allocate epics with `--label epic` as part of the same mapping. After all complete
+bodies are published, link:
 
 ```sh
 CHILD_ID=$(gh api "repos/$R/issues/<child>" --jq .id)
@@ -114,6 +137,8 @@ gh api -X POST "repos/$R/issues/<later>/dependencies/blocked_by" -F issue_id="$B
 ```
 
 Every arrow in the DAG becomes a blocked-by link. State it in the body too.
+Remove obsolete blockers only when that removal was approved. Preserve closed
+children and verify the final native links, not only the rendered issue body.
 
 Fix labels later with `gh issue edit <n> -R "$R" --add-label '<label>'`. A
 needed label that does not exist is a question for the user. Never create a
@@ -134,4 +159,6 @@ file if not.
 
 One message: the epics with numbers and priorities, the DAG with real
 numbers, the labels applied, and the counts of created and retitled issues.
-Every epic is ready for `issue-handler`.
+Identify which epics are ready for `issue-handler`, which are blocked, and which
+remain parked or require an unresolved product decision. Publication does not
+authorize implementation.

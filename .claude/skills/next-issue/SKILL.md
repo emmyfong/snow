@@ -17,7 +17,19 @@ mkdir -p .context
 gh issue list -R "$R" --state open --limit 200 \
   --json number,title,labels,assignees,body > .context/issues.json
 gh pr list -R "$R" --state open --limit 100 \
-  --json number,headRefName,closingIssuesReferences > .context/prs.json
+  --json number,headRefName > .context/prs.json
+# Use GraphQL for closing links; this gh version omits them from JSON fields.
+gh api graphql -F owner="${R%/*}" -F name="${R#*/}" -f query='
+query($owner: String!, $name: String!) {
+  repository(owner: $owner, name: $name) {
+    pullRequests(states: OPEN, first: 100) {
+      nodes {
+        number
+        closingIssuesReferences(first: 100) { nodes { number } }
+      }
+    }
+  }
+}' --jq '.data.repository.pullRequests.nodes' > .context/pr-closing.json
 git worktree list --porcelain | grep '^branch ' | sed 's#branch refs/heads/##'
 ```
 
@@ -37,8 +49,14 @@ gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state==
 
 ## 2. Filter
 
+First check the body and native links for parked or superseded scope, conflicting
+acceptance criteria, and dependency cycles. Report inconsistencies; do not silently
+repair GitHub state or treat an open issue as ready work. Honor an explicit user
+choice of goal before default priority ranking.
+
 Drop an epic or standalone issue when any of these is true:
 
+- It is parked or superseded and the user has not asked to reactivate it.
 - It has an open blocker outside itself. A sub-issue blocked by another
   sub-issue of the same epic does not count; that only sets the build order.
 - Every one of its open sub-issues is blocked from outside the epic.
@@ -61,7 +79,8 @@ packages as that work. Parallel work in one package causes merge conflicts.
 
 ## 4. Offer
 
-Ask the user with AskUserQuestion. Offer the top three. Each option has:
+Ask through the available question tool or chat. Offer up to three ready choices.
+If the user already selected the work, retain that choice. Each option has:
 
 - Label: `#<n> <short title>` and its priority, for example
   `#12 Shell in a pane (High)`.

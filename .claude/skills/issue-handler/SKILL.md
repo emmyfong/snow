@@ -32,7 +32,10 @@ gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state==
   blocks it. Ask whether to wait, or to leave that sub-issue out of this PR.
 - Read `.context/CONTEXT.md` in the main checkout, the ADRs in
   `docs/decisions/` on the topic, and the code the epic touches.
-- If an acceptance criterion is ambiguous, ask now, not after you build.
+- Check whether the issue is active, parked, partly shipped, or superseded.
+  Resolve conflicting scope, acceptance criteria, or ADRs before dependent work.
+- If the user problem, scope, or design is unclear, use `plan-with-user` before
+  implementation. Ask about consequential ambiguity; retain previous answers.
 
 ## 2. Set up the worktree
 
@@ -76,7 +79,10 @@ Show the user a short plan in chat:
 - Sub-issues left out, and why.
 - Risks or open questions.
 
-Stop and wait for the go-ahead. Revise until the user approves.
+Obtain approval for the concrete plan before building. If the user has already
+approved this scope and approach, use that authorization. Do not ask again for
+routine implementation choices. Resolve remaining product choices before work
+that depends on them.
 
 ## 4. Build
 
@@ -94,15 +100,19 @@ Work one sub-issue at a time, in the approved order.
   go vet ./internal/<pkg>/...
   go test ./internal/<pkg>/...
   ```
+  For documentation-only work, use the documentation checks in
+  `review-wave/references/local-gate.md`; Go checks are not applicable.
 - Update `CONTEXT.md` when a sub-issue is done.
-- A failure you cannot explain: use superpowers:systematic-debugging.
-- Scope grows: stop and ask the user. Put new work in a new sub-issue or a new
+- Investigate unexplained failures systematically. Use a debugging skill if one
+  is available; do not require an absent plugin. Repeated attempts should add evidence.
+- Scope grows: pause the affected work and ask about the consequential change.
+  Continue independent authorized work. Put new scope in an agreed sub-issue or
   epic, not silently in this PR.
 
 ## 5. Review the branch
 
-Before the PR, run the `review-wave` skill on the branch. It asks the user
-for the reviewer models and count, then writes a curated report.
+Before the PR, run the `review-wave` skill on the branch. It resolves reviewer
+settings from prior answers or asks for missing choices, then writes a curated report.
 
 - Show the user the report and let them choose which findings to fix.
 - Fix the chosen findings. Behavior fixes get a test that fails first.
@@ -129,8 +139,7 @@ Offer to post the review report as the PR's first comment.
 Write the body to `<wt>/.context/pr-<epic>.md` from
 `.github/pull_request_template.md`. Put one `Closes #<n>` line for the epic and
 one for each sub-issue this PR completes. GitHub needs a keyword per issue.
-Fill the summary and how it was tested. End the body with the plain line
-`Co-authored by Claude Code.` Then:
+Fill the summary and how it was tested. Follow AGENTS.md authorship rules. Then:
 
 ```sh
 gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<epic>.md

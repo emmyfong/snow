@@ -1,4 +1,4 @@
-# Review: #<pr> <title>
+# Review: <branch name or PR #number> <title>
 
 Reviewed SHA: `<sha>`. Reviewers: <n> x <model>, curated by <main model>.
 
@@ -6,12 +6,12 @@ Reviewed SHA: `<sha>`. Reviewers: <n> x <model>, curated by <main model>.
 
 ### Problem
 
-- <what the PR sets out to do, from the issue>
+- <what the change sets out to do, from the issue>
 - <constraints that shape it>
 
 ### Verdict
 
-- <ready to merge | merge after fixes | needs rework>, because <one line>.
+- <ready for PR | ready to merge | needs fixes | needs rework>, because <one line>.
 
 ### Findings
 
@@ -38,7 +38,7 @@ Reviewed SHA: `<sha>`. Reviewers: <n> x <model>, curated by <main model>.
 
 ### Artifact
 
-- PR: #<pr>, head `<sha>`, base `<base>`.
+- Artifact: <branch name or PR #number>, head `<sha>`, base `<base>`.
 - Linked issue: #<issue>.
 - Previous report: <path and SHA, or "none">.
 
@@ -62,7 +62,7 @@ Reviewed SHA: `<sha>`. Reviewers: <n> x <model>, curated by <main model>.
 - Evidence: <quote, command, output>
 - Impact: <who is affected and how badly>
 - Required change: <exact change>
-- Tests: <test to add or change, and what it proves>
+- Validation: <applicable check and what it establishes>
 - Alternatives: <option>: <tradeoff>.
 
 ### Verification run
