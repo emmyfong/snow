@@ -77,16 +77,36 @@ func (m *Model) hit(x, y int) mouse.Hit {
 	if w := m.shown(); w != nil {
 		panes = w.Panes
 	}
+	opts := m.statusOptions()
+	var session mouse.Span
+	if sx, sw, ok := ui.SessionSpan(m.theme, opts); ok {
+		session = mouse.Span{X: sx, W: sw}
+	}
 	var tabs []mouse.TabSpan
-	for _, t := range ui.TabSpans(m.theme, m.statusOptions()) {
+	for _, t := range ui.TabSpans(m.theme, opts) {
 		tabs = append(tabs, mouse.TabSpan{Index: t.Index, X: t.X, W: t.W})
 	}
-	return mouse.HitTest(panes, tabs, x, y, m.cols, m.rows)
+	return mouse.HitTest(panes, session, tabs, x, y, m.cols, m.rows)
+}
+
+// closeMark reports whether screen cell x, y is the focused pane's close
+// mark, which Window draws on a border.
+func (m *Model) closeMark(x, y int) bool {
+	mx, my, ok := ui.CloseCell(m.windowPanes(), m.cols, m.windowRows())
+	return ok && x == mx && y == my
 }
 
 func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
+	if ev.Button == tea.MouseLeft && m.closeMark(ev.X, ev.Y) {
+		m.confirmClosePane()
+		return nil
+	}
 	h := m.hit(ev.X, ev.Y)
 	switch h.Kind {
+	case mouse.Session:
+		if ev.Button == tea.MouseLeft {
+			return m.run("sessions", tea.Key{})
+		}
 	case mouse.Tab:
 		switch ev.Button {
 		case tea.MouseLeft:

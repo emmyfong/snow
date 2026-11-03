@@ -45,7 +45,7 @@ func TestDragResizes(t *testing.T) {
 		{"no move", 40, 5, 40, 5, api.Command{}, true},
 	}
 	for _, tt := range tests {
-		h := HitTest(threePanes(), tabs, tt.startX, tt.Y, cols, rows)
+		h := HitTest(threePanes(), Span{}, tabs, tt.startX, tt.Y, cols, rows)
 		d := StartDrag(h, tt.startX, tt.Y)
 		if d == nil {
 			t.Fatalf("%s: no drag started on %+v", tt.name, h)
@@ -64,7 +64,7 @@ func TestDragResizes(t *testing.T) {
 }
 
 func TestDragFollowsThePointerStepByStep(t *testing.T) {
-	d := StartDrag(HitTest(threePanes(), nil, 40, 5, 80, 24), 40, 5)
+	d := StartDrag(HitTest(threePanes(), Span{}, nil, 40, 5, 80, 24), 40, 5)
 	steps := []struct {
 		x    int
 		want *api.Command
@@ -86,7 +86,7 @@ func cmdPtr(c api.Command) *api.Command { return &c }
 // A refused resize leaves the border where it was. Sync puts the drag back
 // in step with the layout, so the next move asks for the whole distance.
 func TestDragSyncsWithTheLayout(t *testing.T) {
-	d := StartDrag(HitTest(threePanes(), nil, 40, 5, 80, 24), 40, 5)
+	d := StartDrag(HitTest(threePanes(), Span{}, nil, 40, 5, 80, 24), 40, 5)
 	d.Move(50, 5) // the server refuses: the layout stays as it was
 	if !d.Sync(threePanes()) {
 		t.Fatal("Sync reported the drag over")
@@ -108,7 +108,7 @@ func TestDragSyncsWithTheLayout(t *testing.T) {
 }
 
 func TestDragEndsWhenItsPaneIsGone(t *testing.T) {
-	d := StartDrag(HitTest(threePanes(), nil, 40, 5, 80, 24), 40, 5)
+	d := StartDrag(HitTest(threePanes(), Span{}, nil, 40, 5, 80, 24), 40, 5)
 	if d.Sync(threePanes()[1:]) {
 		t.Error("Sync kept a drag whose pane is gone")
 	}

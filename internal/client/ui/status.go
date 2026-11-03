@@ -28,13 +28,14 @@ type StatusOptions struct {
 	Message string // shown in place of Right, in the error color
 	Notice  string // shown in place of Right, in the bar's color; a Message wins
 	Prompt  string // a question for the user; takes the whole bar
+	Hint    string // a faint reminder before Right; dropped first when the bar is short
 }
 
 // StatusBar draws one line of exactly Width cells: the session name and the
-// window tabs on the left, and Right, or Message, or Notice, on the right.
-// When the line is too short, Right is dropped first, but a Message or a
-// Notice stays and the tabs are cut to make room for it; one wider than the
-// line is cut too. A Prompt replaces the whole bar.
+// window tabs on the left, and Hint and Right, or Message, or Notice, on the
+// right. When the line is too short, Hint is dropped first, then Right; but a
+// Message or a Notice stays and the tabs are cut to make room for it; one
+// wider than the line is cut too. A Prompt replaces the whole bar.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
@@ -54,13 +55,18 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 		rightStyle = lipgloss.NewStyle().Foreground(th.ErrorFG).Background(th.Error).Bold(true)
 	}
 	left := ansi.Truncate(l.left, l.leftMax, "")
+	hint := ""
+	if l.hint != "" {
+		// Faint keeps the bar's own color, so the reminder reads on the accent.
+		hint = bar.Faint(true).Render(l.hint)
+	}
 	divider := ""
 	if o.Message != "" && l.right != "" {
 		// A dark cell, because the error strip can share the bar's color.
 		divider = lipgloss.NewStyle().Background(th.BarFG).Render(" ")
 	}
-	gap := max(o.Width-ansi.StringWidth(left)-ansi.StringWidth(divider)-ansi.StringWidth(l.right), 0)
-	return left + bar.Render(strings.Repeat(" ", gap)) + divider + rightStyle.Render(l.right)
+	gap := max(o.Width-ansi.StringWidth(left)-ansi.StringWidth(hint)-ansi.StringWidth(divider)-ansi.StringWidth(l.right), 0)
+	return left + bar.Render(strings.Repeat(" ", gap)) + hint + divider + rightStyle.Render(l.right)
 }
 
 // TabSpan is the columns a window's tab covers in the status bar.
@@ -80,19 +86,34 @@ func TabSpans(th theme.Theme, o StatusOptions) []TabSpan {
 	l := layoutStatus(th, o)
 	var out []TabSpan
 	for _, sp := range l.spans {
-		if w := min(sp.X+sp.W, l.leftMax) - sp.X; w > 0 {
+		if w := ansi.StringWidth(ansi.Cut(l.left, sp.X, min(sp.X+sp.W, l.leftMax))); w > 0 {
 			out = append(out, TabSpan{Index: sp.Index, X: sp.X, W: w})
 		}
 	}
 	return out
 }
 
+// SessionSpan returns the columns the session name covers in the bar
+// StatusBar draws for o, and whether any of it shows. The name is the first
+// thing in the bar, so its span starts at column 0. A bar cut short clips the
+// name like a tab, and a Prompt takes the whole bar, so it leaves none.
+func SessionSpan(th theme.Theme, o StatusOptions) (x, w int, ok bool) {
+	if o.Width <= 0 || o.Prompt != "" {
+		return 0, 0, false
+	}
+	l := layoutStatus(th, o)
+	w = ansi.StringWidth(ansi.Cut(l.left, 0, min(l.sessionW, l.leftMax)))
+	return 0, w, w > 0
+}
+
 // statusLayout is the bar's pieces before they are cut to the width.
 type statusLayout struct {
-	left    string    // the session and tabs, untruncated
-	spans   []TabSpan // each tab's columns inside left
-	right   string    // with its padding; "" when dropped
-	leftMax int       // how much of left fits
+	left     string    // the session and tabs, untruncated
+	sessionW int       // the width of the session name's block
+	spans    []TabSpan // each tab's columns inside left
+	hint     string    // the faint reminder, with its padding; "" when dropped
+	right    string    // with its padding; "" when dropped
+	leftMax  int       // how much of left fits
 }
 
 func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
@@ -101,6 +122,7 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	first := bar.Render(" " + g.SessionLeft + o.Session + g.SessionRight + " ")
 	parts := []string{first}
 	x := ansi.StringWidth(first)
+	sessionW := x
 	var spans []TabSpan
 	for _, t := range o.Tabs {
 		label := strconv.Itoa(t.Index) + " " + t.Name
@@ -135,7 +157,11 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		right = shown
 	}
 	right = " " + right + " "
-	lw, rw := ansi.StringWidth(left), ansi.StringWidth(right)
+	hint := ""
+	if o.Hint != "" && shown == "" {
+		hint = o.Hint + "  "
+	}
+	lw, rw, hw := ansi.StringWidth(left), ansi.StringWidth(right), ansi.StringWidth(hint)
 	divider := 0
 	if o.Message != "" {
 		divider = 1 // the divider StatusBar draws before the message
@@ -143,7 +169,10 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 	rw += divider
 	leftMax := o.Width
 	switch {
-	case lw+rw <= o.Width:
+	case lw+rw+hw <= o.Width:
+	case hw > 0 && lw+rw <= o.Width:
+		// The hint goes first: a window tab or Right matters more.
+		hint = ""
 	case shown != "" && rw < o.Width:
 		// A refusal or a notice is the only feedback the user gets, so the
 		// tabs make room for it.
@@ -154,7 +183,8 @@ func layoutStatus(th theme.Theme, o StatusOptions) statusLayout {
 		right = " " + ansi.Truncate(shown, max(o.Width-2-divider, 0), "…") + " "
 		leftMax = max(o.Width-ansi.StringWidth(right)-divider, 0)
 	default:
-		right = ""
+		// Too wide for Right too: drop it, and the hint with it.
+		right, hint = "", ""
 	}
-	return statusLayout{left: left, spans: spans, right: right, leftMax: leftMax}
+	return statusLayout{left: left, sessionW: sessionW, spans: spans, hint: hint, right: right, leftMax: leftMax}
 }

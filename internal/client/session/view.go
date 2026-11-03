@@ -11,23 +11,7 @@ import (
 // beyond the panes.
 func (m *Model) View() tea.View {
 	area := m.windowRows()
-	var panes []ui.WindowPane
-	if w := m.shown(); w != nil {
-		for _, p := range w.Panes {
-			st := m.panes[p.ID]
-			var lines []string
-			if st != nil {
-				lines = st.lines
-			}
-			if rows := m.copyRows(p.ID); rows != nil {
-				lines = rows
-			}
-			if o := m.own[p.ID]; o != nil {
-				lines = o.View()
-			}
-			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused, Driven: p.Driven})
-		}
-	}
+	panes := m.windowPanes()
 	content := ui.Window(m.theme, ui.WindowOptions{Width: m.cols, Height: area, Panes: panes})
 	content = m.overlayPicker(content, area)
 	content = m.overlaySwitcher(content, area)
@@ -58,10 +42,43 @@ func (m *Model) View() tea.View {
 	return v
 }
 
+// menuHint tells mouse users how to reach the pane menu. The status bar drops
+// it before it drops Right or cuts a window tab, and a popup or copy mode
+// hides it, because that state takes the mouse first.
+const menuHint = "right-click: pane menu"
+
+// windowPanes returns the shown window's panes with the rows each one draws,
+// for View and for the close mark's cell.
+func (m *Model) windowPanes() []ui.WindowPane {
+	w := m.shown()
+	if w == nil {
+		return nil
+	}
+	panes := make([]ui.WindowPane, 0, len(w.Panes))
+	for _, p := range w.Panes {
+		st := m.panes[p.ID]
+		var lines []string
+		if st != nil {
+			lines = st.lines
+		}
+		if rows := m.copyRows(p.ID); rows != nil {
+			lines = rows
+		}
+		if o := m.own[p.ID]; o != nil {
+			lines = o.View()
+		}
+		panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused, Driven: p.Driven})
+	}
+	return panes
+}
+
 // statusOptions describes the status bar. The view draws it, and a click on
 // a tab is matched against it.
 func (m *Model) statusOptions() ui.StatusOptions {
 	opts := ui.StatusOptions{Width: m.cols, Message: m.message}
+	if !m.modal() {
+		opts.Hint = menuHint
+	}
 	if m.layout != nil {
 		opts.Session = m.layout.Session
 		for _, w := range m.layout.Windows {

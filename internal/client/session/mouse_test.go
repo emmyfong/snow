@@ -1,9 +1,11 @@
 package session
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -81,9 +83,44 @@ func TestClickTabSelectsWindow(t *testing.T) {
 	}
 	r.sent = nil
 	m.Update(click(70, 23)) // the bar, not a tab
-	m.Update(click(2, 23))  // the session name
+	m.Update(click(30, 23)) // the gap between the tabs and Right
 	if len(r.sent) != 0 {
 		t.Fatalf("sent %v for clicks outside the tabs", r.sent)
+	}
+}
+
+// TestClickSessionNameOpensTheList: a left click on [api] opens the same
+// list as Ctrl+b s.
+func TestClickSessionNameOpensTheList(t *testing.T) {
+	m, _ := switchScreen(t, 80, 24)
+	m.Update(click(2, 23))
+	if m.switcher == nil {
+		t.Fatal("the click did not open the session list")
+	}
+	byMouse := plain(m)
+	key, _ := switchScreen(t, 80, 24)
+	openSessions(key)
+	if key.switcher == nil {
+		t.Fatal("Ctrl+b s did not open the session list")
+	}
+	if byMouse != plain(key) {
+		t.Fatalf("the click and the key drew different lists:\n%s\n---\n%s", byMouse, plain(key))
+	}
+}
+
+// TestClickSessionNameIgnoredWhileAPopupIsOpen: a popup or a prompt keeps
+// the click, so the list never opens behind it.
+func TestClickSessionNameIgnoredWhileAPopupIsOpen(t *testing.T) {
+	for name, open := range map[string]func(*Model){
+		"picker": func(m *Model) { m.Update(ctrlB); m.Update(press('%', 0, "%")) },
+		"prompt": func(m *Model) { m.Update(ctrlB); m.Update(press(':', 0, ":")) },
+	} {
+		m, _ := switchScreen(t, 80, 24)
+		open(m)
+		m.Update(click(2, 23))
+		if m.switcher != nil {
+			t.Errorf("%s: the click opened the session list", name)
+		}
 	}
 }
 
@@ -95,6 +132,70 @@ func TestOnlyTheLeftButtonSelectsAndFocuses(t *testing.T) {
 	m.Update(motion(30, 5))
 	if len(r.sent) != 0 {
 		t.Fatalf("sent %v for non-left clicks", r.sent)
+	}
+}
+
+// clickGlyph clicks the first cell of glyph in the drawn screen, so a test
+// clicks what the user sees.
+func clickGlyph(t *testing.T, m *Model, glyph string) {
+	t.Helper()
+	for y, row := range strings.Split(ansi.Strip(content(m)), "\n") {
+		if x := strings.Index(row, glyph); x >= 0 {
+			m.Update(click(ansi.StringWidth(row[:x]), y))
+			return
+		}
+	}
+	t.Fatalf("no %q on screen:\n%s", glyph, content(m))
+}
+
+// TestClickCloseMarkAsksToClose: the × on the focused pane's border asks
+// before it closes, like the menu item, and does not start a resize drag.
+func TestClickCloseMarkAsksToClose(t *testing.T) {
+	m, r := threePaneScreen(t)
+	clickGlyph(t, m, "×") // pane 2's top-right corner, on the divider
+	if m.confirm == nil || m.drag != nil || len(r.sent) != 0 {
+		t.Fatalf("confirm %v, drag %v, sent %v; want a question and no drag", m.confirm != nil, m.drag != nil, r.sent)
+	}
+	if got := content(m); !strings.Contains(got, "Close this pane") {
+		t.Fatalf("no close question:\n%s", got)
+	}
+	m.Update(press('y', 0, "y"))
+	if c := lastCommand(t, r); c.Op != api.OpClose || c.Target != 2 {
+		t.Fatalf("sent %+v, want close pane 2", c)
+	}
+}
+
+// TestClickCloseMarkOnTopPaneAsksToClose: a focused top pane has no border at
+// its top or sides, so its mark sits on its bottom border. The click asks
+// first, like the other layouts.
+func TestClickCloseMarkOnTopPaneAsksToClose(t *testing.T) {
+	r := &recorder{}
+	m := New(r.send)
+	m.now = fixedClock
+	m.SetSize(80, 24)
+	panes := []api.PaneInfo{
+		{ID: 1, Rect: api.Rect{W: 80, H: 11}, Profile: "pwsh", Focused: true},
+		{ID: 2, Rect: api.Rect{Y: 12, W: 80, H: 11}, Profile: "cmd"},
+	}
+	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
+	fill(m, panes)
+	clickGlyph(t, m, "×")
+	if m.confirm == nil || m.drag != nil || len(r.sent) != 0 {
+		t.Fatalf("confirm %v, drag %v, sent %v; want a question and no drag", m.confirm != nil, m.drag != nil, r.sent)
+	}
+	m.Update(press('y', 0, "y"))
+	if c := lastCommand(t, r); c.Op != api.OpClose || c.Target != 1 {
+		t.Fatalf("sent %+v, want close pane 1", c)
+	}
+}
+
+// TestClickBelowCloseMarkStillResizes: the mark takes one cell, not the whole
+// border.
+func TestClickBelowCloseMarkStillResizes(t *testing.T) {
+	m, _ := threePaneScreen(t)
+	m.Update(click(40, 1))
+	if m.drag == nil {
+		t.Fatal("the border below the mark no longer starts a drag")
 	}
 }
 

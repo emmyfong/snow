@@ -165,12 +165,96 @@ func TestTabSpansMatchTheDrawnBar(t *testing.T) {
 	}
 }
 
+// TestSessionSpanMatchesTheDrawnBar: the span covers exactly the session
+// name, clipped the same way the bar clips it.
+func TestSessionSpanMatchesTheDrawnBar(t *testing.T) {
+	tabs := []Tab{{Index: 1, Name: "dev", Active: true}}
+	tests := []struct {
+		name string
+		o    StatusOptions
+		want string // the text under the span; "" when there is no span
+	}{
+		{"room", StatusOptions{Width: 80, Session: "api", Tabs: tabs}, " [api] "},
+		{"long name", StatusOptions{Width: 80, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-long-session-name] "},
+		{"cut short", StatusOptions{Width: 10, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-l"},
+		{"a message clips it", StatusOptions{Width: 24, Session: "a-very-long-session-name", Tabs: tabs, Message: "no room to split"}, " [a-v"},
+		{"a wide name cut", StatusOptions{Width: 3, Session: "漢字", Tabs: tabs}, " ["},
+		{"a wide name cut in the middle", StatusOptions{Width: 5, Session: "漢字", Tabs: tabs}, " [漢"},
+		{"a prompt hides it", StatusOptions{Width: 80, Session: "api", Prompt: "close? y/n"}, ""},
+		{"no width", StatusOptions{Session: "api"}, ""},
+	}
+	for _, tt := range tests {
+		bar := StatusBar(theme.Default(), tt.o)
+		x, w, ok := SessionSpan(theme.Default(), tt.o)
+		got := ""
+		if ok {
+			if x != 0 {
+				t.Errorf("%s: span starts at %d, want 0", tt.name, x)
+			}
+			got = ansi.Strip(ansi.Cut(bar, x, x+w))
+		}
+		if got != tt.want {
+			t.Errorf("%s: span text %q, want %q (bar %q)", tt.name, got, tt.want, ansi.Strip(bar))
+		}
+	}
+}
+
 func TestTabSpansForPromptAndNoWidth(t *testing.T) {
 	if got := TabSpans(theme.Default(), StatusOptions{Width: 40, Tabs: []Tab{{Name: "a"}}, Prompt: "close? y/n"}); got != nil {
 		t.Errorf("a prompt leaves spans %v", got)
 	}
 	if got := TabSpans(theme.Default(), StatusOptions{Tabs: []Tab{{Name: "a"}}}); got != nil {
 		t.Errorf("width 0 leaves spans %v", got)
+	}
+}
+
+// TestStatusBarHint: the reminder sits before Right, and the bar drops it
+// before Right or a window tab, so it never costs a tab or a message.
+func TestStatusBarHint(t *testing.T) {
+	hint := "right-click: menu"
+	tabs := []Tab{{Index: 0, Name: "dev", Active: true}}
+	tests := []struct {
+		name      string
+		o         StatusOptions
+		wantHint  bool
+		wantRight bool
+		wantTabs  []string
+	}{
+		{"room for all", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, true, true, []string{" 0 dev* "}},
+		{"drops before right", StatusOptions{Width: 30, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, false, true, []string{" 0 dev* "}},
+		{"drops before a tab", StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}, false, false, []string{" 0 dev* "}},
+		{"a message wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Message: "no room", Hint: hint}, false, false, []string{" 0 dev* "}},
+		{"a notice wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Notice: "copied", Hint: hint}, false, false, []string{" 0 dev* "}},
+	}
+	for _, tt := range tests {
+		out := StatusBar(theme.Default(), tt.o)
+		got := ansi.Strip(out)
+		if w := ansi.StringWidth(out); w != tt.o.Width {
+			t.Errorf("%s: width %d, want %d", tt.name, w, tt.o.Width)
+		}
+		if has := strings.Contains(got, hint); has != tt.wantHint {
+			t.Errorf("%s: hint shown %v, want %v (bar %q)", tt.name, has, tt.wantHint, got)
+		}
+		if has := strings.Contains(got, "pwsh  14:02"); has != tt.wantRight {
+			t.Errorf("%s: right shown %v, want %v (bar %q)", tt.name, has, tt.wantRight, got)
+		}
+		if tt.wantHint && strings.Index(got, hint) > strings.Index(got, "pwsh") {
+			t.Errorf("%s: the hint follows Right: %q", tt.name, got)
+		}
+		var spans []string
+		for _, sp := range TabSpans(theme.Default(), tt.o) {
+			spans = append(spans, ansi.Cut(got, sp.X, sp.X+sp.W))
+		}
+		if !slices.Equal(spans, tt.wantTabs) {
+			t.Errorf("%s: spans %q, want %q", tt.name, spans, tt.wantTabs)
+		}
+	}
+	// The hint never costs a tab: the spans are the same with and without it.
+	withHint := StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}
+	without := withHint
+	without.Hint = ""
+	if a, b := TabSpans(theme.Default(), withHint), TabSpans(theme.Default(), without); !slices.Equal(a, b) {
+		t.Errorf("the hint changed the tab spans: %v, want %v", a, b)
 	}
 }
 

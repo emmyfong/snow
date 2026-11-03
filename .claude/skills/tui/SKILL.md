@@ -35,7 +35,7 @@ internal/client/
   confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
   whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
-  mouse/         pure hit-testing (pane, border, tab) and border drags; session turns hits into commands
+  mouse/         pure hit-testing (pane, border, tab, session name) and border drags; session turns hits into commands
   keys/          the key binding table: tmux defaults plus config; read by session, whichkey, menu
   copymode/      scrollback, search, selection
   chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, the recent conversations of its folder while it is empty (`recent.go`: Up, Down, Enter or a click resumes, typing starts a new one, `Ctrl+a` shows every folder), tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
@@ -73,7 +73,8 @@ internal/client/
   by mouse (click, drag, or the right-click menu), and every menu item shows
   its shortcut.
 - **No permanent buttons.** Chrome is pane borders and one status bar.
-  Discoverability comes from which-key hints, menus, and the home page.
+  Discoverability comes from the faint status-bar hint, which-key hints,
+  menus, and the home page.
 - **Reuse before you build.** Check the catalog first. Extend a component with
   an option instead of writing a near-copy in a screen.
 - **Keep the catalog current.** A new or changed component updates the
@@ -86,12 +87,13 @@ Each entry: name, exact signature, one line of use, and notable options.
 | Component | Signature | Use |
 |---|---|---|
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
-| Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`; cells outside the panes' area are blank. |
-| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (` 1 name `, active `*`, zoomed glyph, then a space and the `Agent` mark's glyph when the window holds an agent (`MarkIdle`, `MarkWorking`, `MarkNeedsYou`); the padding is part of the tab's click target) on the left; `Right` or, after a one-cell divider and in the error color, `Message` on the right. The bar is `BarFG`/`BarBG` (the accent in built-in themes); the shown window's tab is the bar inverted, in `TabActive`/`TabActiveBG`; any other tab whose agent needs the user is in `PromptFG`/`PromptBG`, bold. When short, drops `Right` first; a `Message` stays and the tabs are cut instead; a `Message` wider than the bar is cut with `…`. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
+| Window | `Window(th theme.Theme, o WindowOptions) string` | Draws a window's panes (`WindowPane`: rect, lines, focused, driven) in exactly `Width` by `Height` cells. Cells between panes become borders with the right junction glyph; borders touching the focused pane use `FocusBorder`, and a driven pane's borders use `Accent`, which wins. The focused pane's close mark (`Glyphs.Close`) takes one border cell beside it; `CloseCell(panes, width, height)` returns that cell for a click, and a pane with no border has no mark. Cells outside the panes' area are blank. |
+| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | One line of exactly `Width` cells: `[session]` and `Tab`s (` 1 name `, active `*`, zoomed glyph, then a space and the `Agent` mark's glyph when the window holds an agent (`MarkIdle`, `MarkWorking`, `MarkNeedsYou`), then `Glyphs.Driven` when an agent types into the window; the padding is part of the tab's click target) on the left; a faint `Hint`, then `Right`, or, after a one-cell divider and in the error color, `Message`, or `Notice` in the bar's color, on the right. The bar is `BarFG`/`BarBG` (the accent in built-in themes); the shown window's tab is the bar inverted, in `TabActive`/`TabActiveBG`; any other tab whose agent needs the user is in `PromptFG`/`PromptBG`, bold. When short, drops `Hint` first, then `Right`; a `Message` or a `Notice` stays and the tabs are cut instead; one wider than the bar is cut with `…`. A `Prompt` (a question) replaces the whole bar in `PromptFG`/`PromptBG`, as in tmux. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted; optional `Hints[i]` sits right-aligned and muted at the end of row i (a shortcut), and is dropped when it would touch its item. Nothing below 4 cells. |
 | CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`, `HighlightSelected` in `SelectedFG`/`SelectedBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
-| TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. None while a `Prompt` shows. |
+| TabSpans | `TabSpans(th theme.Theme, o StatusOptions) []TabSpan` | Where each tab sits in the bar `StatusBar` draws for the same options (`TabSpan`: window index, first column, width), clipped to what is visible, so a click maps to a window. The clip measures the drawn cells, so a wide character cut in half leaves no blank cell in the span. None while a `Prompt` shows. |
+| SessionSpan | `SessionSpan(th theme.Theme, o StatusOptions) (x, w int, ok bool)` | Where the session name sits in the bar `StatusBar` draws for the same options, clipped like a tab, so a click opens the session list. It starts at column 0. None while a `Prompt` shows. |
 | Size | `Size(box string) (width, height int)` | The widest row and the row count of a rendered box, to center a popup or keep it on screen. |
 | Panel | `Panel(th theme.Theme, o PanelOptions) string` | A frame exactly `Width` wide around `Body` rows, `Title` in the top edge. Shares its frame with `Popup`. Nothing below 4 cells. |
 | Input | `Input(th theme.Theme, o InputOptions) string` | A one-line text field exactly `Width` wide: `Prompt` in the accent color, then `Value` (its end shows when too long) or a muted `Placeholder`; `Focused` draws a cursor. |
@@ -128,11 +130,13 @@ not be used).
   current-match pairs itself; matches reuse the prompt colors and the
   selection reuses the list selection.
 - `Glyphs`: border lines, junctions, corners, the zoom marker, the active-tab
-  mark, the session brackets, the list pointer, the text caret, the spinner frames, the collapsed and expanded markers of a
+  mark, the session brackets, the close mark (`Close`), the list pointer, the
+  text caret, the spinner frames, the collapsed and expanded markers of a
   tool call, the `Checked`, `Unchecked`, and `Working` marks of a
   multi-select option and a task, and the agent marks `AgentIdle`,
   `AgentWorking`, `AgentNeedsYou` (○ ◐ ●; `For` swaps in `-` `~` `!` on a
-  terminal with no colors).
+  terminal with no colors). `Driven` (✎) follows a window's name while an
+  agent types into one of its panes.
 - `Named(name)` reads `[theme] name` from the config: a built-in name,
   ignoring case, or `default`.
 - The terminal may be light or dark. Text on the terminal's own background
