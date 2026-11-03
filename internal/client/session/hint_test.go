@@ -32,6 +32,29 @@ func TestStatusBarShowsThePaneMenuHint(t *testing.T) {
 	}
 }
 
+// TestPaneMenuHintHidesUnderAModal: a popup or copy mode takes the mouse
+// first, so the bar stops claiming that right-click opens the menu.
+func TestPaneMenuHintHidesUnderAModal(t *testing.T) {
+	m, _ := pickerScreen(t, 80, 24)
+	m.Update(ctrlB)
+	m.Update(press('%', 0, "%"))
+	if got := lastBarRow(m); strings.Contains(got, menuHint) {
+		t.Fatalf("the picker shows the hint: %q", got)
+	}
+	copyMode, _ := pickerScreen(t, 80, 24)
+	copyMode.Update(ctrlB)
+	copyMode.Update(press('[', 0, "["))
+	if got := lastBarRow(copyMode); strings.Contains(got, menuHint) {
+		t.Fatalf("copy mode shows the hint: %q", got)
+	}
+}
+
+// lastBarRow is the drawn status bar, without styles.
+func lastBarRow(m *Model) string {
+	rows := strings.Split(m.View().Content, "\n")
+	return ansi.Strip(rows[len(rows)-1])
+}
+
 // TestWhichKeyDelayed: a fast second key never shows the popup, and the
 // timer of an earlier prefix press never shows it for a later one.
 func TestWhichKeyDelayed(t *testing.T) {

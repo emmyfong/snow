@@ -28,7 +28,7 @@ type WindowOptions struct {
 // is a border, drawn with the junction its neighbors call for. Borders that
 // touch the focused pane use the focus color, and borders of a pane an agent
 // types into use the accent color, which wins over the focus color. The
-// focused pane's close mark sits on its top border corner when it has one.
+// focused pane's close mark sits on a border beside it when it has one.
 // Cells outside the area are blank, for a client larger than the session.
 func Window(th theme.Theme, o WindowOptions) string {
 	if o.Width <= 0 || o.Height <= 0 {
@@ -151,8 +151,10 @@ func (g *grid) touchesDriven(x, y int) bool {
 }
 
 // closeCell returns the border cell that carries p's close mark: the cell at
-// its top-right corner when one is a border, else the top of its right border
-// or the right end of its top border, else the top of its left border.
+// its top-right corner when one is a border, else the top of its right border,
+// the right end of its top border, the top of its left border, the left end of
+// its top border, the right end of its bottom border, or the top of its bottom
+// border.
 func (g *grid) closeCell(p WindowPane) (x, y int, ok bool) {
 	cells := [][2]int{
 		{p.X + p.W, p.Y - 1},
@@ -160,6 +162,8 @@ func (g *grid) closeCell(p WindowPane) (x, y int, ok bool) {
 		{p.X + p.W - 1, p.Y - 1},
 		{p.X - 1, p.Y},
 		{p.X, p.Y - 1},
+		{p.X + p.W - 1, p.Y + p.H},
+		{p.X + p.W, p.Y + p.H - 1},
 	}
 	for _, c := range cells {
 		if g.border(c[0], c[1]) {
@@ -170,8 +174,8 @@ func (g *grid) closeCell(p WindowPane) (x, y int, ok bool) {
 }
 
 // CloseCell returns the border cell where Window draws the focused pane's
-// close mark, and whether the focused pane has one. A pane with no border at
-// its top corner, such as the only pane in a window, has no mark.
+// close mark, and whether the focused pane has one. A pane with no border
+// around it, such as the only pane in a window, has no mark.
 func CloseCell(panes []WindowPane, width, height int) (x, y int, ok bool) {
 	g := newGrid(WindowOptions{Width: width, Height: height, Panes: panes})
 	if g.focused < 0 {

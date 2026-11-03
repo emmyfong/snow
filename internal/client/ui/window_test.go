@@ -138,6 +138,7 @@ func TestCloseCell(t *testing.T) {
 		return panes
 	}
 	stacked := []WindowPane{{X: 0, Y: 0, W: 3, H: 1}, {X: 0, Y: 2, W: 3, H: 1, Focused: true}}
+	stackedTop := []WindowPane{{X: 0, Y: 0, W: 3, H: 1, Focused: true}, {X: 0, Y: 2, W: 3, H: 1}}
 	three := func(focus int) []WindowPane {
 		panes := []WindowPane{{X: 0, Y: 0, W: 2, H: 3}, {X: 3, Y: 0, W: 2, H: 1}, {X: 3, Y: 2, W: 2, H: 1}}
 		panes[focus].Focused = true
@@ -153,6 +154,7 @@ func TestCloseCell(t *testing.T) {
 		{"left pane of two", sideBySide(0), 7, 2, 3, 0, true},
 		{"right pane of two", sideBySide(1), 7, 2, 3, 0, true},
 		{"bottom of two stacked", stacked, 3, 3, 2, 1, true},
+		{"top of two stacked", stackedTop, 3, 3, 2, 1, true},
 		{"left of three", three(0), 5, 3, 2, 0, true},
 		{"top right of three", three(1), 5, 3, 2, 0, true},
 		{"bottom right of three", three(2), 5, 3, 4, 1, true},
@@ -180,5 +182,28 @@ func TestWindowDrawsCloseMark(t *testing.T) {
 	}
 	if x, y, ok := CloseCell(panes, 5, 3); !ok || x != 2 || y != 0 {
 		t.Fatalf("CloseCell = (%d, %d, %v), want (2, 0, true)", x, y, ok)
+	}
+	// A focused top pane has no border at its top or sides, so the mark sits
+	// on its bottom border.
+	stacked := []WindowPane{{X: 0, Y: 0, W: 5, H: 1, Focused: true}, {X: 0, Y: 2, W: 5, H: 1}}
+	rows = plain(Window(theme.Default(), WindowOptions{Width: 5, Height: 3, Panes: stacked}))
+	if rows[1] != "────×" {
+		t.Fatalf("bottom border row %q, want the mark at its right end", rows[1])
+	}
+}
+
+// TestWindowCloseMarkTakesTheOnlyBorderCell: with one row, the close mark
+// replaces the only border cell, so the driven accent has nowhere to show.
+func TestWindowCloseMarkTakesTheOnlyBorderCell(t *testing.T) {
+	panes := []WindowPane{
+		{X: 0, Y: 0, W: 3, H: 1},
+		{X: 4, Y: 0, W: 3, H: 1, Focused: true, Driven: true},
+	}
+	out := Window(theme.Default(), WindowOptions{Width: 7, Height: 1, Panes: panes})
+	if n := strings.Count(ansi.Strip(out), "×"); n != 1 {
+		t.Fatalf("%d marks on screen, want 1: %q", n, ansi.Strip(out))
+	}
+	if x, y, ok := CloseCell(panes, 7, 1); !ok || x != 3 || y != 0 {
+		t.Fatalf("CloseCell = (%d, %d, %v), want (3, 0, true)", x, y, ok)
 	}
 }

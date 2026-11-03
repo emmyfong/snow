@@ -92,13 +92,7 @@ func (m *Model) hit(x, y int) mouse.Hit {
 // closeMark reports whether screen cell x, y is the focused pane's close
 // mark, which Window draws on a border.
 func (m *Model) closeMark(x, y int) bool {
-	var panes []ui.WindowPane
-	if w := m.shown(); w != nil {
-		for _, p := range w.Panes {
-			panes = append(panes, ui.WindowPane{X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Focused: p.Focused})
-		}
-	}
-	mx, my, ok := ui.CloseCell(panes, m.cols, m.windowRows())
+	mx, my, ok := ui.CloseCell(m.windowPanes(), m.cols, m.windowRows())
 	return ok && x == mx && y == my
 }
 

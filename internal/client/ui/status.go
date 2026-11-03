@@ -86,7 +86,7 @@ func TabSpans(th theme.Theme, o StatusOptions) []TabSpan {
 	l := layoutStatus(th, o)
 	var out []TabSpan
 	for _, sp := range l.spans {
-		if w := min(sp.X+sp.W, l.leftMax) - sp.X; w > 0 {
+		if w := ansi.StringWidth(ansi.Cut(l.left, sp.X, min(sp.X+sp.W, l.leftMax))); w > 0 {
 			out = append(out, TabSpan{Index: sp.Index, X: sp.X, W: w})
 		}
 	}
@@ -94,14 +94,15 @@ func TabSpans(th theme.Theme, o StatusOptions) []TabSpan {
 }
 
 // SessionSpan returns the columns the session name covers in the bar
-// StatusBar draws for o, and whether any of it shows. A bar cut short clips
-// the name like a tab, and a Prompt takes the whole bar, so it leaves none.
+// StatusBar draws for o, and whether any of it shows. The name is the first
+// thing in the bar, so its span starts at column 0. A bar cut short clips the
+// name like a tab, and a Prompt takes the whole bar, so it leaves none.
 func SessionSpan(th theme.Theme, o StatusOptions) (x, w int, ok bool) {
 	if o.Width <= 0 || o.Prompt != "" {
 		return 0, 0, false
 	}
 	l := layoutStatus(th, o)
-	w = min(l.sessionW, l.leftMax)
+	w = ansi.StringWidth(ansi.Cut(l.left, 0, min(l.sessionW, l.leftMax)))
 	return 0, w, w > 0
 }
 

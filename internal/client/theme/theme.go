@@ -78,7 +78,7 @@ type Glyphs struct {
 	// Driven follows a window's name while an agent types into one of its
 	// panes. One cell.
 	Driven string
-	// Close marks a pane or window the mouse can close. One cell.
+	// Close marks a pane the mouse can close. One cell.
 	Close string
 }
 

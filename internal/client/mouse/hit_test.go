@@ -16,10 +16,12 @@ func threePanes() []api.PaneInfo {
 	}
 }
 
-var tabs = []TabSpan{{Index: 0, X: 7, W: 5}, {Index: 1, X: 13, W: 7}}
+// tabs start right after the name block, as they do in the drawn bar.
+var tabs = []TabSpan{{Index: 0, X: 7, W: 8}, {Index: 1, X: 16, W: 8}}
 
-// session is the span of the name block " [api] " in the test bar.
-var session = Span{X: 0, W: 6}
+// session is the span of the name block " [api] ", 7 cells, as the bar draws
+// it.
+var session = Span{X: 0, W: 7}
 
 func TestHitTest(t *testing.T) {
 	const cols, rows = 80, 24
@@ -38,12 +40,12 @@ func TestHitTest(t *testing.T) {
 		{"horizontal border", 60, 12, Hit{Kind: Border, Axis: Horizontal, Before: 2, After: 3}},
 		{"junction picks the vertical border", 40, 12, Hit{Kind: Border, Axis: Vertical, Before: 1, After: 2}},
 		{"session name", 2, 23, Hit{Kind: Session}},
-		{"session name last cell", 5, 23, Hit{Kind: Session}},
-		{"just past the session name", 6, 23, Hit{Kind: Bar}},
-		{"tab 0", 7, 23, Hit{Kind: Tab, Window: 0}},
-		{"tab 0 last cell", 11, 23, Hit{Kind: Tab, Window: 0}},
-		{"gap between tabs", 12, 23, Hit{Kind: Bar}},
-		{"tab 1", 19, 23, Hit{Kind: Tab, Window: 1}},
+		{"session name last cell", 6, 23, Hit{Kind: Session}},
+		{"the first tab is not the session", 7, 23, Hit{Kind: Tab, Window: 0}},
+		{"tab 0 last cell", 14, 23, Hit{Kind: Tab, Window: 0}},
+		{"gap between tabs", 15, 23, Hit{Kind: Bar}},
+		{"tab 1", 17, 23, Hit{Kind: Tab, Window: 1}},
+		{"tab 1 last cell", 23, 23, Hit{Kind: Tab, Window: 1}},
 		{"status bar elsewhere", 70, 23, Hit{Kind: Bar}},
 		{"outside the screen", 80, 5, Hit{Kind: None}},
 		{"below the screen", 5, 24, Hit{Kind: None}},

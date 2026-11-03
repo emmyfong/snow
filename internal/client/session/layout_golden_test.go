@@ -81,3 +81,21 @@ func goldenCloseMark(t *testing.T, cols, rows int) {
 
 func TestCloseMarkGolden80x24(t *testing.T)  { goldenCloseMark(t, 80, 24) }
 func TestCloseMarkGolden120x40(t *testing.T) { goldenCloseMark(t, 120, 40) }
+
+// goldenCloseMarkTop shows the mark on the bottom border of a focused top
+// pane, which has no border at its top or sides.
+func goldenCloseMarkTop(t *testing.T, cols, rows int) {
+	m := screen(cols, rows)
+	area := rows - 1
+	top := (area - 1 + 1) / 2
+	panes := []api.PaneInfo{
+		{ID: 1, Rect: api.Rect{W: cols, H: top}, Profile: "pwsh", Focused: true},
+		{ID: 2, Rect: api.Rect{Y: top + 1, W: cols, H: area - top - 1}, Profile: "cmd"},
+	}
+	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
+	fill(m, panes)
+	golden.RequireEqual(t, m.View().Content)
+}
+
+func TestCloseMarkTopGolden80x24(t *testing.T)  { goldenCloseMarkTop(t, 80, 24) }
+func TestCloseMarkTopGolden120x40(t *testing.T) { goldenCloseMarkTop(t, 120, 40) }

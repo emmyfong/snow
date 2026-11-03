@@ -178,6 +178,8 @@ func TestSessionSpanMatchesTheDrawnBar(t *testing.T) {
 		{"long name", StatusOptions{Width: 80, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-long-session-name] "},
 		{"cut short", StatusOptions{Width: 10, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-l"},
 		{"a message clips it", StatusOptions{Width: 24, Session: "a-very-long-session-name", Tabs: tabs, Message: "no room to split"}, " [a-v"},
+		{"a wide name cut", StatusOptions{Width: 3, Session: "漢字", Tabs: tabs}, " ["},
+		{"a wide name cut in the middle", StatusOptions{Width: 5, Session: "漢字", Tabs: tabs}, " [漢"},
 		{"a prompt hides it", StatusOptions{Width: 80, Session: "api", Prompt: "close? y/n"}, ""},
 		{"no width", StatusOptions{Session: "api"}, ""},
 	}
@@ -246,6 +248,13 @@ func TestStatusBarHint(t *testing.T) {
 		if !slices.Equal(spans, tt.wantTabs) {
 			t.Errorf("%s: spans %q, want %q", tt.name, spans, tt.wantTabs)
 		}
+	}
+	// The hint never costs a tab: the spans are the same with and without it.
+	withHint := StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}
+	without := withHint
+	without.Hint = ""
+	if a, b := TabSpans(theme.Default(), withHint), TabSpans(theme.Default(), without); !slices.Equal(a, b) {
+		t.Errorf("the hint changed the tab spans: %v, want %v", a, b)
 	}
 }
 
