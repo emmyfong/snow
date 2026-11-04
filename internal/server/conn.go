@@ -108,7 +108,8 @@ func (s *Server) read(c *client) {
 				continue
 			}
 			chats := s.resumeChats(snap)
-			s.call(func(st *state) { st.attach(c, m, snap, chats) })
+			pre := s.prestartSession(m, snap)
+			s.withPrestarted(pre, func(st *state) { st.attach(c, m, snap, chats) })
 			s.closeUnused(chats)
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
@@ -117,7 +118,8 @@ func (s *Server) read(c *client) {
 		case *api.Mouse:
 			s.mouse(c, m)
 		case *api.Command:
-			s.call(func(st *state) { st.command(c, m) })
+			pre := s.prestartCommand(c, m)
+			s.withPrestarted(pre, func(st *state) { st.command(c, m) })
 		case *api.ScrollbackRequest:
 			s.scrollback(c, m)
 		case *api.SearchRequest:

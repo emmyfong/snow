@@ -33,6 +33,9 @@ type state struct {
 	models                      modelCache      // provider model lists for the picker
 	hint                        string          // the hint the clients last heard
 	agentsSent                  []api.AgentInfo // the agent list the clients last heard
+	// prestarted is offered to the chat pane that the running attach or
+	// command opens. It is set only for the length of that call.
+	prestarted *prestarted
 }
 
 type session struct {

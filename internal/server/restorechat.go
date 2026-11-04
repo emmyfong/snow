@@ -86,7 +86,7 @@ func (s *Server) conversationFile(id string) string {
 func (s *Server) freshChat(sp store.Pane, pane *atomic.Int64, cfg agent.Config, notice string) *restoredChat {
 	var model, effort string
 	s.call(func(st *state) { model, effort = st.defaultModel, st.defaultEffort })
-	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
+	conv, err := s.startConversation(cfg, convstore.Meta{Model: model, Effort: effort})
 	if err != nil {
 		s.log.Warn("restore chat failed", "conversation", sp.Conversation, "err", err)
 		notice = fmt.Sprintf("Could not start a chat for %s: %v. This pane is a terminal. The file stays as it is.", s.conversationFile(sp.Conversation), err)

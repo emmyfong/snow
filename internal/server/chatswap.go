@@ -76,7 +76,7 @@ func (s *Server) newChat(c *client, pane int) error {
 		return err
 	}
 	cfg := s.chatConfig(pane, f.profile, f.dir)
-	conv, err := agent.Start(cfg, convstore.Meta{Model: f.model, Effort: f.effort})
+	conv, err := s.startConversation(cfg, convstore.Meta{Model: f.model, Effort: f.effort})
 	if err != nil {
 		return fmt.Errorf("start chat: %w", err)
 	}
