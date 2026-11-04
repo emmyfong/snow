@@ -1,6 +1,6 @@
 # Snow: product and architecture
 
-Updated 2026-11-02. This document separates agreed product direction from the
+Updated 2026-11-04. This document separates agreed product direction from the
 current implementation and proposed designs. GitHub Issues define executable
 scope. A proposal here does not authorize implementation or promise a release.
 Contributor rules live in [AGENTS.md](AGENTS.md).
@@ -22,6 +22,24 @@ each runtime and connection must be verified before it is offered.
 The existing direct-API loop is secondary. It remains implemented. Removing it
 or promising equal investment in both paths is not part of this decision.
 
+Claude Code is the first runtime (#260). Codex and OpenCode follow later, in an
+order not yet set. Personal local use on Windows with WSL is the immediate scope.
+Whether other people may use a Claude subscription through Snow is not settled.
+Snow makes no such claim.
+
+Snow owns its connections. A Snow connection must stay separate from the standalone
+`claude` login, settings, and history. Snow does not import that login by default.
+Signing in or out in Snow never changes the standalone login. Login, status, run
+and sign-out for one connection use one profile and one environment (Windows or one
+WSL distribution). Isolation needs a real test for each sign-in route and platform.
+It is not yet proven (#276).
+
+The user chooses subscription sign-in or an API key. Snow shows the route and its
+billing, and never falls back from one route to the other. A subscription login
+uses Claude's official flow, and Snow reads no OAuth tokens. An API key goes in
+Snow's credential store, scoped to the connection. Host environment variables must
+not choose the route (#276).
+
 OmniRoute is an intended integrated option for setup, connections, lifecycle,
 status, and available usage controls. Bundling versus guided installation is open.
 A gateway does not create unlimited usage or make all subscriptions transferable
@@ -35,6 +53,22 @@ agent activity. Clear small tasks need no large planning ceremony.
 Closing a chat with active work asks whether to stop. Confirmation stops the run
 and preserves progress for explicit resume where supported. Cancelling keeps it
 open. Closing a view must not silently leave that run consuming tokens.
+
+In Claude Code chats (#260), messages typed during a run stay in Snow as drafts.
+"Interrupt and send" stops the current turn, keeps its partial work, then sends.
+The user accepted this for now. Whether mid-turn steering replaces it is open.
+After a stop, close, failure, or reconnect, Snow does not send drafts by itself.
+The direct-API chat keeps its own queue. It starts queued messages after an
+interrupt and drops them on close. Whether that path follows the draft rule is not
+decided.
+
+Stopping a child agent leaves its parent and siblings running. Stopping a parent
+stops all its descendants and the background work that run owns, at every depth.
+Unrelated panes and services keep running. Snow tracks ownership. It does not guess
+from a shared folder or process name. The rule covers Claude Code chats (#263) and
+Snow's future direct-API subagents (#205 and #168, both parked). Where a runtime
+cannot stop one child or confirm a descendant stop, Snow says so and does not
+report success (#263).
 
 ## Current foundation
 
@@ -60,6 +94,8 @@ for the broader setup experience; they do not implement rich runtime-backed chat
 - Transport uses framed JSON over Unix-domain sockets, including on Windows.
   The existing login request can carry an API key once to the local server.
   Do not describe the current protocol as a named pipe or entirely key-free.
+- `internal/credential` `Store.Get` reads host environment variables before saved
+  keys. A connection needs its own lookup (#276).
 
 ## Proposed ownership and boundaries
 
@@ -121,14 +157,16 @@ agent's history into every other agent. Reuse existing storage where appropriate
 Backend session state remains canonical for backend resume; portable notes support
 a handoff but do not promise lossless migration between runtimes.
 
-Proposed stop behavior keeps the chat visible as stopping until the runtime
-acknowledges it. A failed stop stays visible. Save progress incrementally; recovery
-must not require a final summarization call. A saved session is not a running task.
-In-flight usage can occur before cancellation is acknowledged.
+A chat stays visible as stopping until the runtime acknowledges the stop. This is
+decided. Proposed: a failed stop stays visible. Save progress incrementally;
+recovery must not require a final summarization call. A saved session is not a
+running task. In-flight usage can occur before cancellation is acknowledged.
 
-Define app exit, detach, connection loss, reboot recovery, child-agent cancellation,
-background tool processes and multiple views explicitly in their implementation
-issues. The active-chat close decision does not settle all these lifecycles.
+The stop rule above settles that a parent stop ends the background work it owns.
+Define how Snow finds that work, and app exit, detach, connection loss, reboot
+recovery and multiple views, in their implementation issues. The active-chat close
+decision and the stop rule do not settle these lifecycles. What removing a
+connection does to saved history is also open.
 
 ## Workspace features
 
@@ -149,7 +187,7 @@ their older native-only designs are not automatically the implementation plan.
 | Planning | Goals, scope, open questions, editable plans and supported execution controls | #202 |
 | Permissions | Enforce at real execution boundaries; show external-runtime limits | #203 |
 | Multiple agents | User-directed launch, worktrees, status and bounded coordination | #205–208 |
-| Connections | Supported account paths, profiles, API providers and optional gateways | #193, #214, #229 |
+| Connections | Supported account paths, profiles, API providers and optional gateways | #193, #214, #229, #260 |
 
 The skills pane concerns the selected runtime's capabilities. Contributor skills
 in `.claude/skills/` guide agents building Snow. Shared Markdown does not guarantee
@@ -222,7 +260,7 @@ Useful questions count positively; fewer tokens with wrong work is a regression.
 2. Verify supported runtime/account paths. Prove one Snow chat integration with
    visible lifecycle and recoverable session identity. Build on the merged #229
    profile/gateway work and finish #200 without duplicating its completed tools.
-   Choose the first runtime from the evidence with the user.
+   Claude Code is the first runtime, chosen with the user (#260).
 3. Establish usage and quality baselines. Add panes through #192. Connect planning,
    skills, memory, files and git to actual runtime capabilities in small slices.
 4. Prove long-session continuation and selected efficiency changes. Add explicit
@@ -245,12 +283,18 @@ The runtime-backed direction supersedes the own-loop-only product choice in loca
 ADR 0011. Its replacement is local ADR 0014. This shared document carries the
 direction for contributors who do not have the local ADR files.
 
+Local ADR 0015 records Claude Code as the first runtime, Snow-owned connections,
+draft handling, and the stop rule. This document carries them for contributors
+who do not have the local file.
+
 ADR 0012's older sign-in claims require current, route-specific verification.
 This document grants no new authentication entitlement. ADR 0013's gateway
 lifecycle remains the baseline; packaging and routing require separate decisions.
 
-Before affected implementation, resolve: first runtime and supported account path;
-process/child lifecycle; checkpoint coverage; permission guarantees; OmniRoute
-packaging; and v2 acceptance evidence. Before v3 implementation, resolve the client
-contract, client order, remote scope, transport and desktop shell. Keep these
-choices out of unrelated tickets so planning can continue independently.
+Before affected implementation, resolve: account eligibility for a Snow that other
+people install; the Go transport to Claude Code (a long-running process with stream
+JSON is a candidate, untested); what removing a connection does to saved history;
+app exit, detach and connection loss; checkpoint coverage; permission guarantees;
+OmniRoute packaging; and v2 acceptance evidence. Before v3 implementation, resolve
+the client contract, client order, remote scope, transport and desktop shell. Keep
+these choices out of unrelated tickets so planning can continue independently.
