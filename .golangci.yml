@@ -20,6 +20,7 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/store", desc: "server-side package; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/convstore", desc: "server-side package; the server owns conversation files; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "server-side package; agents run in the server; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/clauderuntime", desc: "server-side runtime processes; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/tool", desc: "server-side package; tools run in the server; use pkg/api" }
         convstore-keeps-its-own-format:
           files: ["**/internal/convstore/**", "!$test"]
@@ -65,6 +66,13 @@ linters:
             - github.com/emmyfong/snow/pkg/api
             - github.com/emmyfong/snow/internal/transport
             - github.com/emmyfong/snow/internal/git
+        clauderuntime-owns-only-runtime-processes:
+          list-mode: strict
+          files: ["**/internal/clauderuntime/**", "!$test"]
+          allow:
+            - $gostd
+            - github.com/emmyfong/snow/internal/shell
+            - github.com/emmyfong/snow/pkg/api
         tools-know-only-shell:
           files: ["**/internal/tool/**", "!$test"]
           deny:

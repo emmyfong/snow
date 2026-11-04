@@ -23,7 +23,14 @@ type Process struct {
 // stderr together, written to out. On Windows it starts with
 // CREATE_NO_WINDOW, so the programs it runs open no window either.
 func StartBackground(l Launch, out io.Writer) (*Process, error) {
-	cmd, tree, err := l.start(context.Background(), out)
+	return StartProcess(l, nil, out, out)
+}
+
+// StartProcess starts an owned process tree with separate protocol and diagnostic
+// streams. A nil input closes stdin. The caller must call Stop, even after Done,
+// to release the process tree and terminate any descendants left behind.
+func StartProcess(l Launch, in io.Reader, out, stderr io.Writer) (*Process, error) {
+	cmd, tree, err := l.startIO(context.Background(), in, out, stderr)
 	if err != nil {
 		return nil, err
 	}

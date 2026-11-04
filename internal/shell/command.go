@@ -76,10 +76,14 @@ func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
 // start starts l with stdin closed and its output written to out, as the
 // leader of a process tree that a cancel of ctx kills.
 func (l Launch) start(ctx context.Context, out io.Writer) (*exec.Cmd, *tree, error) {
+	return l.startIO(ctx, nil, out, out)
+}
+
+func (l Launch) startIO(ctx context.Context, in io.Reader, out, stderr io.Writer) (*exec.Cmd, *tree, error) {
 	cmd := exec.CommandContext(ctx, l.Path, l.Args...)
 	cmd.Dir = l.Dir
 	cmd.Env = append(hideVars(os.Environ(), l.Hide), l.Env...)
-	cmd.Stdout, cmd.Stderr = out, out
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, stderr
 	cmd.WaitDelay = waitDelay
 	tree, err := newTree(cmd, l.CmdLine)
 	if err != nil {
