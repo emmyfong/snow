@@ -93,7 +93,7 @@ func TestOutside(t *testing.T) {
 	r := Builtin()
 	call := func(name, in string) []string {
 		tl, _ := r.Get(name)
-		return f.Outside(tl, json.RawMessage(in))
+		return f.Outside(context.Background(), tl, json.RawMessage(in))
 	}
 	if got := call("read", `{"path":"../x"}`); !slices.Equal(got, []string{"../x"}) {
 		t.Errorf("read outside: %v", got)
@@ -109,7 +109,7 @@ func TestOutside(t *testing.T) {
 func TestPreview(t *testing.T) {
 	env := tree(t, map[string]string{"a.go": "one\ntwo\n"})
 	edit, _ := Builtin().Get("edit")
-	c, err := edit.(Previewer).Preview(env, json.RawMessage(`{"path":"a.go","old":"two","new":"2"}`))
+	c, err := edit.(Previewer).Preview(context.Background(), env, json.RawMessage(`{"path":"a.go","old":"two","new":"2"}`))
 	if err != nil || c != (Change{Path: "a.go", Old: "one\ntwo\n", New: "one\n2\n"}) {
 		t.Fatalf("edit preview %+v, %v", c, err)
 	}
@@ -117,7 +117,7 @@ func TestPreview(t *testing.T) {
 		t.Fatalf("preview changed the file: %q", s)
 	}
 	write, _ := Builtin().Get("write")
-	c, err = write.(Previewer).Preview(env, json.RawMessage(`{"path":"new.go","content":"x"}`))
+	c, err = write.(Previewer).Preview(context.Background(), env, json.RawMessage(`{"path":"new.go","content":"x"}`))
 	if err != nil || c != (Change{Path: "new.go", New: "x"}) {
 		t.Fatalf("write preview %+v, %v", c, err)
 	}
@@ -129,7 +129,7 @@ func TestOutsideUnreadableInput(t *testing.T) {
 	f := Folder{Path: t.TempDir()}
 	write, _ := Builtin().Get("write")
 	in := json.RawMessage(`{"path":"a.txt","content":"x"} {"path":"/etc/x"}`)
-	if got := f.Outside(write, in); len(got) == 0 {
+	if got := f.Outside(context.Background(), write, in); len(got) == 0 {
 		t.Fatal("unreadable input counted as inside")
 	}
 	if got := Builtin().Call(context.Background(), Env{Folder: f}, "write", in, nil); !got.IsError {

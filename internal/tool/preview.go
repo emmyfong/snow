@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,11 +21,11 @@ type Change struct {
 type Previewer interface {
 	// Preview returns the change the call would make. An error means the
 	// call would fail; the approval step then asks without a preview.
-	Preview(env Env, input json.RawMessage) (Change, error)
+	Preview(ctx context.Context, env Env, input json.RawMessage) (Change, error)
 }
 
 // Preview implements Previewer.
-func (editTool) Preview(env Env, raw json.RawMessage) (Change, error) {
+func (editTool) Preview(ctx context.Context, env Env, raw json.RawMessage) (Change, error) {
 	var in struct {
 		Path string `json:"path"`
 		Old  string `json:"old"`
@@ -37,7 +38,11 @@ func (editTool) Preview(env Env, raw json.RawMessage) (Change, error) {
 	if err != nil {
 		return Change{}, err
 	}
-	data, err := os.ReadFile(p.OS)
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return Change{}, fmt.Errorf("edit %s: %w", in.Path, err)
+	}
+	data, err := os.ReadFile(osPath)
 	if err != nil {
 		return Change{}, fmt.Errorf("edit %s: %w", in.Path, err)
 	}
@@ -49,7 +54,7 @@ func (editTool) Preview(env Env, raw json.RawMessage) (Change, error) {
 }
 
 // Preview implements Previewer.
-func (writeTool) Preview(env Env, raw json.RawMessage) (Change, error) {
+func (writeTool) Preview(ctx context.Context, env Env, raw json.RawMessage) (Change, error) {
 	var in struct {
 		Path    string `json:"path"`
 		Content string `json:"content"`
@@ -61,7 +66,11 @@ func (writeTool) Preview(env Env, raw json.RawMessage) (Change, error) {
 	if err != nil {
 		return Change{}, err
 	}
-	data, err := os.ReadFile(p.OS)
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return Change{}, fmt.Errorf("write %s: %w", in.Path, err)
+	}
+	data, err := os.ReadFile(osPath)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Change{}, fmt.Errorf("write %s: %w", in.Path, err)
 	}

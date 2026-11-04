@@ -27,7 +27,7 @@ func (editTool) Def() Def {
 	}
 }
 
-func (editTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, error) {
+func (editTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, error) {
 	var in struct {
 		Path string `json:"path"`
 		Old  string `json:"old"`
@@ -40,7 +40,11 @@ func (editTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, er
 	if err != nil {
 		return "", err
 	}
-	data, err := os.ReadFile(p.OS)
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return "", fmt.Errorf("edit %s: %w", in.Path, err)
+	}
+	data, err := os.ReadFile(osPath)
 	if err != nil {
 		return "", fmt.Errorf("edit %s: %w", in.Path, err)
 	}
@@ -48,7 +52,7 @@ func (editTool) Run(_ context.Context, env Env, raw json.RawMessage) (string, er
 	if err != nil {
 		return "", fmt.Errorf("edit %s: %w", in.Path, err)
 	}
-	if err := writeKeepMode(p.OS, []byte(after)); err != nil {
+	if err := writeKeepMode(osPath, []byte(after)); err != nil {
 		return "", fmt.Errorf("edit %s: %w", in.Path, err)
 	}
 	added, removed := lineChanges(string(data), after)

@@ -77,16 +77,18 @@ func decide(c approvalCase) verdict {
 // approver returns the approval step for one tool call. It runs on the
 // turn's goroutine, which alone reads and writes the grants.
 func (c *Conversation) approver(id string) tool.Approver {
-	return func(ctx context.Context, t tool.Tool, input json.RawMessage) (bool, string) {
+	return func(ctx context.Context, env tool.Env, t tool.Tool, input json.RawMessage) (bool, string) {
 		def := t.Def()
-		env := c.env()
-		outside := env.Folder.Outside(t, input)
+		outside, resolved := env.Folder.Boundary(ctx, t, input)
+		for logical, target := range resolved {
+			env.Approved[logical] = target
+		}
 		if decide(approvalCase{Tool: def, Outside: outside, Mode: c.Mode(), Granted: c.grants[def.Name]}) == allow {
 			return true, ""
 		}
 		req := &ApprovalRequest{ID: id, Tool: def.Name, Input: input, Outside: outside}
 		if p, ok := t.(tool.Previewer); ok {
-			if ch, err := p.Preview(env, input); err == nil {
+			if ch, err := p.Preview(ctx, env, input); err == nil {
 				req.Diff = &Diff{Path: ch.Path, Old: ch.Old, New: ch.New}
 			}
 		}

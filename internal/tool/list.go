@@ -43,14 +43,18 @@ func (listTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 	if err != nil {
 		return "", err
 	}
-	if info, err := os.Stat(p.OS); err != nil {
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return "", fmt.Errorf("list %s: %w", in.Path, err)
+	}
+	if info, err := os.Stat(osPath); err != nil {
 		return "", fmt.Errorf("list %s: %w", in.Path, err)
 	} else if !info.IsDir() {
 		return "", fmt.Errorf("%s is a file; use read", in.Path)
 	}
 	out := capped{limit: listBytes}
 	n, more := 0, 0
-	err = walk(ctx, p.OS, func(rel string, d fs.DirEntry) error {
+	err = walk(ctx, osPath, func(rel string, d fs.DirEntry) error {
 		if d.IsDir() {
 			rel += "/"
 		}

@@ -1,6 +1,7 @@
 package tool
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -21,14 +22,34 @@ type Pather interface {
 // Contains reports whether p is inside the folder, the folder itself
 // included. On the OS Snow runs on, symlinks are resolved first, so a link
 // inside that points outside is outside, and Windows paths compare without
-// regard to case. A WSL folder compares its Linux paths only: the links
-// live inside the distro.
+// regard to case. A WSL folder compares its Linux paths only: use Inside to
+// resolve the links inside the distro.
 func (f Folder) Contains(p Path) bool {
 	if f.Distro != "" {
 		return within(path.Clean(f.Path), p.Logical, "/", false)
 	}
 	root := realPath(filepath.Clean(f.Path))
 	return within(root, realPath(p.OS), string(filepath.Separator), runtime.GOOS == "windows")
+}
+
+// Inside reports whether p is inside the folder, with links resolved. For a
+// WSL folder it resolves the folder and the path inside the distro, so a link
+// that points outside is outside.
+func (f Folder) Inside(ctx context.Context, p Path) (bool, error) {
+	_, inside, err := f.resolveInside(ctx, p)
+	return inside, err
+}
+
+// resolveInside returns where p resolves and whether it is inside the folder.
+func (f Folder) resolveInside(ctx context.Context, p Path) (string, bool, error) {
+	if f.Distro == "" {
+		return p.OS, f.Contains(p), nil
+	}
+	resolved, err := resolveWSLPaths(ctx, f.Distro, f.Path, p.Logical)
+	if err != nil {
+		return "", false, err
+	}
+	return resolved[1], within(path.Clean(resolved[0]), path.Clean(resolved[1]), "/", false), nil
 }
 
 // within reports whether p is root or under it.
@@ -96,24 +117,48 @@ func danglingTarget(p string) (string, bool) {
 // Outside returns the paths of a call to t that fall outside the folder.
 // A path the input names but the folder cannot resolve counts as outside,
 // so the user is asked rather than the call let through.
-func (f Folder) Outside(t Tool, input json.RawMessage) []string {
+func (f Folder) Outside(ctx context.Context, t Tool, input json.RawMessage) []string {
+	outside, _ := f.Boundary(ctx, t, input)
+	return outside
+}
+
+// Boundary returns the paths of a call to t that fall outside the folder,
+// and where approval resolved every path it could resolve. An empty target
+// means approval could not resolve the path. The tool opens the recorded
+// target, so a link that changes after approval cannot redirect it.
+func (f Folder) Boundary(ctx context.Context, t Tool, input json.RawMessage) ([]string, map[string]string) {
 	pt, ok := t.(Pather)
 	if !ok {
-		return nil
+		return nil, nil
 	}
 	paths, err := pt.Paths(input)
 	if err != nil {
 		// Input that names no readable path could name any path.
-		return []string{unreadableInput}
+		return []string{unreadableInput}, nil
 	}
 	var out []string
+	var resolved map[string]string
 	for _, raw := range paths {
 		p, err := f.Resolve(raw)
-		if err != nil || !f.Contains(p) {
+		if err != nil {
+			out = append(out, raw)
+			continue
+		}
+		target, inside, err := f.resolveInside(ctx, p)
+		if resolved == nil {
+			resolved = make(map[string]string)
+		}
+		if err != nil {
+			out = append(out, raw)
+			resolved[p.Logical] = ""
+			continue
+		}
+		resolved[p.Logical] = target
+		if !inside {
 			out = append(out, raw)
 		}
 	}
-	return out
+	return out, resolved
 }
 
 // unreadableInput stands for the paths of input a tool cannot read.

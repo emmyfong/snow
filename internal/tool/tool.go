@@ -43,4 +43,9 @@ type Env struct {
 	// User is who the ask and tasks tools talk to; nil means nobody,
 	// and those tools fail with ErrNoUser.
 	User User
+	// Approved maps a path's logical form to where the approval step
+	// resolved it. A WSL tool opens that target, so a link that changes
+	// after approval cannot redirect the open. An empty target means
+	// approval could not resolve the path.
+	Approved map[string]string
 }

@@ -48,13 +48,17 @@ func (readTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 	if err != nil {
 		return "", err
 	}
+	osPath, err := env.RealPath(ctx, p)
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", in.Path, err)
+	}
 	first, limit := max(in.Offset, 1), in.Limit
 	if limit <= 0 {
 		limit = readLines
 	}
 	// Check before opening: opening a named pipe blocks until a writer
 	// comes, and a cancel cannot stop it.
-	info, err := os.Stat(p.OS)
+	info, err := os.Stat(osPath)
 	switch {
 	case err != nil:
 		return "", fmt.Errorf("read %s: %w", in.Path, err)
@@ -63,7 +67,7 @@ func (readTool) Run(ctx context.Context, env Env, raw json.RawMessage) (string, 
 	case !info.Mode().IsRegular():
 		return "", fmt.Errorf("%s is not a regular file", in.Path)
 	}
-	f, err := os.Open(p.OS)
+	f, err := os.Open(osPath)
 	if err != nil {
 		return "", fmt.Errorf("read %s: %w", in.Path, err)
 	}
