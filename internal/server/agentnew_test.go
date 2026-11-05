@@ -42,6 +42,20 @@ func attachIn(t *testing.T, c *apitest.Client, dir string) int {
 	return nextLayout(t, c, func(*api.Layout) bool { return true }).Windows[0].Panes[0].ID
 }
 
+// agentFolder returns the folder the board shows for pane id. The layout
+// shows only a folder the shell reports, which the Windows test shell does
+// not; the board falls back to the folder the pane started in.
+func agentFolder(t *testing.T, board []api.AgentInfo, id int) string {
+	t.Helper()
+	for _, a := range board {
+		if a.Pane == id {
+			return a.Folder
+		}
+	}
+	t.Fatalf("pane %d is not on the board %+v", id, board)
+	return ""
+}
+
 func agentNew(from int, profile, branch string) *api.Command {
 	args := map[string]string{api.ArgProfile: profile}
 	if branch != "" {
@@ -86,9 +100,10 @@ func TestAgentWorktreeLaunch(t *testing.T) {
 	if a.Branch != "agent/1" || nameA != "agent/1" || b.Branch != "fix-login" || nameB != "fix-login" {
 		t.Fatalf("branches %q (%q), %q (%q); want agent/1 and fix-login as branch and window name", a.Branch, nameA, b.Branch, nameB)
 	}
+	board := nextAgents(t, c, func(l []api.AgentInfo) bool { return len(l) == 2 && l[1].Branch != "" })
 	for _, p := range []api.PaneInfo{a, b} {
 		want := filepath.Join(realPath(t, repo), ".worktrees", strings.ReplaceAll(p.Branch, "/", "-"))
-		if realPath(t, p.Worktree) != want || realPath(t, p.Folder) != want {
+		if realPath(t, p.Worktree) != want || realPath(t, agentFolder(t, board, p.ID)) != want {
 			t.Fatalf("pane %+v, want worktree and folder %s", p, want)
 		}
 	}
@@ -98,7 +113,6 @@ func TestAgentWorktreeLaunch(t *testing.T) {
 	if got := gittest.Run(t, repo, "status", "--porcelain"); got != "" {
 		t.Fatalf("main checkout changed:\n%s", got)
 	}
-	board := nextAgents(t, c, func(l []api.AgentInfo) bool { return len(l) == 2 && l[1].Branch != "" })
 	if board[0].Branch != "agent/1" || board[1].Worktree != b.Worktree {
 		t.Fatalf("board %+v, want each agent's branch and worktree", board)
 	}
@@ -144,7 +158,8 @@ func TestSecondAgentSameFolderRefused(t *testing.T) {
 	first := attachIn(t, c, dir)
 	c.Send(agentNew(first, "Claude Code", ""))
 	p, _ := agentWindow(t, c, 2)
-	if p.Worktree != "" || p.Folder != dir {
+	board := nextAgents(t, c, func(l []api.AgentInfo) bool { return len(l) == 1 })
+	if p.Worktree != "" || agentFolder(t, board, p.ID) != dir {
 		t.Fatalf("pane %+v, want the folder itself and no worktree", p)
 	}
 	c.Send(agentNew(first, "Claude Code", ""))
