@@ -2,10 +2,12 @@ package server
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/git"
@@ -281,5 +283,104 @@ func TestNewPaneFromSidePane(t *testing.T) {
 		if a.Kind == api.PaneGit {
 			t.Errorf("the git pane is listed as an agent: %+v", a)
 		}
+	}
+}
+
+// commitByHook reports a hook pair around an agent's git commit in pane,
+// as snow hook sends it: HEAD before the call, then HEAD and its parent.
+func commitByHook(t *testing.T, c *apitest.Client, pane int, dir, before, after, parent string) {
+	t.Helper()
+	at := time.Now()
+	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at, Commit: &api.AgentCommit{Folder: dir, Before: before}})
+	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at.Add(time.Millisecond), Commit: &api.AgentCommit{Folder: dir, After: after, Parent: parent}})
+}
+
+// gitAndTerminal opens a git pane on dir and returns it with the terminal
+// pane beside it.
+func gitAndTerminal(t *testing.T, c *apitest.Client, dir string) (git, terminal int) {
+	t.Helper()
+	c.Send(&api.Attach{Session: "git", Create: true, Dir: dir})
+	terminal = shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
+	c.Send(&api.Command{Op: api.OpSplit, Target: terminal, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: api.PaneGit}})
+	for _, p := range shownPanes(nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })) {
+		if p.Kind == api.PaneGit {
+			git = p.ID
+		}
+	}
+	return git, terminal
+}
+
+func commitFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	writeFile(t, dir, name, name+"\n")
+	gittest.Run(t, dir, "add", name)
+	gittest.Run(t, dir, "commit", "-q", "-m", "add "+name)
+	return gittest.Run(t, dir, "rev-parse", "HEAD")
+}
+
+// TestHistoryObservedAttribution: a commit gets an agent's mark only when
+// the agent's hooks saw HEAD move onto it by exactly one commit. A report
+// whose parent is not the HEAD seen before the call marks nothing.
+func TestHistoryObservedAttribution(t *testing.T) {
+	dir := t.TempDir()
+	gittest.Repo(t, dir)
+	s := newTestServer(t)
+	c := connect(t, s, 120, 30)
+	git, term := gitAndTerminal(t, c, dir)
+
+	base := gittest.Run(t, dir, "rev-parse", "HEAD")
+	agent := commitFile(t, dir, "agent.txt")
+	commitByHook(t, c, term, dir, base, agent, base)
+	other := commitFile(t, dir, "other.txt")
+	// The parent does not match what the hook saw before: no proof.
+	commitByHook(t, c, term, dir, base, other, agent)
+
+	st := waitGit(t, c, git, func(st *api.GitState) bool {
+		return len(st.History) == 3 && st.History[1].Agent != ""
+	})
+	for _, cm := range st.History {
+		if marked := cm.Agent != ""; marked != (cm.Hash == agent) {
+			t.Errorf("%s %q: agent %q", cm.Short, cm.Subject, cm.Agent)
+		}
+	}
+	if a := st.History[1].Agent; !strings.HasPrefix(a, "window ") {
+		t.Errorf("the agent's commit is marked %q, want its window", a)
+	}
+}
+
+// TestHistoryUnknownAttribution: commits made outside Snow's hooks, and
+// commits only a hook's text names, stay unassigned; the history keeps
+// git's own author and subject.
+func TestHistoryUnknownAttribution(t *testing.T) {
+	dir := t.TempDir()
+	gittest.Repo(t, dir)
+	s := newTestServer(t)
+	c := connect(t, s, 120, 30)
+	git, term := gitAndTerminal(t, c, dir)
+	before := gittest.Run(t, dir, "rev-parse", "HEAD")
+	// A hook that saw HEAD before a call, and no read after it.
+	c.Send(&api.AgentState{Pane: term, State: api.AgentWorking, At: time.Now(), Commit: &api.AgentCommit{Folder: dir, Before: before}})
+	writeFile(t, dir, "x.txt", "x\n")
+	gittest.Run(t, dir, "add", "x.txt")
+	gittest.Run(t, dir, "commit", "-q", "-m", "Co-Authored-By: an agent")
+	st := waitGit(t, c, git, func(st *api.GitState) bool { return len(st.History) == 2 })
+	for _, cm := range st.History {
+		if cm.Agent != "" {
+			t.Errorf("%s %q is marked %q", cm.Short, cm.Subject, cm.Agent)
+		}
+		if cm.Author != "Test" || cm.When.IsZero() || cm.Short == "" {
+			t.Errorf("commit %+v lost git's metadata", cm)
+		}
+	}
+}
+
+// TestCommitMarksBound: the oldest mark goes when the marks are full.
+func TestCommitMarksBound(t *testing.T) {
+	var m commitMarks
+	for i := range maxCommitMarks + 1 {
+		m.add(fmt.Sprintf("%040x", i), "a")
+	}
+	if m.agent(fmt.Sprintf("%040x", 0)) != "" || m.agent(fmt.Sprintf("%040x", maxCommitMarks)) != "a" || len(m.by) != maxCommitMarks {
+		t.Errorf("%d marks; oldest %q", len(m.by), m.agent(fmt.Sprintf("%040x", 0)))
 	}
 }

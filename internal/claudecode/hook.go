@@ -45,10 +45,13 @@ var (
 )
 
 // event is the part of a hook's input Snow reads. Claude Code sends more,
-// such as the tool's input, which Snow skips.
+// such as a tool's output, which Snow skips.
 type event struct {
 	Name             string
 	NotificationType string
+	Tool             string // tool_name
+	Command          string // tool_input.command, for the Bash tool
+	Cwd              string // the folder the agent works in
 }
 
 // maxInput bounds how much of a hook's input StateFor reads. The event's
@@ -62,7 +65,11 @@ const maxInput = 64 << 10
 // state. It reads at most maxInput bytes and stops after the first value;
 // the caller drains the rest.
 func StateFor(r io.Reader) (state string, change bool) {
-	e := readEvent(io.LimitReader(r, maxInput))
+	return stateOf(readEvent(io.LimitReader(r, maxInput)))
+}
+
+// stateOf returns the agent state e means, as StateFor does.
+func stateOf(e event) (state string, change bool) {
 	switch e.Name {
 	case EventUserPromptSubmit, EventPreToolUse, EventPostToolUse:
 		return api.AgentWorking, true
@@ -95,15 +102,27 @@ func readEvent(r io.Reader) event {
 			return e
 		}
 		var skip json.RawMessage
+		var tool struct {
+			Command string `json:"command"`
+		}
 		var dst any = &skip
 		switch tok {
 		case "hook_event_name":
 			dst = &e.Name
 		case "notification_type":
 			dst = &e.NotificationType
+		case "tool_name":
+			dst = &e.Tool
+		case "tool_input":
+			dst = &tool
+		case "cwd":
+			dst = &e.Cwd
 		}
 		if err := dec.Decode(dst); err != nil {
 			return e
+		}
+		if tok == "tool_input" {
+			e.Command = tool.Command
 		}
 	}
 	return e
@@ -124,9 +143,8 @@ type Hook struct {
 
 // input is what the reading goroutine found.
 type input struct {
-	state  string
-	change bool
-	err    error
+	ev  event
+	err error
 }
 
 // Run reads the hook's input from stdin and sends the agent state it means
@@ -153,8 +171,7 @@ func (h Hook) Run(stdin io.Reader) error {
 				}
 			}
 		}()
-		state, change := StateFor(stdin)
-		read <- input{state: state, change: change}
+		read <- input{ev: readEvent(io.LimitReader(stdin, maxInput))}
 		_, _ = io.Copy(io.Discard, stdin) // only drains; the event is read
 	}()
 	defer func() {
@@ -176,10 +193,11 @@ func (h Hook) Run(stdin io.Reader) error {
 	if err != nil || pane < 1 || h.Socket == "" {
 		return ErrNotInPane
 	}
-	if !in.change {
+	state, change := stateOf(in.ev)
+	if !change {
 		return nil
 	}
-	return send(h.Socket, h.Version, &api.AgentState{Pane: pane, State: in.state, At: at}, deadline)
+	return send(h.Socket, h.Version, &api.AgentState{Pane: pane, State: state, At: at, Commit: readCommit(in.ev, deadline)}, deadline)
 }
 
 // send connects to the server at socket and sends m, giving up at deadline.

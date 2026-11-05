@@ -52,7 +52,7 @@ func (m *Model) listKey(k tea.Key) api.Message {
 	case k.Text == "u":
 		return m.unstage(es, i)
 	case k.Code == tea.KeySpace:
-		if i >= 0 && es[i].wt == nil && es[i].staged {
+		if i >= 0 && es[i].file() && es[i].staged {
 			return m.unstage(es, i)
 		}
 		return m.stage(es, i)
@@ -76,7 +76,7 @@ func (m *Model) move(es []entry, i int) {
 
 func (m *Model) stage(es []entry, i int) api.Message {
 	switch {
-	case i < 0 || es[i].wt != nil:
+	case i < 0 || !es[i].file():
 		m.note = "No file to stage."
 		return nil
 	case es[i].staged && !es[i].change.Unstaged():
@@ -87,7 +87,7 @@ func (m *Model) stage(es []entry, i int) api.Message {
 }
 
 func (m *Model) unstage(es []entry, i int) api.Message {
-	if i < 0 || es[i].wt != nil || !es[i].change.Staged() {
+	if i < 0 || !es[i].file() || !es[i].change.Staged() {
 		m.note = "Select a staged file to unstage."
 		return nil
 	}
@@ -106,7 +106,7 @@ func (m *Model) stageAll() api.Message {
 
 func (m *Model) openDiff(es []entry, i int) api.Message {
 	switch {
-	case i < 0:
+	case i < 0 || es[i].cm != nil:
 		return nil
 	case es[i].wt != nil:
 		return m.openWorktree(*es[i].wt)

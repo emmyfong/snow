@@ -16,12 +16,15 @@ func (st *state) agentState(m *api.AgentState) {
 	}
 	m.At = notAfterNow(m.At)
 	for _, sess := range st.sessions {
-		_, p := sess.findPane(m.Pane)
+		w, p := sess.findPane(m.Pane)
 		if p == nil {
 			continue
 		}
 		if p.term == nil || p.ended {
 			return
+		}
+		if m.Commit != nil {
+			st.observeCommit(w, p, m.Commit)
 		}
 		p.sawHook = true
 		if p.hookless {

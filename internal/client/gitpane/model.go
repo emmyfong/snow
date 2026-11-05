@@ -26,11 +26,38 @@ type entry struct {
 	change api.GitChange
 	staged bool
 	wt     *api.GitWorktree // set for a worktree row
+	cm     *api.GitCommit   // set for a history row
 }
+
+// The sections of the list, in their order.
+const (
+	secStaged = iota
+	secChanges
+	secWorktrees
+	secHistory
+)
+
+// section is the part of the list e is in.
+func (e entry) section() int {
+	switch {
+	case e.cm != nil:
+		return secHistory
+	case e.wt != nil:
+		return secWorktrees
+	case e.staged:
+		return secStaged
+	}
+	return secChanges
+}
+
+// file reports whether e is a changed file, which the stage keys act on.
+func (e entry) file() bool { return e.wt == nil && e.cm == nil }
 
 // key names e across states, so the selection stays on it.
 func (e entry) key() string {
 	switch {
+	case e.cm != nil:
+		return "h\x00" + e.cm.Hash
 	case e.wt != nil:
 		return "w\x00" + e.wt.Path
 	case e.staged:
@@ -127,6 +154,9 @@ func (m *Model) entries() []entry {
 		for i := range m.st.Worktrees {
 			out = append(out, entry{wt: &m.st.Worktrees[i]})
 		}
+	}
+	for i := range m.st.History {
+		out = append(out, entry{cm: &m.st.History[i]})
 	}
 	return out
 }

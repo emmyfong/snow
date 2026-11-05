@@ -181,6 +181,13 @@ locked it, and the window of the agent that works in it. `*` marks the
 worktree the pane shows. `Enter` on a worktree goes to its agent's pane;
 on a worktree with no agent, it opens a terminal there in a new window.
 
+The history lists the newest 50 commits. A commit shows the agent that
+made it only when Snow saw it happen: the agent's Claude Code hooks
+reported a `git commit`, and HEAD moved onto that commit by exactly one
+commit. Every other commit shows `unknown`. Snow never guesses from a
+commit's text or author, and it never adds trailers or changes authors.
+Snow keeps these marks in memory, so they reset when the server restarts.
+
 Git runs as you would run it, with your own identity and hooks, in the
 WSL distribution for a WSL folder. Snow never changes git config and adds
 nothing to a commit message. A commit git refuses, for example because a

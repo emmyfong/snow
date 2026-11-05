@@ -73,7 +73,7 @@ func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane,
 	case "", api.PaneTerminal:
 		return st.srv.startPane(id, cols, rows, profile, dir, "")
 	}
-	return st.srv.openSide(id, kind, profile, dir)
+	return st.srv.openSide(st, id, kind, profile, dir)
 }
 
 // newWindow starts a window with one pane of kind, as openPane does, adds

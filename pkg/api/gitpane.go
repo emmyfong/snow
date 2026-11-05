@@ -3,6 +3,7 @@ package api
 import (
 	"fmt"
 	"strconv"
+	"time"
 )
 
 // PaneGit is the git pane: the changes in the folder it opened from, their
@@ -48,6 +49,8 @@ type GitState struct {
 	// Worktrees are the repository's checkouts, the main one first. It
 	// is empty when git cannot list them.
 	Worktrees []GitWorktree `json:"worktrees,omitempty"`
+	// History is HEAD's newest commits, newest first.
+	History []GitCommit `json:"history,omitempty"`
 	// Error is the last action's failure, in git's own words. Notice is
 	// the last action's outcome, such as the commit it made.
 	Error  string `json:"error,omitempty"`
@@ -75,7 +78,26 @@ func (s *GitState) Validate() error {
 			return fmt.Errorf("%w: git worktree with no path", ErrInvalidSidePane)
 		}
 	}
+	for _, c := range s.History {
+		if c.Hash == "" {
+			return fmt.Errorf("%w: git commit with no hash", ErrInvalidSidePane)
+		}
+	}
 	return nil
+}
+
+// GitCommit is one commit of the history. Agent names the agent Snow saw
+// make it, such as "window 2 agent/1": its Claude Code hook reported a
+// git commit that moved HEAD onto exactly this commit. Agent is empty for
+// every other commit, whoever made it; Snow never guesses from the
+// commit's text or author.
+type GitCommit struct {
+	Hash    string    `json:"hash"`
+	Short   string    `json:"short"`
+	Author  string    `json:"author,omitempty"`
+	When    time.Time `json:"when"`
+	Subject string    `json:"subject,omitempty"`
+	Agent   string    `json:"agent,omitempty"`
 }
 
 // GitWorktree is one checkout of a repository, in the repository's own

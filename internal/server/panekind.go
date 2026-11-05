@@ -44,6 +44,9 @@ type sideContext struct {
 	// goroutine hands its results to the pane this way, so the pane's state
 	// needs no lock. It must not be called on the model goroutine.
 	Apply func(f func())
+	// Agent returns the agent Snow saw make commit hash, or "". It runs
+	// only on the model goroutine.
+	Agent func(hash string) string
 }
 
 // sideKind is a pane kind that opens a side pane. Open runs on the model
@@ -116,14 +119,14 @@ func (k *paneKinds) kinds() []api.PaneKindInfo {
 // openSide opens side pane id of kind in folder, which belongs to the
 // distribution of profile, the profile of the pane it opened from. It
 // returns ErrUnknownKind for a kind that is not registered.
-func (s *Server) openSide(id int, kind, profile, folder string) (*pane, error) {
+func (s *Server) openSide(st *state, id int, kind, profile, folder string) (*pane, error) {
 	sk, ok := s.kinds.side[kind]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownKind, kind)
 	}
 	distro, _ := s.distroOf(profile)
 	sp, err := sk.Open(sideContext{
-		Pane: id, Folder: folder, Distro: distro,
+		Pane: id, Folder: folder, Distro: distro, Agent: st.marks.agent,
 		Changed: func() { s.post(func(st *state) { st.sideChanged(id) }) },
 		Apply: func(f func()) {
 			s.send(func(st *state) {

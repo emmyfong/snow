@@ -27,6 +27,7 @@ func gitKind() sideKind {
 // and hands each new state over through Apply, so state needs no lock.
 type gitPane struct {
 	state  api.GitState // owned by the model goroutine
+	agent  func(hash string) string
 	jobs   chan gitJob
 	cancel context.CancelFunc
 	done   chan struct{}
@@ -45,6 +46,7 @@ func openGit(ctx sideContext) (sidePane, error) {
 		jobs:   make(chan gitJob, gitJobs),
 		cancel: cancel,
 		done:   make(chan struct{}),
+		agent:  ctx.Agent,
 	}
 	w := &gitWorker{
 		repo:  git.Repo{Path: ctx.Folder, Distro: ctx.Distro},
@@ -59,8 +61,16 @@ func openGit(ctx sideContext) (sidePane, error) {
 }
 
 // State implements sidePane.
+// The history's agent marks are read now, so a mark that arrives after
+// git's history still shows.
 func (p *gitPane) State() api.SideState {
 	st := p.state
+	if p.agent != nil && len(st.History) > 0 {
+		st.History = append([]api.GitCommit(nil), st.History...)
+		for i := range st.History {
+			st.History[i].Agent = p.agent(st.History[i].Hash)
+		}
+	}
 	return &st
 }
 

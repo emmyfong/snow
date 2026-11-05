@@ -243,45 +243,42 @@ func (m *Model) listBody(h int) []row {
 		items, itemEntry = append(items, ui.ListItem{Heading: text}), append(itemEntry, -1)
 	}
 	sel := -1
-	nStaged, nChanged := 0, 0
+	count := map[int]int{}
 	for _, e := range es {
-		switch {
-		case e.wt != nil:
-		case e.staged:
-			nStaged++
-		default:
-			nChanged++
-		}
+		count[e.section()]++
 	}
 	codeW := 1
 	pathW := max(m.width-2-codeW-3, 4) // pointer, code, column gap
 	if len(m.st.Changes) == 0 {
 		heading("No changes.")
 	}
+	omitted := func() {
+		if m.st.Omitted > 0 {
+			heading(fmt.Sprintf("%d more changes not shown", m.st.Omitted))
+		}
+	}
 	for i, e := range es {
-		switch {
-		case e.wt != nil && (i == 0 || es[i-1].wt == nil):
-			if m.st.Omitted > 0 {
-				heading(fmt.Sprintf("%d more changes not shown", m.st.Omitted))
+		if sec := e.section(); i == 0 || es[i-1].section() != sec {
+			if sec >= secWorktrees && (i == 0 || es[i-1].section() < secWorktrees) {
+				omitted()
 			}
-			heading(fmt.Sprintf("Worktrees (%d)", len(m.st.Worktrees)))
-		case e.wt == nil && i == 0 && e.staged:
-			heading(fmt.Sprintf("Staged (%d)", nStaged))
-		case e.wt == nil && !e.staged && (i == 0 || es[i-1].staged):
-			heading(fmt.Sprintf("Changes (%d)", nChanged))
+			heading(fmt.Sprintf("%s (%d)", sectionNames[sec], count[sec]))
 		}
 		if i == m.selected(es) {
 			sel = len(items)
 		}
-		if e.wt != nil {
+		switch {
+		case e.cm != nil:
+			items = append(items, ui.ListItem{Cols: commitCols(*e.cm)})
+		case e.wt != nil:
 			items = append(items, ui.ListItem{Cols: m.worktreeCols(*e.wt)})
-		} else {
+		default:
 			items = append(items, ui.ListItem{Cols: []string{code(e), cutLeft(pathText(e.change), pathW)}})
 		}
 		itemEntry = append(itemEntry, i)
 	}
-	if m.st.Omitted > 0 && len(m.st.Worktrees) <= 1 {
-		heading(fmt.Sprintf("%d more changes not shown", m.st.Omitted))
+	if count[secWorktrees]+count[secHistory] == 0 {
+		omitted()
 	}
 	view, rows := ui.ListRows(m.th, ui.ListOptions{Items: items, Selected: sel, Width: m.width, Height: h})
 	var out []row
@@ -296,6 +293,19 @@ func (m *Model) listBody(h int) []row {
 		}
 	}
 	return out
+}
+
+var sectionNames = map[int]string{secStaged: "Staged", secChanges: "Changes", secWorktrees: "Worktrees", secHistory: "History"}
+
+// commitCols are a history row's cells: its short hash, the agent Snow
+// saw make it or "unknown", and its subject. The mark comes before the
+// subject so a narrow pane cuts the subject, not the mark.
+func commitCols(cm api.GitCommit) []string {
+	agent := "unknown"
+	if cm.Agent != "" {
+		agent = "by " + ui.PlainLine(cm.Agent)
+	}
+	return []string{"", strings.Join([]string{ui.PlainLine(cm.Short), agent, ui.PlainLine(cm.Subject)}, "  ")}
 }
 
 // worktreeCols are a worktree row's cells: "*" for the checkout the pane
@@ -434,18 +444,23 @@ func (m *Model) listHints() []hint {
 	case len(m.entries()) == 0:
 		return []hint{refresh}
 	}
-	enter := "diff"
-	if es := m.entries(); m.selected(es) >= 0 && es[m.selected(es)].wt != nil {
-		enter = "open"
-	}
-	return []hint{
+	hs := []hint{
 		{ui.Hint{Key: "s", Desc: "stage"}, tea.Key{Code: 's', Text: "s"}},
 		{ui.Hint{Key: "u", Desc: "unstage"}, tea.Key{Code: 'u', Text: "u"}},
 		{ui.Hint{Key: "c", Desc: "commit"}, tea.Key{Code: 'c', Text: "c"}},
-		{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}},
-		{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},
-		refresh,
 	}
+	es := m.entries()
+	if i := m.selected(es); i < 0 || es[i].cm == nil {
+		enter := "diff"
+		if i >= 0 && es[i].wt != nil {
+			enter = "open"
+		}
+		hs = append(hs, hint{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}})
+	}
+	return append(hs,
+		hint{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},
+		refresh,
+	)
 }
 
 func (m *Model) diffLayout(l *layout) {

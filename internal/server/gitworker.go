@@ -22,6 +22,9 @@ var (
 	gitCommitWait = 5 * time.Minute
 )
 
+// gitHistory is how many of HEAD's newest commits the git pane shows.
+const gitHistory = 50
+
 // gitStateBudget is the most a git pane's state may take as JSON, so it
 // fits in one frame with room for the envelope.
 const gitStateBudget = api.MaxFrameSize * 3 / 4
@@ -177,6 +180,14 @@ func (w *gitWorker) read(ctx context.Context) api.GitState {
 			next.Worktrees = append(next.Worktrees, api.GitWorktree{Path: wt.Path, Branch: wt.Branch, Main: wt.Main, Detached: wt.Detached, Locked: wt.Locked})
 		}
 	}
+	// A repository with no commit yet has no history to read.
+	if !st.Initial {
+		if cs, err := w.repo.Log(c, gitHistory); err == nil {
+			for _, cm := range cs {
+				next.History = append(next.History, api.GitCommit{Hash: cm.Hash, Short: cm.Short, Author: cm.Author, When: cm.When, Subject: cm.Subject})
+			}
+		}
+	}
 	return next
 }
 
@@ -226,6 +237,8 @@ func fitGitState(st *api.GitState) {
 		case st.Diff != nil && len(st.Diff.Lines) > 0:
 			st.Diff.Lines = st.Diff.Lines[:len(st.Diff.Lines)/2]
 			st.Diff.Cut = true
+		case len(st.History) > 0:
+			st.History = nil
 		case len(st.Worktrees) > 0:
 			st.Worktrees = nil
 		case len(st.Changes) > 0:

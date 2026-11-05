@@ -28,6 +28,52 @@ type AgentState struct {
 	Pane  int       `json:"pane"`
 	State string    `json:"state"`
 	At    time.Time `json:"at"`
+	// Commit is set when the hook was for a tool call that runs git
+	// commit, or nil.
+	Commit *AgentCommit `json:"commit,omitempty"`
+}
+
+// MaxCommitFolder bounds AgentCommit.Folder.
+const MaxCommitFolder = 4096
+
+// AgentCommit is what snow hook read of git around an agent's tool call
+// that runs git commit, in the folder the agent works in. Before the call
+// it reads HEAD into Before; after it, HEAD into After and HEAD's first
+// parent into Parent. A HEAD that git cannot read is empty. The server
+// counts a commit as the agent's only when After's parent is Before: one
+// new commit on top of what was there.
+type AgentCommit struct {
+	Folder string `json:"folder"`
+	Before string `json:"before,omitempty"`
+	After  string `json:"after,omitempty"`
+	Parent string `json:"parent,omitempty"`
+}
+
+// Validate checks the folder and that each hash is a git object name.
+func (c *AgentCommit) Validate() error {
+	if c.Folder == "" || len(c.Folder) > MaxCommitFolder {
+		return fmt.Errorf("%w: commit folder of %d bytes", ErrInvalidAgentState, len(c.Folder))
+	}
+	for _, h := range []string{c.Before, c.After, c.Parent} {
+		if h != "" && !IsCommitHash(h) {
+			return fmt.Errorf("%w: %q is not a commit hash", ErrInvalidAgentState, h)
+		}
+	}
+	return nil
+}
+
+// IsCommitHash reports whether h is a full git object name: 40 hex
+// digits for SHA-1, or 64 for SHA-256, in lower case.
+func IsCommitHash(h string) bool {
+	if len(h) != 40 && len(h) != 64 {
+		return false
+	}
+	for _, r := range h {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }
 
 // Type implements Message.
@@ -41,9 +87,13 @@ func (a *AgentState) Validate() error {
 	}
 	switch a.State {
 	case "", AgentIdle, AgentWorking, AgentNeedsYou:
-		return nil
+	default:
+		return fmt.Errorf("%w: unknown state %q", ErrInvalidAgentState, a.State)
 	}
-	return fmt.Errorf("%w: unknown state %q", ErrInvalidAgentState, a.State)
+	if a.Commit != nil {
+		return a.Commit.Validate()
+	}
+	return nil
 }
 
 // urgency orders the agent states: the user must see the higher first.

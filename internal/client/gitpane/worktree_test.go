@@ -108,3 +108,33 @@ func TestWorktreeRows(t *testing.T) {
 		t.Errorf("one checkout shows a section:\n%s", view)
 	}
 }
+
+// history is a state with no changes and two commits: one an agent made
+// as Snow saw, one Snow knows nothing about.
+func history() api.GitState {
+	return api.GitState{
+		Folder: "/home/u/snow", Branch: "main",
+		History: []api.GitCommit{
+			{Hash: strings.Repeat("a", 40), Short: "aaaaaaa", Author: "Ada", Subject: "feat(git): add the git pane", Agent: "window 2 agent/1"},
+			{Hash: strings.Repeat("b", 40), Short: "bbbbbbb", Author: "Ada", Subject: "docs: fix a typo"},
+		},
+	}
+}
+
+// TestHistoryRows: a commit shows its agent only when Snow saw the agent
+// make it, and "unknown" otherwise; Enter on a commit does nothing.
+func TestHistoryRows(t *testing.T) {
+	m := model(history(), 80, 24)
+	view := ansi.Strip(strings.Join(m.View(), "\n"))
+	for _, want := range []string{"No changes.", "History (2)", "aaaaaaa  by window 2 agent/1  feat(git): add the git pane", "bbbbbbb  unknown  docs: fix a typo"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("view lacks %q:\n%s", want, view)
+		}
+	}
+	if msg := m.Key(key("enter")); msg != nil {
+		t.Errorf("Enter on a commit sent %#v", msg)
+	}
+	if strings.Contains(view, "enter diff") {
+		t.Errorf("a commit row offers a diff:\n%s", view)
+	}
+}

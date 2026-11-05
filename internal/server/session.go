@@ -40,6 +40,8 @@ type state struct {
 	// remembered is the project layout last saved for each chat folder,
 	// so an unchanged layout is not written again.
 	remembered map[string]string
+	// marks are the commits Snow saw agents make, for the git pane.
+	marks commitMarks
 }
 
 type session struct {

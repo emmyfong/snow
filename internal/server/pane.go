@@ -36,6 +36,9 @@ type pane struct {
 	// terminal pane, at agentAt; owned by the model goroutine.
 	agent   string
 	agentAt time.Time
+	// commitBefore is HEAD before the agent's tool call that runs git
+	// commit, from snow hook, until the hook after the call.
+	commitBefore string
 	// sawHook is set by the pane's first hook. hookless is set when an
 	// agent pane sent none in time: its hooks are not set up.
 	sawHook, hookless bool
