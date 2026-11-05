@@ -73,9 +73,18 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "tools never see keys" }
         worktree-runs-git-through-shell:
           # An allow list: the worktree package runs git and edits one file in
-          # .git, so it needs no other Snow package but shell.
+          # .git, so it needs no other Snow package but git and shell.
           list-mode: strict
           files: ["**/internal/worktree/**", "!$test"]
+          allow:
+            - $gostd
+            - github.com/emmyfong/snow/internal/git
+            - github.com/emmyfong/snow/internal/shell
+        git-runs-only-git:
+          # An allow list: the git package runs the git command and nothing
+          # else, so no server state or key can reach it.
+          list-mode: strict
+          files: ["**/internal/git/**", "!$test"]
           allow:
             - $gostd
             - github.com/emmyfong/snow/internal/shell

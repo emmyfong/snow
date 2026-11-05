@@ -31,8 +31,9 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				// The conversation file holds the transcript.
 				sp.Kind, sp.Conversation = store.KindChat, p.chat.savedID()
 			case p.side != nil:
-				// A side pane opens anew from its kind and folder.
-				sp.Kind = p.sideKind
+				// A side pane opens anew from its kind, folder, and the
+				// profile it opened from.
+				sp.Kind, sp.Profile = p.sideKind, p.sideFrom
 			default:
 				sp.Scrollback = lastLines(p, st.srv.savedLines())
 				sp.Worktree, sp.Branch = p.worktree, p.branch

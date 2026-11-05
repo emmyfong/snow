@@ -3,9 +3,7 @@ package worktree
 import (
 	"context"
 	"errors"
-	"fmt"
 	"os"
-	"os/exec"
 	"testing"
 )
 
@@ -69,32 +67,5 @@ func TestCancelledContext(t *testing.T) {
 		if errors.Is(err, not) {
 			t.Errorf("a cancelled call reads as %v", not)
 		}
-	}
-}
-
-// TestDeclined: only git's exit code 1 is an answer of "no" to a question.
-// A crash, a kill, or a failure to start is a failure, and no sentinel
-// error may hide it.
-func TestDeclined(t *testing.T) {
-	exit := func(code int) error {
-		cmd := exec.Command("git", "check-ref-format", "refs/heads/bad..name")
-		if code != 1 {
-			cmd = exec.Command("git", "--no-such-option")
-		}
-		err := cmd.Run()
-		var e *exec.ExitError
-		if !errors.As(err, &e) {
-			t.Fatalf("git did not fail: %v", err)
-		}
-		return &failure{sub: "x", code: e.ExitCode(), cause: err}
-	}
-	if !declined(exit(1)) {
-		t.Error("exit code 1 is a no")
-	}
-	if declined(exit(129)) {
-		t.Error("exit code 129 is a failure")
-	}
-	if declined(&failure{sub: "x", code: -1, cause: context.Canceled}) || declined(fmt.Errorf("plain")) {
-		t.Error("a kill or a plain error is a failure")
 	}
 }

@@ -48,6 +48,7 @@ func TestOwnPaneKinds(t *testing.T) {
 		{api.PaneTerminal, "<nil>"},
 		{"", "<nil>"},
 		{api.PaneChat, "session.chatPane"},
+		{api.PaneGit, "session.gitPane"},
 		{"files", "*session.unknownPane"},
 	}
 	for _, tt := range tests {

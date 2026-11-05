@@ -19,10 +19,13 @@ type pane struct {
 	term    *term.Pane // nil for a chat or side pane
 	chat    *chatPane  // nil for a terminal or side pane
 	// side is the pane of a registered side kind, sideKind its name, and
-	// sideRev its state revision; owned by the model goroutine.
+	// sideRev its state revision; owned by the model goroutine. sideFrom
+	// is the profile of the pane it opened from, which gives its folder's
+	// distribution. It is not profile: a side pane is never an agent.
 	side     sidePane
 	sideKind string
 	sideRev  uint64
+	sideFrom string
 	ended    bool        // its WSL distribution stopped; it waits for r to restart
 	dir      string      // the folder it was asked to start in, for a shell that never reports one
 	closed   atomic.Bool // Snow closed it; set before its program is ended

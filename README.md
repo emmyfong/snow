@@ -159,6 +159,28 @@ instructions alone shows "not enforced". The other modes are
 again in its role; a role no longer in `config.toml` restores the agent
 without one.
 
+### Git pane
+
+The git pane shows the changes in the folder of the pane you open it
+from: `/open git` in a chat, `Ctrl+b O`, or "Open pane..." in the pane
+menu. Opened beside an agent, it shows that agent's worktree. The `ide`
+layout puts one on the right.
+
+The header shows the branch and how far it is ahead of or behind its
+upstream. Staged changes come first, then the others. In the list, `s`
+stages the selected file, `u` unstages it, `Space` does whichever fits,
+`a` stages every change, and `Enter` or `d` shows its diff. `c` opens a
+box for the commit message: `Enter` commits, `Ctrl+J` adds a line, and
+`Esc` closes the box and keeps the message. `r` reads the folder again;
+the pane also reads it every few seconds. Click a file to select it,
+click it again for its diff, and click a key hint to press its key.
+
+Git runs as you would run it, with your own identity and hooks, in the
+WSL distribution for a WSL folder. Snow never changes git config and adds
+nothing to a commit message. A commit git refuses, for example because a
+hook failed, keeps your message and shows git's error. The pane has no
+action that discards changes.
+
 ### Desktop notifications
 
 Snow shows a desktop notification when an agent starts to need you or
@@ -406,7 +428,7 @@ Type `/` in the message line to see them. Tab completes, Enter runs.
 
 A layout keeps the panes it reuses running. Panes it does not hold move to
 a background window named `moved`; nothing closes. Kinds Snow cannot open
-yet, such as `files` and `git`, are left out, and the status bar says so.
+yet, such as `files` and `viewer`, are left out, and the status bar says so.
 After a layout change, Snow remembers the chat window's layout for the
 project (the git repository above the folder, or the folder) in
 `~/.snow/projects`, and a new session there starts with it. This follows

@@ -1,0 +1,24 @@
+[1m feat/195-git-pane[m[38;2;107;124;140m  in snow[m[38;2;107;124;140m, 2 ahead, 1 behind[m                          [38;2;107;124;140mreading [m
+  [38;2;107;124;140mStaged (3)[m                                                                    
+[1;38;2;255;255;255;48;2;45;74;102m> A   internal/git/status.go                                                    [m
+  M   internal/server/gitpane.go                                                
+  R   docs/old.md -> docs/new.md                                                
+  [38;2;107;124;140mChanges (3)[m                                                                   
+  M   internal/server/gitpane.go                                                
+  M   README.md                                                                 
+  ?   notes/todo.txt                                                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;127;184;230ms[m [38;2;107;124;140mstage[m   [38;2;127;184;230mu[m [38;2;107;124;140munstage[m   [38;2;127;184;230mc[m [38;2;107;124;140mcommit[m   [38;2;127;184;230menter[m [38;2;107;124;140mdiff[m   [38;2;127;184;230ma[m [38;2;107;124;140mstage all[m   [38;2;127;184;230mr[m [38;2;107;124;140mrefresh[m

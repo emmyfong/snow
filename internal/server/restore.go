@@ -127,7 +127,7 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string, c
 		if rc := chats[sp.ID]; sp.Kind == store.KindChat && rc != nil && rc.conv != nil {
 			p = rc.paneFor(int(id), sp.Profile)
 		} else if side {
-			p, err = st.srv.openSide(int(id), sp.Kind, sp.Folder)
+			p, err = st.srv.openSide(int(id), sp.Kind, sp.Profile, sp.Folder)
 		} else {
 			role, hasRole := roles[sp.ID]
 			p, err = st.srv.startPaneArgs(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider), role.args)

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"slices"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -132,8 +133,9 @@ func TestPaneKindProtocol(t *testing.T) {
 	if _, e := apitest.Reply[*api.PaneKinds](c); e != nil {
 		t.Fatal(e)
 	}
-	if got := c.Kinds(); len(got) != 2 || got[1] != (api.PaneKindInfo{Name: "note", Title: "Note"}) {
-		t.Fatalf("kinds %+v, want terminal then note", got)
+	want := []api.PaneKindInfo{{Name: api.PaneTerminal, Title: "Terminal"}, {Name: api.PaneGit, Title: "Git"}, {Name: "note", Title: "Note"}}
+	if got := c.Kinds(); !slices.Equal(got, want) {
+		t.Fatalf("kinds %+v, want %+v", got, want)
 	}
 
 	note := splitNote(t, c, first)
