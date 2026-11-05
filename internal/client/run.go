@@ -28,6 +28,11 @@ type Options struct {
 	ConfigPath string
 	Input      io.Reader // nil means standard input
 	Output     io.Writer // nil means standard output
+	// AnyServerBuild attaches to a server of another version on the same
+	// protocol. Without it Run returns a *api.VersionMismatchError, so the
+	// user hears that the server runs an older build, such as after an
+	// update, and can restart it.
+	AnyServerBuild bool
 }
 
 // outboxSize bounds queued messages to the server. Keys from fast typing fit
@@ -62,8 +67,15 @@ func Run(opts Options) (Result, error) {
 	// terminalSize falls back to 80x24, so the size is always known here.
 	cols, rows, _ := acceptedSize(terminalSize(opts.Output))
 	hello := api.Hello{ClientVersion: opts.Version, Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}
-	if _, err := api.ClientHandshake(conn, hello); err != nil {
+	w, err := api.ClientHandshake(conn, hello)
+	if err != nil {
 		return Result{}, fmt.Errorf("connect to server: %w", err)
+	}
+	if !opts.AnyServerBuild && w.ServerVersion != opts.Version {
+		return Result{}, &api.VersionMismatchError{
+			ClientVersion: opts.Version, ServerVersion: w.ServerVersion,
+			ClientProtocol: hello.Protocol, ServerProtocol: w.Protocol,
+		}
 	}
 
 	// One goroutine writes every message in order. Sending from tea.Cmds

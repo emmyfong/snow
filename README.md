@@ -47,6 +47,24 @@ release: `sudo apt install ./snow_amd64.deb`.
 
 With Go installed: `go install github.com/emmyfong/snow/cmd/snow@latest`.
 
+To run a build of your own checkout as plain `snow`, let the install
+script build it. It puts the build where a release goes and adds that
+folder to PATH. Run it again after you pull to update. In PowerShell, in
+the checkout:
+
+```powershell
+try { $env:SNOW_SOURCE = "."; .\install.ps1 } finally { Remove-Item Env:SNOW_SOURCE -ErrorAction SilentlyContinue }
+```
+
+In Linux or WSL: `SNOW_SOURCE=. sh install.sh`. The build runs code from
+the checkout, and `go` may download its toolchain and modules, so build
+only a checkout you trust.
+
+A Snow server that still runs keeps its old build. When `snow` meets a
+server of another version, it says so and asks to restart it. Say `y`
+to start the new build; programs in the server's panes stop, and saved
+sessions come back. Say `n` to keep working in the old server.
+
 ## First run
 
 Run `snow`. It starts a background server and opens the home page, which

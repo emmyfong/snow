@@ -12,6 +12,9 @@
 #   $env:SNOW_BASE_URL     where the release files are: a URL or a folder;
 #                          for tests and mirrors
 #   $env:SNOW_NO_PATH      set to 1 to leave PATH alone
+#   $env:SNOW_SOURCE       a Snow checkout: build it with go and install that
+#                          build instead of a release; run it again to update;
+#                          SNOW_VERSION and SNOW_BASE_URL do not apply
 #
 # It runs inside your PowerShell session (irm | iex), so it never calls exit:
 # a failure stops the script, not your terminal.
@@ -23,6 +26,15 @@ function Install-Snow {
     # Windows PowerShell 5.1 may default to TLS 1.0, which GitHub refuses.
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 
+    $source = $null
+    if ($env:SNOW_SOURCE) {
+        # PowerShell's location, not the process's folder: they differ after cd.
+        $source = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($env:SNOW_SOURCE)
+        if (-not (Test-Path -LiteralPath (Join-Path $source 'cmd\snow'))) {
+            throw "snow install: $source is not a Snow checkout: it has no cmd\snow"
+        }
+        if (-not (Get-Command go -ErrorAction SilentlyContinue)) { throw 'snow install: go is needed to build from source but is not installed' }
+    }
     $arch = Get-SnowArch
     if ($env:SNOW_BASE_URL) {
         $base = $env:SNOW_BASE_URL
@@ -43,25 +55,11 @@ function Install-Snow {
     New-Item -ItemType Directory -Path $tmp | Out-Null
     $target = Join-Path $dest 'snow.exe'
     try {
-        Write-Host "Downloading $archive"
-        Get-SnowFile "$base/$archive" (Join-Path $tmp $archive)
-        Get-SnowFile "$base/checksums.txt" (Join-Path $tmp 'checksums.txt')
-
-        $want = $null
-        foreach ($line in Get-Content -LiteralPath (Join-Path $tmp 'checksums.txt')) {
-            $fields = $line -split '\s+'
-            if ($fields.Count -ge 2 -and $fields[1] -eq $archive) { $want = $fields[0] }
+        if ($source) {
+            $exe = Build-SnowExe $source $tmp
+        } else {
+            $exe = Get-SnowRelease $base $archive $tmp
         }
-        if (-not $want) { throw "snow install: checksums.txt has no entry for $archive" }
-        $got = Get-SnowSha256 (Join-Path $tmp $archive)
-        if ($got -ne $want) {
-            throw "snow install: checksum mismatch for ${archive}: the download is damaged or was changed; nothing was installed"
-        }
-
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
-        [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $tmp $archive), (Join-Path $tmp 'unpacked'))
-        $exe = Join-Path $tmp 'unpacked\snow.exe'
-        if (-not (Test-Path -LiteralPath $exe)) { throw 'snow install: the archive has no snow.exe' }
         Replace-SnowExe $exe $target
     } finally {
         Remove-Item -Recurse -Force -LiteralPath $tmp -ErrorAction SilentlyContinue
@@ -70,6 +68,46 @@ function Install-Snow {
     $version = & $target version
     Write-Host "Installed $version to $target"
     if ($env:SNOW_NO_PATH -ne '1') { Add-SnowPath $dest }
+}
+
+# Get-SnowRelease downloads archive from base into tmp, checks it against
+# the release's checksums, and returns the path of the snow.exe in it.
+function Get-SnowRelease($base, $archive, $tmp) {
+    Write-Host "Downloading $archive"
+    Get-SnowFile "$base/$archive" (Join-Path $tmp $archive)
+    Get-SnowFile "$base/checksums.txt" (Join-Path $tmp 'checksums.txt')
+
+    $want = $null
+    foreach ($line in Get-Content -LiteralPath (Join-Path $tmp 'checksums.txt')) {
+        $fields = $line -split '\s+'
+        if ($fields.Count -ge 2 -and $fields[1] -eq $archive) { $want = $fields[0] }
+    }
+    if (-not $want) { throw "snow install: checksums.txt has no entry for $archive" }
+    $got = Get-SnowSha256 (Join-Path $tmp $archive)
+    if ($got -ne $want) {
+        throw "snow install: checksum mismatch for ${archive}: the download is damaged or was changed; nothing was installed"
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    [IO.Compression.ZipFile]::ExtractToDirectory((Join-Path $tmp $archive), (Join-Path $tmp 'unpacked'))
+    $exe = Join-Path $tmp 'unpacked\snow.exe'
+    if (-not (Test-Path -LiteralPath $exe)) { throw 'snow install: the archive has no snow.exe' }
+    return $exe
+}
+
+# Build-SnowExe builds snow.exe from the checkout at source into tmp and
+# returns its path. go's own output shows, so a failed build says why.
+function Build-SnowExe($source, $tmp) {
+    Write-Host "SNOW_SOURCE is set: building snow in $source, not installing a release"
+    $exe = Join-Path $tmp 'snow.exe'
+    Push-Location -LiteralPath $source
+    try {
+        & go build -o $exe ./cmd/snow | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "snow install: go build failed in $source; nothing was installed" }
+    } finally {
+        Pop-Location
+    }
+    return $exe
 }
 
 # Get-SnowSha256 hashes a file with .NET, not Get-FileHash. Windows
@@ -107,14 +145,20 @@ function Get-SnowArch {
 
 # Replace-SnowExe moves the new snow.exe into place. Windows refuses to
 # overwrite a running exe but lets it be renamed, and Snow's server keeps
-# running between sessions, so the old file moves aside first. A newer snow
-# then offers to restart the old server.
+# running between sessions, so the old file moves aside first, to a name of
+# its own: a server can still hold the file an earlier install moved aside.
+# A newer snow then offers to restart the old server.
 function Replace-SnowExe($new, $target) {
-    $old = "$target.old"
-    Remove-Item -Force -LiteralPath $old -ErrorAction SilentlyContinue
+    $dir = Split-Path -Parent $target
+    $name = Split-Path -Leaf $target
+    # Leftovers from earlier installs; a file still running stays until a
+    # later install.
+    Get-ChildItem -LiteralPath $dir -Filter "$name.old*" -ErrorAction SilentlyContinue |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    $old = "$target.old-" + [guid]::NewGuid().ToString('N')
     if (Test-Path -LiteralPath $target) {
         try {
-            Move-Item -Force -LiteralPath $target -Destination $old
+            Move-Item -LiteralPath $target -Destination $old
         } catch {
             throw "snow install: could not move the old $target aside: $($_.Exception.Message)"
         }
@@ -122,10 +166,9 @@ function Replace-SnowExe($new, $target) {
     try {
         Move-Item -Force -LiteralPath $new -Destination $target
     } catch {
-        if (Test-Path -LiteralPath $old) { Move-Item -Force -LiteralPath $old -Destination $target -ErrorAction SilentlyContinue }
+        if (Test-Path -LiteralPath $old) { Move-Item -LiteralPath $old -Destination $target -ErrorAction SilentlyContinue }
         throw "snow install: could not install ${target}: $($_.Exception.Message)"
     }
-    # Still running: the next install removes it.
     Remove-Item -Force -LiteralPath $old -ErrorAction SilentlyContinue
 }
 
@@ -182,5 +225,5 @@ try {
     throw $message
 } finally {
     # irm | iex defines these in the user's session; leave nothing behind.
-    Remove-Item -ErrorAction SilentlyContinue -Path Function:\Install-Snow, Function:\Get-SnowSha256, Function:\Get-SnowArch, Function:\Replace-SnowExe, Function:\Add-SnowPath, Function:\Get-SnowFile
+    Remove-Item -ErrorAction SilentlyContinue -Path Function:\Install-Snow, Function:\Get-SnowRelease, Function:\Build-SnowExe, Function:\Get-SnowSha256, Function:\Get-SnowArch, Function:\Replace-SnowExe, Function:\Add-SnowPath, Function:\Get-SnowFile
 }
