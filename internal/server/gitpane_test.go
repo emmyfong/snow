@@ -96,6 +96,33 @@ func TestGitPaneStageCommit(t *testing.T) {
 	}
 }
 
+// TestGitPaneDiffFollowsStage: staging the file whose diff is open shows
+// its staged diff, not an empty one, and stage all stages every change.
+func TestGitPaneDiffFollowsStage(t *testing.T) {
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	writeFile(t, repo, "a.txt", "changed\n")
+	writeFile(t, repo, "b.txt", "new\n")
+	s := New(testOptions())
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	pane := openGitPane(t, c, repo)
+	waitGit(t, c, pane, func(st *api.GitState) bool { return len(st.Changes) == 2 })
+
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActDiff, Args: map[string]string{api.ArgGitPath: "a.txt"}})
+	waitGit(t, c, pane, func(st *api.GitState) bool { return st.Diff != nil && !st.Loading })
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActStage, Args: map[string]string{api.ArgGitPath: "a.txt"}})
+	st := waitGit(t, c, pane, func(st *api.GitState) bool { return !st.Loading && st.Diff != nil && st.Diff.Staged })
+	if !hasDiffLine(st.Diff, api.GitLineAdd, "changed") {
+		t.Errorf("staged diff %+v", st.Diff)
+	}
+
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActStageAll})
+	waitGit(t, c, pane, func(st *api.GitState) bool {
+		return !st.Loading && len(st.Changes) == 2 && st.Changes[0].Staged() && st.Changes[1].Staged() && !st.Changes[0].Unstaged() && !st.Changes[1].Unstaged()
+	})
+}
+
 // TestGitPaneCommitFails: a failed commit shows git's own words in Error,
 // and the pane goes on working.
 func TestGitPaneCommitFails(t *testing.T) {
@@ -288,11 +315,11 @@ func TestNewPaneFromSidePane(t *testing.T) {
 
 // commitByHook reports a hook pair around an agent's git commit in pane,
 // as snow hook sends it: HEAD before the call, then HEAD and its parent.
-func commitByHook(t *testing.T, c *apitest.Client, pane int, dir, before, after, parent string) {
+func commitByHook(t *testing.T, c *apitest.Client, pane int, before, after, parent string) {
 	t.Helper()
 	at := time.Now()
-	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at, Commit: &api.AgentCommit{Folder: dir, Before: before}})
-	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at.Add(time.Millisecond), Commit: &api.AgentCommit{Folder: dir, After: after, Parent: parent}})
+	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at, Commit: &api.AgentCommit{Phase: api.CommitBefore, Before: before}})
+	c.Send(&api.AgentState{Pane: pane, State: api.AgentWorking, At: at.Add(time.Millisecond), Commit: &api.AgentCommit{Phase: api.CommitAfter, After: after, Parent: parent}})
 }
 
 // gitAndTerminal opens a git pane on dir and returns it with the terminal
@@ -330,10 +357,11 @@ func TestHistoryObservedAttribution(t *testing.T) {
 
 	base := gittest.Run(t, dir, "rev-parse", "HEAD")
 	agent := commitFile(t, dir, "agent.txt")
-	commitByHook(t, c, term, dir, base, agent, base)
+	commitByHook(t, c, term, base, agent, base)
 	other := commitFile(t, dir, "other.txt")
 	// The parent does not match what the hook saw before: no proof.
-	commitByHook(t, c, term, dir, base, other, agent)
+	commitByHook(t, c, term, base, other, agent)
+	c.Send(&api.SidePaneAction{Pane: git, Action: api.GitActRefresh})
 
 	st := waitGit(t, c, git, func(st *api.GitState) bool {
 		return len(st.History) == 3 && st.History[1].Agent != ""
@@ -359,10 +387,11 @@ func TestHistoryUnknownAttribution(t *testing.T) {
 	git, term := gitAndTerminal(t, c, dir)
 	before := gittest.Run(t, dir, "rev-parse", "HEAD")
 	// A hook that saw HEAD before a call, and no read after it.
-	c.Send(&api.AgentState{Pane: term, State: api.AgentWorking, At: time.Now(), Commit: &api.AgentCommit{Folder: dir, Before: before}})
+	c.Send(&api.AgentState{Pane: term, State: api.AgentWorking, At: time.Now(), Commit: &api.AgentCommit{Phase: api.CommitBefore, Before: before}})
 	writeFile(t, dir, "x.txt", "x\n")
 	gittest.Run(t, dir, "add", "x.txt")
 	gittest.Run(t, dir, "commit", "-q", "-m", "Co-Authored-By: an agent")
+	c.Send(&api.SidePaneAction{Pane: git, Action: api.GitActRefresh})
 	st := waitGit(t, c, git, func(st *api.GitState) bool { return len(st.History) == 2 })
 	for _, cm := range st.History {
 		if cm.Agent != "" {
@@ -382,5 +411,56 @@ func TestCommitMarksBound(t *testing.T) {
 	}
 	if m.agent(fmt.Sprintf("%040x", 0)) != "" || m.agent(fmt.Sprintf("%040x", maxCommitMarks)) != "a" || len(m.by) != maxCommitMarks {
 		t.Errorf("%d marks; oldest %q", len(m.by), m.agent(fmt.Sprintf("%040x", 0)))
+	}
+}
+
+// TestGitPaneLoadingWhileJobsWait: a state the worker read before a job
+// keeps the pane loading until the job's answer, so the client does not
+// take an old read as the commit's outcome.
+func TestGitPaneLoadingWhileJobsWait(t *testing.T) {
+	p := &gitPane{jobs: make(chan gitJob, gitJobs)}
+	if err := p.Act(api.GitActCommit, map[string]string{api.ArgGitMessage: "m"}); err != nil {
+		t.Fatal(err)
+	}
+	p.take(api.GitState{Branch: "main"}, false)
+	if !p.state.Loading {
+		t.Fatal("a poll's state cleared loading while the commit waits")
+	}
+	p.take(api.GitState{Branch: "main", Notice: "Committed abc"}, true)
+	if p.state.Loading {
+		t.Fatal("the commit's answer left the pane loading")
+	}
+}
+
+// TestHistoryStaleEvidence: HEAD seen before a git commit that never
+// reported back is not evidence for a later call whose own read before it
+// failed, nor after any other hook; a commit made on top meanwhile stays
+// unknown.
+func TestHistoryStaleEvidence(t *testing.T) {
+	dir := t.TempDir()
+	gittest.Repo(t, dir)
+	s := newTestServer(t)
+	c := connect(t, s, 120, 30)
+	git, term := gitAndTerminal(t, c, dir)
+	base := gittest.Run(t, dir, "rev-parse", "HEAD")
+	at := time.Now()
+	report := func(cm *api.AgentCommit) {
+		at = at.Add(time.Millisecond)
+		c.Send(&api.AgentState{Pane: term, State: api.AgentWorking, At: at, Commit: cm})
+	}
+	// A git commit that failed: Claude Code sends no PostToolUse.
+	report(&api.AgentCommit{Phase: api.CommitBefore, Before: base})
+	user := commitFile(t, dir, "user.txt")
+	// The next call's read before it failed.
+	report(&api.AgentCommit{Phase: api.CommitBefore})
+	report(&api.AgentCommit{Phase: api.CommitAfter, After: user, Parent: base})
+	// Evidence, then another hook between it and the read after.
+	report(&api.AgentCommit{Phase: api.CommitBefore, Before: base})
+	report(nil)
+	report(&api.AgentCommit{Phase: api.CommitAfter, After: user, Parent: base})
+	c.Send(&api.SidePaneAction{Pane: git, Action: api.GitActRefresh})
+	st := waitGit(t, c, git, func(st *api.GitState) bool { return len(st.History) == 2 && !st.Loading })
+	if st.History[0].Agent != "" {
+		t.Errorf("%s is marked %q on stale evidence", st.History[0].Short, st.History[0].Agent)
 	}
 }

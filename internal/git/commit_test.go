@@ -165,3 +165,34 @@ func read(t *testing.T, path string) []byte {
 	}
 	return b
 }
+
+// TestGitStageAll: stage all reaches every change of the repository from a
+// subfolder: a new file, a deleted one, and one above the folder.
+func TestGitStageAll(t *testing.T) {
+	dir := repo(t)
+	ctx := context.Background()
+	if err := os.MkdirAll(filepath.Join(dir, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "sub/new.txt", "new\n")
+	write(t, dir, "top.txt", "top\n")
+	if err := os.Remove(filepath.Join(dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	r := Repo{Path: filepath.Join(dir, "sub")}
+	if err := r.StageAll(ctx); err != nil {
+		t.Fatal(err)
+	}
+	st, err := r.Status(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(st.Changes) != 3 {
+		t.Fatalf("changes %+v, want 3", st.Changes)
+	}
+	for _, c := range st.Changes {
+		if !c.Staged() || c.Work != "" {
+			t.Errorf("%+v is not wholly staged", c)
+		}
+	}
+}

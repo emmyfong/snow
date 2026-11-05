@@ -44,7 +44,7 @@ internal/client/
   copymode/      scrollback, search, selection
   chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, the recent conversations of its folder while it is empty (`recent.go`: Up, Down, Enter or a click resumes, typing starts a new one, `Ctrl+a` shows every folder), tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
-  gitpane/       the git pane (api.GitState): the branch, the staged and other changes, one file's diff, and the commit message box; keys and clicks become api.SidePaneAction, and git runs on the server
+  gitpane/       the git pane (api.GitState): the branch, the staged and other changes, one file's diff, the commit message box, the worktrees with the agent that works in each (`worktree.go`: Enter focuses it, else opens a terminal there), and the history, where a commit shows its agent only when the server saw the agent make it, else "unknown"; keys and clicks become api.SidePaneAction or api.Command, and git runs on the server
 ```
 
 - A screen or popup is a package that implements `Screen` (or a popup

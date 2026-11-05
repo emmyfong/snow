@@ -23,9 +23,6 @@ func (st *state) agentState(m *api.AgentState) {
 		if p.term == nil || p.ended {
 			return
 		}
-		if m.Commit != nil {
-			st.observeCommit(w, p, m.Commit)
-		}
 		p.sawHook = true
 		if p.hookless {
 			p.hookless = false
@@ -35,6 +32,7 @@ func (st *state) agentState(m *api.AgentState) {
 			return
 		}
 		p.agentAt = m.At
+		st.observeCommit(w, p, m.Commit)
 		if p.agent == m.State {
 			return
 		}

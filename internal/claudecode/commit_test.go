@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/git"
 	"github.com/emmyfong/snow/internal/gittest"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -68,7 +69,7 @@ func TestHookSendsCommit(t *testing.T) {
 	if err := h.Run(strings.NewReader(hookInput(t, EventPreToolUse, `git commit -m "b"`, repo))); err != nil {
 		t.Fatal(err)
 	}
-	if m := next(); m.Commit == nil || m.Commit.Before != before || m.Commit.Folder != repo {
+	if m := next(); m.Commit == nil || m.Commit.Phase != api.CommitBefore || m.Commit.Before != before {
 		t.Fatalf("before the call: %+v", m.Commit)
 	}
 	if err := os.WriteFile(filepath.Join(repo, "b.txt"), []byte("b\n"), 0o644); err != nil {
@@ -80,7 +81,7 @@ func TestHookSendsCommit(t *testing.T) {
 	if err := h.Run(strings.NewReader(hookInput(t, EventPostToolUse, `git commit -m "b"`, repo))); err != nil {
 		t.Fatal(err)
 	}
-	if m := next(); m.Commit == nil || m.Commit.After != after || m.Commit.Parent != before {
+	if m := next(); m.Commit == nil || m.Commit.Phase != api.CommitAfter || m.Commit.After != after || m.Commit.Parent != before {
 		t.Fatalf("after the call: %+v", m.Commit)
 	}
 
@@ -97,8 +98,28 @@ func TestHookSendsCommit(t *testing.T) {
 func TestReadCommitNoRepo(t *testing.T) {
 	gittest.Isolate(t)
 	e := event{Name: EventPostToolUse, Tool: "Bash", Command: "git commit -m x", Cwd: t.TempDir()}
-	c := readCommit(e, time.Now().Add(time.Second))
-	if c == nil || c.After != "" || c.Parent != "" {
+	c := readCommit(e, "", time.Now().Add(time.Second))
+	if c == nil || c.Phase != api.CommitAfter || c.After != "" || c.Parent != "" {
 		t.Errorf("readCommit = %+v", c)
+	}
+}
+
+// TestHeadRepo: the Windows snow.exe that a Claude Code in WSL starts
+// reads git inside that distribution; a Windows folder, or any folder on
+// another OS, reads it directly.
+func TestHeadRepo(t *testing.T) {
+	tests := []struct {
+		goos, cwd, distro string
+		want              git.Repo
+	}{
+		{"windows", "/home/u/p", "Ubuntu", git.Repo{Path: "/home/u/p", Distro: "Ubuntu"}},
+		{"windows", `C:\src\p`, "Ubuntu", git.Repo{Path: `C:\src\p`}},
+		{"windows", "/home/u/p", "", git.Repo{Path: "/home/u/p"}},
+		{"linux", "/home/u/p", "Ubuntu", git.Repo{Path: "/home/u/p"}},
+	}
+	for _, tt := range tests {
+		if got := headRepo(tt.goos, tt.cwd, tt.distro); got != tt.want {
+			t.Errorf("headRepo(%s, %s, %s) = %+v, want %+v", tt.goos, tt.cwd, tt.distro, got, tt.want)
+		}
 	}
 }

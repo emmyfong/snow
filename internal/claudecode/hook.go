@@ -138,6 +138,7 @@ type Hook struct {
 	Pane    string           // SNOW_PANE: the pane's ID
 	Socket  string           // SNOW_SOCKET: the server's socket path
 	Version string           // snow's version, for the handshake
+	Distro  string           // WSL_DISTRO_NAME: the WSL distribution Claude Code runs in, or empty
 	Now     func() time.Time // the time the report carries; nil means time.Now
 }
 
@@ -197,7 +198,11 @@ func (h Hook) Run(stdin io.Reader) error {
 	if !change {
 		return nil
 	}
-	return send(h.Socket, h.Version, &api.AgentState{Pane: pane, State: state, At: at, Commit: readCommit(in.ev, deadline)}, deadline)
+	if isCommitCall(in.ev) {
+		deadline = deadline.Add(commitBudget)
+	}
+	commit := readCommit(in.ev, h.Distro, deadline.Add(-sendMargin))
+	return send(h.Socket, h.Version, &api.AgentState{Pane: pane, State: state, At: at, Commit: commit}, deadline)
 }
 
 // send connects to the server at socket and sends m, giving up at deadline.

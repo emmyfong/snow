@@ -19,7 +19,7 @@ type Commit struct {
 // Log returns the newest n commits of HEAD, newest first. It only reads:
 // it changes no config, ref, or commit.
 func (r Repo) Log(ctx context.Context, n int) ([]Commit, error) {
-	out, err := r.Run(ctx, r.Path, "log", "-n", strconv.Itoa(n), "--no-color",
+	out, err := r.Run(ctx, r.Path, "log", "-n", strconv.Itoa(n), "--no-color", "--no-show-signature",
 		"--format=%H%x1f%h%x1f%an%x1f%at%x1f%s%x1e", "HEAD", "--")
 	if err != nil {
 		return nil, r.Classify(err)

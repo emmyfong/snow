@@ -169,10 +169,11 @@ layout puts one on the right.
 The header shows the branch and how far it is ahead of or behind its
 upstream. Staged changes come first, then the others. In the list, `s`
 stages the selected file, `u` unstages it, `Space` does whichever fits,
-`a` stages every change, and `Enter` or `d` shows its diff. `c` opens a
+`a` stages every change in the repository, and `Enter` or `d` shows its diff. `c` opens a
 box for the commit message: `Enter` commits, `Ctrl+J` adds a line, and
 `Esc` closes the box and keeps the message. `r` reads the folder again;
-the pane also reads it every few seconds. Click a file to select it,
+the pane also reads it every few seconds, without taking git's index
+lock, so it never makes an agent's own `git add` or `git commit` fail. Click a file to select it,
 click it again for its diff, and click a key hint to press its key.
 
 A repository with more than one worktree lists them under the changes:
@@ -184,7 +185,8 @@ on a worktree with no agent, it opens a terminal there in a new window.
 The history lists the newest 50 commits. A commit shows the agent that
 made it only when Snow saw it happen: the agent's Claude Code hooks
 reported a `git commit`, and HEAD moved onto that commit by exactly one
-commit. Every other commit shows `unknown`. Snow never guesses from a
+commit during that call. This works for Claude Code on Windows, in WSL,
+and on Linux and macOS. Every other commit shows `unknown`. Snow never guesses from a
 commit's text or author, and it never adds trailers or changes authors.
 Snow keeps these marks in memory, so they reset when the server restarts.
 

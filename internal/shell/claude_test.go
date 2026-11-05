@@ -137,7 +137,7 @@ func TestLaunchClaude(t *testing.T) {
 		p := Profile{Kind: KindClaude, Path: "wsl.exe", Args: []string{"-d", "Ubuntu"}, Distro: "Ubuntu"}
 		l := p.Launch(h, "/home/emmy/api")
 		want := []string{"-d", "Ubuntu", "--cd", "/home/emmy/api", "-e", "sh", "/mnt/c/Users/emmy/AppData/Local/snow/shell/claude.sh"}
-		if !slices.Equal(l.Args, want) || l.Dir != "" || !slices.Contains(l.Env, "WSLENV=SNOW:SNOW_PANE:SNOW_SOCKET") {
+		if !slices.Equal(l.Args, want) || l.Dir != "" || !slices.Contains(l.Env, "WSLENV=SNOW:SNOW_PANE:SNOW_SOCKET:WSL_DISTRO_NAME") {
 			t.Fatalf("Launch() = %+v, want args %q", l, want)
 		}
 	})

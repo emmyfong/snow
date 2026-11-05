@@ -37,7 +37,8 @@ type gitWorker struct {
 	cur    api.GitState
 	diff   *git.Change // the change whose diff is open, or nil
 	staged bool
-	apply  func(api.GitState)
+	// apply hands a state over; done is set when the state answers a job.
+	apply func(st api.GitState, done bool)
 }
 
 // run reads the folder, then does each job, and reads the folder again on
@@ -70,7 +71,7 @@ func (w *gitWorker) do(ctx context.Context, j gitJob) {
 	if err != nil {
 		next.Error = err.Error()
 	}
-	w.publish(next, true)
+	w.publish(next, true, true)
 }
 
 // action runs j's git command and returns what to tell the user.
@@ -78,21 +79,19 @@ func (w *gitWorker) action(ctx context.Context, j gitJob) (string, error) {
 	path := j.args[api.ArgGitPath]
 	switch j.action {
 	case api.GitActStage:
-		return "", w.withWait(ctx, gitReadWait, func(c context.Context) error { return w.repo.Stage(c, path) })
+		err := w.withWait(ctx, gitReadWait, func(c context.Context) error { return w.repo.Stage(c, path) })
+		w.followDiff(path, true, err)
+		return "", err
 	case api.GitActUnstage:
 		paths := []string{path}
 		if ch, ok := w.change(path); ok && ch.Orig != "" {
 			paths = append(paths, ch.Orig)
 		}
-		return "", w.withWait(ctx, gitReadWait, func(c context.Context) error { return w.repo.Unstage(c, paths...) })
+		err := w.withWait(ctx, gitReadWait, func(c context.Context) error { return w.repo.Unstage(c, paths...) })
+		w.followDiff(path, false, err)
+		return "", err
 	case api.GitActStageAll:
-		return "", w.withWait(ctx, gitReadWait, func(c context.Context) error {
-			paths := make([]string, len(w.cur.Changes))
-			for i, ch := range w.cur.Changes {
-				paths[i] = ch.Path
-			}
-			return w.repo.Stage(c, paths...)
-		})
+		return "", w.withWait(ctx, gitReadWait, w.repo.StageAll)
 	case api.GitActCommit:
 		var hash string
 		err := w.withWait(ctx, gitCommitWait, func(c context.Context) error {
@@ -116,6 +115,14 @@ func (w *gitWorker) action(ctx context.Context, j gitJob) (string, error) {
 		w.diff = nil
 	}
 	return "", nil
+}
+
+// followDiff moves the open diff of path to the side it was staged or
+// unstaged to, so the view keeps showing the change instead of nothing.
+func (w *gitWorker) followDiff(path string, staged bool, err error) {
+	if err == nil && w.diff != nil && w.diff.Path == path {
+		w.staged = staged
+	}
 }
 
 // withWait runs f with ctx bounded by wait.
@@ -143,8 +150,13 @@ func (w *gitWorker) refresh(ctx context.Context, first bool) {
 	if ctx.Err() != nil {
 		return
 	}
-	next.Notice, next.Error = w.cur.Notice, w.cur.Error
-	w.publish(next, first)
+	// A read that failed shows its own error; otherwise the last action's
+	// outcome stays.
+	next.Notice = w.cur.Notice
+	if next.Error == "" {
+		next.Error = w.cur.Error
+	}
+	w.publish(next, first, false)
 }
 
 // read builds a state from the folder's status and the open diff.
@@ -170,9 +182,12 @@ func (w *gitWorker) read(ctx context.Context) api.GitState {
 	if w.diff != nil {
 		next.Diff = w.readDiff(c, st.Changes)
 	}
-	// A git that cannot list worktrees leaves the section empty; the
-	// changes still show.
+	// A git that cannot list worktrees or read the history this time, such
+	// as one that ran out of time after a slow status, keeps the last
+	// lists, so the sections do not flicker away.
+	next.Worktrees, next.History = w.cur.Worktrees, w.cur.History
 	if wts, err := worktree.Repo(w.repo).List(c); err == nil {
+		next.Worktrees = nil
 		for _, wt := range wts {
 			if wt.Bare {
 				continue
@@ -181,11 +196,12 @@ func (w *gitWorker) read(ctx context.Context) api.GitState {
 		}
 	}
 	// A repository with no commit yet has no history to read.
-	if !st.Initial {
-		if cs, err := w.repo.Log(c, gitHistory); err == nil {
-			for _, cm := range cs {
-				next.History = append(next.History, api.GitCommit{Hash: cm.Hash, Short: cm.Short, Author: cm.Author, When: cm.When, Subject: cm.Subject})
-			}
+	if st.Initial {
+		next.History = nil
+	} else if cs, err := w.repo.Log(c, gitHistory); err == nil {
+		next.History = nil
+		for _, cm := range cs {
+			next.History = append(next.History, api.GitCommit{Hash: cm.Hash, Short: cm.Short, Author: cm.Author, When: cm.When, Subject: cm.Subject})
 		}
 	}
 	return next
@@ -219,13 +235,13 @@ var gitLineKinds = map[git.LineKind]string{
 
 // publish hands next over when it differs from the last state, or always
 // when force is set: an action's answer clears the pane's Loading mark.
-func (w *gitWorker) publish(next api.GitState, force bool) {
+func (w *gitWorker) publish(next api.GitState, force, done bool) {
 	fitGitState(&next)
 	if !force && reflect.DeepEqual(next, w.cur) {
 		return
 	}
 	w.cur = next
-	w.apply(next)
+	w.apply(next, done)
 }
 
 // fitGitState cuts st until its JSON fits gitStateBudget: the diff first,

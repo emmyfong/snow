@@ -22,7 +22,7 @@ func runHook(in io.Reader) (code int) {
 			code = 0
 		}
 	}()
-	h := claudecode.Hook{Pane: os.Getenv(transport.EnvPane), Socket: os.Getenv(transport.EnvSocket), Version: version}
+	h := claudecode.Hook{Pane: os.Getenv(transport.EnvPane), Socket: os.Getenv(transport.EnvSocket), Version: version, Distro: os.Getenv("WSL_DISTRO_NAME")}
 	// A failure here only means the mark does not change; there is no one
 	// to tell without disturbing Claude Code.
 	_ = reportHook(h, in)

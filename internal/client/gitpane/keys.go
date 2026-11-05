@@ -178,7 +178,7 @@ func (m *Model) commit() api.Message {
 		m.note = "The commit message is too long."
 		return nil
 	}
-	m.committing = true
+	m.committing, m.sentNotice = true, m.st.Notice
 	return m.action(api.GitActCommit, map[string]string{api.ArgGitMessage: msg})
 }
 

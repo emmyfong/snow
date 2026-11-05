@@ -17,7 +17,7 @@ import (
 func TestCommand(t *testing.T) {
 	ctx := context.Background()
 	wsl := Repo{Path: "/home/u/proj", Distro: "Ubuntu-24.04"}.Command(ctx, "/home/u/proj", "worktree", "list", "--porcelain")
-	wantWSL := []string{"wsl.exe", "-d", "Ubuntu-24.04", "--cd", "/home/u/proj", "--exec", "env", "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "git", "worktree", "list", "--porcelain"}
+	wantWSL := []string{"wsl.exe", "-d", "Ubuntu-24.04", "--cd", "/home/u/proj", "--exec", "env", "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0", "git", "worktree", "list", "--porcelain"}
 	if !reflect.DeepEqual(wsl.Args, wantWSL) {
 		t.Errorf("WSL args %q, want %q", wsl.Args, wantWSL)
 	}
@@ -25,7 +25,7 @@ func TestCommand(t *testing.T) {
 	if want := []string{"git", "-C", "/p", "status"}; !reflect.DeepEqual(native.Args, want) {
 		t.Errorf("native args %q, want %q", native.Args, want)
 	}
-	if !containsAll(native.Env, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C") {
+	if !containsAll(native.Env, "GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0") {
 		t.Errorf("native env lacks the git settings")
 	}
 }
@@ -130,5 +130,12 @@ func TestNotRepo(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "not a git repository") {
 		t.Errorf("error %q lacks git's own message", err)
+	}
+}
+
+// TestErrorNoCause: an Error with neither stderr nor a cause still reads.
+func TestErrorNoCause(t *testing.T) {
+	if got := NewError("status", 1, "", nil).Error(); got != "git status failed" {
+		t.Errorf("Error() = %q", got)
 	}
 }

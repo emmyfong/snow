@@ -33,26 +33,34 @@ type AgentState struct {
 	Commit *AgentCommit `json:"commit,omitempty"`
 }
 
-// MaxCommitFolder bounds AgentCommit.Folder.
-const MaxCommitFolder = 4096
+// Phases of an AgentCommit: read before the tool call or after it.
+const (
+	CommitBefore = "before"
+	CommitAfter  = "after"
+)
 
 // AgentCommit is what snow hook read of git around an agent's tool call
 // that runs git commit, in the folder the agent works in. Before the call
-// it reads HEAD into Before; after it, HEAD into After and HEAD's first
-// parent into Parent. A HEAD that git cannot read is empty. The server
-// counts a commit as the agent's only when After's parent is Before: one
+// (Phase CommitBefore) it reads HEAD into Before; after it (CommitAfter),
+// HEAD into After and HEAD's first parent into Parent. A HEAD that git
+// cannot read is empty. The server counts a commit as the agent's only
+// when After's parent is the Before of the same pane's last report: one
 // new commit on top of what was there.
 type AgentCommit struct {
-	Folder string `json:"folder"`
+	Phase  string `json:"phase"`
 	Before string `json:"before,omitempty"`
 	After  string `json:"after,omitempty"`
 	Parent string `json:"parent,omitempty"`
 }
 
-// Validate checks the folder and that each hash is a git object name.
+// Validate checks the phase, that only its own hashes are set, and that
+// each hash is a git object name.
 func (c *AgentCommit) Validate() error {
-	if c.Folder == "" || len(c.Folder) > MaxCommitFolder {
-		return fmt.Errorf("%w: commit folder of %d bytes", ErrInvalidAgentState, len(c.Folder))
+	switch {
+	case c.Phase == CommitBefore && c.After == "" && c.Parent == "":
+	case c.Phase == CommitAfter && c.Before == "":
+	default:
+		return fmt.Errorf("%w: commit report of phase %q", ErrInvalidAgentState, c.Phase)
 	}
 	for _, h := range []string{c.Before, c.After, c.Parent} {
 		if h != "" && !IsCommitHash(h) {

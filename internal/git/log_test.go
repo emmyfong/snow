@@ -33,6 +33,9 @@ func TestLogReal(t *testing.T) {
 	write(t, dir, "b.txt", "b\n")
 	gittest.Run(t, dir, "add", "b.txt")
 	gittest.Run(t, dir, "commit", "-q", "-m", "second")
+	// A signature check that git prints before each record must not reach
+	// the parser.
+	gittest.Run(t, dir, "config", "log.showSignature", "true")
 	cs, err := Repo{Path: dir}.Log(context.Background(), 1)
 	if err != nil {
 		t.Fatal(err)

@@ -66,6 +66,9 @@ func (e entry) key() string {
 	return "u\x00" + e.change.Path
 }
 
+// committedPrefix starts the server's notice for a commit that worked.
+const committedPrefix = "Committed "
+
 // Model is one git pane.
 type Model struct {
 	pane          int
@@ -84,7 +87,11 @@ type Model struct {
 	cursor   int             // in msg, in runes
 	// committing is set from sending a commit until its answer, so a
 	// commit that worked clears the message and one that failed keeps it.
+	// sentNotice is the notice shown when the commit went out: only a new
+	// "Committed" notice tells that this commit worked, not a state that
+	// came without one, such as after the server refused the action.
 	committing bool
+	sentNotice string
 	note       string
 }
 
@@ -107,7 +114,7 @@ func (m *Model) SetState(st api.GitState) {
 	m.st, m.loaded = st, true
 	if m.committing && !st.Loading {
 		m.committing = false
-		if st.Error == "" {
+		if st.Error == "" && st.Notice != m.sentNotice && strings.HasPrefix(st.Notice, committedPrefix) {
 			m.msg, m.cursor = nil, 0
 			m.mode = modeList
 		}

@@ -26,11 +26,14 @@ func gitKind() sideKind {
 // gitPane is the model goroutine's half of a git pane. Its worker runs git
 // and hands each new state over through Apply, so state needs no lock.
 type gitPane struct {
-	state  api.GitState // owned by the model goroutine
-	agent  func(hash string) string
-	jobs   chan gitJob
-	cancel context.CancelFunc
-	done   chan struct{}
+	state api.GitState // owned by the model goroutine
+	// pending counts the jobs taken and not yet answered, so a state the
+	// worker read before a job never shows the pane as done with it.
+	pending int
+	agent   func(hash string) string
+	jobs    chan gitJob
+	cancel  context.CancelFunc
+	done    chan struct{}
 }
 
 // gitJob is one action for the worker.
@@ -51,7 +54,7 @@ func openGit(ctx sideContext) (sidePane, error) {
 	w := &gitWorker{
 		repo:  git.Repo{Path: ctx.Folder, Distro: ctx.Distro},
 		cur:   api.GitState{Folder: ctx.Folder},
-		apply: func(st api.GitState) { ctx.Apply(func() { p.state = st }) },
+		apply: func(st api.GitState, done bool) { ctx.Apply(func() { p.take(st, done) }) },
 	}
 	go func() {
 		defer close(p.done)
@@ -60,7 +63,18 @@ func openGit(ctx sideContext) (sidePane, error) {
 	return p, nil
 }
 
+// take makes st the pane's state, on the model goroutine. done is set
+// when st answers a job. The pane shows loading while any job waits.
+func (p *gitPane) take(st api.GitState, done bool) {
+	if done && p.pending > 0 {
+		p.pending--
+	}
+	st.Loading = p.pending > 0
+	p.state = st
+}
+
 // State implements sidePane.
+//
 // The history's agent marks are read now, so a mark that arrives after
 // git's history still shows.
 func (p *gitPane) State() api.SideState {
@@ -85,6 +99,7 @@ func (p *gitPane) Act(action string, args map[string]string) error {
 	default:
 		return ErrGitBusy
 	}
+	p.pending++
 	p.state.Loading = true
 	return nil
 }

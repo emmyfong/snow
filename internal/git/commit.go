@@ -15,6 +15,15 @@ func (r Repo) Stage(ctx context.Context, paths ...string) error {
 	return r.onPaths(ctx, []string{"add", "--all", "--"}, paths)
 }
 
+// StageAll stages every change in the repository, also those the pane
+// does not list, with one short command line.
+func (r Repo) StageAll(ctx context.Context) error {
+	if _, err := r.Run(ctx, r.Path, "add", "--all", "--", ":/"); err != nil {
+		return r.Classify(err)
+	}
+	return nil
+}
+
 // Unstage takes the staged changes to paths back out of the index. The
 // files keep their changes. A rename needs both its paths.
 func (r Repo) Unstage(ctx context.Context, paths ...string) error {

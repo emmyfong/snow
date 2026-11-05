@@ -106,6 +106,13 @@ func TestCommitBox(t *testing.T) {
 	if a := m.Key(key("enter")); a != nil {
 		t.Fatal("a second Enter sent another commit while the first waits")
 	}
+	// A state without the commit's notice, such as a read from before the
+	// commit or one after the server refused it, keeps the message.
+	m.SetState(changes())
+	if m.mode != modeCommit || m.message() != "fix\nbody" {
+		t.Fatalf("a state with no outcome: mode %d, message %q", m.mode, string(m.msg))
+	}
+	wantAction(t, m.Key(key("enter")), api.GitActCommit, map[string]string{api.ArgGitMessage: "fix\nbody"})
 	done := changes()
 	done.Changes = done.Changes[3:]
 	done.Notice = "Committed abc1234"

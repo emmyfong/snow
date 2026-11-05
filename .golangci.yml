@@ -57,12 +57,14 @@ linters:
         claudecode-uses-documented-surfaces:
           # An allow list: this package touches Claude Code's hooks and
           # settings only, so nothing that holds keys or logins can creep in.
+          # git reads HEAD around an agent's git commit, for the git pane.
           list-mode: strict
           files: ["**/internal/claudecode/**", "!$test"]
           allow:
             - $gostd
             - github.com/emmyfong/snow/pkg/api
             - github.com/emmyfong/snow/internal/transport
+            - github.com/emmyfong/snow/internal/git
         tools-know-only-shell:
           files: ["**/internal/tool/**", "!$test"]
           deny:

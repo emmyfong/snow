@@ -37,17 +37,24 @@ func (c *commitMarks) add(hash, agent string) {
 func (c *commitMarks) agent(hash string) string { return c.by[hash] }
 
 // observeCommit records what snow hook read of git around one of p's tool
-// calls that runs git commit. HEAD before the call waits on the pane; the
-// read after it marks HEAD as the agent's only when HEAD's parent is that
-// HEAD: the call made exactly one new commit on top. An amend, a reset,
-// or a commit someone else made between the two reads marks nothing.
+// calls that runs git commit; c is nil for any other hook. HEAD before the
+// call waits on the pane, and any other report clears it, so the evidence
+// is always from the call just before. The read after the call marks HEAD
+// as the agent's only when HEAD's parent is that HEAD: HEAD moved by
+// exactly one new commit during the call. An amend, a reset, or a failed
+// read marks nothing. A commit someone else made on top during the call,
+// while the agent's own git commit made none, would still be marked; the
+// hooks cannot tell those apart.
 func (st *state) observeCommit(w *window, p *pane, c *api.AgentCommit) {
-	if c.Before != "" {
+	before := p.commitBefore
+	p.commitBefore = ""
+	if c == nil {
+		return
+	}
+	if c.Phase == api.CommitBefore {
 		p.commitBefore = c.Before
 		return
 	}
-	before := p.commitBefore
-	p.commitBefore = ""
 	if before == "" || c.After == "" || c.Parent != before {
 		return
 	}

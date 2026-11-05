@@ -108,8 +108,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    │           │                       │    the WSL distribution for a WSL folder, for worktree
    │           │                       │    and the git pane; worktree imports only git and
    │           │                       │    shell, git only shell)
-   ├──► claudecode ──► pkg/api, transport  (snow hook, snow claude: Claude Code's
-   │           │                       │    hooks and settings only, never its login)
+   ├──► claudecode ──► pkg/api, transport, git  (snow hook, snow claude: Claude
+   │           │                       │    Code's hooks and settings only, never its
+   │           │                       │    login; git reads HEAD around an agent's commit)
    ├──► mcp ──► pkg/api, transport     (snow mcp: the pane tools Claude Code
    │           │                       │    calls, through the Snow socket)
    ├──► shell  (snow claude: the WSL distributions that have claude)

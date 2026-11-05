@@ -40,8 +40,11 @@ type Repo struct {
 }
 
 // gitEnv keeps git from asking questions no one can answer, and keeps its
-// messages in English, which Classify reads.
-var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C"}
+// messages in English, which Classify reads. GIT_OPTIONAL_LOCKS=0 keeps a
+// read such as status from taking index.lock to refresh the index, so a
+// pane that reads on a timer never makes an agent's git add or commit
+// fail on the lock.
+var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C", "GIT_OPTIONAL_LOCKS=0"}
 
 // maxOutput bounds what Run keeps of git's output. A diff of a huge file
 // must not fill the server's memory; the parsers cut far below this.
@@ -76,10 +79,13 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	if e.Stderr != "" {
+	switch {
+	case e.Stderr != "":
 		return "git " + e.Sub + ": " + e.Stderr
+	case e.cause != nil:
+		return "git " + e.Sub + ": " + e.cause.Error()
 	}
-	return "git " + e.Sub + ": " + e.cause.Error()
+	return "git " + e.Sub + " failed"
 }
 
 func (e *Error) Unwrap() error { return e.cause }
