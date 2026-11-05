@@ -30,6 +30,8 @@ type Config struct {
 	Providers map[string]Endpoint `toml:"provider"`
 	// Agents holds the [agent.<name>] tables, by name. Nil means none.
 	Agents map[string]Agent `toml:"agent"`
+	// Roles holds the [role.<name>] tables, by name. Nil means none.
+	Roles map[string]Role `toml:"role"`
 }
 
 // Notify sets which events show a desktop notification.
@@ -181,6 +183,10 @@ func parse(data string) (Config, *Error) {
 		return Config{}, verr
 	}
 	if verr, path := cfg.validateAgents(); verr != nil {
+		verr.Line = keyLine(data, path)
+		return Config{}, verr
+	}
+	if verr, path := cfg.validateRoles(); verr != nil {
 		verr.Line = keyLine(data, path)
 		return Config{}, verr
 	}

@@ -97,7 +97,7 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore, notify
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore, notify, private
    │           │                       │
    │           │                       ├──► agent ──► provider, convstore, tool ──► shell
    │           │                       │    (the server runs agents; agents never import server,

@@ -34,7 +34,9 @@ internal/client/
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
   agents/        the agents board (Ctrl+b w) and needs-you inbox (Ctrl+b i): the board lists every agent of the session from api.AgentList over the whole window area, with kind, state, how long, folder, and a chat's model and cost; the inbox lists every agent that waits for the user in every session; Enter focuses the agent's pane in both
   sessionlist/   session rows (name, state, last used, a "needs you" alert) for the home page, and the session list popup (Ctrl+b s)
-  confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it
+  confirm/       the confirmation popup (Close/Cancel buttons; y, n, Esc); keys and mouse share it. `NewChoice` adds a second action between them, with its own key (the agent close: Keep worktree, Remove worktree, Cancel)
+  agentlaunch/   the new agent form (Ctrl+b A, `agents new`, `/agents new`): folder, branch (empty means agent/N), Claude Code profile, and role (listed only when config.toml has roles); it sends agent-new
+  roletext/      what a role limits and whether Claude Code enforces it (`Limits`, `Short`); the form and the agents board share it, so only a plan-mode role reads "read-only"
   menu/          the right-click menu (`menu.PaneItems` reads labels and shortcuts from `keys.Table`)
   whichkey/      the prefix hint popup (`whichkey.View`, fed by `keys.Table.Entries`)
   mouse/         pure hit-testing (pane, border, tab, session name) and border drags; session turns hits into commands

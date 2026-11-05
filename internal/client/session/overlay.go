@@ -25,6 +25,8 @@ type overlay struct {
 	done func(r picker.Result) tea.Cmd
 	// agents, when set, takes each new agent list from the server.
 	agents func([]api.AgentInfo)
+	// paste, when set, takes pasted text; without it a paste is dropped.
+	paste func(string)
 }
 
 // conversationPane is an own pane that has a conversation to resume into

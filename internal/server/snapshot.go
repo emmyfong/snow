@@ -35,6 +35,10 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				sp.Kind = p.sideKind
 			default:
 				sp.Scrollback = lastLines(p, st.srv.savedLines())
+				sp.Worktree, sp.Branch = p.worktree, p.branch
+				if p.role != nil {
+					sp.Role = p.role.Name
+				}
 			}
 			sw.Panes = append(sw.Panes, sp)
 		}

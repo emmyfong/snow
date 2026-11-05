@@ -49,17 +49,23 @@ func (l AgentList) MarshalJSON() ([]byte, error) {
 // for chat panes only: the model the next turn uses, and the estimated
 // cost of the conversation's priced replies, in US dollars.
 type AgentInfo struct {
-	Session    string    `json:"session"`
-	Window     int       `json:"window"`
-	WindowName string    `json:"windowName"`
-	Pane       int       `json:"pane"`
-	Kind       string    `json:"kind"`
-	Profile    string    `json:"profile,omitempty"`
-	Folder     string    `json:"folder,omitempty"`
-	Worktree   string    `json:"worktree,omitempty"`
-	State      string    `json:"state,omitempty"`
-	Since      time.Time `json:"since"`
-	Waits      string    `json:"waits,omitempty"`
-	Model      string    `json:"model,omitempty"`
-	Cost       float64   `json:"cost,omitempty"`
+	Session    string `json:"session"`
+	Window     int    `json:"window"`
+	WindowName string `json:"windowName"`
+	Pane       int    `json:"pane"`
+	Kind       string `json:"kind"`
+	Profile    string `json:"profile,omitempty"`
+	Folder     string `json:"folder,omitempty"`
+	Worktree   string `json:"worktree,omitempty"`
+	Branch     string `json:"branch,omitempty"` // the worktree's branch
+	// Role is the title of the role the agent started with, and
+	// PermissionMode and ReadOnly what its RoleInfo said then.
+	Role           string    `json:"role,omitempty"`
+	PermissionMode string    `json:"permissionMode,omitempty"`
+	ReadOnly       bool      `json:"readOnly,omitempty"`
+	State          string    `json:"state,omitempty"`
+	Since          time.Time `json:"since"`
+	Waits          string    `json:"waits,omitempty"`
+	Model          string    `json:"model,omitempty"`
+	Cost           float64   `json:"cost,omitempty"`
 }

@@ -98,7 +98,7 @@ func TestMenuItemsRunTheirActions(t *testing.T) {
 func TestMenuByKeyboard(t *testing.T) {
 	m, r := pickerScreen(t, 80, 24)
 	m.Update(rightClick(50, 3))
-	for range 4 { // split right, split down, Claude Code, open pane
+	for range 5 { // split right, split down, Claude Code, new agent, open pane
 		m.Update(press(tea.KeyDown, 0, ""))
 	}
 	m.Update(enter)

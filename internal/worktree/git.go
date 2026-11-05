@@ -112,6 +112,15 @@ func declined(err error) bool {
 	return errors.As(err, &f) && f.code == 1
 }
 
+// branchTaken reports whether err is git refusing to make a branch that
+// already exists. git runs with LC_ALL=C, so its messages are English.
+func branchTaken(err error) bool {
+	var f *failure
+	return errors.As(err, &f) &&
+		(strings.Contains(f.stderr, "reference already exists") ||
+			strings.Contains(f.stderr, "a branch named") && strings.Contains(f.stderr, "already exists"))
+}
+
 // classify gives a failure that says what is wrong with the repository or
 // with git itself a typed error. Any other failure passes through.
 func (r Repo) classify(err error) error {

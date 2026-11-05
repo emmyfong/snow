@@ -79,9 +79,16 @@ func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane,
 // newWindow starts a window with one pane of kind, as openPane does, adds
 // it to sess at the lowest free index, and shows it.
 func (st *state) newWindow(sess *session, kind, profile, dir string) (*window, error) {
+	return st.newWindowWith(sess, func(id, cols, rows int) (*pane, error) {
+		return st.openPane(id, cols, rows, kind, profile, dir)
+	})
+}
+
+// newWindowWith is newWindow with the pane open makes.
+func (st *state) newWindowWith(sess *session, open func(id, cols, rows int) (*pane, error)) (*window, error) {
 	cols, rows := sess.area()
 	id := st.nextPane
-	p, err := st.openPane(id, cols, rows, kind, profile, dir)
+	p, err := open(id, cols, rows)
 	if err != nil {
 		return nil, err
 	}

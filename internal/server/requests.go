@@ -10,7 +10,7 @@ import (
 
 // attach shows a session to c: a running one, a saved one restored from
 // snap, or a new one when asked.
-func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats map[int]*restoredChat) {
+func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats map[int]*restoredChat, roles map[int]restoredRole) {
 	if err := m.Validate(); err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeBadCommand, Message: err.Error()})
 		return
@@ -28,7 +28,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats ma
 			cols, rows = defaultCols, defaultRows
 		}
 		var err error
-		if sess, err = st.restore(snap, chats, cols, rows); err != nil {
+		if sess, err = st.restore(snap, chats, roles, cols, rows); err != nil {
 			st.srv.log.Warn("restore failed", "session", m.Session, "err", err)
 			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 			return
@@ -173,6 +173,14 @@ func (st *state) profileList() *api.ProfileList {
 	l := &api.ProfileList{Profiles: names}
 	if len(names) > 0 {
 		l.Default = names[0]
+	}
+	for _, n := range names {
+		if st.srv.launch.isAgent(n) {
+			l.Agents = append(l.Agents, n)
+		}
+	}
+	for _, r := range st.srv.opts.Roles {
+		l.Roles = append(l.Roles, r.info())
 	}
 	return l
 }

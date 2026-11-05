@@ -61,12 +61,13 @@ func (s *Server) loadSaved(session string) (*store.Snapshot, error) {
 // running its profile in its folder below its saved lines. Panes get new
 // IDs. A profile that no longer exists runs the default; a folder that is
 // gone falls back as for any new pane. A chat pane takes its conversation
-// from chats, which resumeChats made off this goroutine.
-func (st *state) restore(snap *store.Snapshot, chats map[int]*restoredChat, cols, rows int) (*session, error) {
+// from chats, which resumeChats made off this goroutine, and an agent its
+// role from roles, which restoreRoles made there too.
+func (st *state) restore(snap *store.Snapshot, chats map[int]*restoredChat, roles map[int]restoredRole, cols, rows int) (*session, error) {
 	sess := &session{name: snap.Name, lastUsed: time.Now(), cols: cols, rows: rows}
 	divider := restoredDivider(snap.Saved)
 	for _, sw := range snap.Windows {
-		w, err := st.restoreWindow(sess, sw, divider, chats)
+		w, err := st.restoreWindow(sess, sw, divider, chats, roles)
 		if err != nil {
 			st.closeSession(sess)
 			return nil, fmt.Errorf("restore %s: %w", snap.Name, err)
@@ -87,7 +88,7 @@ func (st *state) restore(snap *store.Snapshot, chats map[int]*restoredChat, cols
 }
 
 // restoreWindow starts the panes of sw in a tree with new pane IDs.
-func (st *state) restoreWindow(sess *session, sw store.Window, divider string, chats map[int]*restoredChat) (*window, error) {
+func (st *state) restoreWindow(sess *session, sw store.Window, divider string, chats map[int]*restoredChat, roles map[int]restoredRole) (*window, error) {
 	saved := map[int]store.Pane{}
 	for _, p := range sw.Panes {
 		saved[p.ID] = p
@@ -128,9 +129,20 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string, c
 		} else if side {
 			p, err = st.srv.openSide(int(id), sp.Kind, sp.Folder)
 		} else {
-			p, err = st.srv.startPane(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider))
+			role, hasRole := roles[sp.ID]
+			p, err = st.srv.startPaneArgs(int(id), r.W, r.H, sp.Profile, sp.Folder, preamble(sp.Scrollback, divider), role.args)
 			if errors.Is(err, ErrUnknownProfile) {
+				// The default profile is no agent: the role's options would
+				// reach a shell.
+				hasRole = false
 				p, err = st.srv.startPane(int(id), r.W, r.H, "", sp.Folder, preamble(sp.Scrollback, divider))
+			}
+			if err == nil {
+				p.worktree, p.branch = sp.Worktree, sp.Branch
+				if hasRole {
+					info := role.info.info()
+					p.role = &info
+				}
 			}
 		}
 		if err != nil {

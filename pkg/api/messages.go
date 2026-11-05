@@ -287,6 +287,10 @@ type PaneInfo struct {
 	AgentState string `json:"agentState,omitempty"`
 	// Driven is set while an agent types into the pane through send_keys.
 	Driven bool `json:"driven,omitempty"`
+	// Worktree and Branch are the git worktree Snow made for the pane's
+	// agent, and its branch. Empty for other panes.
+	Worktree string `json:"worktree,omitempty"`
+	Branch   string `json:"branch,omitempty"`
 }
 
 // Rect is a cell rectangle; X and Y are the top-left corner.
@@ -394,6 +398,14 @@ const (
 	// resumed conversation starts in another approval mode. The client
 	// shows the message.
 	CodeNotice = "notice"
+	// CodeFolderBusy means an agent-new named a folder outside git where
+	// another agent works; the message names it. Nothing started.
+	CodeFolderBusy = "folder-busy"
+	// CodeBranchExists means an agent-new named a branch that is already
+	// there. Snow never takes over a branch. Nothing started.
+	CodeBranchExists = "branch-exists"
+	// CodeBadBranch means an agent-new named a branch git does not accept.
+	CodeBadBranch = "bad-branch"
 )
 
 // Error makes a server's Error message usable as a Go error.

@@ -28,7 +28,7 @@ func TestEntriesGroupRelatedKeys(t *testing.T) {
 		"Resize pane by 5":        "Alt+Arrows",
 		"Detach":                  "d",
 		"Next/previous window":    "n/p",
-		"Agents":                  "w/i",
+		"Agents":                  "w/i/A",
 		"Claude Code / open pane": "a/O",
 		"Even out / layout":       "E/Space",
 	}

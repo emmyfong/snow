@@ -88,7 +88,8 @@ for the broader setup experience; they do not implement rich runtime-backed chat
   conversation records. External runtime state cannot be recreated from visible
   transcript text alone.
 - The agents board and needs-you inbox exist. Agent identity is currently tied
-  to panes. `internal/worktree` exists; full launch workflows remain in #207.
+  to panes. A Claude Code agent can start in its own worktree and window, with
+  an optional role (#207). Only the role's permission mode is enforced.
 - `internal/client/session/panes.go` has a pane interface. #192 should extend
   that seam instead of introducing a general plugin framework in advance.
 - Transport uses framed JSON over Unix-domain sockets, including on Windows.

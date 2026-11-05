@@ -217,6 +217,10 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 			return m.openModePicker(id)
 		case chat.AskHelp:
 			return m.openHelp(id)
+		case chat.AskAgentNew:
+			return m.openAgentLaunch(id)
+		case chat.AskAgents:
+			return m.openBoard()
 		case chat.AskOpen:
 			if kind := askedArg(p); kind != "" {
 				m.openKind(id, kind)

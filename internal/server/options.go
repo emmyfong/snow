@@ -52,6 +52,11 @@ type Options struct {
 	// Agents are the agent profiles from config.toml. The picker lists
 	// them after the detected profiles. They are ignored when Spec is set.
 	Agents []AgentProfile
+	// Roles are the agent roles from config.toml, which the new agent form
+	// offers. RolesDir is where a launch writes a role's instructions for
+	// claude to read; empty means roles with instructions cannot start.
+	Roles    []Role
+	RolesDir string
 	// Secrets reads the secrets agent profiles name. Nil means none can
 	// be read: such a profile's panes fail with ErrNoSecret.
 	Secrets SecretSource

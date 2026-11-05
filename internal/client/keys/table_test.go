@@ -33,6 +33,7 @@ func TestDefaultBindings(t *testing.T) {
 		{"s", "sessions"},
 		{"w", "choose-agent"},
 		{"i", "inbox"},
+		{"A", "new-agent"},
 		{":", "command-prompt"},
 		{"[", "copy-mode"},
 		{"C-b", "send-prefix"},
@@ -307,7 +308,7 @@ func TestChooseAgentKey(t *testing.T) {
 	if a, ok := tab.Action("i"); !ok || a.Name != "inbox" {
 		t.Fatalf("i = %q %v, want inbox", a.Name, ok)
 	}
-	if got := entryFor(t, tab.Entries(), "Agents").Keys; got != "w/i" {
-		t.Fatalf("which-key lists the agent views on %q, want w/i", got)
+	if got := entryFor(t, tab.Entries(), "Agents").Keys; got != "w/i/A" {
+		t.Fatalf("which-key lists the agent views on %q, want w/i/A", got)
 	}
 }

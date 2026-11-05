@@ -112,6 +112,53 @@ folder, state, and wait time. `Ctrl+b i` opens the needs-you inbox: every
 agent in every session that waits for you, oldest first. Enter jumps to the
 selected agent's pane, and you answer there.
 
+### Parallel agents in worktrees
+
+`Ctrl+b A` opens the new agent form. `agents new` in the `Ctrl+b :`
+list, `/agents new` in a chat, and "New agent in worktree..." in the
+pane menu open it too. Type the folder and, if you want, a branch name,
+then pick a Claude Code profile and press Enter. In a git repository,
+Snow makes a new branch and a worktree for it in
+`<repo>/.worktrees/<branch>`, and starts Claude Code there in a new
+window named after the branch. From a folder below the top of the
+repository, the agent starts in the same folder of its worktree. An empty branch field gives `agent/1`,
+`agent/2`, and so on: the first number with no branch. A folder outside
+git is used as it is, and only one agent may work in it at a time. The
+agents board shows each agent's repository and branch.
+
+Closing an agent pane that has a worktree asks what to do with the
+worktree: keep it or remove it. The branch always stays. Snow never
+removes a worktree with uncommitted changes or commits that no branch
+holds; it keeps the worktree and says why.
+
+#### Roles
+
+A role starts an agent with extra instructions, a Claude Code permission
+mode, or both. Add a `[role.<name>]` table to `~/.snow/config.toml`; the
+new agent form lists each role.
+
+```toml
+[role.reviewer]
+title = "Reviewer"
+instructions = "Review the diff on this branch. Report findings; do not fix them."
+permission_mode = "plan"
+
+[role.tester]
+instructions = "Write tests for the changed code. Do not change other code."
+```
+
+Instructions go after Claude Code's own system prompt, so your
+`CLAUDE.md` files still apply. Instructions only ask: Claude Code can
+still edit files and run commands. `permission_mode` is enforced by
+Claude Code: `plan` keeps the agent from editing files and running
+commands, and only a role with `plan` shows as read-only. A role with
+instructions alone shows "not enforced". The other modes are
+`acceptEdits`, `auto`, `dontAsk`, and `manual`. Snow does not allow
+`bypassPermissions` in a role. Snow writes the instructions to
+`~/.snow/roles/` when an agent starts. A saved session starts the agent
+again in its role; a role no longer in `config.toml` restores the agent
+without one.
+
 ### Desktop notifications
 
 Snow shows a desktop notification when an agent starts to need you or
@@ -278,11 +325,12 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `"` | Split down |
 | `c` | New window |
 | `a` | Claude Code pane beside the pane, in its folder |
+| `A` | New agent in its own worktree and window |
 | `O` | Open a pane of a kind from a list, or focus the one the window has |
 | `n`, `p` | Next and previous window |
 | `0` to `9` | Go to window 0 to 9 |
 | `,` | Rename the window |
-| `x` | Close the pane (asks first) |
+| `x` | Close the pane (asks first; for an agent, also asks about its worktree) |
 | `&` | Close the window (asks first) |
 | `z` | Zoom the pane, or unzoom |
 | `E` | Even out the panes |
@@ -292,9 +340,9 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `Alt` + arrows | Resize the pane by 5 cells |
 | `[` | Copy mode |
 | `s` | Switch to another session from a list |
-| `w` | Agents board: every agent in this session |
+| `w` | Agents board: every agent in this session (`agents new` in `:` starts one) |
 | `i` | Needs-you inbox: every agent that waits for you |
-| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `theme`, `open`, `layout` for this session |
+| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `agents [new]`, `theme`, `open`, `layout` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
@@ -353,6 +401,7 @@ Type `/` in the message line to see them. Tab completes, Enter runs.
 | `/effort [level]` | Set the effort from the next turn; `default` lets the provider choose |
 | `/open [kind]` | Open a pane of that kind beside the chat, or focus the one the window has; with no kind, pick from a list |
 | `/layout [name]` | Arrange the window as `ide`, `focus`, or `review`; with no name, pick from a list |
+| `/agents [new]` | Show the agents board; `new` starts an agent in a worktree |
 | `/help` | Show the commands and keys |
 
 A layout keeps the panes it reuses running. Panes it does not hold move to
@@ -429,10 +478,14 @@ turn_end = true       # false: no notification when a turn ends
 # title = "Claude Code (free)"          # environment; see "Agent profiles"
 # command = ["claude"]
 # env = { ANTHROPIC_BASE_URL = "http://localhost:20128", ANTHROPIC_AUTH_TOKEN = "$secret:omniroute" }
+
+# [role.reviewer]                       # a role for a new agent; see "Roles"
+# instructions = "Review the diff. Report findings."
+# permission_mode = "plan"              # enforced by Claude Code: read-only
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
-`new-claude`, `new-chat` (no key by default), `open-pane`, `layout-picker`,
+`new-claude`, `new-agent`, `new-chat` (no key by default), `open-pane`, `layout-picker`,
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),

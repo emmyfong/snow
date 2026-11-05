@@ -196,6 +196,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.mouseMsg(msg)
 	case tea.PasteMsg:
 		switch c := m.focusedOwn(); {
+		case m.over != nil && m.over.paste != nil:
+			m.over.paste(msg.Content)
 		case m.modal():
 		case c != nil:
 			c.Paste(msg.Content)

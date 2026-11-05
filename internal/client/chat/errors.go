@@ -22,6 +22,8 @@ const (
 	AskResume    = "resume"     // choose a past conversation
 	AskPickMode  = "pick-mode"  // choose the approval mode
 	AskHelp      = "help"       // show the commands and keys
+	AskAgentNew  = "agent-new"  // start a Claude Code agent in its own worktree
+	AskAgents    = "agents"     // show the agents board
 	AskOpen      = "open"       // open a pane kind, or pick one; see AskedArg
 	AskLayout    = "layout"     // arrange the window, or pick a preset; see AskedArg
 )

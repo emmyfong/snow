@@ -39,6 +39,12 @@ func (st *state) agentSplit(c *client, sess *session, cmd *api.Command) {
 				st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: claudeMissing(distro)})
 				return
 			}
+			// The profile may be new: the agent form lists it from now on.
+			for cl := range st.clients {
+				if cl.session != "" && !cl.dropped {
+					st.enqueue(cl, st.profileList())
+				}
+			}
 			st.runWithSecrets(c, sess, withProfile(cmd, name))
 		})
 	}()

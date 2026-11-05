@@ -29,6 +29,7 @@ func TestPaneMenuItems(t *testing.T) {
 		{"Split right", "Ctrl+b %", "split-right"},
 		{"Split down", `Ctrl+b "`, "split-down"},
 		{"Claude Code pane", "Ctrl+b a", "new-claude"},
+		{"New agent in worktree...", "Ctrl+b A", "new-agent"},
 		{"Open pane...", "Ctrl+b O", "open-pane"},
 		{"Zoom", "Ctrl+b z", "zoom"},
 		{"Even out", "Ctrl+b E", "even-out"},
