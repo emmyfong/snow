@@ -6,6 +6,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
+	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -15,11 +16,12 @@ import (
 // creates its file and syncs the folder, which the model goroutine must
 // never wait for (ADR 0007).
 type prestarted struct {
-	// profile and dir are the pane arguments it was started for. A pane
-	// opened with other arguments does not take it.
-	profile, dir string
-	chat         *restoredChat // nil when err is set
-	err          error         // why the conversation could not start
+	// profile and dir are the pane arguments it was started for, and model
+	// and effort the defaults then. A pane opened with other arguments, or
+	// after the defaults changed, does not take it.
+	profile, dir, model, effort string
+	chat                        *restoredChat // nil when err is set
+	err                         error         // why the conversation could not start
 }
 
 // startConversation starts a conversation, as agent.Start does.
@@ -35,14 +37,17 @@ func (s *Server) startConversation(cfg agent.Config, meta convstore.Meta) (*agen
 func (s *Server) prestart(profile, dir, model, effort string) *prestarted {
 	pane := new(atomic.Int64)
 	cfg := s.chatConfigFor(func() int { return int(pane.Load()) }, profile, dir)
+	pre := &prestarted{profile: profile, dir: dir, model: model, effort: effort}
 	conv, err := s.startConversation(cfg, convstore.Meta{Model: model, Effort: effort})
 	if err != nil {
-		return &prestarted{profile: profile, dir: dir, err: err}
+		pre.err = err
+		return pre
 	}
-	return &prestarted{profile: profile, dir: dir, chat: &restoredChat{
+	pre.chat = &restoredChat{
 		conv: conv, snap: newSnapshot(0, conv, model, effort, conv.Mode()),
 		folder: cfg.Folder.Path, profile: cfg.Shell.Name, pane: pane,
-	}}
+	}
+	return pre
 }
 
 // prestartSession starts the first conversation of the session m creates.
@@ -89,10 +94,18 @@ func (s *Server) prestartCommand(c *client, cmd *api.Command) *prestarted {
 		}
 		from := 0
 		if cmd.Op == api.OpSplit {
-			if _, p := sess.findPane(cmd.Target); p == nil {
+			w, p := sess.findPane(cmd.Target)
+			if p == nil {
 				return
 			}
-			from = cmd.Target
+			// A split that cannot fit fails before it opens a pane, and a
+			// conversation started for it would leave its file behind.
+			cols, rows := sess.area()
+			d := directions[cmd.Args[api.ArgDir]]
+			if w.tree.CanSplitWithin(layout.PaneID(p.id), d, layout.PaneID(st.nextPane), cols, rows) != nil {
+				return
+			}
+			from = p.id
 		}
 		profile, dir = st.newPaneArgs(sess, cmd, from)
 		model, effort = st.defaultModel, st.defaultEffort
@@ -109,7 +122,8 @@ func (s *Server) prestartCommand(c *client, cmd *api.Command) *prestarted {
 // the caller starts the conversation itself.
 func (st *state) takePrestarted(id int, profile, dir string) (p *pane, ok bool, err error) {
 	pre := st.prestarted
-	if pre == nil || pre.profile != profile || pre.dir != dir {
+	if pre == nil || pre.profile != profile || pre.dir != dir ||
+		pre.model != st.defaultModel || pre.effort != st.defaultEffort {
 		return nil, false, nil
 	}
 	st.prestarted = nil
@@ -127,7 +141,10 @@ func (s *Server) withPrestarted(pre *prestarted, f func(st *state)) {
 		f(st)
 		st.prestarted = nil
 	})
-	if pre != nil && pre.chat != nil {
-		s.closeUnused(map[int]*restoredChat{0: pre.chat})
+	if pre == nil || pre.chat == nil {
+		return
+	}
+	if err := pre.chat.closeUnused(); err != nil {
+		s.log.Warn("close unused conversation", "conversation", pre.chat.conv.ID(), "err", err)
 	}
 }

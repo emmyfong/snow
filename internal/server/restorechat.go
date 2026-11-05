@@ -111,11 +111,20 @@ func (rc *restoredChat) paneFor(id int, profile string) *pane {
 // the model goroutine, after the attach.
 func (s *Server) closeUnused(chats map[int]*restoredChat) {
 	for id, rc := range chats {
-		if rc.used || rc.conv == nil {
-			continue
-		}
-		if err := rc.conv.Close(); err != nil && !errors.Is(err, agent.ErrClosed) {
+		if err := rc.closeUnused(); err != nil {
 			s.log.Warn("close unused conversation", "pane", id, "err", err)
 		}
 	}
+}
+
+// closeUnused closes rc's conversation if no pane took it. It waits, so it
+// runs off the model goroutine.
+func (rc *restoredChat) closeUnused() error {
+	if rc.used || rc.conv == nil {
+		return nil
+	}
+	if err := rc.conv.Close(); err != nil && !errors.Is(err, agent.ErrClosed) {
+		return err
+	}
+	return nil
 }
