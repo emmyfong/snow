@@ -61,15 +61,31 @@ const (
 // matches keys by comparing whole events, so a key with text, such as Up with
 // text x, matched nothing and sent its code as a broken character.
 func (k Key) event() uv.KeyPressEvent {
-	return uv.KeyPressEvent{Code: k.Code, Mod: uv.KeyMod(k.Mod)}
+	mod := k.Mod
+	// vt has no bytes for Shift+Enter or Shift+Backspace, with or without
+	// Alt, and sent nothing or a lone ESC (#240). vt has no kitty keyboard
+	// mode to tell the program about Shift, so Shift+Enter goes out as
+	// Alt+Enter, which Claude Code and many other programs read as a
+	// newline, and Shift+Backspace as Backspace. Shift+Tab keeps its own
+	// sequence.
+	if mod&ModShift != 0 && mod&^(ModShift|ModAlt) == 0 {
+		switch k.Code {
+		case KeyEnter:
+			mod = ModAlt
+		case KeyBackspace:
+			mod &^= ModShift
+		}
+	}
+	return uv.KeyPressEvent{Code: k.Code, Mod: uv.KeyMod(mod)}
 }
 
 // text returns the bytes a key types when only Shift, Alt, or both modify
 // it. vt's SendKey writes a printable key only when it has no modifier, and
 // writes its code, not its text, so Shift+a sent nothing and the kitty shape
 // of A (code a, text A) sent a (#236). Keys with Ctrl or Meta, special keys,
-// keys that type nothing, and keys whose text holds a control character are
-// left to vt, so a malformed key cannot write escape sequences.
+// keys with neither text nor a printable code, and keys whose text holds a
+// control character are left to vt, so a malformed key cannot write escape
+// sequences.
 func (k Key) text() (string, bool) {
 	if k.Mod&^(ModShift|ModAlt) != 0 || k.Code > unicode.MaxRune {
 		return "", false
@@ -78,8 +94,10 @@ func (k Key) text() (string, bool) {
 	if strings.ContainsFunc(s, unicode.IsControl) {
 		return "", false
 	}
-	if s == "" && k.Mod&ModShift != 0 && unicode.IsLower(k.Code) {
-		// Terminals send Alt+Shift+a with no text.
+	if s == "" && k.Mod&ModShift != 0 && unicode.IsPrint(k.Code) {
+		// Terminals send Alt+Shift+a, Alt+Shift+1, and Shift+Space with no
+		// text. A letter's shifted form is known; a digit's or a symbol's
+		// depends on the keyboard layout, so it is sent unshifted (#240).
 		s = string(unicode.ToUpper(k.Code))
 	}
 	if s == "" {

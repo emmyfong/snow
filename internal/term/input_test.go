@@ -78,6 +78,19 @@ func TestSendKeyShiftedText(t *testing.T) {
 		{"text without shift", Key{Code: 'a', Text: "A"}, "A"},
 		{"shift+non-ASCII", Key{Code: 'é', Mod: ModShift, Text: "É"}, "É"},
 		{"shift+space", Key{Code: ' ', Mod: ModShift, Text: " "}, " "},
+		// Terminals send these with Shift and no text (#240).
+		// vt has no kitty keyboard mode, so Shift+Enter goes out as
+		// Alt+Enter, a newline in Claude Code and many other programs.
+		{"shift+enter", Key{Code: KeyEnter, Mod: ModShift}, "\x1b\r"},
+		{"shift+enter with text", Key{Code: KeyEnter, Mod: ModShift, Text: "\r"}, "\x1b\r"},
+		{"alt+shift+enter", Key{Code: KeyEnter, Mod: ModAlt | ModShift}, "\x1b\r"},
+		{"shift+backspace", Key{Code: KeyBackspace, Mod: ModShift}, "\x7f"},
+		{"alt+shift+backspace", Key{Code: KeyBackspace, Mod: ModAlt | ModShift}, "\x1b\x7f"},
+		{"shift+space without text", Key{Code: ' ', Mod: ModShift}, " "},
+		{"alt+shift+1", Key{Code: '1', Mod: ModAlt | ModShift}, "\x1b1"},
+		{"shift+1 without text", Key{Code: '1', Mod: ModShift}, "1"},
+		// Special keys never take the text path.
+		{"shift+up", Key{Code: KeyUp, Mod: ModShift}, ""},
 		// Terminals send Alt+Shift+a with no text.
 		{"alt+shift+a", Key{Code: 'a', Mod: ModAlt | ModShift}, "\x1bA"},
 		{"alt+a", Key{Code: 'a', Mod: ModAlt}, "\x1ba"},
