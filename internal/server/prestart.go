@@ -2,6 +2,7 @@ package server
 
 import (
 	"fmt"
+	"slices"
 	"sync/atomic"
 
 	"github.com/emmyfong/snow/internal/agent"
@@ -74,6 +75,9 @@ func (s *Server) prestartSession(m *api.Attach, snap *store.Snapshot) *prestarte
 // opensChat reports whether cmd may open a chat pane: a new window, a
 // split, or an open of kind chat. An agent split opens its own kind of pane.
 func opensChat(cmd *api.Command) bool {
+	if cmd.Op == api.OpLayout {
+		return true // the plan says; see prestartCommand
+	}
 	return cmd.Args[api.ArgKind] == api.PaneChat && cmd.Args[api.ArgAgent] == "" &&
 		(cmd.Op == api.OpNewWindow || cmd.Op == api.OpSplit || cmd.Op == api.OpOpen)
 }
@@ -93,7 +97,18 @@ func (s *Server) prestartCommand(c *client, cmd *api.Command) *prestarted {
 			return
 		}
 		from := 0
-		if cmd.Op == api.OpSplit || cmd.Op == api.OpOpen {
+		switch cmd.Op {
+		case api.OpLayout:
+			w, p := sess.findPane(cmd.Target)
+			if p == nil {
+				return
+			}
+			plan, err := st.planLayout(sess, w, cmd.Args[api.ArgName])
+			if err != nil || !slices.ContainsFunc(plan.open, func(l newLeaf) bool { return l.kind == api.PaneChat }) {
+				return
+			}
+			from = p.id
+		case api.OpSplit, api.OpOpen:
 			w, p := sess.findPane(cmd.Target)
 			if p == nil {
 				return

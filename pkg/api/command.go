@@ -26,7 +26,26 @@ const (
 	// OpOpen opens a pane of kind beside pane Target, or focuses the pane
 	// of that kind its window already has.
 	OpOpen = "open" // kind
+	// OpLayout arranges the window holding pane Target as a preset from
+	// LayoutPresets.
+	OpLayout = "layout" // name
 )
+
+// LayoutPreset is one window arrangement that OpLayout applies.
+type LayoutPreset struct {
+	Name string // the value of ArgName
+	Desc string // what a picker shows
+}
+
+// LayoutPresets lists the presets in the order a picker shows them. A
+// preset reuses each pane of a kind it holds, opens the kinds the window
+// lacks, skips kinds the server cannot open, and moves the panes it does
+// not hold to a new background window named "moved".
+var LayoutPresets = []LayoutPreset{
+	{Name: "ide", Desc: "Files, viewer over chat over terminal, and git"},
+	{Name: "focus", Desc: "The chat alone"},
+	{Name: "review", Desc: "The viewer beside the chat"},
+}
 
 // Command argument keys.
 const (
@@ -125,6 +144,11 @@ func (c *Command) Validate() error {
 		return needWindow()
 	case OpNewWindow, OpNextWindow, OpPrevWindow:
 		return nil
+	case OpLayout:
+		if c.Args[ArgName] == "" {
+			return fmt.Errorf("%w: layout needs a name", ErrInvalidCommand)
+		}
+		return needTarget()
 	case OpOpen:
 		if c.Args[ArgKind] == "" {
 			return fmt.Errorf("%w: open needs a kind", ErrInvalidCommand)

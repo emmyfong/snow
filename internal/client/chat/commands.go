@@ -37,6 +37,9 @@ type Host interface {
 	// Open asks the session to open a pane of kind beside this chat, or to
 	// show the kind picker when kind is empty.
 	Open(kind string)
+	// Arrange asks the session to arrange this chat's window as preset
+	// name, or to show the preset picker when name is empty.
+	Arrange(name string)
 }
 
 // RunFunc runs one command in a chat pane. rest is what the user typed
@@ -70,7 +73,8 @@ type host struct{ m *Model }
 func (h host) Send(kind, text string)  { h.m.sent = h.m.chatInput(kind, text) }
 func (h host) Ask(request string)      { h.m.asked = request }
 func (h host) Notice(text string)      { h.m.note = text }
-func (h host) Open(kind string)        { h.m.asked, h.m.openKind = AskOpen, kind }
+func (h host) Open(kind string)        { h.m.asked, h.m.askArg = AskOpen, kind }
+func (h host) Arrange(name string)     { h.m.asked, h.m.askArg = AskLayout, name }
 func (h host) SetInput(text string)    { h.m.setInput(text) }
 func (h host) Input() string           { return string(h.m.input) }
 func (h host) Model() (string, string) { return h.m.snap.Model, h.m.snap.Effort }

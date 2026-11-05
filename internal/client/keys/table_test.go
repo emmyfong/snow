@@ -25,7 +25,7 @@ func TestDefaultBindings(t *testing.T) {
 		{"9", "select-window-9"},
 		{",", "rename-window"},
 		{"x", "close-pane"}, {"&", "close-window"},
-		{"z", "zoom"}, {"E", "even-out"},
+		{"z", "zoom"}, {"E", "even-out"}, {"Space", "layout-picker"},
 		{"Left", "focus-left"}, {"Right", "focus-right"}, {"Up", "focus-up"}, {"Down", "focus-down"},
 		{"C-Left", "resize-left"}, {"C-Right", "resize-right"}, {"C-Up", "resize-up"}, {"C-Down", "resize-down"},
 		{"M-Left", "resize-left-5"}, {"M-Right", "resize-right-5"}, {"M-Up", "resize-up-5"}, {"M-Down", "resize-down-5"},

@@ -218,13 +218,17 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 		case chat.AskHelp:
 			return m.openHelp(id)
 		case chat.AskOpen:
-			if o, ok := p.(interface{ OpenKind() string }); ok {
-				if kind := o.OpenKind(); kind != "" {
-					m.openKind(id, kind)
-					return nil
-				}
+			if kind := askedArg(p); kind != "" {
+				m.openKind(id, kind)
+				return nil
 			}
 			return m.openKindPicker(id)
+		case chat.AskLayout:
+			if name := askedArg(p); name != "" {
+				m.arrange(id, name)
+				return nil
+			}
+			return m.openLayoutPicker(id)
 		}
 	}
 	if note != "" {

@@ -37,7 +37,7 @@ type Model struct {
 	errAt         int    // the entry of the failure whose choices take keys
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
-	openKind      string // the kind AskOpen names; see OpenKind
+	askArg        string // what AskOpen or AskLayout names; see AskedArg
 	loaded        bool   // the first snapshot came
 	note          string // a note for the status bar; see Note
 	diffs         diffCache

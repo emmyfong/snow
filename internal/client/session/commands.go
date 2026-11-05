@@ -19,6 +19,22 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 	"theme":  (*Model).cmdTheme,
 	"chat":   (*Model).cmdChat,
 	"open":   (*Model).cmdOpen,
+	"layout": (*Model).cmdLayout,
+}
+
+// cmdLayout arranges the focused pane's window as a preset; with no name
+// it shows the preset picker.
+func (m *Model) cmdLayout(name string) tea.Cmd {
+	m.prompt = nil
+	p := m.focused()
+	if p == nil {
+		return nil
+	}
+	if name == "" {
+		return m.openLayoutPicker(p.ID)
+	}
+	m.arrange(p.ID, name)
+	return nil
 }
 
 // cmdOpen opens a pane of kind beside the focused pane, or focuses the one

@@ -39,9 +39,19 @@ func (st *state) command(c *client, cmd *api.Command) {
 
 // run applies a validated cmd to sess, as command does.
 func (st *state) run(c *client, sess *session, cmd *api.Command) {
-	if err := st.apply(sess, cmd); err != nil {
+	var notice string
+	var err error
+	if cmd.Op == api.OpLayout {
+		notice, err = st.applyLayout(sess, cmd)
+	} else {
+		err = st.apply(sess, cmd)
+	}
+	if err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
 		return
+	}
+	if notice != "" {
+		st.enqueue(c, &api.Error{Code: api.CodeNotice, Message: notice})
 	}
 	if _, ok := st.sessions[sess.name]; !ok {
 		return // the command closed the last window

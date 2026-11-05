@@ -32,6 +32,7 @@ func TestPaneMenuItems(t *testing.T) {
 		{"Open pane...", "Ctrl+b O", "open-pane"},
 		{"Zoom", "Ctrl+b z", "zoom"},
 		{"Even out", "Ctrl+b E", "even-out"},
+		{"Layout...", "Ctrl+b Space", "layout-picker"},
 		{"New window", "Ctrl+b c", "new-window"},
 		{"Rename window", "Ctrl+b ,", "rename-window"},
 		{"Close pane", "Ctrl+b x", "close-pane"},
