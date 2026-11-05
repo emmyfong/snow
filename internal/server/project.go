@@ -3,11 +3,11 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/emmyfong/snow/internal/layout"
@@ -116,11 +116,23 @@ func (s *Server) projectLayout(f tool.Folder) *layout.Template {
 		s.log.Warn("project layout not used", "project", key, "err", err)
 		return nil
 	}
-	if !slices.Contains(tmpl.Kinds(), api.PaneChat) {
-		s.log.Warn("project layout not used", "project", key, "err", "it has no chat")
+	// One chat: the session's prestarted one. A second would start its
+	// conversation on the model goroutine.
+	if chats := countKind(tmpl.Kinds(), api.PaneChat); chats != 1 {
+		s.log.Warn("project layout not used", "project", key, "err", fmt.Sprintf("it has %d chats, not 1", chats))
 		return nil
 	}
 	return &tmpl
+}
+
+func countKind(kinds []string, kind string) int {
+	n := 0
+	for _, k := range kinds {
+		if k == kind {
+			n++
+		}
+	}
+	return n
 }
 
 // rememberLayout saves the layout of the first window of sess that holds a

@@ -237,3 +237,53 @@ func TestRestoreSidePane(t *testing.T) {
 		})
 	}
 }
+
+// TestOpenSideNilPane: a side kind that opens nothing is refused, and the
+// server does not panic.
+func TestOpenSideNilPane(t *testing.T) {
+	dir := t.TempDir() // before the server, so its shell has ended when the folder goes
+	opts := testOptions()
+	opts.sideKinds = []sideKind{{Name: "empty", Title: "Empty", Open: func(sideContext) (sidePane, error) { return nil, nil }}}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "e", Create: true, Dir: dir})
+	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
+	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{api.ArgKind: "empty"}})
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed {
+		t.Fatalf("got %+v, want the open refused", e)
+	}
+}
+
+// nilStatePane is a side pane whose State is nil.
+type nilStatePane struct{ notePane }
+
+func (nilStatePane) State() api.SideState { return nil }
+
+// TestSyncSidesNilState: a side pane with no state sends nothing, does not
+// panic, and is not tried again on every frame.
+func TestSyncSidesNilState(t *testing.T) {
+	dir := t.TempDir() // before the server, so its shell has ended when the folder goes
+	opts := testOptions()
+	opts.sideKinds = []sideKind{{Name: "blank", Title: "Blank", Open: func(sideContext) (sidePane, error) {
+		return &nilStatePane{notePane{closed: new(atomic.Int32)}}, nil
+	}}}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "b", Create: true, Dir: dir})
+	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
+	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{api.ArgKind: "blank"}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	blank := focusedID(l)
+	eventually(t, "the blank pane's rev is marked seen", func() bool {
+		seen := false
+		s.call(func(st *state) {
+			for cl := range st.clients {
+				_, p := st.sessions["b"].findPane(blank)
+				seen = p != nil && cl.sideRev[blank] == p.sideRev
+			}
+		})
+		return seen
+	})
+}

@@ -103,6 +103,9 @@ func (s *Server) openSide(id int, kind, folder string) (*pane, error) {
 	if err != nil {
 		return nil, fmt.Errorf("open %s pane: %w", kind, err)
 	}
+	if sp == nil {
+		return nil, fmt.Errorf("open %s pane: the kind opened nothing", kind)
+	}
 	return &pane{id: id, dir: folder, side: sp, sideKind: kind, sideRev: 1}, nil
 }
 
@@ -129,12 +132,19 @@ func (st *state) syncSides(c *client) {
 			if p.side == nil || c.sideRev[id] == p.sideRev {
 				continue
 			}
-			msg, err := api.NewSidePaneState(id, p.sideRev, p.side.State())
+			// The revision counts as seen even when it cannot be sent, so a
+			// bad state is logged once, not on every frame.
+			c.sideRev[id] = p.sideRev
+			state := p.side.State()
+			if state == nil || state.Kind() != p.sideKind {
+				st.srv.log.Warn("side pane state", "pane", id, "kind", p.sideKind, "err", "no state of its kind")
+				continue
+			}
+			msg, err := api.NewSidePaneState(id, p.sideRev, state)
 			if err != nil {
 				st.srv.log.Warn("side pane state", "pane", id, "kind", p.sideKind, "err", err)
 				continue
 			}
-			c.sideRev[id] = p.sideRev
 			st.enqueue(c, msg)
 		}
 	}

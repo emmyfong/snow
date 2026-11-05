@@ -1,6 +1,7 @@
 package server
 
 import (
+	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -167,5 +168,26 @@ func TestLayoutUnknownPreset(t *testing.T) {
 	layoutCmd(c, chat, "grid")
 	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "ide, focus, review") {
 		t.Fatalf("got %+v, want an error listing the layouts", e)
+	}
+}
+
+// TestLayoutFailedOpenKeepsIDs: a layout whose second new pane fails to
+// open closes the first, and its ID is not given to the next pane, so the
+// closed pane's exit cannot remove that pane.
+func TestLayoutFailedOpenKeepsIDs(t *testing.T) {
+	broken := sideKind{Name: "git", Title: "Git", Open: func(sideContext) (sidePane, error) { return nil, errors.New("no git") }}
+	s := chatSideServer(t, []sideKind{broken})
+	c := connect(t, s, 100, 30)
+	chat := openChat(t, c)
+	var reserved int
+	s.call(func(st *state) { reserved = st.nextPane })
+	layoutCmd(c, chat, "ide") // opens a terminal, then git fails
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed {
+		t.Fatalf("got %+v, want the layout refused", e)
+	}
+	c.Send(&api.Command{Op: api.OpSplit, Target: chat, Args: map[string]string{api.ArgDir: api.DirLeft}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return terminalIn(l) != 0 })
+	if id := terminalIn(l); id <= reserved {
+		t.Fatalf("new pane %d reuses an ID the failed layout reserved (from %d)", id, reserved)
 	}
 }

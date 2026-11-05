@@ -121,3 +121,43 @@ func TestProjectSaverCloseFlushes(t *testing.T) {
 		t.Fatal("a change after Close is pending")
 	}
 }
+
+// TestSaveLayoutKeepsNewer: a file a newer Snow wrote is not replaced.
+func TestSaveLayoutKeepsNewer(t *testing.T) {
+	p, err := OpenProjects(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	newer := `{"version":9,"key":"k","layout":{}}`
+	if err := os.WriteFile(p.path("k"), []byte(newer), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.SaveLayout("k", json.RawMessage(`{"kind":"chat"}`)); !errors.Is(err, ErrNewerVersion) {
+		t.Fatalf("err %v, want ErrNewerVersion", err)
+	}
+	if b, _ := os.ReadFile(p.path("k")); string(b) != newer {
+		t.Fatalf("the newer file changed to %s", b)
+	}
+}
+
+// TestProjectSaverCloseTakesFiredSave: a save whose timer fired but has
+// not been taken yet is written by Close, not lost.
+func TestProjectSaverCloseTakesFiredSave(t *testing.T) {
+	p, err := OpenProjects(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := NewProjectSaver(p, time.Hour, nil)
+	s.Changed("id", func() string { return "k" }, json.RawMessage(`{}`))
+	// Stand in for a timer that fired and waits for s.mu: stop it so it
+	// never runs, as Stop returning false would leave it to fire.
+	s.mu.Lock()
+	ps := s.pending["id"]
+	ps.timer.Stop()
+	s.mu.Unlock()
+	s.Close()
+	s.fire("id", ps) // the late timer: finds its save taken
+	if _, err := p.LoadLayout("k"); err != nil {
+		t.Fatalf("the save was lost: %v", err)
+	}
+}

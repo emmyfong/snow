@@ -61,7 +61,17 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	// at human speed, so the cost is small.
 	st.repaint(sess)
 	st.changed(sess)
-	st.rememberLayout(sess)
+	if changesTree[cmd.Op] {
+		st.rememberLayout(sess)
+	}
+}
+
+// changesTree lists the commands that change a window's layout. Only they
+// save the project layout, so a focus after a restore that did not fit
+// keeps the layout the project saved.
+var changesTree = map[string]bool{
+	api.OpSplit: true, api.OpClose: true, api.OpCloseWindow: true, api.OpResize: true, api.OpSwap: true,
+	api.OpZoom: true, api.OpEven: true, api.OpNewWindow: true, api.OpOpen: true, api.OpLayout: true,
 }
 
 // apply performs one validated command on sess.

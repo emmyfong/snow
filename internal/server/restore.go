@@ -145,7 +145,7 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string, c
 		w.focused = int(tree.Panes()[0])
 	}
 	if w.name == "" {
-		w.name = w.panes[w.focused].profile
+		w.name = w.panes[w.focused].name()
 	}
 	return w, nil
 }

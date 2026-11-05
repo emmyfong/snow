@@ -29,6 +29,11 @@
 //   - A new ChatInput kind keeps ProtocolVersion: a server that does not
 //     know it answers with a command-failed Error, which leaves the session
 //     running.
+//   - A new pane kind keeps ProtocolVersion: SidePaneState and
+//     SidePaneAction carry every side pane, with a state struct per kind.
+//     An older client draws a pane of a kind it does not know as an empty
+//     terminal, and the server ignores keys sent to it. A newer client shows
+//     a placeholder.
 //   - Pane IDs start at 1; 0 means none. Window indexes start at 0, as in
 //     tmux.
 package api

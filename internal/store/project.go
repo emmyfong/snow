@@ -59,8 +59,12 @@ func (p *Projects) path(key string) string {
 	return filepath.Join(p.dir, hex.EncodeToString(sum[:16])+".json")
 }
 
-// SaveLayout writes layout for key atomically, with mode 0600.
+// SaveLayout writes layout for key atomically, with mode 0600. It does not
+// replace a file a newer Snow wrote: that gives ErrNewerVersion.
 func (p *Projects) SaveLayout(key string, layout json.RawMessage) error {
+	if _, err := p.LoadLayout(key); errors.Is(err, ErrNewerVersion) {
+		return err
+	}
 	b, err := json.Marshal(projectFile{Version: ProjectVersion, Key: key, Layout: layout})
 	if err != nil {
 		return fmt.Errorf("encode project layout: %w", err)

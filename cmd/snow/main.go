@@ -184,16 +184,15 @@ func serve(stderr io.Writer) int {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	// Without a home folder sessions still run; they are only not saved.
-	var sessions string
+	// Project layouts name folders, so they follow the same switch.
+	var sessions, projects string
 	if cfg.Sessions.Save {
 		if sessions, err = store.DefaultDir(); err != nil {
 			log.Warn("sessions will not be saved", "err", err)
 		}
-	}
-	// Without a home folder a new session starts with the default layout.
-	projects, err := store.DefaultProjectsDir()
-	if err != nil {
-		log.Warn("project layouts will not be saved", "err", err)
+		if projects, err = store.DefaultProjectsDir(); err != nil {
+			log.Warn("project layouts will not be saved", "err", err)
+		}
 	}
 	savedLines := cfg.Sessions.Lines
 	if savedLines == 0 {

@@ -157,6 +157,9 @@ func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, n
 	}
 	cols, rows := sess.area()
 	rects := layout.Rects(plan.tree, cols, rows).Panes
+	// The IDs stay used even when an open fails: a closed pane's exit is
+	// matched by ID, and must not find a later pane.
+	st.nextPane += len(plan.open)
 	opened := map[int]*pane{}
 	for _, leaf := range plan.open {
 		r := rects[layout.PaneID(leaf.id)]
@@ -169,7 +172,6 @@ func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, n
 		}
 		opened[leaf.id] = p
 	}
-	st.nextPane += len(plan.open)
 
 	if len(plan.moved) > 0 {
 		st.moveToWindow(sess, w, plan.moved, "moved")

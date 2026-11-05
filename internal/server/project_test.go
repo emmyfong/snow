@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
@@ -38,7 +39,8 @@ func TestProjectKey(t *testing.T) {
 }
 
 // TestProjectKeyGitRoot: a folder inside a git repository has the
-// repository's key; a folder outside one has its own.
+// repository's key, for a folder of this OS and of a WSL distro. The WSL
+// case runs off Windows, where a distro's paths are this OS's own.
 func TestProjectKeyGitRoot(t *testing.T) {
 	repo := t.TempDir()
 	if err := os.Mkdir(filepath.Join(repo, ".git"), 0o700); err != nil {
@@ -51,7 +53,26 @@ func TestProjectKeyGitRoot(t *testing.T) {
 	if got, want := projectKey(tool.Folder{Path: sub}), normalForm("", repo); got != want {
 		t.Fatalf("key %q, want the repository's %q", got, want)
 	}
+	if runtime.GOOS != "windows" {
+		if got, want := projectKey(tool.Folder{Path: sub, Distro: "Ubuntu"}), normalForm("Ubuntu", repo); got != want {
+			t.Fatalf("WSL key %q, want the repository's %q", got, want)
+		}
+	}
+}
+
+// TestProjectKeyNoRepository: a folder with no .git at or above it is its
+// own project. The test skips on a machine whose temp folder is inside a
+// repository.
+func TestProjectKeyNoRepository(t *testing.T) {
 	plain := t.TempDir()
+	for dir := plain; ; dir = filepath.Dir(dir) {
+		if _, err := os.Stat(filepath.Join(dir, ".git")); err == nil {
+			t.Skipf("%s is inside a repository", plain)
+		}
+		if filepath.Dir(dir) == dir {
+			break
+		}
+	}
 	if got, want := projectKey(tool.Folder{Path: plain}), normalForm("", plain); got != want {
 		t.Fatalf("key %q, want the folder's %q", got, want)
 	}
@@ -147,6 +168,9 @@ func TestRememberRestoresNewSession(t *testing.T) {
 
 	c2 := connect(t, s, 100, 30)
 	after, _ := openIn(t, c2, "two", dir)
+	if len(shownPanes(after)) != len(shownPanes(before)) {
+		t.Fatalf("panes %+v, want %+v", shownPanes(after), shownPanes(before))
+	}
 	for i, want := range shownPanes(before) {
 		got := shownPanes(after)[i]
 		if got.Kind != want.Kind || got.Rect != want.Rect {
@@ -203,5 +227,48 @@ func TestRememberCorruptFile(t *testing.T) {
 	}
 	if b, err := os.ReadFile(file); err != nil || string(b) != "{not json" {
 		t.Fatalf("the file changed: %q, %v", b, err)
+	}
+}
+
+// TestRememberRefusesTwoChats: a saved layout with two chats is not used,
+// so a new session never starts a second conversation on the model
+// goroutine.
+func TestRememberRefusesTwoChats(t *testing.T) {
+	dir := t.TempDir()
+	s, p := projectServer(t)
+	writeProject(t, p, dir, layout.Template{Axis: layout.Horizontal, Ratios: []float64{0.5, 0.5}, Children: []layout.Template{
+		{Kind: api.PaneChat}, {Kind: api.PaneChat},
+	}})
+	c := connect(t, s, 100, 30)
+	l, _ := openIn(t, c, "one", dir)
+	if ps := shownPanes(l); len(ps) != 1 {
+		t.Fatalf("panes %+v, want the default chat alone", ps)
+	}
+}
+
+// TestRememberIgnoresCommandsThatKeepTheLayout: after a restore that did
+// not fit, a focus command leaves the saved layout alone.
+func TestRememberIgnoresCommandsThatKeepTheLayout(t *testing.T) {
+	dir := t.TempDir()
+	s, p := projectServer(t)
+	writeProject(t, p, dir, layout.Template{Axis: layout.Vertical, Ratios: []float64{0.5, 0.5}, Children: []layout.Template{
+		{Kind: api.PaneTerminal}, {Kind: api.PaneChat},
+	}})
+	entries, err := os.ReadDir(s.opts.ProjectsDir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("project files %v, %v", entries, err)
+	}
+	file := filepath.Join(s.opts.ProjectsDir, entries[0].Name())
+	before, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := connect(t, s, 100, 2) // one row: terminal over chat cannot fit
+	_, chat := openIn(t, c, "one", dir)
+	c.Send(&api.Command{Op: api.OpFocus, Target: chat})
+	nextLayout(t, c, func(*api.Layout) bool { return true })
+	time.Sleep(10 * s.opts.saveDelay)
+	if after, err := os.ReadFile(file); err != nil || string(after) != string(before) {
+		t.Fatalf("the saved layout changed to %s, %v", after, err)
 	}
 }

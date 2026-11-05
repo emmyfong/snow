@@ -18,8 +18,9 @@ type ProjectSaver struct {
 
 	mu      sync.Mutex
 	pending map[string]*projectSave // by the caller's id for the project
-	writing sync.Mutex              // one write at a time
 	closed  bool
+	writing sync.Mutex     // one write at a time
+	running sync.WaitGroup // saves taken and not yet written
 }
 
 type projectSave struct {
@@ -51,44 +52,54 @@ func (s *ProjectSaver) Changed(id string, key func() string, layout json.RawMess
 	s.pending[id] = ps
 }
 
-// fire writes ps if it is still the latest change for id.
+// fire writes ps unless a later change for id, or Close, took its place.
 func (s *ProjectSaver) fire(id string, ps *projectSave) {
-	s.mu.Lock()
-	if s.pending[id] != ps {
-		s.mu.Unlock()
+	if !s.take(id, ps) {
 		return
 	}
-	delete(s.pending, id)
-	s.mu.Unlock()
 	s.write(ps)
 }
 
+// take removes ps from the pending saves and counts it as running. It
+// reports false when ps is no longer pending.
+func (s *ProjectSaver) take(id string, ps *projectSave) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.pending[id] != ps {
+		return false
+	}
+	delete(s.pending, id)
+	s.running.Add(1)
+	return true
+}
+
 func (s *ProjectSaver) write(ps *projectSave) {
+	defer s.running.Done()
+	key := ps.key() // may read the disk: outside the write lock
 	s.writing.Lock()
 	defer s.writing.Unlock()
-	key := ps.key()
 	if err := s.p.SaveLayout(key, ps.layout); err != nil && s.report != nil {
 		s.report(key, err)
 	}
 }
 
-// Close writes every pending change now and stops the saver. Later calls
-// to Changed do nothing.
+// Close writes every pending change now, waits for writes under way, and
+// stops the saver. Later calls to Changed do nothing.
 func (s *ProjectSaver) Close() {
 	s.mu.Lock()
 	s.closed = true
 	var due []*projectSave
 	for id, ps := range s.pending {
-		if ps.timer.Stop() {
-			due = append(due, ps)
-		}
+		// A timer that already fired finds its save gone and writes
+		// nothing; this write takes its place.
+		ps.timer.Stop()
 		delete(s.pending, id)
+		s.running.Add(1)
+		due = append(due, ps)
 	}
 	s.mu.Unlock()
 	for _, ps := range due {
 		s.write(ps)
 	}
-	// A timer that fired before Stop may still be writing.
-	s.writing.Lock()
-	s.writing.Unlock() //nolint:staticcheck // waits for that write
+	s.running.Wait()
 }
