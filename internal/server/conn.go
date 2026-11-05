@@ -26,6 +26,8 @@ type client struct {
 	// chatLive holds the chat panes c is in step with: it got their
 	// snapshot and every event since. Others get a snapshot next.
 	chatLive map[int]bool
+	// sideRev is the state revision of each side pane c last got.
+	sideRev map[int]uint64
 	// wantsModels says c asked for the model list and hears when a fetch
 	// finishes.
 	wantsModels bool
@@ -53,7 +55,7 @@ func (s *Server) serveConn(raw net.Conn) {
 		_ = raw.Close()
 		return
 	}
-	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}}
+	c := &client{conn: conn, raw: raw, out: make(chan api.Message, s.outbox), chatLive: map[int]bool{}, sideRev: map[int]uint64{}}
 	c.tools, c.stop = context.WithCancel(context.Background())
 	defer c.stop()
 	// A bad size is not fatal: the client gets the default size until it
@@ -111,6 +113,8 @@ func (s *Server) read(c *client) {
 			pre := s.prestartSession(m, snap)
 			s.withPrestarted(pre, func(st *state) { st.attach(c, m, snap, chats) })
 			s.closeUnused(chats)
+		case *api.SidePaneAction:
+			s.call(func(st *state) { st.sideAction(c, m) })
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })
 		case *api.Input:

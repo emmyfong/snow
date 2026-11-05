@@ -70,10 +70,10 @@ func TestEffortNoteListsTheLevels(t *testing.T) {
 
 // TestCommandsAreInTheChatList: the new commands show in the chat's list.
 func TestCommandsAreInTheChatList(t *testing.T) {
-	m, _ := newChat(100, 40)
+	m, _ := newChat(100, 60) // tall enough that the list shows every command
 	typeText(m, "/")
 	got := screen(m)
-	for _, name := range []string{"/new", "/resume", "/rename", "/mode", "/effort", "/help"} {
+	for _, name := range []string{"/new", "/resume", "/rename", "/mode", "/effort", "/open", "/layout", "/help"} {
 		if !strings.Contains(got, name) {
 			t.Errorf("the list lacks %s:\n%s", name, got)
 		}

@@ -56,6 +56,18 @@ func buildHandlers() map[string]handler {
 		},
 		"new-chat":   func(m *Model, _ tea.Key) tea.Cmd { m.newChat(); return nil },
 		"new-claude": func(m *Model, _ tea.Key) tea.Cmd { m.newClaude(); return nil },
+		"layout-picker": func(m *Model, _ tea.Key) tea.Cmd {
+			if p := m.focused(); p != nil {
+				return m.openLayoutPicker(p.ID)
+			}
+			return nil
+		},
+		"open-pane": func(m *Model, _ tea.Key) tea.Cmd {
+			if p := m.focused(); p != nil {
+				return m.openKindPicker(p.ID)
+			}
+			return nil
+		},
 		"model-picker": func(m *Model, _ tea.Key) tea.Cmd {
 			if p := m.focused(); p != nil {
 				return m.openModelPicker(p.ID)

@@ -39,9 +39,19 @@ func (st *state) command(c *client, cmd *api.Command) {
 
 // run applies a validated cmd to sess, as command does.
 func (st *state) run(c *client, sess *session, cmd *api.Command) {
-	if err := st.apply(sess, cmd); err != nil {
+	var notice string
+	var err error
+	if cmd.Op == api.OpLayout {
+		notice, err = st.applyLayout(sess, cmd)
+	} else {
+		err = st.apply(sess, cmd)
+	}
+	if err != nil {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
 		return
+	}
+	if notice != "" {
+		st.enqueue(c, &api.Error{Code: api.CodeNotice, Message: notice})
 	}
 	if _, ok := st.sessions[sess.name]; !ok {
 		return // the command closed the last window
@@ -51,6 +61,17 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	// at human speed, so the cost is small.
 	st.repaint(sess)
 	st.changed(sess)
+	if changesTree[cmd.Op] {
+		st.rememberLayout(sess)
+	}
+}
+
+// changesTree lists the commands that change a window's layout. Only they
+// save the project layout, so a focus after a restore that did not fit
+// keeps the layout the project saved.
+var changesTree = map[string]bool{
+	api.OpSplit: true, api.OpClose: true, api.OpCloseWindow: true, api.OpResize: true, api.OpSwap: true,
+	api.OpZoom: true, api.OpEven: true, api.OpNewWindow: true, api.OpOpen: true, api.OpLayout: true,
 }
 
 // apply performs one validated command on sess.
@@ -153,6 +174,8 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 		return nil
 	case api.OpEven:
 		return w.tree.Even(id)
+	case api.OpOpen:
+		return st.openKind(sess, w, p, cmd)
 	}
 	return fmt.Errorf("%w: %s is not a pane command", api.ErrInvalidCommand, cmd.Op)
 }

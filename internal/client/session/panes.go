@@ -37,16 +37,6 @@ type ownPane interface {
 	Tick()
 }
 
-// newOwnPane returns the pane for p's kind, or nil for a terminal pane or
-// a kind this client does not know.
-func (m *Model) newOwnPane(kind string, id int) ownPane {
-	switch kind {
-	case api.PaneChat:
-		return newChatPane(id, m.theme, m.now, !m.hideUsage)
-	}
-	return nil
-}
-
 // ownTickMsg advances every animating pane.
 type ownTickMsg struct{}
 
@@ -69,6 +59,8 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	case *api.ChatEvent:
 		m.feed(api.PaneChat, msg.Pane, msg)
 		m.sendListRequest(msg.Pane)
+	case *api.SidePaneState:
+		m.feed(msg.Kind, msg.Pane, msg)
 	case ownTickMsg:
 		m.ownTicking = false
 		for _, p := range m.own {
@@ -225,6 +217,18 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 			return m.openModePicker(id)
 		case chat.AskHelp:
 			return m.openHelp(id)
+		case chat.AskOpen:
+			if kind := askedArg(p); kind != "" {
+				m.openKind(id, kind)
+				return nil
+			}
+			return m.openKindPicker(id)
+		case chat.AskLayout:
+			if name := askedArg(p); name != "" {
+				m.arrange(id, name)
+				return nil
+			}
+			return m.openLayoutPicker(id)
 		}
 	}
 	if note != "" {

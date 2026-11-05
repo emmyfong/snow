@@ -3,6 +3,7 @@ package server
 import (
 	"cmp"
 	"fmt"
+	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/store"
 	"slices"
 	"strconv"
@@ -36,6 +37,9 @@ type state struct {
 	// prestarted is offered to the chat pane that the running attach or
 	// command opens. It is set only for the length of that call.
 	prestarted *prestarted
+	// remembered is the project layout last saved for each chat folder,
+	// so an unchanged layout is not written again.
+	remembered map[string]string
 }
 
 type session struct {
@@ -49,7 +53,7 @@ type session struct {
 }
 
 func newState(s *Server) *state {
-	st := &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}, models: newModelCache()}
+	st := &state{srv: s, sessions: map[string]*session{}, clients: map[*client]struct{}{}, nextPane: 1, savedAt: map[string]uint64{}, saved: s.savedInfos(), notes: s.startNotes, endTimers: map[string]*time.Timer{}, models: newModelCache(), remembered: map[string]string{}}
 	if s.opts.Chat != nil {
 		st.defaultModel, st.defaultEffort = s.opts.Chat.DefaultModel, s.opts.Chat.DefaultEffort
 	}
@@ -70,9 +74,16 @@ func (st *state) createSession(name string, cols, rows int, dir string) (*sessio
 		cols, rows = defaultCols, defaultRows
 	}
 	sess := &session{name: name, lastUsed: time.Now(), cols: cols, rows: rows}
+	var project *layout.Template // taken with the prestarted chat
+	if st.prestarted != nil {
+		project = st.prestarted.project
+	}
 	w, err := st.newWindow(sess, st.firstKind(), "", dir)
 	if err != nil {
 		return nil, fmt.Errorf("start pane for %s: %w", name, err)
+	}
+	if project != nil {
+		st.restoreProject(sess, w, *project)
 	}
 	st.sessions[name] = sess
 	st.served = true

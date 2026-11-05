@@ -18,6 +18,38 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 	"kill":   (*Model).cmdKill,
 	"theme":  (*Model).cmdTheme,
 	"chat":   (*Model).cmdChat,
+	"open":   (*Model).cmdOpen,
+	"layout": (*Model).cmdLayout,
+}
+
+// cmdLayout arranges the focused pane's window as a preset; with no name
+// it shows the preset picker.
+func (m *Model) cmdLayout(name string) tea.Cmd {
+	m.prompt = nil
+	p := m.focused()
+	if p == nil {
+		return nil
+	}
+	if name == "" {
+		return m.openLayoutPicker(p.ID)
+	}
+	m.arrange(p.ID, name)
+	return nil
+}
+
+// cmdOpen opens a pane of kind beside the focused pane, or focuses the one
+// its window has; with no kind it shows the kind picker.
+func (m *Model) cmdOpen(kind string) tea.Cmd {
+	m.prompt = nil
+	p := m.focused()
+	if p == nil {
+		return nil
+	}
+	if kind == "" {
+		return m.openKindPicker(p.ID)
+	}
+	m.openKind(p.ID, kind)
+	return nil
 }
 
 // cmdChat opens a chat beside the focused pane.

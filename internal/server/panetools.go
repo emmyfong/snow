@@ -32,7 +32,7 @@ func (st *state) toolPane(caller, id int) (*session, *pane, *api.Error) {
 	}
 	if _, p := sess.findPane(id); p != nil {
 		if p.term == nil {
-			return nil, nil, &api.Error{Code: api.CodeNotTerminal, Message: fmt.Sprintf("pane %d is a chat pane; it has no screen", id)}
+			return nil, nil, &api.Error{Code: api.CodeNotTerminal, Message: fmt.Sprintf("pane %d is a %s pane; it has no screen", id, p.kind())}
 		}
 		return sess, p, nil
 	}

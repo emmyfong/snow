@@ -26,10 +26,14 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				continue
 			}
 			sp := store.Pane{ID: p.id, Profile: p.profile, Folder: p.folder()}
-			if p.chat != nil {
+			switch {
+			case p.chat != nil:
 				// The conversation file holds the transcript.
 				sp.Kind, sp.Conversation = store.KindChat, p.chat.savedID()
-			} else {
+			case p.side != nil:
+				// A side pane opens anew from its kind and folder.
+				sp.Kind = p.sideKind
+			default:
 				sp.Scrollback = lastLines(p, st.srv.savedLines())
 			}
 			sw.Panes = append(sw.Panes, sp)
