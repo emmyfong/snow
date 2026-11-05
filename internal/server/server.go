@@ -26,6 +26,7 @@ type Server struct {
 	opts   Options
 	log    *slog.Logger
 	launch launcher
+	kinds  *paneKinds
 	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)
@@ -36,7 +37,10 @@ type Server struct {
 	closing  sync.WaitGroup // panes still being closed in the background
 	releases sync.Map       // conversation ID → channel closed once its pane let go of the file
 	saver    *store.Saver   // nil when sessions are not saved
-	store    *store.Store   // where saver writes; nil with it
+	// projects and projectSaver keep project layouts; nil when off.
+	projects     *store.Projects
+	projectSaver *store.ProjectSaver
+	store        *store.Store // where saver writes; nil with it
 	// startSaved lists the sessions saved when the server started; the
 	// model goroutine takes it over.
 	startSaved []store.Info
@@ -57,7 +61,14 @@ func New(opts Options) *Server {
 		done:     make(chan struct{}),
 	}
 	s.launch = newLauncher(opts, s.log)
+	kinds, err := newPaneKinds(opts.Chat != nil, opts.sideKinds...)
+	if err != nil {
+		s.log.Error("pane kinds", "err", err)
+		kinds, _ = newPaneKinds(opts.Chat != nil)
+	}
+	s.kinds = kinds
 	s.saver = s.openSaver()
+	s.projects, s.projectSaver = s.openProjects()
 	go s.loop()
 	return s
 }

@@ -23,6 +23,8 @@ var groups = map[string]group{
 	"select-window": {"Select window"},
 	"step-window":   {"Next/previous window"},
 	"agents":        {"Agents"},
+	"new-pane":      {"Claude Code / open pane"},
+	"arrange":       {"Even out / layout"},
 	"focus":         {"Focus pane"},
 	"resize":        {"Resize pane by 1"},
 	"resize-5":      {"Resize pane by 5"},
@@ -38,8 +40,9 @@ func buildActions() []Action {
 		{Name: "split-right", Desc: "Split right"},
 		{Name: "split-down", Desc: "Split down"},
 		{Name: "new-window", Desc: "New window"},
-		{Name: "new-claude", Desc: "Claude Code pane"},
+		{Name: "new-claude", Desc: "Claude Code pane", Group: "new-pane"},
 		{Name: "new-chat", Desc: "New chat"},
+		{Name: "open-pane", Desc: "Open pane...", Group: "new-pane"},
 		{Name: "model-picker", Desc: "Pick model"},
 		{Name: "next-window", Desc: "Next window", Group: "step-window"},
 		{Name: "prev-window", Desc: "Previous window", Group: "step-window"},
@@ -53,7 +56,8 @@ func buildActions() []Action {
 		Action{Name: "close-pane", Desc: "Close pane"},
 		Action{Name: "close-window", Desc: "Close window"},
 		Action{Name: "zoom", Desc: "Zoom"},
-		Action{Name: "even-out", Desc: "Even out"},
+		Action{Name: "even-out", Desc: "Even out", Group: "arrange"},
+		Action{Name: "layout-picker", Desc: "Layout...", Group: "arrange"},
 	)
 	for _, d := range directions {
 		as = append(as, Action{Name: "focus-" + d, Desc: "Focus " + d, Group: "focus"})
@@ -100,14 +104,14 @@ type binding struct{ key, action string }
 
 func buildDefaults() []binding {
 	b := []binding{
-		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"}, {"a", "new-claude"}, {"m", "model-picker"}, {"n", "next-window"}, {"p", "prev-window"},
+		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"}, {"a", "new-claude"}, {"O", "open-pane"}, {"m", "model-picker"}, {"n", "next-window"}, {"p", "prev-window"},
 	}
 	for i := range 10 {
 		n := strconv.Itoa(i)
 		b = append(b, binding{n, "select-window-" + n})
 	}
 	b = append(b, binding{",", "rename-window"}, binding{"x", "close-pane"}, binding{"&", "close-window"},
-		binding{"z", "zoom"}, binding{"E", "even-out"})
+		binding{"z", "zoom"}, binding{"E", "even-out"}, binding{"Space", "layout-picker"})
 	for _, d := range directions {
 		name := strings.ToUpper(d[:1]) + d[1:]
 		b = append(b, binding{name, "focus-" + d}, binding{"C-" + name, "resize-" + d}, binding{"M-" + name, "resize-" + d + "-5"})

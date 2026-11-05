@@ -144,6 +144,9 @@ func (st *state) saveBusy() {
 // disk as it is: the shells may already have died and taken panes and
 // sessions with them, and the last saves hold the state to restore.
 func (st *state) stopSaving() {
+	if ps := st.srv.projectSaver; ps != nil {
+		ps.Close()
+	}
 	saver := st.srv.saver
 	if saver == nil {
 		return

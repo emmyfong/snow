@@ -260,3 +260,20 @@ func TestRefusedChatSplitStartsNothing(t *testing.T) {
 		t.Fatalf("%d conversations after the refused split, want %d", len(after), len(before))
 	}
 }
+
+// TestOpenChatFocusStartsNothing: open of chat in a window that has one
+// focuses it and starts no conversation.
+func TestOpenChatFocusStartsNothing(t *testing.T) {
+	s, h, _ := newHeldServer(t)
+	c := connect(t, s, 100, 30)
+	chat := openChat(t, c)
+	c.Send(&api.Command{Op: api.OpSplit, Target: chat, Args: map[string]string{api.ArgDir: api.DirRight}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	shell := focusedID(l)
+	starts := h.calls.Load()
+	c.Send(&api.Command{Op: api.OpOpen, Target: shell, Args: map[string]string{api.ArgKind: api.PaneChat}})
+	nextLayout(t, c, func(l *api.Layout) bool { return focusedID(l) == chat && len(shownPanes(l)) == 2 })
+	if n := h.calls.Load(); n != starts {
+		t.Fatalf("%d conversation starts after open chat, want %d", n, starts)
+	}
+}

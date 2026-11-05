@@ -326,6 +326,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `c` | New window |
 | `a` | Claude Code pane beside the pane, in its folder |
 | `A` | New agent in its own worktree and window |
+| `O` | Open a pane of a kind from a list, or focus the one the window has |
 | `n`, `p` | Next and previous window |
 | `0` to `9` | Go to window 0 to 9 |
 | `,` | Rename the window |
@@ -333,6 +334,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `&` | Close the window (asks first) |
 | `z` | Zoom the pane, or unzoom |
 | `E` | Even out the panes |
+| `Space` | Arrange the window from a layout preset: `ide`, `focus`, `review` |
 | Arrows | Focus the pane in that direction |
 | `Ctrl` + arrows | Resize the pane by 1 cell |
 | `Alt` + arrows | Resize the pane by 5 cells |
@@ -340,7 +342,7 @@ Every key in a session starts with the prefix, `Ctrl+b`, as in tmux.
 | `s` | Switch to another session from a list |
 | `w` | Agents board: every agent in this session (`agents new` in `:` starts one) |
 | `i` | Needs-you inbox: every agent that waits for you |
-| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `agents [new]`, `theme` for this session |
+| `:` | Command list: `new`, `switch`, `rename`, `kill`, `chat` (Snow's own chat), `agents [new]`, `theme`, `open`, `layout` for this session |
 | `d` | Detach: home page; Esc quits Snow |
 | `Ctrl+b` | Send `Ctrl+b` to the program |
 
@@ -397,8 +399,18 @@ Type `/` in the message line to see them. Tab completes, Enter runs.
 | `/rename [title]` | Rename the conversation |
 | `/mode [ask\|auto]` | Set when tools wait for you; with no word, pick from a list |
 | `/effort [level]` | Set the effort from the next turn; `default` lets the provider choose |
+| `/open [kind]` | Open a pane of that kind beside the chat, or focus the one the window has; with no kind, pick from a list |
+| `/layout [name]` | Arrange the window as `ide`, `focus`, or `review`; with no name, pick from a list |
 | `/agents [new]` | Show the agents board; `new` starts an agent in a worktree |
 | `/help` | Show the commands and keys |
+
+A layout keeps the panes it reuses running. Panes it does not hold move to
+a background window named `moved`; nothing closes. Kinds Snow cannot open
+yet, such as `files` and `git`, are left out, and the status bar says so.
+After a layout change, Snow remembers the chat window's layout for the
+project (the git repository above the folder, or the folder) in
+`~/.snow/projects`, and a new session there starts with it. This follows
+`[sessions] save`.
 
 `/new` and `/resume` wait for a running turn to end: press `Esc` first. A
 conversation that another pane shows is not opened twice; `/resume` moves
@@ -473,7 +485,7 @@ turn_end = true       # false: no notification when a turn ends
 ```
 
 Actions for `[keys.bind]`: `split-right`, `split-down`, `new-window`,
-`new-claude`, `new-agent`, `new-chat` (no key by default),
+`new-claude`, `new-agent`, `new-chat` (no key by default), `open-pane`, `layout-picker`,
 `next-window`, `prev-window`, `select-window-0` to `select-window-9`,
 `rename-window`, `close-pane`, `close-window`, `zoom`, `even-out`,
 `focus-left`/`right`/`up`/`down`, `resize-left`/`right`/`up`/`down` (by 1),

@@ -60,15 +60,20 @@ func (sess *session) findPane(id int) (*window, *pane) {
 }
 
 // openPane starts a new pane of kind: a terminal running profile in dir,
-// or a chat in dir opened from a pane running profile.
+// a chat in dir opened from a pane running profile, or a side pane of a
+// registered kind in dir. A side pane checks its folder itself, off the
+// model goroutine.
 func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane, error) {
-	if kind == api.PaneChat {
+	switch kind {
+	case api.PaneChat:
 		if p, ok, err := st.takePrestarted(id, profile, dir); ok {
 			return p, err
 		}
 		return st.srv.startChat(id, profile, dir, st.defaultModel, st.defaultEffort)
+	case "", api.PaneTerminal:
+		return st.srv.startPane(id, cols, rows, profile, dir, "")
 	}
-	return st.srv.startPane(id, cols, rows, profile, dir, "")
+	return st.srv.openSide(id, kind, dir)
 }
 
 // newWindow starts a window with one pane of kind, as openPane does, adds

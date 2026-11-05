@@ -17,7 +17,7 @@ func TestDefaultBindings(t *testing.T) {
 		action string
 	}{
 		{"%", "split-right"}, {`"`, "split-down"}, {"c", "new-window"},
-		{"a", "new-claude"}, {"m", "model-picker"},
+		{"a", "new-claude"}, {"O", "open-pane"}, {"m", "model-picker"},
 		{"n", "next-window"}, {"p", "prev-window"},
 		{"0", "select-window-0"}, {"1", "select-window-1"}, {"2", "select-window-2"},
 		{"3", "select-window-3"}, {"4", "select-window-4"}, {"5", "select-window-5"},
@@ -25,7 +25,7 @@ func TestDefaultBindings(t *testing.T) {
 		{"9", "select-window-9"},
 		{",", "rename-window"},
 		{"x", "close-pane"}, {"&", "close-window"},
-		{"z", "zoom"}, {"E", "even-out"},
+		{"z", "zoom"}, {"E", "even-out"}, {"Space", "layout-picker"},
 		{"Left", "focus-left"}, {"Right", "focus-right"}, {"Up", "focus-up"}, {"Down", "focus-down"},
 		{"C-Left", "resize-left"}, {"C-Right", "resize-right"}, {"C-Up", "resize-up"}, {"C-Down", "resize-down"},
 		{"M-Left", "resize-left-5"}, {"M-Right", "resize-right-5"}, {"M-Up", "resize-up-5"}, {"M-Down", "resize-down-5"},

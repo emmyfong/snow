@@ -56,6 +56,9 @@ const (
 	TypeSendKeys
 	TypeWaitForRequest
 	TypeWaitFor
+	TypePaneKinds
+	TypeSidePaneState
+	TypeSidePaneAction
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -159,6 +162,12 @@ func newMessage(t MsgType) Message {
 		return &WaitForRequest{}
 	case TypeWaitFor:
 		return &WaitFor{}
+	case TypePaneKinds:
+		return &PaneKinds{}
+	case TypeSidePaneState:
+		return &SidePaneState{}
+	case TypeSidePaneAction:
+		return &SidePaneAction{}
 	}
 	return nil
 }
@@ -267,7 +276,7 @@ type WindowInfo struct {
 // PaneInfo is one pane's place on screen.
 type PaneInfo struct {
 	ID      int    `json:"id"`
-	Kind    string `json:"kind"` // PaneTerminal or PaneChat
+	Kind    string `json:"kind"` // a name from PaneKinds
 	Rect    Rect   `json:"rect"`
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it

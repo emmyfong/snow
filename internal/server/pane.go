@@ -16,11 +16,16 @@ import (
 type pane struct {
 	id      int
 	profile string
-	term    *term.Pane  // nil for a chat pane
-	chat    *chatPane   // nil for a terminal pane
-	ended   bool        // its WSL distribution stopped; it waits for r to restart
-	dir     string      // the folder it was asked to start in, for a shell that never reports one
-	closed  atomic.Bool // Snow closed it; set before its program is ended
+	term    *term.Pane // nil for a chat or side pane
+	chat    *chatPane  // nil for a terminal or side pane
+	// side is the pane of a registered side kind, sideKind its name, and
+	// sideRev its state revision; owned by the model goroutine.
+	side     sidePane
+	sideKind string
+	sideRev  uint64
+	ended    bool        // its WSL distribution stopped; it waits for r to restart
+	dir      string      // the folder it was asked to start in, for a shell that never reports one
+	closed   atomic.Bool // Snow closed it; set before its program is ended
 	// fetching is set while a goroutine reads the busy pane's frame for the
 	// frame loop; owned by the model goroutine.
 	fetching bool
@@ -108,7 +113,7 @@ func usableDir(dir string) string {
 // folder returns the pane's folder: the one its shell last reported, or the
 // one it started in.
 func (p *pane) folder() string {
-	if p.chat != nil {
+	if p.term == nil {
 		return p.dir
 	}
 	if f := p.term.Folder(); f != "" {
@@ -117,18 +122,22 @@ func (p *pane) folder() string {
 	return p.dir
 }
 
-// kind returns api.PaneTerminal or api.PaneChat.
+// kind returns the pane's kind: api.PaneTerminal, api.PaneChat, or a side
+// kind's name.
 func (p *pane) kind() string {
-	if p.chat != nil {
+	switch {
+	case p.chat != nil:
 		return api.PaneChat
+	case p.side != nil:
+		return p.sideKind
 	}
 	return api.PaneTerminal
 }
 
 // name is what a window that p opens is called.
 func (p *pane) name() string {
-	if p.chat != nil {
-		return "chat"
+	if p.term == nil {
+		return p.kind()
 	}
 	return p.profile
 }
@@ -136,8 +145,11 @@ func (p *pane) name() string {
 // close ends p's program, or its chat: the running turn stops and what
 // arrived is saved. It waits, so it never runs on the model goroutine.
 func (p *pane) close() error {
-	if p.chat != nil {
+	switch {
+	case p.chat != nil:
 		return p.chat.conv.Close()
+	case p.side != nil:
+		return p.side.Close()
 	}
 	return p.term.Close()
 }

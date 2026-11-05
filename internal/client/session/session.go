@@ -37,8 +37,9 @@ type Model struct {
 	layout     *api.Layout
 	panes      map[int]*paneState
 	profiles   api.ProfileList
-	sessions   []api.SessionInfo // the server's last session list
-	agents     []api.AgentInfo   // the server's last agent list
+	kinds      []api.PaneKindInfo // what the server can open, for a picker
+	sessions   []api.SessionInfo  // the server's last session list
+	agents     []api.AgentInfo    // the server's last agent list
 	cols, rows int
 	prefixed   bool    // the prefix key was pressed; the next key is a command
 	prefixKey  tea.Key // the key that started the prefix, for send-prefix
@@ -127,7 +128,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
-	case *api.ChatSnapshot, *api.ChatEvent, ownTickMsg:
+	case *api.ChatSnapshot, *api.ChatEvent, *api.SidePaneState, ownTickMsg:
 		return m.ownMsg(msg)
 	case tea.ColorProfileMsg:
 		// The terminal's color depth is known only now; text that would
@@ -139,6 +140,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.ProfileList:
 		m.profiles = *msg
+	case *api.PaneKinds:
+		m.kinds = msg.Kinds
 	case *api.ModelList:
 		return m.setModelList(msg)
 	case gatewayCheckMsg:

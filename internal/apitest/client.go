@@ -30,8 +30,10 @@ type Client struct {
 	conn     *api.Conn
 	incoming chan received
 	rows     map[int]string
-	chats    map[int]*api.ChatSnapshot // pane ID → rebuilt chat
-	agents   *api.AgentList            // the last agent list
+	chats    map[int]*api.ChatSnapshot  // pane ID → rebuilt chat
+	agents   *api.AgentList             // the last agent list
+	sides    map[int]*api.SidePaneState // pane ID → newest side pane state
+	kinds    *api.PaneKinds             // the last pane kind list
 
 	// Updates counts PaneUpdates received; LastLen is the number of rows
 	// in the most recent one.
@@ -58,7 +60,7 @@ func New(t testing.TB, raw net.Conn, cols, rows int) *Client {
 	if _, err := api.ClientHandshake(conn, hello); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
-	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}, chats: map[int]*api.ChatSnapshot{}, rec: rec}
+	c := &Client{t: t, raw: raw, conn: conn, incoming: make(chan received, 1024), rows: map[int]string{}, chats: map[int]*api.ChatSnapshot{}, sides: map[int]*api.SidePaneState{}, rec: rec}
 	go func() {
 		for {
 			m, err := conn.Receive()
@@ -102,8 +104,8 @@ func (c *Client) Send(m api.Message) {
 	}
 }
 
-// Next receives one message, applying a PaneUpdate to the screen and a
-// ChatSnapshot or ChatEvent to its chat. It returns ErrTimeout if nothing
+// Next receives one message, applying a PaneUpdate to the screen, a
+// ChatSnapshot or ChatEvent to its chat, and a SidePaneState to its pane. It returns ErrTimeout if nothing
 // arrives within timeout.
 func (c *Client) Next(timeout time.Duration) (api.Message, error) {
 	select {
@@ -125,6 +127,13 @@ func (c *Client) Next(timeout time.Duration) (api.Message, error) {
 			}
 		case *api.AgentList:
 			c.agents = m
+		case *api.SidePaneState:
+			// A state older than the one held is stale.
+			if s := c.sides[m.Pane]; s == nil || m.Rev > s.Rev {
+				c.sides[m.Pane] = m
+			}
+		case *api.PaneKinds:
+			c.kinds = m
 		}
 		return r.m, r.err
 	case <-time.After(timeout):

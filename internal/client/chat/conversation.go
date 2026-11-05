@@ -66,6 +66,23 @@ func runEffort(h Host, rest string) {
 	}
 }
 
+// runOpen handles /open: a kind opens beside the chat, or focuses the pane
+// of that kind the window has; none asks for the picker. The server knows
+// which kinds exist and refuses one it does not have.
+func runOpen(h Host, rest string) { h.Open(strings.ToLower(strings.TrimSpace(rest))) }
+
+// runLayout handles /layout: a preset name arranges the chat's window;
+// none asks for the picker.
+func runLayout(h Host, rest string) { h.Arrange(strings.ToLower(strings.TrimSpace(rest))) }
+
+// AskedArg returns what the last AskOpen or AskLayout named, or "" for its
+// picker, and clears it.
+func (m *Model) AskedArg() string {
+	a := m.askArg
+	m.askArg = ""
+	return a
+}
+
 // runHelp asks the session for the help panel.
 func runHelp(h Host, _ string) { h.Ask(AskHelp) }
 
@@ -93,6 +110,8 @@ func init() {
 		{command.Command{Name: "mode", Args: "[ask|auto]", Desc: "Choose when tools wait for you", Group: command.GroupModel}, runMode},
 		{command.Command{Name: "effort", Args: "[level]", Desc: "Set how hard the model thinks", Group: command.GroupModel}, runEffort},
 		{command.Command{Name: "agents", Args: "[new]", Desc: "Agents board; new starts an agent", Group: command.GroupSnow}, runAgents},
+		{command.Command{Name: "open", Args: "[kind]", Desc: "Open a pane, or focus it", Group: command.GroupConversation, Where: command.InSession}, runOpen},
+		{command.Command{Name: "layout", Args: "[name]", Desc: "Arrange the window from a preset", Group: command.GroupConversation, Where: command.InSession}, runLayout},
 		{command.Command{Name: "help", Desc: "Show the commands and keys", Group: command.GroupSnow}, runHelp},
 	} {
 		if err := Register(c.cmd, c.run); err != nil {

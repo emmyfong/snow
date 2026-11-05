@@ -24,6 +24,8 @@ const (
 	AskHelp      = "help"       // show the commands and keys
 	AskAgentNew  = "agent-new"  // start a Claude Code agent in its own worktree
 	AskAgents    = "agents"     // show the agents board
+	AskOpen      = "open"       // open a pane kind, or pick one; see AskedArg
+	AskLayout    = "layout"     // arrange the window, or pick a preset; see AskedArg
 )
 
 // errorTitles name each failure in its box's top edge.

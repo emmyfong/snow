@@ -27,7 +27,29 @@ const (
 	// window: profile; optional folder, branch, role. In a git repository
 	// the agent gets its own worktree on a new branch.
 	OpAgentNew = "agent-new"
+	// OpOpen opens a pane of kind beside pane Target, or focuses the pane
+	// of that kind its window already has.
+	OpOpen = "open" // kind
+	// OpLayout arranges the window holding pane Target as a preset from
+	// LayoutPresets.
+	OpLayout = "layout" // name
 )
+
+// LayoutPreset is one window arrangement that OpLayout applies.
+type LayoutPreset struct {
+	Name string // the value of ArgName
+	Desc string // what a picker shows
+}
+
+// LayoutPresets lists the presets in the order a picker shows them. A
+// preset reuses each pane of a kind it holds, opens the kinds the window
+// lacks, skips kinds the server cannot open, and moves the panes it does
+// not hold to a new background window named "moved".
+var LayoutPresets = []LayoutPreset{
+	{Name: "ide", Desc: "Files, viewer over chat over terminal, and git"},
+	{Name: "focus", Desc: "The chat alone"},
+	{Name: "review", Desc: "The viewer beside the chat"},
+}
 
 // Command argument keys.
 const (
@@ -36,7 +58,7 @@ const (
 	ArgFolder  = "folder"  // empty means the target pane's folder
 	ArgCells   = "cells"   // a positive whole number
 	ArgName    = "name"
-	ArgKind    = "kind" // PaneTerminal or PaneChat; empty means PaneTerminal
+	ArgKind    = "kind" // a name from PaneKinds; empty means PaneTerminal
 	// ArgAgent asks a split for an agent's terminal pane in place of a
 	// profile: the server picks the agent's profile that fits the target
 	// pane, for example the one inside the same WSL distribution. When it
@@ -99,8 +121,10 @@ func (c *Command) Validate() error {
 		}
 		return fmt.Errorf("%w: %s needs a dir of left, right, up, or down", ErrInvalidCommand, c.Op)
 	}
-	if k, ok := c.Args[ArgKind]; ok && k != PaneTerminal && k != PaneChat {
-		return fmt.Errorf("%w: unknown pane kind %q", ErrInvalidCommand, k)
+	if k, ok := c.Args[ArgKind]; ok {
+		if err := CheckKind(k); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidCommand, err)
+		}
 	}
 	if w, ok := c.Args[ArgWorktree]; ok && (w != WorktreeRemove || c.Op != OpClose) {
 		return fmt.Errorf("%w: %s cannot take worktree %q", ErrInvalidCommand, c.Op, w)
@@ -116,8 +140,8 @@ func (c *Command) Validate() error {
 		}
 		// The server picks the agent's profile, and an agent runs in a
 		// terminal pane.
-		if _, set := c.Args[ArgProfile]; set || c.Args[ArgKind] == PaneChat {
-			return fmt.Errorf("%w: an agent takes no profile and no chat kind", ErrInvalidCommand)
+		if _, set := c.Args[ArgProfile]; set || c.Args[ArgKind] != "" && c.Args[ArgKind] != PaneTerminal {
+			return fmt.Errorf("%w: an agent takes no profile and no kind but terminal", ErrInvalidCommand)
 		}
 	}
 	switch c.Op {
@@ -147,6 +171,19 @@ func (c *Command) Validate() error {
 	case OpAgentNew:
 		if c.Args[ArgProfile] == "" {
 			return fmt.Errorf("%w: agent-new needs a profile", ErrInvalidCommand)
+		}
+		return needTarget()
+	case OpLayout:
+		if c.Args[ArgName] == "" {
+			return fmt.Errorf("%w: layout needs a name", ErrInvalidCommand)
+		}
+		return needTarget()
+	case OpOpen:
+		if c.Args[ArgKind] == "" {
+			return fmt.Errorf("%w: open needs a kind", ErrInvalidCommand)
+		}
+		if _, set := c.Args[ArgAgent]; set {
+			return fmt.Errorf("%w: open takes no agent", ErrInvalidCommand)
 		}
 		return needTarget()
 	}

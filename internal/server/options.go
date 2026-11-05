@@ -43,6 +43,9 @@ type Options struct {
 	// means store.MaxScrollback, and less than 0 none, only the layout and
 	// folders.
 	SavedLines int
+	// ProjectsDir is where each project's chat window layout is saved, so
+	// a new session there starts with it. Empty saves none.
+	ProjectsDir string
 	// Chat is what chat panes need. Nil means the server cannot open them:
 	// a split or a new window of kind chat fails with ErrNoChat.
 	Chat *ChatOptions
@@ -82,6 +85,9 @@ type Options struct {
 	// afterHookWait runs f when an agent pane has had defaultHookWait to
 	// send its first hook; nil means a timer. Tests fire it by hand.
 	afterHookWait func(f func())
+	// sideKinds are side pane kinds to register. Tests set it; Snow's own
+	// side kinds are registered in New.
+	sideKinds []sideKind
 	// afterDriven runs f when a pane's driven mark has lasted drivenFor;
 	// nil means a timer. Tests fire it by hand.
 	afterDriven func(f func())
