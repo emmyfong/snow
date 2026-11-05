@@ -69,3 +69,22 @@ func TestOSPath(t *testing.T) {
 		t.Errorf("native osPath = %q", got)
 	}
 }
+
+// TestBranchTaken: both ways git says another caller made the branch first
+// count; other failures do not.
+func TestBranchTaken(t *testing.T) {
+	tests := []struct {
+		stderr string
+		want   bool
+	}{
+		{"Preparing worktree (new branch 'agent/1')\nfatal: cannot lock ref 'refs/heads/agent/1': reference already exists", true},
+		{"fatal: a branch named 'agent/1' already exists", true},
+		{"fatal: '/src/.worktrees/agent-1' already exists", false},
+		{"fatal: not a git repository", false},
+	}
+	for _, tt := range tests {
+		if got := branchTaken(&failure{sub: "worktree", code: 255, stderr: tt.stderr}); got != tt.want {
+			t.Errorf("branchTaken(%q) = %v, want %v", tt.stderr, got, tt.want)
+		}
+	}
+}

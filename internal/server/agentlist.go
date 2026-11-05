@@ -55,7 +55,7 @@ func agentInfo(sess *session, w *window, p *pane, kind string) api.AgentInfo {
 		Worktree: p.worktree, Branch: p.branch,
 	}
 	if p.role != nil {
-		a.Role, a.PermissionMode, a.ReadOnly = p.role.Name, p.role.PermissionMode, p.role.ReadOnly
+		a.Role, a.PermissionMode, a.ReadOnly = p.role.Title, p.role.PermissionMode, p.role.ReadOnly
 	}
 	if p.chat != nil {
 		snap := &p.chat.snap

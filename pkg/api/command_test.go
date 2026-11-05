@@ -49,6 +49,9 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpClose, Target: 1, Args: map[string]string{ArgWorktree: WorktreeRemove}}, true},
 		{Command{Op: OpClose, Target: 1, Args: map[string]string{ArgWorktree: "delete"}}, false},
 		{Command{Op: OpCloseWindow, Target: 1, Args: map[string]string{ArgWorktree: WorktreeRemove}}, false},
+		{Command{Op: OpAgentNew, Target: 1, Args: map[string]string{ArgProfile: "Claude Code", ArgBranch: "fix", ArgRole: "reviewer"}}, true},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgBranch: "fix"}}, false},
+		{Command{Op: OpNewWindow, Args: map[string]string{ArgRole: "reviewer"}}, false},
 	}
 	for _, tt := range tests {
 		err := tt.cmd.Validate()

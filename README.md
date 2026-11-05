@@ -120,7 +120,8 @@ pane menu open it too. Type the folder and, if you want, a branch name,
 then pick a Claude Code profile and press Enter. In a git repository,
 Snow makes a new branch and a worktree for it in
 `<repo>/.worktrees/<branch>`, and starts Claude Code there in a new
-window named after the branch. An empty branch field gives `agent/1`,
+window named after the branch. From a folder below the top of the
+repository, the agent starts in the same folder of its worktree. An empty branch field gives `agent/1`,
 `agent/2`, and so on: the first number with no branch. A folder outside
 git is used as it is, and only one agent may work in it at a time. The
 agents board shows each agent's repository and branch.
@@ -154,7 +155,9 @@ commands, and only a role with `plan` shows as read-only. A role with
 instructions alone shows "not enforced". The other modes are
 `acceptEdits`, `auto`, `dontAsk`, and `manual`. Snow does not allow
 `bypassPermissions` in a role. Snow writes the instructions to
-`~/.snow/roles/` when an agent starts.
+`~/.snow/roles/` when an agent starts. A saved session starts the agent
+again in its role; a role no longer in `config.toml` restores the agent
+without one.
 
 ### Desktop notifications
 

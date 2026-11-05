@@ -4,7 +4,9 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/apitest"
@@ -137,7 +139,7 @@ func TestAgentWorktreeLaunchFailure(t *testing.T) {
 		return os.IsNotExist(err) && gittest.Run(t, repo, "branch", "--list", "agent/1") == ""
 	})
 	c.Send(agentNew(first, "Claude Code", "-bad"))
-	if e := nextError(t, c); !strings.Contains(e.Message, "not a valid branch name") {
+	if e := nextError(t, c); e.Code != api.CodeBadBranch || !strings.Contains(e.Message, "not a valid branch name") {
 		t.Fatalf("got %+v, want the bad branch refused", e)
 	}
 	var windows int
@@ -164,7 +166,7 @@ func TestSecondAgentSameFolderRefused(t *testing.T) {
 	}
 	c.Send(agentNew(first, "Claude Code", ""))
 	e := nextError(t, c)
-	if !strings.Contains(e.Message, ErrFolderBusy.Error()) || !strings.Contains(e.Message, "window 1") {
+	if e.Code != api.CodeFolderBusy || !strings.Contains(e.Message, ErrFolderBusy.Error()) || !strings.Contains(e.Message, "window 1") {
 		t.Fatalf("got %+v, want the busy folder refused, naming window 1", e)
 	}
 }
@@ -258,7 +260,7 @@ func TestAgentWorktreeSaved(t *testing.T) {
 			t.Errorf("saved pane %+v, want worktree %s on agent/1", saved, p.Worktree)
 			return
 		}
-		sess, err := st.restore(&snap, nil, 100, 30)
+		sess, err := st.restore(&snap, nil, nil, 100, 30)
 		if err != nil {
 			t.Errorf("restore: %v", err)
 			return
@@ -326,15 +328,161 @@ func TestAgentNewUnknownRole(t *testing.T) {
 }
 
 // TestRoleFileNames: names that differ only in characters a file name
-// cannot hold get different files, each safe to pass to cmd.
+// cannot hold get different files, each safe to pass to cmd, and changed
+// instructions get a new file.
 func TestRoleFileNames(t *testing.T) {
-	a, b := roleFile("Code Reviewer"), roleFile("Code-Reviewer")
+	a, b := roleFile(Role{Name: "Code Reviewer"}), roleFile(Role{Name: "Code-Reviewer"})
 	if a == b {
 		t.Fatalf("both roles write %s", a)
 	}
-	for _, f := range []string{a, b, roleFile(`a/b\c:%!"`)} {
+	if roleFile(Role{Name: "r", Instructions: "one"}) == roleFile(Role{Name: "r", Instructions: "two"}) {
+		t.Fatal("new instructions reuse the old file")
+	}
+	for _, f := range []string{a, b, roleFile(Role{Name: `a/b\c:%!"`})} {
 		if strings.ContainsAny(f, `/\:*?"<>|% !`) {
 			t.Fatalf("file name %q holds an unsafe character", f)
 		}
+	}
+}
+
+// TestRoleFileAtOnce: launches that write one role's file at the same time
+// all get the whole text.
+func TestRoleFileAtOnce(t *testing.T) {
+	s := &Server{opts: Options{RolesDir: t.TempDir()}}
+	r := Role{Name: "reviewer", Instructions: strings.Repeat("Review the diff. ", 4000)}
+	const n = 16
+	paths, errs := make([]string, n), make([]error, n)
+	var wg sync.WaitGroup
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			args, err := s.roleArgs(r, "")
+			errs[i] = err
+			if err == nil {
+				paths[i] = args[len(args)-1]
+			}
+		}()
+	}
+	wg.Wait()
+	for i := range n {
+		if errs[i] != nil {
+			t.Fatalf("launch %d: %v", i, errs[i])
+		}
+		if b, err := os.ReadFile(paths[i]); err != nil || string(b) != r.Instructions {
+			t.Fatalf("launch %d read %d bytes, %v; want the whole text", i, len(b), err)
+		}
+	}
+	if left, _ := filepath.Glob(filepath.Join(s.opts.RolesDir, "*.tmp")); len(left) != 0 {
+		t.Fatalf("temp files left: %v", left)
+	}
+}
+
+// TestRoleBypassRefused: the server refuses a role that would turn off
+// every permission check, though config already does.
+func TestRoleBypassRefused(t *testing.T) {
+	s := &Server{opts: Options{RolesDir: t.TempDir()}}
+	if _, err := s.roleArgs(Role{Name: "yolo", PermissionMode: "bypassPermissions"}, ""); !errors.Is(err, ErrRoleMode) {
+		t.Fatalf("err %v, want ErrRoleMode", err)
+	}
+}
+
+// TestAgentLaunchesAtOnce: launches sent together with no branch each get
+// their own agent/<n>, though their git commands overlap.
+func TestAgentLaunchesAtOnce(t *testing.T) {
+	repo := t.TempDir() // before the server, so its shells have ended when the folder goes
+	gittest.Repo(t, repo)
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, repo)
+	const n = 4
+	for range n {
+		c.Send(agentNew(first, "Claude Code", ""))
+	}
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == n+1 })
+	got := map[string]bool{}
+	for _, w := range l.Windows[1:] {
+		got[w.Panes[0].Branch] = true
+	}
+	for i := 1; i <= n; i++ {
+		if b := "agent/" + strconv.Itoa(i); !got[b] {
+			t.Fatalf("branches %v, want agent/1 to agent/%d", got, n)
+		}
+	}
+}
+
+// TestAgentLaunchStoppedServer: a server that stops while a launch makes
+// its worktree takes the worktree and branch back before Close returns.
+// The launch starts on the model goroutine, which then stops at once, so
+// the launch finishes its git work with no model goroutine to open the
+// agent.
+func TestAgentLaunchStoppedServer(t *testing.T) {
+	repo := t.TempDir() // before the server, so its shells have ended when the folder goes
+	gittest.Repo(t, repo)
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, repo)
+	closed := make(chan struct{})
+	s.call(func(st *state) {
+		var cl *client
+		for k := range st.clients {
+			cl = k
+		}
+		st.agentNew(cl, st.sessions["work"], agentNew(first, "Claude Code", ""))
+		go func() {
+			s.Close()
+			close(closed)
+		}()
+		<-s.quit
+	})
+	<-closed
+	if got := gittest.Run(t, repo, "branch", "--list", "agent/*"); got != "" {
+		t.Fatalf("branch %q left by a launch the server stopped", got)
+	}
+	if got := gittest.Run(t, repo, "worktree", "list", "--porcelain"); strings.Contains(got, ".worktrees") {
+		t.Fatalf("worktree left by a launch the server stopped:\n%s", got)
+	}
+}
+
+// TestAgentFromSubfolder: an agent started from a folder below the top of
+// a repository starts in the same folder of its worktree.
+func TestAgentFromSubfolder(t *testing.T) {
+	repo := t.TempDir() // before the server, so its shells have ended when the folder goes
+	gittest.Repo(t, repo)
+	sub := filepath.Join(repo, "cmd")
+	if err := os.Mkdir(sub, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(sub, "main.go"), []byte("package main\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gittest.Run(t, repo, "add", "cmd")
+	gittest.Run(t, repo, "commit", "-q", "-m", "cmd")
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, sub)
+	c.Send(agentNew(first, "Claude Code", ""))
+	p, _ := agentWindow(t, c, 2)
+	board := nextAgents(t, c, func(l []api.AgentInfo) bool { return len(l) == 1 && l[0].Branch != "" })
+	if want := filepath.Join(realPath(t, p.Worktree), "cmd"); realPath(t, agentFolder(t, board, p.ID)) != want {
+		t.Fatalf("agent in %s, want %s", agentFolder(t, board, p.ID), want)
+	}
+}
+
+// TestAgentBranchExists: a branch the user names that is already there is
+// refused with its own code, and the branch is left as it was.
+func TestAgentBranchExists(t *testing.T) {
+	repo := t.TempDir() // before the server, so its shells have ended when the folder goes
+	gittest.Repo(t, repo)
+	gittest.Run(t, repo, "branch", "fix-login")
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, repo)
+	c.Send(agentNew(first, "Claude Code", "fix-login"))
+	if e := nextError(t, c); e.Code != api.CodeBranchExists {
+		t.Fatalf("got %+v, want branch-exists", e)
+	}
+	if got := gittest.Run(t, repo, "branch", "--list", "fix-login"); got == "" {
+		t.Fatal("the existing branch is gone")
 	}
 }

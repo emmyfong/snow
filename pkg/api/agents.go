@@ -58,8 +58,8 @@ type AgentInfo struct {
 	Folder     string `json:"folder,omitempty"`
 	Worktree   string `json:"worktree,omitempty"`
 	Branch     string `json:"branch,omitempty"` // the worktree's branch
-	// Role is the role the agent started with, and PermissionMode and
-	// ReadOnly what its RoleInfo said then.
+	// Role is the title of the role the agent started with, and
+	// PermissionMode and ReadOnly what its RoleInfo said then.
 	Role           string    `json:"role,omitempty"`
 	PermissionMode string    `json:"permissionMode,omitempty"`
 	ReadOnly       bool      `json:"readOnly,omitempty"`

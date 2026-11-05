@@ -31,7 +31,8 @@ const maxAgentBranch = 999
 type launched struct {
 	repo worktree.Repo
 	wt   worktree.Worktree
-	ok   bool // false for a folder that is not a git repository
+	dir  string // where the agent starts: the launch folder's match in wt
+	ok   bool   // false for a folder that is not a git repository
 	role *Role
 	args []string // the role's Claude Code options
 }
@@ -66,7 +67,11 @@ func (st *state) agentNew(c *client, sess *session, cmd *api.Command) {
 	repo := worktree.Repo{Path: folder, Distro: distro}
 	branch := cmd.Args[api.ArgBranch]
 	srv := st.srv
+	// Close waits for the launch, so a worktree it makes is never left
+	// behind by a server that stops part way.
+	srv.closing.Add(1)
 	go func() {
+		defer srv.closing.Done()
 		l, err := makeWorktree(repo, branch)
 		l.role = role
 		if err == nil && role != nil {
@@ -75,18 +80,38 @@ func (st *state) agentNew(c *client, sess *session, cmd *api.Command) {
 		if err == nil {
 			err = launch.loadSecrets(launch.secrets(profile))
 		}
-		srv.post(func(st *state) {
+		open := func(st *state) {
 			if err == nil {
 				err = st.openAgent(c, sess, profile, folder, l)
 			}
 			if err != nil {
 				discard(srv, l)
 				if !c.dropped {
-					st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
+					st.enqueue(c, launchError(err))
 				}
 			}
-		})
+		}
+		select {
+		case srv.requests <- open:
+		case <-srv.quit:
+			discardNow(srv, l)
+		}
 	}()
+}
+
+// launchError is the error a client gets for a failed launch: a code it
+// can act on for the failures the user can fix, and the whole message.
+func launchError(err error) *api.Error {
+	code := api.CodeCommandFailed
+	switch {
+	case errors.Is(err, ErrFolderBusy):
+		code = api.CodeFolderBusy
+	case errors.Is(err, worktree.ErrBranchExists):
+		code = api.CodeBranchExists
+	case errors.Is(err, worktree.ErrBadBranch):
+		code = api.CodeBadBranch
+	}
+	return &api.Error{Code: code, Message: err.Error()}
 }
 
 // makeWorktree makes repo a worktree on branch, or on agent/<n> when
@@ -109,6 +134,10 @@ func makeWorktree(repo worktree.Repo, branch string) (launched, error) {
 		return l, fmt.Errorf("make the agent's worktree: %w", err)
 	}
 	l.ok = true
+	if l.dir, err = repo.In(ctx, l.wt); err != nil {
+		// The worktree is there; only the subfolder is unknown.
+		l.dir = l.wt.Path
+	}
 	return l, nil
 }
 
@@ -133,7 +162,7 @@ func (st *state) openAgent(c *client, sess *session, profile, folder string, l l
 	}
 	dir := folder
 	if l.ok {
-		dir = l.wt.Path
+		dir = l.dir
 	} else if other := st.agentIn(folder); other != "" {
 		return fmt.Errorf("%w: %s; it is not a git repository, so the agent cannot get its own worktree", ErrFolderBusy, other)
 	}
@@ -180,10 +209,18 @@ func discard(srv *Server, l launched) {
 	srv.closing.Add(1)
 	go func() {
 		defer srv.closing.Done()
-		ctx, cancel := context.WithTimeout(context.Background(), gitWait)
-		defer cancel()
-		if err := l.repo.Discard(ctx, l.wt); err != nil {
-			srv.log.Warn("take back the agent's worktree", "worktree", l.wt.Path, "err", err)
-		}
+		discardNow(srv, l)
 	}()
+}
+
+// discardNow is discard on the calling goroutine: never the model's.
+func discardNow(srv *Server, l launched) {
+	if !l.ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), gitWait)
+	defer cancel()
+	if err := l.repo.Discard(ctx, l.wt); err != nil {
+		srv.log.Warn("take back the agent's worktree", "worktree", l.wt.Path, "err", err)
+	}
 }

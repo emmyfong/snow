@@ -132,7 +132,7 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 		items := make([]ui.ListItem, 0, len(m.roles)+1)
 		items = append(items, ui.ListItem{Cols: []string{noRole, ""}})
 		for _, r := range m.roles {
-			items = append(items, ui.ListItem{Cols: []string{r.Name, roletext.Short(r.PermissionMode, r.ReadOnly)}})
+			items = append(items, ui.ListItem{Cols: []string{r.Title, roletext.Short(r.PermissionMode, r.ReadOnly)}})
 		}
 		selected := m.role
 		if m.focus != fieldRole {

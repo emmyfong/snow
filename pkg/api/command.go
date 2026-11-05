@@ -105,6 +105,11 @@ func (c *Command) Validate() error {
 	if w, ok := c.Args[ArgWorktree]; ok && (w != WorktreeRemove || c.Op != OpClose) {
 		return fmt.Errorf("%w: %s cannot take worktree %q", ErrInvalidCommand, c.Op, w)
 	}
+	for _, arg := range []string{ArgBranch, ArgRole} {
+		if _, ok := c.Args[arg]; ok && c.Op != OpAgentNew {
+			return fmt.Errorf("%w: %s cannot take %s", ErrInvalidCommand, c.Op, arg)
+		}
+	}
 	if a, ok := c.Args[ArgAgent]; ok {
 		if a != AgentClaude || c.Op != OpSplit {
 			return fmt.Errorf("%w: %s cannot take agent %q", ErrInvalidCommand, c.Op, a)

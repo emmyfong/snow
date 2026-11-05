@@ -35,6 +35,10 @@ linters:
             - { pkg: "github.com/charmbracelet/x/xpty", desc: "experimental; use internal/term" }
             - { pkg: "github.com/charmbracelet/x/vt", desc: "experimental; use internal/term" }
             - { pkg: "github.com/creack/pty", desc: "use internal/term" }
+        gittest-only-in-tests:
+          files: ["$all", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/gittest", desc: "test helpers; it links the testing package" }
         api-is-public:
           files: ["**/pkg/api/**"]
           deny:

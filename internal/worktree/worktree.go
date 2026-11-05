@@ -68,6 +68,11 @@ func (r Repo) Create(ctx context.Context, branch string) (Worktree, error) {
 		return Worktree{}, err
 	}
 	if _, err := r.git(ctx, main.Path, "worktree", "add", "-b", branch, dir); err != nil {
+		if branchTaken(err) {
+			// Another caller made the branch after the check above. It is
+			// theirs: leave it.
+			return Worktree{}, fmt.Errorf("%w: %s", ErrBranchExists, branch)
+		}
 		return Worktree{}, errors.Join(r.classify(err), r.undoBranch(ctx, main.Path, branch, strings.TrimSpace(head)))
 	}
 	return Worktree{Path: dir, Branch: branch, Head: strings.TrimSpace(head)}, nil

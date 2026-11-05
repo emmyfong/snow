@@ -21,7 +21,9 @@ type ProfileList struct {
 // when that mode keeps the agent from editing files and running commands:
 // instructions alone never make a role read-only.
 type RoleInfo struct {
+	// Name identifies the role in ArgRole; Title is what a client shows.
 	Name            string `json:"name"`
+	Title           string `json:"title,omitempty"`
 	PermissionMode  string `json:"permissionMode,omitempty"`
 	HasInstructions bool   `json:"hasInstructions,omitempty"`
 	ReadOnly        bool   `json:"readOnly,omitempty"`

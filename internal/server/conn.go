@@ -107,9 +107,9 @@ func (s *Server) read(c *client) {
 				s.reply(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 				continue
 			}
-			chats := s.resumeChats(snap)
+			chats, roles := s.resumeChats(snap), s.restoreRoles(snap)
 			pre := s.prestartSession(m, snap)
-			s.withPrestarted(pre, func(st *state) { st.attach(c, m, snap, chats) })
+			s.withPrestarted(pre, func(st *state) { st.attach(c, m, snap, chats, roles) })
 			s.closeUnused(chats)
 		case *api.Resize:
 			s.call(func(st *state) { st.resize(c, m) })

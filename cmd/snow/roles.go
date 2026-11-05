@@ -18,7 +18,7 @@ func roleOptions(cfg config.Config) ([]server.Role, string, error) {
 	roles := make([]server.Role, 0, len(cfg.Roles))
 	for _, name := range slices.Sorted(maps.Keys(cfg.Roles)) {
 		r := cfg.Roles[name]
-		roles = append(roles, server.Role{Name: r.TitleOf(name), Instructions: r.Instructions, PermissionMode: r.PermissionMode})
+		roles = append(roles, server.Role{Name: name, Title: r.TitleOf(name), Instructions: r.Instructions, PermissionMode: r.PermissionMode})
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {

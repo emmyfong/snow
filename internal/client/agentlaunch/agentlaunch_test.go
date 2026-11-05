@@ -157,8 +157,8 @@ func TestAgentLaunchTiny(t *testing.T) {
 }
 
 var roles = []api.RoleInfo{
-	{Name: "reviewer", PermissionMode: "plan", HasInstructions: true, ReadOnly: true},
-	{Name: "coder", HasInstructions: true},
+	{Name: "reviewer", Title: "reviewer", PermissionMode: "plan", HasInstructions: true, ReadOnly: true},
+	{Name: "coder", Title: "coder", HasInstructions: true},
 }
 
 // TestAgentRoleCommand: Tab reaches the role list, Down picks a role, and

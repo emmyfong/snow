@@ -62,6 +62,9 @@ type Pane struct {
 	// does not know them keeps the pane and loses only the link.
 	Worktree string `json:"worktree,omitempty"`
 	Branch   string `json:"branch,omitempty"`
+	// Role is the table name of the role the agent started with; empty
+	// for none.
+	Role string `json:"role,omitempty"`
 	// Scrollback holds a terminal pane's last lines, oldest first, with
 	// styles as ANSI escape sequences: its history, the scrollback then the
 	// screen. A chat pane has none.
