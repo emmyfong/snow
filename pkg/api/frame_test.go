@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"io"
 	"reflect"
@@ -38,6 +39,9 @@ func everyMessage() []Message {
 		&SearchRequest{Pane: 1, Query: "error"},
 		&SearchResult{Pane: 1, Query: "error", Matches: []Match{{Line: 3, Col: 0, Len: 5}}, Truncated: true},
 		&Detach{},
+		&PaneKinds{Kinds: []PaneKindInfo{{Name: PaneTerminal, Title: "Terminal"}, {Name: "files", Title: "Files"}}},
+		&SidePaneState{Pane: 4, Kind: "files", Rev: 3, State: json.RawMessage(`{"root":"/src"}`)},
+		&SidePaneAction{Pane: 4, Action: "open", Args: map[string]string{"path": "main.go"}},
 		&Shutdown{},
 		&KillSession{Session: "api"},
 		&RenameSession{Session: "api", Name: "web"},

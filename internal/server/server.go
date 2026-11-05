@@ -26,6 +26,7 @@ type Server struct {
 	opts   Options
 	log    *slog.Logger
 	launch launcher
+	kinds  *paneKinds
 	outbox int // per-client queue length; tests lower it
 
 	requests chan func(*state)
@@ -57,6 +58,12 @@ func New(opts Options) *Server {
 		done:     make(chan struct{}),
 	}
 	s.launch = newLauncher(opts, s.log)
+	kinds, err := newPaneKinds(opts.Chat != nil, opts.sideKinds...)
+	if err != nil {
+		s.log.Error("pane kinds", "err", err)
+		kinds, _ = newPaneKinds(opts.Chat != nil)
+	}
+	s.kinds = kinds
 	s.saver = s.openSaver()
 	go s.loop()
 	return s

@@ -42,6 +42,11 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgProfile: "Ubuntu"}}, false},
 		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgKind: PaneChat}}, false},
 		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgKind: PaneTerminal}}, true},
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgAgent: AgentClaude, ArgKind: "files"}}, false},
+		// A well-formed kind passes; the server refuses one it does not have.
+		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgKind: "files"}}, true},
+		{Command{Op: OpNewWindow, Args: map[string]string{ArgKind: "Files"}}, false},
+		{Command{Op: OpNewWindow, Args: map[string]string{ArgKind: ""}}, false},
 	}
 	for _, tt := range tests {
 		err := tt.cmd.Validate()

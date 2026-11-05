@@ -32,7 +32,7 @@ const (
 	ArgFolder  = "folder"  // empty means the target pane's folder
 	ArgCells   = "cells"   // a positive whole number
 	ArgName    = "name"
-	ArgKind    = "kind" // PaneTerminal or PaneChat; empty means PaneTerminal
+	ArgKind    = "kind" // a name from PaneKinds; empty means PaneTerminal
 	// ArgAgent asks a split for an agent's terminal pane in place of a
 	// profile: the server picks the agent's profile that fits the target
 	// pane, for example the one inside the same WSL distribution. When it
@@ -83,8 +83,10 @@ func (c *Command) Validate() error {
 		}
 		return fmt.Errorf("%w: %s needs a dir of left, right, up, or down", ErrInvalidCommand, c.Op)
 	}
-	if k, ok := c.Args[ArgKind]; ok && k != PaneTerminal && k != PaneChat {
-		return fmt.Errorf("%w: unknown pane kind %q", ErrInvalidCommand, k)
+	if k, ok := c.Args[ArgKind]; ok {
+		if err := CheckKind(k); err != nil {
+			return fmt.Errorf("%w: %w", ErrInvalidCommand, err)
+		}
 	}
 	if a, ok := c.Args[ArgAgent]; ok {
 		if a != AgentClaude || c.Op != OpSplit {
@@ -92,8 +94,8 @@ func (c *Command) Validate() error {
 		}
 		// The server picks the agent's profile, and an agent runs in a
 		// terminal pane.
-		if _, set := c.Args[ArgProfile]; set || c.Args[ArgKind] == PaneChat {
-			return fmt.Errorf("%w: an agent takes no profile and no chat kind", ErrInvalidCommand)
+		if _, set := c.Args[ArgProfile]; set || c.Args[ArgKind] != "" && c.Args[ArgKind] != PaneTerminal {
+			return fmt.Errorf("%w: an agent takes no profile and no kind but terminal", ErrInvalidCommand)
 		}
 	}
 	switch c.Op {

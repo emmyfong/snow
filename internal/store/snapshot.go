@@ -50,7 +50,9 @@ type Window struct {
 // Pane is one pane of a window. ID matches the pane's leaf in the layout.
 type Pane struct {
 	ID int `json:"id"`
-	// Kind is KindChat for a chat pane, and empty for a terminal.
+	// Kind is KindChat for a chat pane, a side pane kind's name, and
+	// empty for a terminal. A reader without that side kind opens a
+	// terminal in its place.
 	Kind    string `json:"kind,omitempty"`
 	Profile string `json:"profile"` // the shell profile's name
 	Folder  string `json:"folder,omitempty"`

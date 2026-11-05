@@ -69,6 +69,7 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats ma
 	c.last = map[int][]string{}
 	c.seen = map[int]uint64{}
 	c.chatLive = map[int]bool{}
+	c.sideRev = map[int]uint64{}
 	sess.lastUsed = time.Now()
 	st.enqueue(c, st.layout(sess))
 	st.syncChats(c)
@@ -76,6 +77,8 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats ma
 		st.enqueue(c, &api.Error{Code: api.CodeNotice, Message: n})
 	}
 	st.enqueue(c, st.profileList())
+	st.enqueue(c, &api.PaneKinds{Kinds: st.srv.kinds.kinds()})
+	st.syncSides(c)
 	st.fitSession(sess)
 	st.sessionsChanged()
 	if old, ok := st.sessions[prev]; ok && prev != sess.name {

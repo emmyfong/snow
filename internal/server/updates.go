@@ -102,6 +102,7 @@ func (st *state) flush() {
 			continue
 		}
 		st.syncChats(c)
+		st.syncSides(c)
 		w := sess.shown()
 		if w == nil {
 			continue
