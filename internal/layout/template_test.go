@@ -120,3 +120,26 @@ func TestTemplateBuildWrongCount(t *testing.T) {
 		t.Fatalf("err %v, want ErrInvalidTree", err)
 	}
 }
+
+// TestTemplateOfRoundTrip: the Template of a tree builds the same tree.
+func TestTemplateOfRoundTrip(t *testing.T) {
+	tree, err := ide.Build([]PaneID{4, 9, 2, 7, 5}, 120, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := tree.ResizeCells(9, Down, 3, 120, 40); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[PaneID]string{4: "files", 9: "viewer", 2: "chat", 7: "terminal", 5: "git"}
+	tmpl := TemplateOf(tree, func(id PaneID) string { return kinds[id] })
+	if got := tmpl.Kinds(); !reflect.DeepEqual(got, []string{"files", "viewer", "chat", "terminal", "git"}) {
+		t.Fatalf("kinds %v", got)
+	}
+	again, err := tmpl.Build(tree.Panes(), 120, 40)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(again, tree) {
+		t.Fatalf("rebuilt %+v, want %+v", again.Root, tree.Root)
+	}
+}

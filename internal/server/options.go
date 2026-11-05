@@ -43,6 +43,9 @@ type Options struct {
 	// means store.MaxScrollback, and less than 0 none, only the layout and
 	// folders.
 	SavedLines int
+	// ProjectsDir is where each project's chat window layout is saved, so
+	// a new session there starts with it. Empty saves none.
+	ProjectsDir string
 	// Chat is what chat panes need. Nil means the server cannot open them:
 	// a split or a new window of kind chat fails with ErrNoChat.
 	Chat *ChatOptions

@@ -61,6 +61,7 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	// at human speed, so the cost is small.
 	st.repaint(sess)
 	st.changed(sess)
+	st.rememberLayout(sess)
 }
 
 // apply performs one validated command on sess.

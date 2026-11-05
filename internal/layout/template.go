@@ -141,3 +141,20 @@ func (t *Tree) Apply(tmpl Template, ids []PaneID, cols, rows int) error {
 	*t = *built
 	return nil
 }
+
+// TemplateOf returns the Template of t, with kind naming each pane's kind.
+// Build of it with t.Panes() gives back t's layout, without zoom.
+func TemplateOf(t *Tree, kind func(PaneID) string) Template {
+	var of func(n *Node) Template
+	of = func(n *Node) Template {
+		if n.leaf() {
+			return Template{Kind: kind(n.Pane)}
+		}
+		tmpl := Template{Axis: n.Axis, Ratios: append([]float64(nil), n.Ratios...)}
+		for _, c := range n.Children {
+			tmpl.Children = append(tmpl.Children, of(c))
+		}
+		return tmpl
+	}
+	return of(t.Root)
+}

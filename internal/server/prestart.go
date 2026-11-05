@@ -23,6 +23,9 @@ type prestarted struct {
 	profile, dir, model, effort string
 	chat                        *restoredChat // nil when err is set
 	err                         error         // why the conversation could not start
+	// project is the saved layout of the chat's project, for a new
+	// session; nil for none.
+	project *layout.Template
 }
 
 // startConversation starts a conversation, as agent.Start does.
@@ -69,7 +72,11 @@ func (s *Server) prestartSession(m *api.Attach, snap *store.Snapshot) *prestarte
 	if exists {
 		return nil
 	}
-	return s.prestart("", m.Dir, model, effort)
+	pre := s.prestart("", m.Dir, model, effort)
+	if pre.err == nil {
+		pre.project = s.projectLayout(s.projectFolder(pre.chat))
+	}
+	return pre
 }
 
 // opensChat reports whether cmd may open a chat pane: a new window, a

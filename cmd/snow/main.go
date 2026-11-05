@@ -190,6 +190,11 @@ func serve(stderr io.Writer) int {
 			log.Warn("sessions will not be saved", "err", err)
 		}
 	}
+	// Without a home folder a new session starts with the default layout.
+	projects, err := store.DefaultProjectsDir()
+	if err != nil {
+		log.Warn("project layouts will not be saved", "err", err)
+	}
 	savedLines := cfg.Sessions.Lines
 	if savedLines == 0 {
 		savedLines = -1 // the config's 0 is "no lines", the server's is "default"
@@ -216,7 +221,7 @@ func serve(stderr io.Writer) int {
 	// starts none.
 	desktop := notify.New(notify.Options{NeedsYou: cfg.Notify.NeedsYou, TurnEnd: cfg.Notify.TurnEnd, Log: log})
 	opts := server.Options{
-		Version: version, Log: log, SessionsDir: sessions, SavedLines: savedLines,
+		Version: version, Log: log, SessionsDir: sessions, ProjectsDir: projects, SavedLines: savedLines,
 		Scrollback: cfg.Scrollback.Lines, DefaultProfile: cfg.Profile.Default, Chat: chat,
 		Notify: desktop,
 	}

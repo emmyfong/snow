@@ -43,21 +43,36 @@ type layoutPlan struct {
 	skipped []string  // kinds the server cannot open
 }
 
-// planLayout works out preset name for window w of sess. It changes
-// nothing. Existing panes fill the preset's leaves of their kind, lowest
-// ID first and plain terminals before agent ones, so a running chat and
-// its shells keep going.
-func (st *state) planLayout(sess *session, w *window, name string) (layoutPlan, error) {
+// presetTemplate returns the Template of preset name.
+func presetTemplate(name string) (layout.Template, error) {
 	tmpl, ok := presets[name]
 	if !ok {
 		names := make([]string, len(api.LayoutPresets))
 		for i, p := range api.LayoutPresets {
 			names[i] = p.Name
 		}
-		return layoutPlan{}, fmt.Errorf("%w %q. The layouts are: %s", ErrUnknownPreset, name, strings.Join(names, ", "))
+		return layout.Template{}, fmt.Errorf("%w %q. The layouts are: %s", ErrUnknownPreset, name, strings.Join(names, ", "))
 	}
+	return tmpl, nil
+}
+
+// planLayout works out preset name for window w of sess, as planTemplate
+// does.
+func (st *state) planLayout(sess *session, w *window, name string) (layoutPlan, error) {
+	tmpl, err := presetTemplate(name)
+	if err != nil {
+		return layoutPlan{}, err
+	}
+	return st.planTemplate(sess, w, tmpl, name)
+}
+
+// planTemplate works out tmpl, called name in errors, for window w of
+// sess. It changes nothing. Existing panes fill the template's leaves of
+// their kind, lowest ID first and plain terminals before agent ones, so a
+// running chat and its shells keep going.
+func (st *state) planTemplate(sess *session, w *window, tmpl layout.Template, name string) (layoutPlan, error) {
 	var plan layoutPlan
-	tmpl, ok = tmpl.Prune(func(kind string) bool {
+	tmpl, ok := tmpl.Prune(func(kind string) bool {
 		if st.srv.kinds.has(kind) {
 			return true
 		}
@@ -123,11 +138,23 @@ func (st *state) applyLayout(sess *session, cmd *api.Command) (notice string, er
 		return "", fmt.Errorf("no pane %d", cmd.Target)
 	}
 	name := cmd.Args[api.ArgName]
-	plan, err := st.planLayout(sess, w, name)
+	tmpl, err := presetTemplate(name)
 	if err != nil {
 		return "", err
 	}
 	profile, dir := st.newPaneArgs(sess, cmd, target.id)
+	return st.applyTemplate(sess, w, tmpl, name, profile, dir)
+}
+
+// applyTemplate applies tmpl, called name in messages, to window w as
+// planTemplate plans it. New panes start with profile in dir. Panes the
+// template does not hold move to a new window named "moved", which is not
+// shown; nothing closes. On an error the window is unchanged.
+func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, name, profile, dir string) (notice string, err error) {
+	plan, err := st.planTemplate(sess, w, tmpl, name)
+	if err != nil {
+		return "", err
+	}
 	cols, rows := sess.area()
 	rects := layout.Rects(plan.tree, cols, rows).Panes
 	opened := map[int]*pane{}
