@@ -67,6 +67,13 @@ func TestTooSmallRefused(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			before := tt.start.clone()
+			if err := tt.start.CanSplitWithin(tt.target, tt.dir, 2, tt.cols, tt.rows); !errors.Is(err, tt.wantErr) {
+				t.Fatalf("CanSplitWithin err = %v, want %v", err, tt.wantErr)
+			}
+			if !reflect.DeepEqual(tt.start, before) {
+				t.Fatalf("CanSplitWithin changed the tree to %s", dump(t, tt.start))
+			}
 			err := tt.start.SplitWithin(tt.target, tt.dir, 2, tt.cols, tt.rows)
 			if !errors.Is(err, tt.wantErr) {
 				t.Fatalf("err = %v, want %v", err, tt.wantErr)

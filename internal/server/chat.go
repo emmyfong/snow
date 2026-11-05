@@ -58,6 +58,10 @@ type ChatOptions struct {
 	// Shell, when set, is the profile every chat's run tool uses. Unset,
 	// a chat uses the profile of the pane it opened from.
 	Shell *shell.Profile
+
+	// start starts a new conversation. Nil means agent.Start. Tests set it
+	// to hold a start while they watch the model goroutine.
+	start func(agent.Config, convstore.Meta) (*agent.Conversation, error)
 }
 
 // providerStatuses is the provider list the model picker shows.
@@ -125,7 +129,7 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 	}
 	cfg := s.chatConfig(id, profile, dir)
 	folder, sh := cfg.Folder, cfg.Shell
-	conv, err := agent.Start(cfg, convstore.Meta{Model: model, Effort: effort})
+	conv, err := s.startConversation(cfg, convstore.Meta{Model: model, Effort: effort})
 	if err != nil {
 		return nil, fmt.Errorf("start chat: %w", err)
 	}
