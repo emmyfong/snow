@@ -18,7 +18,7 @@ import (
 // s and u stage and unstage the file; Esc, q, or d go back. In the commit
 // box: Enter commits; Alt+Enter, Shift+Enter, and Ctrl+J add a line; Esc
 // closes the box and keeps the message.
-func (m *Model) Key(k tea.Key) *api.SidePaneAction {
+func (m *Model) Key(k tea.Key) api.Message {
 	if !m.loaded {
 		return nil
 	}
@@ -31,7 +31,7 @@ func (m *Model) Key(k tea.Key) *api.SidePaneAction {
 	return m.listKey(k)
 }
 
-func (m *Model) listKey(k tea.Key) *api.SidePaneAction {
+func (m *Model) listKey(k tea.Key) api.Message {
 	es := m.entries()
 	i := m.selected(es)
 	switch {
@@ -52,7 +52,7 @@ func (m *Model) listKey(k tea.Key) *api.SidePaneAction {
 	case k.Text == "u":
 		return m.unstage(es, i)
 	case k.Code == tea.KeySpace:
-		if i >= 0 && es[i].staged {
+		if i >= 0 && es[i].wt == nil && es[i].staged {
 			return m.unstage(es, i)
 		}
 		return m.stage(es, i)
@@ -74,9 +74,9 @@ func (m *Model) move(es []entry, i int) {
 	}
 }
 
-func (m *Model) stage(es []entry, i int) *api.SidePaneAction {
+func (m *Model) stage(es []entry, i int) api.Message {
 	switch {
-	case i < 0:
+	case i < 0 || es[i].wt != nil:
 		m.note = "No file to stage."
 		return nil
 	case es[i].staged && !es[i].change.Unstaged():
@@ -86,15 +86,15 @@ func (m *Model) stage(es []entry, i int) *api.SidePaneAction {
 	return m.action(api.GitActStage, map[string]string{api.ArgGitPath: es[i].change.Path})
 }
 
-func (m *Model) unstage(es []entry, i int) *api.SidePaneAction {
-	if i < 0 || !es[i].change.Staged() {
+func (m *Model) unstage(es []entry, i int) api.Message {
+	if i < 0 || es[i].wt != nil || !es[i].change.Staged() {
 		m.note = "Select a staged file to unstage."
 		return nil
 	}
 	return m.action(api.GitActUnstage, map[string]string{api.ArgGitPath: es[i].change.Path})
 }
 
-func (m *Model) stageAll() *api.SidePaneAction {
+func (m *Model) stageAll() api.Message {
 	for _, c := range m.st.Changes {
 		if c.Unstaged() {
 			return m.action(api.GitActStageAll, nil)
@@ -104,9 +104,12 @@ func (m *Model) stageAll() *api.SidePaneAction {
 	return nil
 }
 
-func (m *Model) openDiff(es []entry, i int) *api.SidePaneAction {
-	if i < 0 {
+func (m *Model) openDiff(es []entry, i int) api.Message {
+	switch {
+	case i < 0:
 		return nil
+	case es[i].wt != nil:
+		return m.openWorktree(*es[i].wt)
 	}
 	return m.action(api.GitActDiff, map[string]string{api.ArgGitPath: es[i].change.Path, api.ArgGitStaged: api.GitStagedArg(es[i].staged)})
 }
@@ -119,7 +122,7 @@ func (m *Model) openCommit() {
 	m.mode = modeCommit
 }
 
-func (m *Model) diffKey(k tea.Key) *api.SidePaneAction {
+func (m *Model) diffKey(k tea.Key) api.Message {
 	d := m.st.Diff
 	switch {
 	case k.Code == tea.KeyEscape || k.Text == "q" || k.Text == "d" || k.Code == tea.KeyBackspace:
@@ -144,7 +147,7 @@ func (m *Model) diffKey(k tea.Key) *api.SidePaneAction {
 	return nil
 }
 
-func (m *Model) commitKey(k tea.Key) *api.SidePaneAction {
+func (m *Model) commitKey(k tea.Key) api.Message {
 	switch {
 	case k.Code == tea.KeyEscape:
 		m.mode = modeList
@@ -160,7 +163,7 @@ func (m *Model) commitKey(k tea.Key) *api.SidePaneAction {
 
 // commit sends the commit, unless the message is blank, nothing is
 // staged, or a commit already waits for its answer.
-func (m *Model) commit() *api.SidePaneAction {
+func (m *Model) commit() api.Message {
 	msg := m.message()
 	switch {
 	case m.committing:

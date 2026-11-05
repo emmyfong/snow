@@ -175,6 +175,12 @@ box for the commit message: `Enter` commits, `Ctrl+J` adds a line, and
 the pane also reads it every few seconds. Click a file to select it,
 click it again for its diff, and click a key hint to press its key.
 
+A repository with more than one worktree lists them under the changes:
+each worktree's folder, its branch or `detached`, `locked` when git has
+locked it, and the window of the agent that works in it. `*` marks the
+worktree the pane shows. `Enter` on a worktree goes to its agent's pane;
+on a worktree with no agent, it opens a terminal there in a new window.
+
 Git runs as you would run it, with your own identity and hooks, in the
 WSL distribution for a WSL folder. Snow never changes git config and adds
 nothing to a commit message. A commit git refuses, for example because a

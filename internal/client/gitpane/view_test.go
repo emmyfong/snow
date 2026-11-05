@@ -46,6 +46,7 @@ func goldenStates() map[string]func() *Model {
 			}
 			return m
 		},
+		"Worktrees": func() *Model { return worktreeModel(0, 0) },
 		"Committed": func() *Model {
 			st := changes()
 			st.Changes = st.Changes[3:]

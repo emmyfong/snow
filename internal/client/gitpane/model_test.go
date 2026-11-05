@@ -25,8 +25,10 @@ func changes() api.GitState {
 	}
 }
 
+func testTheme() theme.Theme { return theme.Default() }
+
 func model(st api.GitState, w, h int) *Model {
-	m := New(7, theme.Default())
+	m := New(7, testTheme())
 	m.SetSize(w, h)
 	m.SetState(st)
 	return m
@@ -51,10 +53,11 @@ func key(s string) tea.Key {
 	return tea.Key{Code: r, Text: s}
 }
 
-func wantAction(t *testing.T, got *api.SidePaneAction, action string, args map[string]string) {
+func wantAction(t *testing.T, msg api.Message, action string, args map[string]string) {
 	t.Helper()
-	if got == nil || got.Pane != 7 || got.Action != action {
-		t.Fatalf("action %+v, want %s on pane 7", got, action)
+	got, ok := msg.(*api.SidePaneAction)
+	if !ok || got.Pane != 7 || got.Action != action {
+		t.Fatalf("message %#v, want %s on pane 7", msg, action)
 	}
 	for k, v := range args {
 		if got.Args[k] != v {
@@ -158,19 +161,19 @@ func TestSelectionStays(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("end"))
 	m.Key(tea.Key{Code: tea.KeyEnd})
-	if m.selPath != "notes/todo.txt" {
-		t.Fatalf("selected %q", m.selPath)
+	if m.selKey != "u\x00notes/todo.txt" {
+		t.Fatalf("selected %q", m.selKey)
 	}
 	st := changes()
 	st.Changes = append([]api.GitChange{{Path: "a.go", Work: "M"}}, st.Changes...)
 	m.SetState(st)
-	if m.selPath != "notes/todo.txt" {
-		t.Errorf("after a new row: selected %q", m.selPath)
+	if m.selKey != "u\x00notes/todo.txt" {
+		t.Errorf("after a new row: selected %q", m.selKey)
 	}
 	st.Changes = st.Changes[:len(st.Changes)-1]
 	m.SetState(st)
-	if m.selPath != "README.md" {
-		t.Errorf("after the row went: selected %q, want README.md", m.selPath)
+	if m.selKey != "u\x00README.md" {
+		t.Errorf("after the row went: selected %q, want README.md", m.selKey)
 	}
 }
 

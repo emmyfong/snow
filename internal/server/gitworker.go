@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/git"
+	"github.com/emmyfong/snow/internal/worktree"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -166,6 +167,16 @@ func (w *gitWorker) read(ctx context.Context) api.GitState {
 	if w.diff != nil {
 		next.Diff = w.readDiff(c, st.Changes)
 	}
+	// A git that cannot list worktrees leaves the section empty; the
+	// changes still show.
+	if wts, err := worktree.Repo(w.repo).List(c); err == nil {
+		for _, wt := range wts {
+			if wt.Bare {
+				continue
+			}
+			next.Worktrees = append(next.Worktrees, api.GitWorktree{Path: wt.Path, Branch: wt.Branch, Main: wt.Main, Detached: wt.Detached, Locked: wt.Locked})
+		}
+	}
 	return next
 }
 
@@ -215,6 +226,8 @@ func fitGitState(st *api.GitState) {
 		case st.Diff != nil && len(st.Diff.Lines) > 0:
 			st.Diff.Lines = st.Diff.Lines[:len(st.Diff.Lines)/2]
 			st.Diff.Cut = true
+		case len(st.Worktrees) > 0:
+			st.Worktrees = nil
 		case len(st.Changes) > 0:
 			half := len(st.Changes) / 2
 			st.Omitted += len(st.Changes) - half

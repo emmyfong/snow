@@ -20,11 +20,23 @@ const (
 	modeCommit             // the changes, with the commit message box
 )
 
-// entry is one row of the changes: a file's staged or its unstaged change.
-// A file with both has two rows.
+// entry is one row the user can select: a file's staged or its unstaged
+// change, or a worktree. A file with both changes has two rows.
 type entry struct {
 	change api.GitChange
 	staged bool
+	wt     *api.GitWorktree // set for a worktree row
+}
+
+// key names e across states, so the selection stays on it.
+func (e entry) key() string {
+	switch {
+	case e.wt != nil:
+		return "w\x00" + e.wt.Path
+	case e.staged:
+		return "s\x00" + e.change.Path
+	}
+	return "u\x00" + e.change.Path
 }
 
 // Model is one git pane.
@@ -35,14 +47,14 @@ type Model struct {
 	loaded        bool
 	width, height int
 	mode          mode
-	// The selected row: by file and side, so it stays on the same change
-	// when the list moves, and by index for when that change is gone.
-	selPath   string
-	selStaged bool
-	selIndex  int
-	scroll    int    // diff rows scrolled past
-	msg       []rune // the commit message being typed
-	cursor    int    // in msg, in runes
+	// The selected row: by key, so it stays on the same row when the list
+	// moves, and by index for when that row is gone.
+	selKey   string
+	selIndex int
+	agents   []api.AgentInfo // the session's, for the worktrees' owners
+	scroll   int             // diff rows scrolled past
+	msg      []rune          // the commit message being typed
+	cursor   int             // in msg, in runes
 	// committing is set from sending a commit until its answer, so a
 	// commit that worked clears the message and one that failed keeps it.
 	committing bool
@@ -93,8 +105,12 @@ func (m *Model) Note() string {
 	return n
 }
 
-// entries are the rows of the changes: staged changes first, then the
-// others, each in git's order.
+// SetAgents gives the pane its session's agents, which own worktrees.
+func (m *Model) SetAgents(agents []api.AgentInfo) { m.agents = agents }
+
+// entries are the rows the user can select: staged changes first, then
+// the others, each in git's order, then the worktrees when the repository
+// has more than its main checkout.
 func (m *Model) entries() []entry {
 	var out []entry
 	for _, c := range m.st.Changes {
@@ -107,13 +123,18 @@ func (m *Model) entries() []entry {
 			out = append(out, entry{change: c})
 		}
 	}
+	if len(m.st.Worktrees) > 1 {
+		for i := range m.st.Worktrees {
+			out = append(out, entry{wt: &m.st.Worktrees[i]})
+		}
+	}
 	return out
 }
 
 // selected returns the selected row's index in entries, or -1 for none.
 func (m *Model) selected(es []entry) int {
 	for i, e := range es {
-		if e.change.Path == m.selPath && e.staged == m.selStaged {
+		if e.key() == m.selKey {
 			return i
 		}
 	}
@@ -129,7 +150,7 @@ func (m *Model) keepSelection() {
 		return
 	}
 	if len(es) == 0 {
-		m.selPath, m.selStaged, m.selIndex = "", false, 0
+		m.selKey, m.selIndex = "", 0
 		return
 	}
 	m.selectIndex(es, min(m.selIndex, len(es)-1))
@@ -138,7 +159,7 @@ func (m *Model) keepSelection() {
 func (m *Model) selectIndex(es []entry, i int) {
 	i = min(max(i, 0), len(es)-1)
 	m.selIndex = i
-	m.selPath, m.selStaged = es[i].change.Path, es[i].staged
+	m.selKey = es[i].key()
 }
 
 // staged reports whether any change is staged.
@@ -158,7 +179,7 @@ func (m *Model) readFailed() bool {
 }
 
 // action returns the side pane action for this pane.
-func (m *Model) action(name string, args map[string]string) *api.SidePaneAction {
+func (m *Model) action(name string, args map[string]string) api.Message {
 	return &api.SidePaneAction{Pane: m.pane, Action: name, Args: args}
 }
 

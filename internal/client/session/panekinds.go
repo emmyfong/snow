@@ -16,7 +16,9 @@ func (m *Model) newOwnPane(kind string, id int) ownPane {
 		return nil
 	}
 	if mk, ok := ownKinds[kind]; ok {
-		return mk(m, id)
+		p := mk(m, id)
+		m.giveAgents(p)
+		return p
 	}
 	return newUnknownPane(kind, m.theme)
 }

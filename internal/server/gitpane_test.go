@@ -10,6 +10,7 @@ import (
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/git"
 	"github.com/emmyfong/snow/internal/gittest"
+	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -204,5 +205,81 @@ func TestSideKindsOverride(t *testing.T) {
 	got := sideKinds([]sideKind{{Name: api.PaneGit, Title: "Fake", Open: open}, {Name: "note", Open: open}})
 	if len(got) != 2 || got[0].Title != "Fake" || got[1].Name != "note" {
 		t.Errorf("kinds %+v", got)
+	}
+}
+
+// TestGitPaneWorktreeList: the pane lists the repository's worktrees from
+// real git, the main checkout first, with each branch.
+func TestGitPaneWorktreeList(t *testing.T) {
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	linked := filepath.Join(t.TempDir(), "linked")
+	gittest.Run(t, repo, "worktree", "add", "-q", "-b", "agent/1", linked)
+	s := New(testOptions())
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	pane := openGitPane(t, c, repo)
+	st := waitGit(t, c, pane, func(st *api.GitState) bool { return len(st.Worktrees) == 2 })
+	if !st.Worktrees[0].Main || st.Worktrees[0].Branch != "main" || st.Worktrees[1].Branch != "agent/1" {
+		t.Fatalf("worktrees %+v", st.Worktrees)
+	}
+	if !samePathForTest(st.Worktrees[1].Path, linked) {
+		t.Errorf("linked worktree at %s, want %s", st.Worktrees[1].Path, linked)
+	}
+}
+
+// samePathForTest compares a path git listed with one the test made, which
+// may differ by symlinks, such as macOS's /var and /private/var.
+func samePathForTest(a, b string) bool {
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	return errA == nil && errB == nil && strings.EqualFold(ra, rb)
+}
+
+// TestNewPaneFromSidePane: a pane opened from a git pane runs with the
+// profile of the pane the git pane opened from, so a terminal for a WSL
+// worktree starts in that distribution. The git pane is still no agent.
+func TestNewPaneFromSidePane(t *testing.T) {
+	dir := t.TempDir()
+	gittest.Isolate(t)
+	var asked []string
+	opts := testOptions()
+	shell := opts.Spec
+	opts.Spec = func(profile, d string) (term.Spec, string, error) {
+		asked = append(asked, profile)
+		spec, name, err := shell(profile, d)
+		if profile != "" {
+			name = profile
+		}
+		return spec, name, err
+	}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	c.Send(&api.Attach{Session: "git", Create: true, Dir: dir})
+	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
+	c.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgProfile: "work"}})
+	work := 0
+	for _, p := range shownPanes(nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })) {
+		if p.ID != first {
+			work = p.ID
+		}
+	}
+	c.Send(&api.Command{Op: api.OpSplit, Target: work, Args: map[string]string{api.ArgDir: api.DirDown, api.ArgKind: api.PaneGit}})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 3 })
+	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgFolder: dir}})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 2 })
+	var last string
+	s.call(func(*state) {})
+	if len(asked) > 0 {
+		last = asked[len(asked)-1]
+	}
+	if last != "work" {
+		t.Errorf("the new window's terminal asked for profile %q, want work (asked %q)", last, asked)
+	}
+	for _, a := range c.WaitAgents(func([]api.AgentInfo) bool { return true }) {
+		if a.Kind == api.PaneGit {
+			t.Errorf("the git pane is listed as an agent: %+v", a)
+		}
 	}
 }

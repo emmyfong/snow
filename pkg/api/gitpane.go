@@ -45,6 +45,9 @@ type GitState struct {
 	Changes  []GitChange `json:"changes,omitempty"`
 	Omitted  int         `json:"omitted,omitempty"` // changes left out of Changes
 	Diff     *GitDiff    `json:"diff,omitempty"`    // the open diff, or nil
+	// Worktrees are the repository's checkouts, the main one first. It
+	// is empty when git cannot list them.
+	Worktrees []GitWorktree `json:"worktrees,omitempty"`
 	// Error is the last action's failure, in git's own words. Notice is
 	// the last action's outcome, such as the commit it made.
 	Error  string `json:"error,omitempty"`
@@ -67,7 +70,22 @@ func (s *GitState) Validate() error {
 	if s.Diff != nil && s.Diff.Path == "" {
 		return fmt.Errorf("%w: git diff with no path", ErrInvalidSidePane)
 	}
+	for _, w := range s.Worktrees {
+		if w.Path == "" {
+			return fmt.Errorf("%w: git worktree with no path", ErrInvalidSidePane)
+		}
+	}
 	return nil
+}
+
+// GitWorktree is one checkout of a repository, in the repository's own
+// path form: a Linux path for a WSL repository.
+type GitWorktree struct {
+	Path     string `json:"path"`
+	Branch   string `json:"branch,omitempty"` // empty for a detached HEAD
+	Main     bool   `json:"main,omitempty"`   // the repository's own checkout
+	Detached bool   `json:"detached,omitempty"`
+	Locked   bool   `json:"locked,omitempty"`
 }
 
 // GitChange is one changed file. Index and Work are git's one-letter codes

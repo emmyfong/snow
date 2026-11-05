@@ -40,12 +40,6 @@ func (g gitPane) Animating() bool { return false }
 
 func (g gitPane) Tick() {}
 
-// result turns the pane's action into a message, never a typed nil, and
-// the pane's note.
-func (g gitPane) result(a *api.SidePaneAction) (api.Message, string) {
-	note := g.Note()
-	if a == nil {
-		return nil, note
-	}
-	return a, note
-}
+// result returns the pane's message for the server, or nil, and the
+// pane's note.
+func (g gitPane) result(msg api.Message) (api.Message, string) { return msg, g.Note() }

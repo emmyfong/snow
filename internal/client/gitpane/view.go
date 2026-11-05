@@ -71,7 +71,7 @@ func (m *Model) Cursor() (x, y int, ok bool) {
 // send, or nil. A click selects a change, and a click on the selected one
 // shows its diff. A click on a key hint presses its key, and a click on
 // the commit box opens it.
-func (m *Model) Click(x, y int) *api.SidePaneAction {
+func (m *Model) Click(x, y int) api.Message {
 	if !m.loaded {
 		return nil
 	}
@@ -232,35 +232,56 @@ func (m *Model) listBody(h int) []row {
 		return note("No git repository in "+ui.FolderName(m.st.Folder)+".", "Run git init in a terminal to start one.")
 	case m.readFailed():
 		return note("Git did not answer:", ui.PlainLine(m.st.Error))
-	case len(m.st.Changes) == 0:
-		return note("No changes.")
 	}
 	es := m.entries()
+	if len(es) == 0 {
+		return note("No changes.")
+	}
 	var items []ui.ListItem
 	var itemEntry []int // the entry of each item, or -1 for a heading
+	heading := func(text string) {
+		items, itemEntry = append(items, ui.ListItem{Heading: text}), append(itemEntry, -1)
+	}
 	sel := -1
-	nStaged := 0
+	nStaged, nChanged := 0, 0
 	for _, e := range es {
-		if e.staged {
+		switch {
+		case e.wt != nil:
+		case e.staged:
 			nStaged++
+		default:
+			nChanged++
 		}
 	}
 	codeW := 1
 	pathW := max(m.width-2-codeW-3, 4) // pointer, code, column gap
+	if len(m.st.Changes) == 0 {
+		heading("No changes.")
+	}
 	for i, e := range es {
-		if i == 0 && e.staged {
-			items, itemEntry = append(items, ui.ListItem{Heading: fmt.Sprintf("Staged (%d)", nStaged)}), append(itemEntry, -1)
-		}
-		if !e.staged && (i == 0 || es[i-1].staged) {
-			items, itemEntry = append(items, ui.ListItem{Heading: fmt.Sprintf("Changes (%d)", len(es)-nStaged)}), append(itemEntry, -1)
+		switch {
+		case e.wt != nil && (i == 0 || es[i-1].wt == nil):
+			if m.st.Omitted > 0 {
+				heading(fmt.Sprintf("%d more changes not shown", m.st.Omitted))
+			}
+			heading(fmt.Sprintf("Worktrees (%d)", len(m.st.Worktrees)))
+		case e.wt == nil && i == 0 && e.staged:
+			heading(fmt.Sprintf("Staged (%d)", nStaged))
+		case e.wt == nil && !e.staged && (i == 0 || es[i-1].staged):
+			heading(fmt.Sprintf("Changes (%d)", nChanged))
 		}
 		if i == m.selected(es) {
 			sel = len(items)
 		}
-		items, itemEntry = append(items, ui.ListItem{Cols: []string{code(e), cutLeft(pathText(e.change), pathW)}}), append(itemEntry, i)
+		if e.wt != nil {
+			items = append(items, ui.ListItem{Cols: m.worktreeCols(*e.wt)})
+		} else {
+			items = append(items, ui.ListItem{Cols: []string{code(e), cutLeft(pathText(e.change), pathW)}})
+		}
+		itemEntry = append(itemEntry, i)
 	}
-	if m.st.Omitted > 0 {
-		items, itemEntry = append(items, ui.ListItem{Heading: fmt.Sprintf("%d more not shown", m.st.Omitted)}), append(itemEntry, -1)
+	if m.st.Omitted > 0 && len(m.st.Worktrees) <= 1 {
+		heading(fmt.Sprintf("%d more changes not shown", m.st.Omitted))
 	}
 	view, rows := ui.ListRows(m.th, ui.ListOptions{Items: items, Selected: sel, Width: m.width, Height: h})
 	var out []row
@@ -275,6 +296,34 @@ func (m *Model) listBody(h int) []row {
 		}
 	}
 	return out
+}
+
+// worktreeCols are a worktree row's cells: "*" for the checkout the pane
+// shows, then its folder name, branch, lock, and owner in one cell, so a
+// long path in the changes does not push them out of a narrow pane.
+func (m *Model) worktreeCols(wt api.GitWorktree) []string {
+	mark := ""
+	if m.current(wt) {
+		mark = "*"
+	}
+	parts := []string{ui.FolderName(ui.PlainLine(wt.Path))}
+	if wt.Branch != "" {
+		parts = append(parts, ui.PlainLine(wt.Branch))
+	} else {
+		parts = append(parts, "detached")
+	}
+	if wt.Locked {
+		parts = append(parts, "locked")
+	}
+	if own := ownerText(wt, owners(wt, m.st.Worktrees, m.agents)); own != "" {
+		parts = append(parts, own)
+	}
+	return []string{mark, strings.Join(parts, "  ")}
+}
+
+// current reports whether wt is the checkout the pane's folder is in.
+func (m *Model) current(wt api.GitWorktree) bool {
+	return len(owners(wt, m.st.Worktrees, []api.AgentInfo{{Folder: m.st.Folder}})) > 0
 }
 
 // code is the one-letter code of an entry's change.
@@ -382,14 +431,18 @@ func (m *Model) listHints() []hint {
 			{ui.Hint{Key: "ctrl+j", Desc: "new line"}, tea.Key{Code: 'j', Mod: tea.ModCtrl}},
 			{ui.Hint{Key: "esc", Desc: "cancel"}, tea.Key{Code: tea.KeyEscape}},
 		}
-	case len(m.st.Changes) == 0:
+	case len(m.entries()) == 0:
 		return []hint{refresh}
+	}
+	enter := "diff"
+	if es := m.entries(); m.selected(es) >= 0 && es[m.selected(es)].wt != nil {
+		enter = "open"
 	}
 	return []hint{
 		{ui.Hint{Key: "s", Desc: "stage"}, tea.Key{Code: 's', Text: "s"}},
 		{ui.Hint{Key: "u", Desc: "unstage"}, tea.Key{Code: 'u', Text: "u"}},
 		{ui.Hint{Key: "c", Desc: "commit"}, tea.Key{Code: 'c', Text: "c"}},
-		{ui.Hint{Key: "enter", Desc: "diff"}, tea.Key{Code: tea.KeyEnter}},
+		{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}},
 		{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},
 		refresh,
 	}
