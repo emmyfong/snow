@@ -22,6 +22,8 @@ const (
 	AskResume    = "resume"     // choose a past conversation
 	AskPickMode  = "pick-mode"  // choose the approval mode
 	AskHelp      = "help"       // show the commands and keys
+	AskAgentNew  = "agent-new"  // start a Claude Code agent in its own worktree
+	AskAgents    = "agents"     // show the agents board
 )
 
 // errorTitles name each failure in its box's top edge.

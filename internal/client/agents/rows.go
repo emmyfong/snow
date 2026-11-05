@@ -45,6 +45,22 @@ func waitText(a api.AgentInfo) string {
 	return "waiting"
 }
 
+// projectFolder is the folder an agent's row names: for an agent in a
+// worktree Snow made, the repository that holds the worktree, since the
+// worktree's own folder repeats the branch.
+func projectFolder(a api.AgentInfo) string {
+	if a.Worktree == "" {
+		return a.Folder
+	}
+	p := strings.TrimRight(a.Worktree, `/\`)
+	for range 2 { // <repository>/.worktrees/<name>
+		if i := strings.LastIndexAny(p, `/\`); i > 0 {
+			p = p[:i]
+		}
+	}
+	return p
+}
+
 // place is where an agent is: its window's index and name.
 func place(a api.AgentInfo) string {
 	return strings.TrimSpace(strconv.Itoa(a.Window) + " " + a.WindowName)

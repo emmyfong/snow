@@ -18,6 +18,7 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 	"kill":   (*Model).cmdKill,
 	"theme":  (*Model).cmdTheme,
 	"chat":   (*Model).cmdChat,
+	"agents": (*Model).cmdAgents,
 }
 
 // cmdChat opens a chat beside the focused pane.

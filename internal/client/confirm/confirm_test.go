@@ -108,3 +108,31 @@ func TestViewIsCenteredAndWidthSafe(t *testing.T) {
 		}
 	}
 }
+
+// TestChoice: a popup with a second action answers Alt to its key, to
+// Enter on its button, and to a click on it; Cancel still has the focus.
+func TestChoice(t *testing.T) {
+	th := theme.Default()
+	m := NewChoice("Close agent", "Keep its worktree?", "Keep worktree", "Remove worktree", "r")
+	if m.Key(tea.Key{Code: tea.KeyEnter}) != No {
+		t.Fatal("Enter on the first focus did not cancel")
+	}
+	if m.Key(tea.Key{Text: "r", Code: 'r'}) != Alt || m.Key(tea.Key{Text: "y", Code: 'y'}) != Yes {
+		t.Fatal("r and y did not choose Alt and Yes")
+	}
+	m.Key(tea.Key{Code: tea.KeyLeft})
+	if m.Key(tea.Key{Code: tea.KeyEnter}) != Alt {
+		t.Fatal("Enter on the middle button did not choose Alt")
+	}
+	box, x, y := m.View(th, 80, 24)
+	for i, row := range strings.Split(box, "\n") {
+		plain := ansi.Strip(row)
+		if j := strings.Index(plain, "[ Remove worktree ]"); j >= 0 {
+			if got := m.Click(th, 80, 24, x+ansi.StringWidth(plain[:j])+2, y+i); got != Alt {
+				t.Fatalf("click on Remove worktree gave %v, want Alt", got)
+			}
+			return
+		}
+	}
+	t.Fatal("no Remove worktree button")
+}

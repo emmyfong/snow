@@ -69,6 +69,19 @@ func runEffort(h Host, rest string) {
 // runHelp asks the session for the help panel.
 func runHelp(h Host, _ string) { h.Ask(AskHelp) }
 
+// runAgents handles /agents: new starts an agent in its own worktree, and
+// nothing shows the agents board.
+func runAgents(h Host, rest string) {
+	switch strings.TrimSpace(rest) {
+	case "":
+		h.Ask(AskAgents)
+	case "new":
+		h.Ask(AskAgentNew)
+	default:
+		h.Notice("/agents takes new, or nothing for the board.")
+	}
+}
+
 func init() {
 	for _, c := range []struct {
 		cmd command.Command
@@ -79,6 +92,7 @@ func init() {
 		{command.Command{Name: "rename", Args: "[title]", Desc: "Rename this conversation", Group: command.GroupConversation}, runRename},
 		{command.Command{Name: "mode", Args: "[ask|auto]", Desc: "Choose when tools wait for you", Group: command.GroupModel}, runMode},
 		{command.Command{Name: "effort", Args: "[level]", Desc: "Set how hard the model thinks", Group: command.GroupModel}, runEffort},
+		{command.Command{Name: "agents", Args: "[new]", Desc: "Agents board; new starts an agent", Group: command.GroupSnow}, runAgents},
 		{command.Command{Name: "help", Desc: "Show the commands and keys", Group: command.GroupSnow}, runHelp},
 	} {
 		if err := Register(c.cmd, c.run); err != nil {

@@ -57,6 +57,7 @@ type AgentInfo struct {
 	Profile    string    `json:"profile,omitempty"`
 	Folder     string    `json:"folder,omitempty"`
 	Worktree   string    `json:"worktree,omitempty"`
+	Branch     string    `json:"branch,omitempty"` // the worktree's branch
 	State      string    `json:"state,omitempty"`
 	Since      time.Time `json:"since"`
 	Waits      string    `json:"waits,omitempty"`

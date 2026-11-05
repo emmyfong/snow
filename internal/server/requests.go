@@ -171,5 +171,10 @@ func (st *state) profileList() *api.ProfileList {
 	if len(names) > 0 {
 		l.Default = names[0]
 	}
+	for _, n := range names {
+		if st.srv.launch.isAgent(n) {
+			l.Agents = append(l.Agents, n)
+		}
+	}
 	return l
 }

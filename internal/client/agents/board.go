@@ -165,14 +165,18 @@ func (b *Board) summary() string {
 }
 
 // items is one list row per agent: its window, kind, state, how long it
-// has been in that state, its folder, and for a chat its model and cost.
+// has been in that state, its folder, and for a chat its model and cost,
+// or for an agent in a worktree Snow made, the worktree's branch.
 // A row whose agent needs the user ends in an alert that says what it
 // waits for, in the prompt colors.
 func (b *Board) items(g theme.Glyphs) []ui.ListItem {
 	now := b.now()
 	items := make([]ui.ListItem, len(b.agents))
 	for i, a := range b.agents {
-		cols := []string{place(a), kindName(a.Kind), stateText(a.State, g), span(now.Sub(a.Since)), ui.FolderName(a.Folder)}
+		cols := []string{place(a), kindName(a.Kind), stateText(a.State, g), span(now.Sub(a.Since)), ui.FolderName(projectFolder(a))}
+		if a.Branch != "" {
+			cols = append(cols, a.Branch)
+		}
 		if a.Kind == api.AgentKindChat {
 			model := a.Model
 			if b.usage && a.Cost > 0 {

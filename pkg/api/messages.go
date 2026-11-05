@@ -278,6 +278,10 @@ type PaneInfo struct {
 	AgentState string `json:"agentState,omitempty"`
 	// Driven is set while an agent types into the pane through send_keys.
 	Driven bool `json:"driven,omitempty"`
+	// Worktree and Branch are the git worktree Snow made for the pane's
+	// agent, and its branch. Empty for other panes.
+	Worktree string `json:"worktree,omitempty"`
+	Branch   string `json:"branch,omitempty"`
 }
 
 // Rect is a cell rectangle; X and Y are the top-left corner.

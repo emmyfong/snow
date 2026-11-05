@@ -52,6 +52,7 @@ func agentInfo(sess *session, w *window, p *pane, kind string) api.AgentInfo {
 	a := api.AgentInfo{
 		Session: sess.name, Window: w.index, WindowName: w.name, Pane: p.id, Kind: kind,
 		Profile: p.profile, Folder: p.folder(), State: p.agentWas, Since: p.agentSince,
+		Worktree: p.worktree, Branch: p.branch,
 	}
 	if p.chat != nil {
 		snap := &p.chat.snap

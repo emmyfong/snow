@@ -69,6 +69,7 @@ func buildActions() []Action {
 		Action{Name: "sessions", Desc: "Switch session"},
 		Action{Name: "choose-agent", Desc: "Agents board", Group: "agents"},
 		Action{Name: "inbox", Desc: "Needs-you inbox", Group: "agents"},
+		Action{Name: "new-agent", Desc: "New agent in worktree...", Group: "agents"},
 		Action{Name: "command-prompt", Desc: "Command prompt"},
 		Action{Name: "detach", Desc: "Detach"},
 		Action{Name: "send-prefix", Desc: "Send the prefix key"},
@@ -111,5 +112,5 @@ func buildDefaults() []binding {
 		name := strings.ToUpper(d[:1]) + d[1:]
 		b = append(b, binding{name, "focus-" + d}, binding{"C-" + name, "resize-" + d}, binding{"M-" + name, "resize-" + d + "-5"})
 	}
-	return append(b, binding{"[", "copy-mode"}, binding{"s", "sessions"}, binding{"w", "choose-agent"}, binding{"i", "inbox"}, binding{":", "command-prompt"}, binding{"d", "detach"})
+	return append(b, binding{"[", "copy-mode"}, binding{"s", "sessions"}, binding{"w", "choose-agent"}, binding{"i", "inbox"}, binding{"A", "new-agent"}, binding{":", "command-prompt"}, binding{"d", "detach"})
 }

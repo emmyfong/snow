@@ -34,6 +34,14 @@ func (st *state) command(c *client, cmd *api.Command) {
 		st.agentSplit(c, sess, cmd)
 		return
 	}
+	if cmd.Op == api.OpAgentNew {
+		st.agentNew(c, sess, cmd)
+		return
+	}
+	if cmd.Op == api.OpClose && cmd.Args[api.ArgWorktree] == api.WorktreeRemove {
+		st.closeAgent(c, sess, cmd)
+		return
+	}
 	st.runWithSecrets(c, sess, cmd)
 }
 

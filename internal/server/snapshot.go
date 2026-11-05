@@ -31,6 +31,7 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				sp.Kind, sp.Conversation = store.KindChat, p.chat.savedID()
 			} else {
 				sp.Scrollback = lastLines(p, st.srv.savedLines())
+				sp.Worktree, sp.Branch = p.worktree, p.branch
 			}
 			sw.Panes = append(sw.Panes, sp)
 		}

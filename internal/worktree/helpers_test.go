@@ -2,48 +2,19 @@ package worktree
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/gittest"
 )
 
-// isolate keeps the tests away from the user's git config and gives git an
-// identity through the environment, so no test writes config.
-func isolate(t *testing.T) {
-	t.Helper()
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(home, "gitconfig"))
-	t.Setenv("GIT_CONFIG_SYSTEM", filepath.Join(home, "gitconfig-system"))
-	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
-	// A git run inside a hook or a wrapper leaves these set, and they point
-	// every command at the wrong repository. Setenv first, so the old value
-	// comes back when the test ends.
-	for _, name := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"} {
-		t.Setenv(name, "")
-		if err := os.Unsetenv(name); err != nil {
-			t.Fatal(err)
-		}
-	}
-	// A repository above the temp folder must not be found by accident.
-	t.Setenv("GIT_CEILING_DIRECTORIES", os.TempDir())
-	for _, who := range []string{"AUTHOR", "COMMITTER"} {
-		t.Setenv("GIT_"+who+"_NAME", "Test")
-		t.Setenv("GIT_"+who+"_EMAIL", "test@example.com")
-	}
-}
+// isolate keeps the tests away from the user's git config.
+func isolate(t *testing.T) { gittest.Isolate(t) }
 
 // runGit runs git in dir for a test and returns its trimmed output.
 func runGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
-	}
-	return strings.TrimSpace(string(out))
+	return gittest.Run(t, dir, args...)
 }
 
 // newEmptyRepo is a repository with no commit.

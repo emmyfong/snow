@@ -7,6 +7,9 @@ import "encoding/json"
 type ProfileList struct {
 	Profiles []string `json:"profiles"`
 	Default  string   `json:"default"`
+	// Agents names the profiles in Profiles that run an agent, such as
+	// Claude Code, in their order. An agent-new command takes one.
+	Agents []string `json:"agents,omitempty"`
 }
 
 // Type implements Message.

@@ -81,6 +81,8 @@ func (st *state) layout(sess *session) *api.Layout {
 				Focused:    int(id) == w.focused,
 				AgentState: p.agentNow(),
 				Driven:     p.driven(),
+				Worktree:   p.worktree,
+				Branch:     p.branch,
 			})
 		}
 		l.Windows = append(l.Windows, info)

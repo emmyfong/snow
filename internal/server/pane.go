@@ -38,6 +38,10 @@ type pane struct {
 	// drivenUntil is when the mark that an agent types into this pane
 	// ends; owned by the model goroutine.
 	drivenUntil time.Time
+
+	// worktree and branch are the git worktree Snow made for the pane's
+	// agent, and its branch; empty for other panes.
+	worktree, branch string
 }
 
 // startPane starts profile's program in dir at cols by rows, below

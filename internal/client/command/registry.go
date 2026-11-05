@@ -130,6 +130,7 @@ var builtins = []Command{
 	{Name: "rename", Args: "[name]", Desc: "Rename this session", Group: GroupConversation, Where: InSession},
 	{Name: "kill", Args: "[session]", Desc: "End a session and its programs", Group: GroupConversation, Session: true, Where: Home | InSession},
 	{Name: "chat", Desc: "Open a chat with the agent beside this pane", Group: GroupConversation, Where: InSession},
+	{Name: "agents", Args: "[new]", Desc: "Agents board; new starts an agent", Group: GroupConversation, Where: InSession},
 	{Name: "theme", Args: "[name]", Desc: "Pick the colors", Group: GroupSnow, Where: Home | InSession},
 	{Name: "help", Desc: "Show commands and keys", Group: GroupSnow, Where: Home},
 	{Name: "quit", Desc: "Leave Snow; sessions keep running", Group: GroupSnow, Where: Home},

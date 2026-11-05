@@ -129,6 +129,9 @@ func (st *state) restoreWindow(sess *session, sw store.Window, divider string, c
 			if errors.Is(err, ErrUnknownProfile) {
 				p, err = st.srv.startPane(int(id), r.W, r.H, "", sp.Folder, preamble(sp.Scrollback, divider))
 			}
+			if err == nil {
+				p.worktree, p.branch = sp.Worktree, sp.Branch
+			}
 		}
 		if err != nil {
 			for _, started := range w.panes {

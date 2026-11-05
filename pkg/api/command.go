@@ -11,7 +11,7 @@ import (
 // operation's arguments are listed with it.
 const (
 	OpSplit        = "split"         // dir; optional profile, folder, kind, agent
-	OpClose        = "close"         // close pane Target
+	OpClose        = "close"         // close pane Target; optional worktree
 	OpResize       = "resize"        // dir, cells: move Target's edge on side dir
 	OpZoom         = "zoom"          // toggle zoom on Target
 	OpSwap         = "swap"          // dir: swap Target with its neighbor
@@ -23,6 +23,10 @@ const (
 	OpNextWindow   = "next-window"
 	OpPrevWindow   = "prev-window"
 	OpCloseWindow  = "close-window" // close window Target and its panes
+	// OpAgentNew starts a Claude Code agent from pane Target in a new
+	// window: profile; optional folder, branch. In a git repository the
+	// agent gets its own worktree on a new branch.
+	OpAgentNew = "agent-new"
 )
 
 // Command argument keys.
@@ -39,7 +43,17 @@ const (
 	// finds none, it answers with a command-failed Error that says how to
 	// install the agent. Only AgentClaude is known.
 	ArgAgent = "agent"
+	// ArgBranch names the new branch of an agent's worktree. Empty means
+	// agent/<n>, with the lowest n that has no branch.
+	ArgBranch = "branch"
+	// ArgWorktree is WorktreeRemove on a close of an agent's pane to
+	// remove its worktree too. The branch is kept, and a worktree with
+	// changes is kept.
+	ArgWorktree = "worktree"
 )
+
+// WorktreeRemove is the ArgWorktree value that removes the worktree.
+const WorktreeRemove = "remove"
 
 // Agents for ArgAgent.
 const (
@@ -86,6 +100,9 @@ func (c *Command) Validate() error {
 	if k, ok := c.Args[ArgKind]; ok && k != PaneTerminal && k != PaneChat {
 		return fmt.Errorf("%w: unknown pane kind %q", ErrInvalidCommand, k)
 	}
+	if w, ok := c.Args[ArgWorktree]; ok && (w != WorktreeRemove || c.Op != OpClose) {
+		return fmt.Errorf("%w: %s cannot take worktree %q", ErrInvalidCommand, c.Op, w)
+	}
 	if a, ok := c.Args[ArgAgent]; ok {
 		if a != AgentClaude || c.Op != OpSplit {
 			return fmt.Errorf("%w: %s cannot take agent %q", ErrInvalidCommand, c.Op, a)
@@ -120,6 +137,11 @@ func (c *Command) Validate() error {
 		return needWindow()
 	case OpNewWindow, OpNextWindow, OpPrevWindow:
 		return nil
+	case OpAgentNew:
+		if c.Args[ArgProfile] == "" {
+			return fmt.Errorf("%w: agent-new needs a profile", ErrInvalidCommand)
+		}
+		return needTarget()
 	}
 	return fmt.Errorf("%w: unknown op %q", ErrInvalidCommand, c.Op)
 }

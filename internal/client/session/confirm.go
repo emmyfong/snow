@@ -13,8 +13,9 @@ import (
 // confirmation is a popup that guards a request: a command, or the end of
 // a session.
 type confirmation struct {
-	popup *confirm.Model
-	msg   api.Message
+	popup  *confirm.Model
+	msg    api.Message
+	altMsg api.Message // sent for the popup's second action, if it has one
 }
 
 // confirmClosePane asks before closing the focused pane, as tmux does:
@@ -32,6 +33,10 @@ func (m *Model) confirmClosePane() {
 			place = i + 1
 		}
 	}
+	if p.Worktree != "" {
+		m.confirmCloseAgent(p)
+		return
+	}
 	what := strings.TrimSpace(p.Profile + " " + p.Folder)
 	if what != "" {
 		what += ", "
@@ -39,6 +44,17 @@ func (m *Model) confirmClosePane() {
 	m.confirm = &confirmation{
 		popup: confirm.New("Close pane", fmt.Sprintf("Close this pane (%s%d of %d)?", what, place, len(w.Panes)), "Close"),
 		msg:   &api.Command{Op: api.OpClose, Target: p.ID},
+	}
+}
+
+// confirmCloseAgent asks before closing an agent that works in a worktree
+// Snow made, and whether its worktree goes too. Its branch always stays.
+func (m *Model) confirmCloseAgent(p *api.PaneInfo) {
+	question := fmt.Sprintf("Close this agent on branch %s? The branch stays. Keep its worktree, or remove it? A worktree with uncommitted changes is kept.", p.Branch)
+	m.confirm = &confirmation{
+		popup:  confirm.NewChoice("Close agent", question, "Keep worktree", "Remove worktree", "r"),
+		msg:    &api.Command{Op: api.OpClose, Target: p.ID},
+		altMsg: &api.Command{Op: api.OpClose, Target: p.ID, Args: map[string]string{api.ArgWorktree: api.WorktreeRemove}},
 	}
 }
 
@@ -101,6 +117,11 @@ func (m *Model) confirmResult(r confirm.Result) {
 	case confirm.Yes:
 		m.confirm = nil
 		m.send(c.msg)
+	case confirm.Alt:
+		m.confirm = nil
+		if c.altMsg != nil {
+			m.send(c.altMsg)
+		}
 	case confirm.No:
 		m.confirm = nil
 	}

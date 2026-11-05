@@ -28,7 +28,7 @@ func TestEntriesGroupRelatedKeys(t *testing.T) {
 		"Resize pane by 5":     "Alt+Arrows",
 		"Detach":               "d",
 		"Next/previous window": "n/p",
-		"Agents":               "w/i",
+		"Agents":               "w/i/A",
 	}
 	for desc, keys := range tests {
 		if got := entryFor(t, es, desc).Keys; got != keys {
