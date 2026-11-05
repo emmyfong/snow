@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/internal/term"
 	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
@@ -40,16 +41,27 @@ type pane struct {
 	drivenUntil time.Time
 
 	// worktree and branch are the git worktree Snow made for the pane's
-	// agent, and its branch; empty for other panes.
+	// agent, and its branch; empty for other panes. role is the role the
+	// agent started with.
 	worktree, branch string
+	role             *api.RoleInfo
 }
 
 // startPane starts profile's program in dir at cols by rows, below
 // preamble, and tells the model goroutine when it exits. An empty profile means the default. The
 // launcher decides which folders a profile can use.
 func (s *Server) startPane(id, cols, rows int, profile, dir, preamble string) (*pane, error) {
+	return s.startPaneArgs(id, cols, rows, profile, dir, preamble, nil)
+}
+
+// startPaneArgs is startPane with extra arguments after the profile's
+// own, such as a role's Claude Code options.
+func (s *Server) startPaneArgs(id, cols, rows int, profile, dir, preamble string, extra []string) (*pane, error) {
 	spec, profile, err := s.launch.spec(profile, dir)
 	if err != nil {
+		return nil, err
+	}
+	if spec.Args, spec.CmdLine, err = shell.AppendArgs(spec.Args, spec.CmdLine, extra...); err != nil {
 		return nil, err
 	}
 	if s.opts.Socket != "" {

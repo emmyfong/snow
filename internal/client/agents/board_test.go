@@ -30,7 +30,7 @@ func three() []api.AgentInfo {
 		{Session: "other", Window: 0, WindowName: "sh", Pane: 9, Kind: api.AgentKindClaudeCode, State: api.AgentNeedsYou, Since: base.Add(-time.Hour)},
 		{Session: "work", Window: 1, WindowName: "planner", Pane: 2, Kind: api.AgentKindClaudeCode, Folder: "/home/em/snow", State: api.AgentIdle, Since: base.Add(-3 * time.Minute)},
 		{Session: "work", Window: 2, WindowName: "chat", Pane: 4, Kind: api.AgentKindChat, Folder: "/home/em/snow/.worktrees/fix-12", State: api.AgentWorking, Since: base.Add(-40 * time.Second), Model: "anthropic/claude-sonnet-5-5", Cost: 0.88},
-		{Session: "work", Window: 3, WindowName: "reviewer", Pane: 6, Kind: api.AgentKindClaudeCode, Folder: `C:\src\snow\.worktrees\agent-1`, Worktree: `C:\src\snow\.worktrees\agent-1`, Branch: "agent/1", State: api.AgentNeedsYou, Since: base.Add(-2 * time.Hour)},
+		{Session: "work", Window: 3, WindowName: "reviewer", Pane: 6, Kind: api.AgentKindClaudeCode, Folder: `C:\src\snow\.worktrees\agent-1`, Worktree: `C:\src\snow\.worktrees\agent-1`, Branch: "agent/1", Role: "reviewer", PermissionMode: "plan", ReadOnly: true, State: api.AgentNeedsYou, Since: base.Add(-2 * time.Hour)},
 	}
 }
 

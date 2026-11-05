@@ -176,5 +176,8 @@ func (st *state) profileList() *api.ProfileList {
 			l.Agents = append(l.Agents, n)
 		}
 	}
+	for _, r := range st.srv.opts.Roles {
+		l.Roles = append(l.Roles, r.info())
+	}
 	return l
 }

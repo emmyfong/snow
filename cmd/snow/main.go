@@ -203,6 +203,11 @@ func serve(stderr io.Writer) int {
 	if err != nil {
 		log.Warn("agent profiles", "err", err)
 	}
+	// Without a home folder, roles that set only a permission mode still work.
+	roles, rolesDir, err := roleOptions(cfg)
+	if err != nil {
+		log.Warn("roles with instructions are off", "err", err)
+	}
 	// A gateway starts in the background, so a slow one never holds the
 	// server. Stop ends only the trees Snow started.
 	gateways := startGateways(cfg, log)
@@ -221,6 +226,7 @@ func serve(stderr io.Writer) int {
 		Notify: desktop,
 	}
 	opts.Agents, opts.Secrets, opts.KeyVars = agents.profiles, agents.secrets, agents.keyVars
+	opts.Roles, opts.RolesDir = roles, rolesDir
 	if err := server.Run(ctx, opts, path); err != nil {
 		log.Error("server stopped", "err", err)
 		_, _ = fmt.Fprintln(stderr, "snow:", err)

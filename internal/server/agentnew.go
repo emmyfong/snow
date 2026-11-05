@@ -26,11 +26,14 @@ const gitWait = 30 * time.Second
 // maxAgentBranch is how far agentBranch counts before it gives up.
 const maxAgentBranch = 999
 
-// launched is a worktree made for an agent that has not started yet.
+// launched is a worktree made for an agent that has not started yet, and
+// how the agent starts.
 type launched struct {
 	repo worktree.Repo
 	wt   worktree.Worktree
 	ok   bool // false for a folder that is not a git repository
+	role *Role
+	args []string // the role's Claude Code options
 }
 
 // agentNew starts the agent cmd asks for, from pane cmd.Target, in a new
@@ -50,12 +53,25 @@ func (st *state) agentNew(c *client, sess *session, cmd *api.Command) {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: fmt.Sprintf("%v: %s", ErrNotAgent, profile)})
 		return
 	}
+	var role *Role
+	if name := cmd.Args[api.ArgRole]; name != "" {
+		r, err := st.srv.role(name)
+		if err != nil {
+			st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
+			return
+		}
+		role = &r
+	}
 	distro, _ := st.srv.distroOf(profile)
 	repo := worktree.Repo{Path: folder, Distro: distro}
 	branch := cmd.Args[api.ArgBranch]
 	srv := st.srv
 	go func() {
 		l, err := makeWorktree(repo, branch)
+		l.role = role
+		if err == nil && role != nil {
+			l.args, err = srv.roleArgs(*role, distro)
+		}
 		if err == nil {
 			err = launch.loadSecrets(launch.secrets(profile))
 		}
@@ -121,12 +137,18 @@ func (st *state) openAgent(c *client, sess *session, profile, folder string, l l
 	} else if other := st.agentIn(folder); other != "" {
 		return fmt.Errorf("%w: %s; it is not a git repository, so the agent cannot get its own worktree", ErrFolderBusy, other)
 	}
-	w, err := st.newWindow(sess, api.PaneTerminal, profile, dir)
+	w, err := st.newWindowWith(sess, func(id, cols, rows int) (*pane, error) {
+		return st.srv.startPaneArgs(id, cols, rows, profile, dir, "", l.args)
+	})
 	if err != nil {
 		return err
 	}
+	p := w.panes[w.focused]
+	if l.role != nil {
+		info := l.role.info()
+		p.role = &info
+	}
 	if l.ok {
-		p := w.panes[w.focused]
 		p.worktree, p.branch = l.wt.Path, l.wt.Branch
 		w.name = l.wt.Branch
 	}

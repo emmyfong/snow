@@ -21,7 +21,7 @@ func (m *Model) openAgentLaunch(id int) tea.Cmd {
 		return nil
 	}
 	target := from.ID
-	form := agentlaunch.New(from.Folder, m.profiles.Agents)
+	form := agentlaunch.New(from.Folder, m.profiles.Agents, m.profiles.Roles)
 	return m.showOverlay(&overlay{
 		popup: form,
 		key:   form.Key,

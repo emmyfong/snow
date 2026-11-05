@@ -24,8 +24,8 @@ const (
 	OpPrevWindow   = "prev-window"
 	OpCloseWindow  = "close-window" // close window Target and its panes
 	// OpAgentNew starts a Claude Code agent from pane Target in a new
-	// window: profile; optional folder, branch. In a git repository the
-	// agent gets its own worktree on a new branch.
+	// window: profile; optional folder, branch, role. In a git repository
+	// the agent gets its own worktree on a new branch.
 	OpAgentNew = "agent-new"
 )
 
@@ -50,6 +50,8 @@ const (
 	// remove its worktree too. The branch is kept, and a worktree with
 	// changes is kept.
 	ArgWorktree = "worktree"
+	// ArgRole names a role from ProfileList.Roles for a new agent.
+	ArgRole = "role"
 )
 
 // WorktreeRemove is the ArgWorktree value that removes the worktree.

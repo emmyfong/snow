@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/roletext"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
@@ -166,7 +167,8 @@ func (b *Board) summary() string {
 
 // items is one list row per agent: its window, kind, state, how long it
 // has been in that state, its folder, and for a chat its model and cost,
-// or for an agent in a worktree Snow made, the worktree's branch.
+// or for an agent in a worktree Snow made, the worktree's branch, and the
+// role it started with and whether Claude Code enforces its limits.
 // A row whose agent needs the user ends in an alert that says what it
 // waits for, in the prompt colors.
 func (b *Board) items(g theme.Glyphs) []ui.ListItem {
@@ -174,8 +176,17 @@ func (b *Board) items(g theme.Glyphs) []ui.ListItem {
 	items := make([]ui.ListItem, len(b.agents))
 	for i, a := range b.agents {
 		cols := []string{place(a), kindName(a.Kind), stateText(a.State, g), span(now.Sub(a.Since)), ui.FolderName(projectFolder(a))}
+		// The branch and the role share a cell: columns line up across
+		// rows, and a chat's model would set a separate cell's width.
+		var extra []string
 		if a.Branch != "" {
-			cols = append(cols, a.Branch)
+			extra = append(extra, a.Branch)
+		}
+		if a.Role != "" {
+			extra = append(extra, a.Role+" ("+roletext.Short(a.PermissionMode, a.ReadOnly)+")")
+		}
+		if len(extra) > 0 {
+			cols = append(cols, strings.Join(extra, "  "))
 		}
 		if a.Kind == api.AgentKindChat {
 			model := a.Model

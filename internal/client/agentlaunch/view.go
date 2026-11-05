@@ -6,6 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/roletext"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 )
@@ -33,6 +34,8 @@ type layout struct {
 	folderRow, branchRow int
 	listTop, listRows    int
 	listItems            []int // profile index per list row
+	roleTop, roleRows    int
+	roleItems            []int // role choice per role row: 0 is no role
 }
 
 // View draws the form centered on a window of cols by rows cells and
@@ -62,6 +65,11 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) picker.Result {
 		m.focus = fieldProfile
 		if i := y - l.listTop; i < len(l.listItems) {
 			m.selected = l.listItems[i]
+		}
+	case l.roleRows > 0 && y >= l.roleTop && y < l.roleTop+l.roleRows:
+		m.focus = fieldRole
+		if i := y - l.roleTop; i < len(l.roleItems) {
+			m.role = l.roleItems[i]
 		}
 	}
 	return picker.Open
@@ -117,6 +125,29 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 		}
 	}
 	l.listRows = len(body) - l.listTop
+	if len(m.roles) > 0 {
+		body = append(body, "")
+		add(label("Role", fieldRole) + muted.Render(ansi.Truncate(m.roleLimits(), fieldW, "…")))
+		l.roleTop = len(body)
+		items := make([]ui.ListItem, 0, len(m.roles)+1)
+		items = append(items, ui.ListItem{Cols: []string{noRole, ""}})
+		for _, r := range m.roles {
+			items = append(items, ui.ListItem{Cols: []string{r.Name, roletext.Short(r.PermissionMode, r.ReadOnly)}})
+		}
+		selected := m.role
+		if m.focus != fieldRole {
+			selected = -1
+		}
+		list, rowItems := ui.ListRows(th, ui.ListOptions{Items: items, Selected: selected, Width: inner, Height: min(len(items), maxListRows)})
+		for _, line := range strings.Split(list, "\n") {
+			add(line)
+		}
+		l.roleItems = rowItems
+		if m.focus != fieldRole {
+			body[l.roleTop+indexOf(rowItems, m.role)] = " " + chosen(th, items[m.role].Cols[0], inner)
+		}
+		l.roleRows = len(body) - l.roleTop
+	}
 	body = append(body, "")
 	for _, line := range wrapText(about, inner) {
 		add(muted.Render(line))
@@ -139,8 +170,22 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 	l.folderRow += l.y + 1
 	l.branchRow += l.y + 1
 	l.listTop += l.y + 1
+	l.roleTop += l.y + 1
 	l.box = ui.Panel(th, ui.PanelOptions{Title: "New agent", Body: strings.Join(body, "\n"), Width: w})
 	return l, true
+}
+
+// noRole is the role list's first choice.
+const noRole = "No role"
+
+// roleLimits says what the chosen role limits, and whether Claude Code
+// enforces it.
+func (m *Model) roleLimits() string {
+	if m.role == 0 {
+		return "Claude Code's own settings"
+	}
+	r := m.roles[m.role-1]
+	return roletext.Limits(r.PermissionMode, r.ReadOnly)
 }
 
 // chosen draws the picked profile, marked with the pointer, when the list

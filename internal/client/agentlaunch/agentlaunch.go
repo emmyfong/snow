@@ -1,6 +1,6 @@
 // Package agentlaunch is the form that starts a Claude Code agent in its
-// own git worktree and window: the folder, the new branch, and the agent
-// profile. Keys and the mouse both fill it in.
+// own git worktree and window: the folder, the new branch, the agent
+// profile, and a role. Keys and the mouse both fill it in.
 package agentlaunch
 
 import (
@@ -19,6 +19,7 @@ const (
 	fieldFolder field = iota
 	fieldBranch
 	fieldProfile
+	fieldRole
 	fieldCount
 )
 
@@ -30,14 +31,16 @@ type Model struct {
 	folder, branch []rune
 	profiles       []string
 	selected       int // index in profiles
+	roles          []api.RoleInfo
+	role           int // 0 is no role, i+1 is roles[i]
 	focus          field
 	note           string // why the form cannot start an agent yet
 }
 
 // New opens the form on folder, the folder of the pane it starts from,
-// with the agent profiles to pick from.
-func New(folder string, profiles []string) *Model {
-	m := &Model{folder: []rune(folder), profiles: profiles, focus: fieldBranch}
+// with the agent profiles and the roles to pick from.
+func New(folder string, profiles []string, roles []api.RoleInfo) *Model {
+	m := &Model{folder: []rune(folder), profiles: profiles, roles: roles, focus: fieldBranch}
 	if len(profiles) == 0 {
 		m.focus = fieldFolder
 	}
@@ -54,16 +57,20 @@ func (m *Model) Key(k tea.Key) picker.Result {
 	case k.Code == tea.KeyEnter:
 		return m.submit()
 	case k.Code == tea.KeyTab && k.Mod.Contains(tea.ModShift):
-		m.focus = (m.focus + fieldCount - 1) % fieldCount
+		m.move(-1)
 	case k.Code == tea.KeyTab:
-		m.focus = (m.focus + 1) % fieldCount
+		m.move(1)
 	case k.Code == tea.KeyUp && m.focus == fieldProfile:
 		m.selected = max(m.selected-1, 0)
 	case k.Code == tea.KeyDown && m.focus == fieldProfile:
 		m.selected = min(m.selected+1, max(len(m.profiles)-1, 0))
-	case k.Code == tea.KeyUp:
-		m.focus = max(m.focus-1, 0)
-	case k.Code == tea.KeyDown:
+	case k.Code == tea.KeyUp && m.focus == fieldRole:
+		m.role = max(m.role-1, 0)
+	case k.Code == tea.KeyDown && m.focus == fieldRole:
+		m.role = min(m.role+1, len(m.roles))
+	case k.Code == tea.KeyUp && m.focus > fieldFolder:
+		m.focus--
+	case k.Code == tea.KeyDown && m.focus < fieldProfile:
 		m.focus++
 	case k.Code == tea.KeyBackspace:
 		if t := m.text(); t != nil && len(*t) > 0 {
@@ -74,6 +81,17 @@ func (m *Model) Key(k tea.Key) picker.Result {
 	}
 	m.note = ""
 	return picker.Open
+}
+
+// move moves the focus step fields on, round the form. The role field is
+// skipped when there are no roles.
+func (m *Model) move(step int) {
+	for {
+		m.focus = (m.focus + fieldCount + field(step)) % fieldCount
+		if m.focus != fieldRole || len(m.roles) > 0 {
+			return
+		}
+	}
 }
 
 // Paste types text into the focused text field. Line breaks are dropped:
@@ -128,6 +146,9 @@ func (m *Model) Command(target int) *api.Command {
 	}
 	if b := strings.TrimSpace(string(m.branch)); b != "" {
 		args[api.ArgBranch] = b
+	}
+	if m.role > 0 {
+		args[api.ArgRole] = m.roles[m.role-1].Name
 	}
 	return &api.Command{Op: api.OpAgentNew, Target: target, Args: args}
 }

@@ -261,3 +261,65 @@ func TestAgentWorktreeSaved(t *testing.T) {
 		t.Fatalf("restored pane %+v, want the worktree back", restored)
 	}
 }
+
+// TestRolePermissionCapability: only a role whose permission mode Claude
+// Code enforces is read-only. Instructions that ask for read-only work do
+// not make it so.
+func TestRolePermissionCapability(t *testing.T) {
+	tests := []struct {
+		role     Role
+		readOnly bool
+	}{
+		{Role{Name: "asks", Instructions: "Read only. Never edit files."}, false},
+		{Role{Name: "edits", PermissionMode: "acceptEdits"}, false},
+		{Role{Name: "plan", PermissionMode: "plan"}, true},
+	}
+	for _, tt := range tests {
+		info := tt.role.info()
+		if info.ReadOnly != tt.readOnly {
+			t.Errorf("%s: read-only %v, want %v", tt.role.Name, info.ReadOnly, tt.readOnly)
+		}
+	}
+	opts := claudeOptions(nil, nil)
+	opts.Roles = []Role{tests[0].role, tests[2].role}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	var l *api.ProfileList
+	s.call(func(st *state) { l = st.profileList() })
+	if len(l.Roles) != 2 || l.Roles[0].ReadOnly || !l.Roles[0].HasInstructions || !l.Roles[1].ReadOnly {
+		t.Fatalf("roles %+v", l.Roles)
+	}
+}
+
+// TestAgentNewUnknownRole: a role the server does not have is refused
+// before any worktree is made.
+func TestAgentNewUnknownRole(t *testing.T) {
+	repo := t.TempDir() // before the server, so its shells have ended when the folder goes
+	gittest.Repo(t, repo)
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, repo)
+	cmd := agentNew(first, "Claude Code", "")
+	cmd.Args[api.ArgRole] = "nobody"
+	c.Send(cmd)
+	if e := nextError(t, c); !strings.Contains(e.Message, ErrUnknownRole.Error()) {
+		t.Fatalf("got %+v, want the role refused", e)
+	}
+	if got := gittest.Run(t, repo, "branch", "--list", "agent/*"); got != "" {
+		t.Fatalf("branches %q after a refused launch", got)
+	}
+}
+
+// TestRoleFileNames: names that differ only in characters a file name
+// cannot hold get different files, each safe to pass to cmd.
+func TestRoleFileNames(t *testing.T) {
+	a, b := roleFile("Code Reviewer"), roleFile("Code-Reviewer")
+	if a == b {
+		t.Fatalf("both roles write %s", a)
+	}
+	for _, f := range []string{a, b, roleFile(`a/b\c:%!"`)} {
+		if strings.ContainsAny(f, `/\:*?"<>|% !`) {
+			t.Fatalf("file name %q holds an unsafe character", f)
+		}
+	}
+}
