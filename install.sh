@@ -9,6 +9,9 @@
 #   SNOW_VERSION      a tag such as v0.1.0; default: the newest release
 #   SNOW_INSTALL_DIR  where snow goes; default: ~/.local/bin
 #   SNOW_BASE_URL     where the release files are; for tests and mirrors
+#   SNOW_SOURCE       a Snow checkout: build it with go and install that
+#                     build instead of a release; run it again to update;
+#                     SNOW_VERSION and SNOW_BASE_URL do not apply
 set -eu
 
 fail() {
@@ -20,8 +23,6 @@ need() {
 	command -v "$1" >/dev/null 2>&1 || fail "$1 is needed but not installed"
 }
 
-need curl
-need tar
 need uname
 
 case "$(uname -s)" in
@@ -35,6 +36,14 @@ x86_64 | amd64) arch=amd64 ;;
 aarch64 | arm64) arch=arm64 ;;
 *) fail "no release for $(uname -m)" ;;
 esac
+
+if [ -n "${SNOW_SOURCE:-}" ]; then
+	need go
+	[ -d "$SNOW_SOURCE/cmd/snow" ] || fail "$SNOW_SOURCE is not a Snow checkout: it has no cmd/snow"
+else
+	need curl
+	need tar
+fi
 
 if [ -n "${SNOW_BASE_URL:-}" ]; then
 	base=$SNOW_BASE_URL
@@ -51,6 +60,8 @@ archive=snow_${os}_${arch}.tar.gz
 mkdir -p "$dest"
 tmp=$(mktemp -d "$dest/.snow-install.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
+# The build runs in the checkout, so the folder must not be relative.
+tmp=$(CDPATH='' cd -- "$tmp" && pwd)
 
 # HTTPS only, so a redirect cannot downgrade the download; file:// is for
 # tests and local mirrors.
@@ -58,22 +69,27 @@ fetch() {
 	curl -fsSL --proto '=https,file' --proto-redir '=https' --tlsv1.2 "$1" -o "$2"
 }
 
-echo "Downloading $archive"
-fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
-fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
-
-want=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
-[ -n "$want" ] || fail "checksums.txt has no entry for $archive"
-if command -v sha256sum >/dev/null 2>&1; then
-	got=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
-elif command -v shasum >/dev/null 2>&1; then
-	got=$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')
+if [ -n "${SNOW_SOURCE:-}" ]; then
+	echo "SNOW_SOURCE is set: building snow in $SNOW_SOURCE, not installing a release"
+	(CDPATH='' cd -- "$SNOW_SOURCE" && go build -o "$tmp/snow" ./cmd/snow) || fail "go build failed in $SNOW_SOURCE; nothing was installed"
 else
-	fail "sha256sum or shasum is needed to check the download"
-fi
-[ "$got" = "$want" ] || fail "checksum mismatch for $archive: the download is damaged or was changed; nothing was installed"
+	echo "Downloading $archive"
+	fetch "$base/$archive" "$tmp/$archive" || fail "could not download $base/$archive"
+	fetch "$base/checksums.txt" "$tmp/checksums.txt" || fail "could not download $base/checksums.txt"
 
-tar -xzf "$tmp/$archive" -C "$tmp" snow || fail "the archive has no snow binary"
+	want=$(awk -v f="$archive" '$2 == f { print $1 }' "$tmp/checksums.txt")
+	[ -n "$want" ] || fail "checksums.txt has no entry for $archive"
+	if command -v sha256sum >/dev/null 2>&1; then
+		got=$(sha256sum "$tmp/$archive" | awk '{ print $1 }')
+	elif command -v shasum >/dev/null 2>&1; then
+		got=$(shasum -a 256 "$tmp/$archive" | awk '{ print $1 }')
+	else
+		fail "sha256sum or shasum is needed to check the download"
+	fi
+	[ "$got" = "$want" ] || fail "checksum mismatch for $archive: the download is damaged or was changed; nothing was installed"
+
+	tar -xzf "$tmp/$archive" -C "$tmp" snow || fail "the archive has no snow binary"
+fi
 chmod 755 "$tmp/snow"
 mv "$tmp/snow" "$dest/snow"
 

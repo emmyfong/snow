@@ -192,12 +192,16 @@ func TestInstallScriptWindowsUpgradesRunningSnow(t *testing.T) {
 	t.Cleanup(func() { _ = running.Process.Kill(); _ = running.Wait() })
 	time.Sleep(500 * time.Millisecond)
 
-	out, err = runInstallPS(t, "powershell.exe", release, dest, false)
-	if err != nil {
-		t.Fatalf("upgrade while snow.exe runs: %v\n%s", err, out)
-	}
-	if !strings.Contains(out, "Installed snow") {
-		t.Fatalf("output %q, want the installed version", out)
+	// Twice: the first moves the running file aside, and the server keeps
+	// it open, so the second must not need that name again.
+	for i := range 2 {
+		out, err = runInstallPS(t, "powershell.exe", release, dest, false)
+		if err != nil {
+			t.Fatalf("upgrade %d while snow.exe runs: %v\n%s", i+1, err, out)
+		}
+		if !strings.Contains(out, "Installed snow") {
+			t.Fatalf("output %q, want the installed version", out)
+		}
 	}
 }
 
@@ -205,6 +209,30 @@ func TestInstallScriptWindowsUpgradesRunningSnow(t *testing.T) {
 // once, keeps entries such as %USERPROFILE%\bin as written, and keeps the
 // value expandable. It runs on a scratch registry key, not the user's PATH.
 func TestInstallScriptWindowsKeepsPathEntries(t *testing.T) {
+	before := `%USERPROFILE%\bin;C:\Tools`
+	keyName := testPathKey(t, before)
+
+	release := fakeWindowsRelease(t, true)
+	dest := filepath.Join(t.TempDir(), "snow")
+	for range 2 { // the second run must not add the folder again
+		if out, err := runInstallPS(t, "powershell.exe", release, dest, false, "SNOW_PATH_KEY="+keyName); err != nil {
+			t.Fatalf("install.ps1: %v\n%s", err, out)
+		}
+	}
+	got, kind := readPathKey(t, keyName)
+	added, ok := strings.CutPrefix(got, before+";")
+	if kind != registry.EXPAND_SZ || !ok || strings.Contains(added, ";") {
+		t.Fatalf("Path = %q (kind %d), want %q plus one entry, as an expandable string", got, kind, before)
+	}
+	if !sameDir(added, dest) {
+		t.Fatalf("added PATH entry %q is not %q", added, dest)
+	}
+}
+
+// testPathKey makes a scratch registry key under HKCU with Path set to
+// path, for SNOW_PATH_KEY, so a test never edits the user's own PATH.
+func testPathKey(t *testing.T, path string) string {
+	t.Helper()
 	b := make([]byte, 6)
 	if _, err := rand.Read(b); err != nil {
 		t.Fatal(err)
@@ -215,20 +243,18 @@ func TestInstallScriptWindowsKeepsPathEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = registry.DeleteKey(registry.CURRENT_USER, keyName) })
-	before := `%USERPROFILE%\bin;C:\Tools`
-	if err := k.SetExpandStringValue("Path", before); err != nil {
+	defer func() { _ = k.Close() }()
+	if err := k.SetExpandStringValue("Path", path); err != nil {
 		t.Fatal(err)
 	}
-	_ = k.Close()
+	return keyName
+}
 
-	release := fakeWindowsRelease(t, true)
-	dest := filepath.Join(t.TempDir(), "snow")
-	for range 2 { // the second run must not add the folder again
-		if out, err := runInstallPS(t, "powershell.exe", release, dest, false, "SNOW_PATH_KEY="+keyName); err != nil {
-			t.Fatalf("install.ps1: %v\n%s", err, out)
-		}
-	}
-	k, err = registry.OpenKey(registry.CURRENT_USER, keyName, registry.QUERY_VALUE)
+// readPathKey returns the Path value of a key from testPathKey, and its
+// registry kind.
+func readPathKey(t *testing.T, keyName string) (string, uint32) {
+	t.Helper()
+	k, err := registry.OpenKey(registry.CURRENT_USER, keyName, registry.QUERY_VALUE)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,15 +263,61 @@ func TestInstallScriptWindowsKeepsPathEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// The added entry may spell dest differently: a temp folder can be an
-	// 8.3 short name (RUNNER~1) that the script writes out in full.
-	added, ok := strings.CutPrefix(got, before+";")
-	if kind != registry.EXPAND_SZ || !ok || strings.Contains(added, ";") {
-		t.Fatalf("Path = %q (kind %d), want %q plus one entry, as an expandable string", got, kind, before)
-	}
-	a, errA := os.Stat(added)
-	d, errD := os.Stat(dest)
-	if errA != nil || errD != nil || !os.SameFile(a, d) {
-		t.Fatalf("added PATH entry %q is not %q (%v, %v)", added, dest, errA, errD)
+	return got, kind
+}
+
+// sameDir reports whether a and b name one folder. A PATH entry may spell
+// it differently: a temp folder can be an 8.3 short name (RUNNER~1) that
+// the script writes out in full.
+func sameDir(a, b string) bool {
+	fa, errA := os.Stat(a)
+	fb, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(fa, fb)
+}
+
+// TestInstallPSFromSource: with SNOW_SOURCE, install.ps1 builds the
+// checkout, installs that build, and adds its folder to PATH; a checkout
+// that does not build installs nothing.
+func TestInstallPSFromSource(t *testing.T) {
+	good, broken := fakeCheckout(t, false), fakeCheckout(t, true)
+	for _, shell := range shells(t) {
+		t.Run(shell, func(t *testing.T) {
+			dest := filepath.Join(t.TempDir(), "snow")
+			key := testPathKey(t, `C:\Tools`)
+			out, err := runInstallPS(t, shell, "", dest, false, "SNOW_SOURCE="+good, "SNOW_PATH_KEY="+key, "GOFLAGS=", "GOWORK=off")
+			if err != nil {
+				t.Fatalf("install.ps1: %v\n%s", err, out)
+			}
+			if !strings.Contains(out, "Installed snow dev-fake") || !strings.Contains(out, "not installing a release") || strings.Contains(out, "Downloading") {
+				t.Fatalf("output %q, want the source build named, installed, and nothing downloaded", out)
+			}
+			path, _ := readPathKey(t, key)
+			if added, ok := strings.CutPrefix(path, `C:\Tools;`); !ok || !sameDir(added, dest) {
+				t.Errorf("PATH %q, want %s added", path, dest)
+			}
+
+			// "." is the checkout PowerShell's location is in, as the README
+			// tells the user to run it.
+			dest = filepath.Join(t.TempDir(), "snow")
+			script, err := filepath.Abs(filepath.Join("..", "..", "install.ps1"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			cmd := exec.Command(shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
+				"Set-Location -LiteralPath '"+good+"'; & '"+script+"'")
+			cmd.Env = append(os.Environ(), "SNOW_SOURCE=.", "SNOW_INSTALL_DIR="+dest, "SNOW_NO_PATH=1", "GOFLAGS=", "GOWORK=off")
+			if b, err := cmd.CombinedOutput(); err != nil || !strings.Contains(string(b), "Installed snow dev-fake") {
+				t.Fatalf("SNOW_SOURCE=. after Set-Location: %v\n%s", err, b)
+			}
+
+			dest = filepath.Join(t.TempDir(), "snow")
+			out, err = runInstallPS(t, shell, "", dest, false, "SNOW_SOURCE="+broken, "GOFLAGS=", "GOWORK=off")
+			if err == nil || !strings.Contains(out, "go build failed") {
+				t.Fatalf("install.ps1 = %v\n%s\nwant the build failure", err, out)
+			}
+			if _, err := os.Stat(filepath.Join(dest, "snow.exe")); !os.IsNotExist(err) {
+				t.Fatal("snow.exe was installed from a failed build")
+			}
+		})
 	}
 }
