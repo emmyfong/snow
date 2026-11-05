@@ -47,6 +47,11 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpSplit, Target: 1, Args: map[string]string{ArgDir: DirRight, ArgKind: "files"}}, true},
 		{Command{Op: OpNewWindow, Args: map[string]string{ArgKind: "Files"}}, false},
 		{Command{Op: OpNewWindow, Args: map[string]string{ArgKind: ""}}, false},
+		{Command{Op: OpOpen, Target: 1, Args: map[string]string{ArgKind: "files"}}, true},
+		{Command{Op: OpOpen, Args: map[string]string{ArgKind: "files"}}, false},
+		{Command{Op: OpOpen, Target: 1}, false},
+		{Command{Op: OpOpen, Target: 1, Args: map[string]string{ArgKind: PaneTerminal}}, true},
+		{Command{Op: OpOpen, Target: 1, Args: map[string]string{ArgKind: "files", ArgAgent: AgentClaude}}, false},
 	}
 	for _, tt := range tests {
 		err := tt.cmd.Validate()

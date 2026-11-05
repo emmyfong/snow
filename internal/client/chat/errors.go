@@ -22,6 +22,7 @@ const (
 	AskResume    = "resume"     // choose a past conversation
 	AskPickMode  = "pick-mode"  // choose the approval mode
 	AskHelp      = "help"       // show the commands and keys
+	AskOpen      = "open"       // open a pane kind, or pick one; see OpenKind
 )
 
 // errorTitles name each failure in its box's top edge.

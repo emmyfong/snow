@@ -153,6 +153,8 @@ func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command
 		return nil
 	case api.OpEven:
 		return w.tree.Even(id)
+	case api.OpOpen:
+		return st.openKind(sess, w, p, cmd)
 	}
 	return fmt.Errorf("%w: %s is not a pane command", api.ErrInvalidCommand, cmd.Op)
 }

@@ -34,6 +34,9 @@ type Host interface {
 	// SetEffort asks the server to set the effort from the next turn. An
 	// empty level lets the provider choose.
 	SetEffort(level string)
+	// Open asks the session to open a pane of kind beside this chat, or to
+	// show the kind picker when kind is empty.
+	Open(kind string)
 }
 
 // RunFunc runs one command in a chat pane. rest is what the user typed
@@ -67,6 +70,7 @@ type host struct{ m *Model }
 func (h host) Send(kind, text string)  { h.m.sent = h.m.chatInput(kind, text) }
 func (h host) Ask(request string)      { h.m.asked = request }
 func (h host) Notice(text string)      { h.m.note = text }
+func (h host) Open(kind string)        { h.m.asked, h.m.openKind = AskOpen, kind }
 func (h host) SetInput(text string)    { h.m.setInput(text) }
 func (h host) Input() string           { return string(h.m.input) }
 func (h host) Model() (string, string) { return h.m.snap.Model, h.m.snap.Effort }

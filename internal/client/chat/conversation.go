@@ -66,6 +66,19 @@ func runEffort(h Host, rest string) {
 	}
 }
 
+// runOpen handles /open: a kind opens beside the chat, or focuses the pane
+// of that kind the window has; none asks for the picker. The server knows
+// which kinds exist and refuses one it does not have.
+func runOpen(h Host, rest string) { h.Open(strings.ToLower(strings.TrimSpace(rest))) }
+
+// OpenKind returns the kind the last AskOpen named, or "" for the picker,
+// and clears it.
+func (m *Model) OpenKind() string {
+	k := m.openKind
+	m.openKind = ""
+	return k
+}
+
 // runHelp asks the session for the help panel.
 func runHelp(h Host, _ string) { h.Ask(AskHelp) }
 
@@ -79,6 +92,7 @@ func init() {
 		{command.Command{Name: "rename", Args: "[title]", Desc: "Rename this conversation", Group: command.GroupConversation}, runRename},
 		{command.Command{Name: "mode", Args: "[ask|auto]", Desc: "Choose when tools wait for you", Group: command.GroupModel}, runMode},
 		{command.Command{Name: "effort", Args: "[level]", Desc: "Set how hard the model thinks", Group: command.GroupModel}, runEffort},
+		{command.Command{Name: "open", Args: "[kind]", Desc: "Open a pane, or focus it", Group: command.GroupConversation, Where: command.InSession}, runOpen},
 		{command.Command{Name: "help", Desc: "Show the commands and keys", Group: command.GroupSnow}, runHelp},
 	} {
 		if err := Register(c.cmd, c.run); err != nil {

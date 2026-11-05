@@ -23,6 +23,9 @@ const (
 	OpNextWindow   = "next-window"
 	OpPrevWindow   = "prev-window"
 	OpCloseWindow  = "close-window" // close window Target and its panes
+	// OpOpen opens a pane of kind beside pane Target, or focuses the pane
+	// of that kind its window already has.
+	OpOpen = "open" // kind
 )
 
 // Command argument keys.
@@ -122,6 +125,14 @@ func (c *Command) Validate() error {
 		return needWindow()
 	case OpNewWindow, OpNextWindow, OpPrevWindow:
 		return nil
+	case OpOpen:
+		if c.Args[ArgKind] == "" {
+			return fmt.Errorf("%w: open needs a kind", ErrInvalidCommand)
+		}
+		if _, set := c.Args[ArgAgent]; set {
+			return fmt.Errorf("%w: open takes no agent", ErrInvalidCommand)
+		}
+		return needTarget()
 	}
 	return fmt.Errorf("%w: unknown op %q", ErrInvalidCommand, c.Op)
 }

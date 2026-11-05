@@ -71,11 +71,11 @@ func (s *Server) prestartSession(m *api.Attach, snap *store.Snapshot) *prestarte
 	return s.prestart("", m.Dir, model, effort)
 }
 
-// opensChat reports whether cmd opens a chat pane: a new window or a split
-// of kind chat. An agent split opens its own kind of pane.
+// opensChat reports whether cmd may open a chat pane: a new window, a
+// split, or an open of kind chat. An agent split opens its own kind of pane.
 func opensChat(cmd *api.Command) bool {
 	return cmd.Args[api.ArgKind] == api.PaneChat && cmd.Args[api.ArgAgent] == "" &&
-		(cmd.Op == api.OpNewWindow || cmd.Op == api.OpSplit)
+		(cmd.Op == api.OpNewWindow || cmd.Op == api.OpSplit || cmd.Op == api.OpOpen)
 }
 
 // prestartCommand starts the conversation of the chat pane that cmd from c
@@ -93,15 +93,21 @@ func (s *Server) prestartCommand(c *client, cmd *api.Command) *prestarted {
 			return
 		}
 		from := 0
-		if cmd.Op == api.OpSplit {
+		if cmd.Op == api.OpSplit || cmd.Op == api.OpOpen {
 			w, p := sess.findPane(cmd.Target)
 			if p == nil {
 				return
 			}
+			if _, has := w.paneOfKind(api.PaneChat); has && cmd.Op == api.OpOpen {
+				return // open focuses the chat the window has
+			}
 			// A split that cannot fit fails before it opens a pane, and a
 			// conversation started for it would leave its file behind.
 			cols, rows := sess.area()
-			d := directions[cmd.Args[api.ArgDir]]
+			d := layout.Right // where open puts its pane
+			if cmd.Op == api.OpSplit {
+				d = directions[cmd.Args[api.ArgDir]]
+			}
 			if w.tree.CanSplitWithin(layout.PaneID(p.id), d, layout.PaneID(st.nextPane), cols, rows) != nil {
 				return
 			}

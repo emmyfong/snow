@@ -24,6 +24,7 @@ internal/client/
   picker/        the profile picker popup
   listpick/      the list popup (rows, keys, click mapping) that the mode and resume pickers share
   modepick/      the approval mode picker (`/mode`)
+  kindpick/      the pane kind picker (`/open`, `Ctrl+b O`, the pane menu): the kinds from api.PaneKinds, the ones the window has marked; a kind the client cannot draw shows `session/unknownpane.go`
   resumepick/    the past-conversation picker (`/resume`; `Ctrl+a` toggles every folder)
   convrow/       the cells of one past-conversation row (`convrow.Columns`): the resume picker and an empty chat's list of recent conversations share it
   modelpick/     the model and effort picker (`/model`)
