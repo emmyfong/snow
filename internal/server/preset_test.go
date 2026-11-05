@@ -71,7 +71,8 @@ func TestLayoutKeepsPanes(t *testing.T) {
 	}
 	l := nextLayout(t, c, func(l *api.Layout) bool {
 		ps := shownPanes(l)
-		return len(ps) == 2 && ps[0].ID == chat && ps[1].ID == shell && ps[1].Rect.Y > ps[0].Rect.Y
+		return len(ps) == 3 && ps[0].ID == chat && ps[1].ID == shell && ps[1].Rect.Y > ps[0].Rect.Y &&
+			ps[2].Kind == api.PaneGit && ps[2].Rect.X > ps[0].Rect.X
 	})
 	if windowNamed(l, "moved") != nil {
 		t.Fatal("a moved window with nothing to move")
@@ -92,8 +93,8 @@ func TestLayoutSkipsUnregisteredKind(t *testing.T) {
 	chat, _ := openChatBesideShell(t, c)
 	layoutCmd(c, chat, "ide")
 	e := nextError(t, c)
-	if e.Code != api.CodeNotice || !strings.Contains(e.Message, "files, viewer, git") {
-		t.Fatalf("got %+v, want a notice naming files, viewer, git", e)
+	if e.Code != api.CodeNotice || !strings.Contains(e.Message, "files, viewer") || strings.Contains(e.Message, "git") {
+		t.Fatalf("got %+v, want a notice naming files and viewer, not git", e)
 	}
 }
 

@@ -84,32 +84,20 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 		m.Scroll(1)
 	case k.Code == tea.KeyDown:
 		m.Scroll(-1)
-	case k.Code == tea.KeyLeft:
-		m.cursor = max(m.cursor-1, 0)
-	case k.Code == tea.KeyRight:
-		m.cursor = min(m.cursor+1, len(m.input))
-	case k.Code == tea.KeyHome:
-		m.cursor = 0
-	case k.Code == tea.KeyEnd:
-		m.cursor = len(m.input)
-		m.Follow()
-	case k.Code == tea.KeyBackspace:
-		m.unselect()
-		if m.cursor > 0 {
-			m.input = slices.Delete(m.input, m.cursor-1, m.cursor)
-			m.cursor--
-		}
-		m.Follow()
-	case k.Code == tea.KeyDelete:
-		if m.cursor < len(m.input) {
-			m.input = slices.Delete(m.input, m.cursor, m.cursor+1)
-		}
-		m.Follow()
-	case k.Code == 'u' && k.Mod == tea.ModCtrl:
-		m.input, m.cursor = nil, 0
 	default:
-		if text, ok := keys.Typed(k); ok {
-			m.insert(text)
+		text, cursor, ok := keys.EditAt(m.input, m.cursor, k)
+		if !ok {
+			return nil
+		}
+		// An edit gives the keyboard back to the message and shows the
+		// latest text; End shows it too.
+		changed := !slices.Equal(text, m.input)
+		if changed {
+			m.unselect()
+		}
+		m.input, m.cursor = text, cursor
+		if changed || k.Code == tea.KeyEnd {
+			m.Follow()
 		}
 	}
 	return nil
@@ -126,9 +114,7 @@ func (m *Model) Retry() *api.ChatInput { return m.chatInput(api.ChatInputRetry, 
 
 func (m *Model) insert(text string) {
 	m.unselect()
-	r := []rune(text)
-	m.input = slices.Insert(m.input, m.cursor, r...)
-	m.cursor += len(r)
+	m.input, m.cursor = keys.InsertAt(m.input, m.cursor, text)
 	m.Follow()
 }
 

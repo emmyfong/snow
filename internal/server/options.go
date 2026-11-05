@@ -86,7 +86,8 @@ type Options struct {
 	// send its first hook; nil means a timer. Tests fire it by hand.
 	afterHookWait func(f func())
 	// sideKinds are side pane kinds to register. Tests set it; Snow's own
-	// side kinds are registered in New.
+	// side kinds are registered in New, and one here of the same name
+	// takes its place.
 	sideKinds []sideKind
 	// afterDriven runs f when a pane's driven mark has lasted drivenFor;
 	// nil means a timer. Tests fire it by hand.

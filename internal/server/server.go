@@ -61,7 +61,7 @@ func New(opts Options) *Server {
 		done:     make(chan struct{}),
 	}
 	s.launch = newLauncher(opts, s.log)
-	kinds, err := newPaneKinds(opts.Chat != nil, opts.sideKinds...)
+	kinds, err := newPaneKinds(opts.Chat != nil, sideKinds(opts.sideKinds)...)
 	if err != nil {
 		s.log.Error("pane kinds", "err", err)
 		kinds, _ = newPaneKinds(opts.Chat != nil)

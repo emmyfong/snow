@@ -114,8 +114,10 @@ func (l *Launch) wsl(h Hooks, dir, script string) {
 }
 
 // snowVars are the variables the server sets in every pane: SNOW for a
-// nested snow, and SNOW_PANE and SNOW_SOCKET for snow hook.
-const snowVars = "SNOW:SNOW_PANE:SNOW_SOCKET"
+// nested snow, and SNOW_PANE and SNOW_SOCKET for snow hook. WSL sets
+// WSL_DISTRO_NAME itself; listing it passes it to the Windows snow.exe
+// that a hook starts, which reads git in that distribution.
+const snowVars = "SNOW:SNOW_PANE:SNOW_SOCKET:WSL_DISTRO_NAME"
 
 // forwardSnow adds snowVars to a WSLENV value, which lists the variables
 // wsl.exe passes between Windows and the Linux side, both ways: a Windows

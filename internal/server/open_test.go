@@ -71,8 +71,8 @@ func TestOpenUnknownKind(t *testing.T) {
 	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
 	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{api.ArgKind: "files"}})
 	_, e := apitest.Reply[*api.Layout](c)
-	if e == nil || !strings.Contains(e.Message, "terminal, note") {
-		t.Fatalf("open files answered %v, want an error naming terminal, note", e)
+	if e == nil || !strings.Contains(e.Message, "terminal, git, note") {
+		t.Fatalf("open files answered %v, want an error naming terminal, git, note", e)
 	}
 }
 

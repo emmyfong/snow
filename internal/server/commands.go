@@ -1,6 +1,7 @@
 package server
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 
@@ -200,7 +201,9 @@ func (st *state) newPaneArgs(sess *session, cmd *api.Command, from int) (profile
 	}
 	if _, p := sess.findPane(from); p != nil {
 		if profile == "" {
-			profile = p.profile
+			// A side pane has no profile of its own; a pane opened from it
+			// runs where the side pane's folder is.
+			profile = cmp.Or(p.profile, p.sideFrom)
 		}
 		if folder == "" {
 			folder = p.folder()

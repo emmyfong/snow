@@ -1,6 +1,6 @@
 // Package worktree creates, lists, and removes the git worktrees that give
-// each coding agent a folder of its own. Git runs through the git command,
-// as the user would run it, in the repository's own distribution for a WSL
+// each coding agent a folder of its own. Git runs through internal/git, as
+// the user would run it, in the repository's own distribution for a WSL
 // folder. Snow never writes git config. It needs git 2.17 or later, the
 // first version with `git worktree remove`.
 //
@@ -9,18 +9,14 @@
 package worktree
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"os"
-	"os/exec"
 	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
+	"github.com/emmyfong/snow/internal/git"
 	"github.com/emmyfong/snow/internal/shell"
 )
 
@@ -32,113 +28,27 @@ type Repo struct {
 	Distro string // empty for a repository of the OS Snow runs on
 }
 
-// gitEnv keeps git from asking questions no one can answer, and keeps its
-// messages in English, which classify reads for the repository errors.
-var gitEnv = []string{"GIT_TERMINAL_PROMPT=0", "LC_ALL=C"}
-
-// command builds the git process for args, started in dir. A WSL
-// repository runs through wsl.exe, which does not pass the environment on,
-// so env sets it inside the distribution.
-func (r Repo) command(ctx context.Context, dir string, args ...string) *exec.Cmd {
-	var cmd *exec.Cmd
-	if r.Distro == "" {
-		cmd = exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
-		cmd.Env = append(os.Environ(), gitEnv...)
-	} else {
-		wsl := []string{"-d", r.Distro, "--cd", dir, "--exec", "env"}
-		wsl = append(append(append(wsl, gitEnv...), "git"), args...)
-		cmd = exec.CommandContext(ctx, "wsl.exe", wsl...)
-	}
-	// A child of git, such as a hook, can hold the output pipes after git
-	// is killed. Run gives up on them after this long.
-	cmd.WaitDelay = 2 * time.Second
-	shell.HideWindow(cmd)
-	return cmd
-}
-
-// failure is a git command that did not succeed.
-type failure struct {
-	sub    string // the git subcommand
-	code   int    // the exit code, or -1 if git did not run
-	stderr string
-	cause  error
-}
-
-func (f *failure) Error() string {
-	if f.stderr != "" {
-		return "git " + f.sub + ": " + f.stderr
-	}
-	return "git " + f.sub + ": " + f.cause.Error()
-}
-
-func (f *failure) Unwrap() error { return f.cause }
-
 // git runs git in dir and returns what it wrote to its standard output.
-// A failure comes back as a *failure; classify turns it into a typed error.
+// A failure comes back as a *git.Error; classify turns it into a typed error.
 func (r Repo) git(ctx context.Context, dir string, args ...string) (string, error) {
-	cmd := r.command(ctx, dir, args...)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Run(); err != nil {
-		f := &failure{sub: args[0], code: -1, stderr: stderrText(stderr.Bytes(), r.Distro != ""), cause: err}
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			// A killed git says "signal: killed"; the caller wants to know why.
-			f.cause = fmt.Errorf("%w: %w", ctxErr, err)
-		}
-		var exit *exec.ExitError
-		if errors.As(err, &exit) {
-			f.code = exit.ExitCode()
-		}
-		return "", f
-	}
-	return stdout.String(), nil
+	return git.Repo(r).Run(ctx, dir, args...)
 }
 
-// stderrText returns what a command wrote to its error output as text. Git
-// writes UTF-8. wsl.exe writes its own errors, such as a distribution that
-// is not there, in UTF-16 with NULs between the letters, so for WSL a NUL
-// means UTF-16.
-func stderrText(b []byte, wsl bool) string {
-	if wsl && bytes.IndexByte(b, 0) >= 0 {
-		return strings.TrimSpace(shell.DecodeUTF16LE(b))
-	}
-	return strings.TrimSpace(string(b))
-}
-
-// declined reports whether err is git answering "no" to a yes-or-no command,
-// which it does with exit code 1, and not git failing to answer.
-func declined(err error) bool {
-	var f *failure
-	return errors.As(err, &f) && f.code == 1
-}
+// declined reports whether err is git answering "no" to a yes-or-no command.
+func declined(err error) bool { return git.Declined(err) }
 
 // branchTaken reports whether err is git refusing to make a branch that
 // already exists. git runs with LC_ALL=C, so its messages are English.
 func branchTaken(err error) bool {
-	var f *failure
-	return errors.As(err, &f) &&
-		(strings.Contains(f.stderr, "reference already exists") ||
-			strings.Contains(f.stderr, "a branch named") && strings.Contains(f.stderr, "already exists"))
+	var e *git.Error
+	return errors.As(err, &e) &&
+		(strings.Contains(e.Stderr, "reference already exists") ||
+			strings.Contains(e.Stderr, "a branch named") && strings.Contains(e.Stderr, "already exists"))
 }
 
 // classify gives a failure that says what is wrong with the repository or
 // with git itself a typed error. Any other failure passes through.
-func (r Repo) classify(err error) error {
-	var f *failure
-	if !errors.As(err, &f) {
-		return err
-	}
-	switch {
-	case errors.Is(f.cause, exec.ErrNotFound),
-		// env exits 127 when it cannot find git. Its message is in the
-		// distribution's language, so only the code is read.
-		r.Distro != "" && f.code == 127:
-		return fmt.Errorf("%w: %w", ErrNoGit, err)
-	case f.code == 128 && (strings.Contains(f.stderr, "not a git repository") || strings.Contains(f.stderr, "cannot change to")):
-		return fmt.Errorf("%w: %w", ErrNotRepo, err)
-	}
-	return err
-}
+func (r Repo) classify(err error) error { return git.Repo(r).Classify(err) }
 
 // join joins path elements in the repository's own form.
 func (r Repo) join(elem ...string) string {

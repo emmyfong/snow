@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -106,5 +107,35 @@ func TestOldClientIgnoresField(t *testing.T) {
 	}
 	if b := mustJSON(t, &sent.Sessions[1]); bytes.Contains([]byte(b), []byte("needsYou")) {
 		t.Fatalf("a session with no waiting agent encodes %s", b)
+	}
+}
+
+func TestAgentCommitValidate(t *testing.T) {
+	h1, h2 := strings.Repeat("a", 40), strings.Repeat("b", 64)
+	tests := []struct {
+		name string
+		c    AgentCommit
+		ok   bool
+	}{
+		{"before", AgentCommit{Phase: CommitBefore, Before: h1}, true},
+		{"before, git could not read", AgentCommit{Phase: CommitBefore}, true},
+		{"after, sha-256", AgentCommit{Phase: CommitAfter, After: h2, Parent: h2}, true},
+		{"after, root commit", AgentCommit{Phase: CommitAfter, After: h1}, true},
+		{"no phase", AgentCommit{Before: h1}, false},
+		{"unknown phase", AgentCommit{Phase: "during"}, false},
+		{"before with after's hash", AgentCommit{Phase: CommitBefore, After: h1}, false},
+		{"after with before's hash", AgentCommit{Phase: CommitAfter, Before: h1}, false},
+		{"short hash", AgentCommit{Phase: CommitBefore, Before: "abc1234"}, false},
+		{"upper case", AgentCommit{Phase: CommitBefore, Before: strings.Repeat("A", 40)}, false},
+		{"not hex", AgentCommit{Phase: CommitAfter, After: strings.Repeat("g", 40)}, false},
+	}
+	for _, tt := range tests {
+		err := (&AgentState{Pane: 1, State: AgentWorking, Commit: &tt.c}).Validate()
+		if (err == nil) != tt.ok {
+			t.Errorf("%s: Validate() = %v, want ok %v", tt.name, err, tt.ok)
+		}
+		if err != nil && !errors.Is(err, ErrInvalidAgentState) {
+			t.Errorf("%s: %v is not ErrInvalidAgentState", tt.name, err)
+		}
 	}
 }

@@ -3,6 +3,7 @@ package server
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -32,9 +33,20 @@ type sidePane interface {
 type sideContext struct {
 	Pane   int
 	Folder string // the folder of the pane it opened from, or the session's
+	// Distro is the WSL distribution Folder belongs to, from the profile
+	// of the pane it opened from; empty for a folder of the OS Snow runs on.
+	Distro string
 	// Changed tells the server the pane's state changed, from any
 	// goroutine. The server sends State to the pane's clients.
 	Changed func()
+	// Apply runs f on the model goroutine, after the functions applied
+	// before it, then sends State to the pane's clients. A kind's own
+	// goroutine hands its results to the pane this way, so the pane's state
+	// needs no lock. It must not be called on the model goroutine.
+	Apply func(f func())
+	// Agent returns the agent Snow saw make commit hash, or "". It runs
+	// only on the model goroutine.
+	Agent func(hash string) string
 }
 
 // sideKind is a pane kind that opens a side pane. Open runs on the model
@@ -49,6 +61,21 @@ type sideKind struct {
 type paneKinds struct {
 	list []api.PaneKindInfo // in registration order, for a picker
 	side map[string]sideKind
+}
+
+// sideKinds returns Snow's own side kinds, with each of extra in place of
+// the one of its name, or added after them.
+func sideKinds(extra []sideKind) []sideKind {
+	kinds := []sideKind{gitKind()}
+	for _, x := range extra {
+		i := slices.IndexFunc(kinds, func(k sideKind) bool { return k.Name == x.Name })
+		if i < 0 {
+			kinds = append(kinds, x)
+		} else {
+			kinds[i] = x
+		}
+	}
+	return kinds
 }
 
 // newPaneKinds returns the registry with terminal, chat when chats is set,
@@ -89,16 +116,24 @@ func (k *paneKinds) kinds() []api.PaneKindInfo {
 	return append([]api.PaneKindInfo(nil), k.list...)
 }
 
-// openSide opens side pane id of kind in folder. It returns ErrUnknownKind
-// for a kind that is not registered.
-func (s *Server) openSide(id int, kind, folder string) (*pane, error) {
+// openSide opens side pane id of kind in folder, which belongs to the
+// distribution of profile, the profile of the pane it opened from. It
+// returns ErrUnknownKind for a kind that is not registered.
+func (s *Server) openSide(st *state, id int, kind, profile, folder string) (*pane, error) {
 	sk, ok := s.kinds.side[kind]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownKind, kind)
 	}
+	distro, _ := s.distroOf(profile)
 	sp, err := sk.Open(sideContext{
-		Pane: id, Folder: folder,
+		Pane: id, Folder: folder, Distro: distro, Agent: st.marks.agent,
 		Changed: func() { s.post(func(st *state) { st.sideChanged(id) }) },
+		Apply: func(f func()) {
+			s.send(func(st *state) {
+				f()
+				st.sideChanged(id)
+			})
+		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("open %s pane: %w", kind, err)
@@ -106,7 +141,7 @@ func (s *Server) openSide(id int, kind, folder string) (*pane, error) {
 	if sp == nil {
 		return nil, fmt.Errorf("open %s pane: the kind opened nothing", kind)
 	}
-	return &pane{id: id, dir: folder, side: sp, sideKind: kind, sideRev: 1}, nil
+	return &pane{id: id, dir: folder, side: sp, sideKind: kind, sideRev: 1, sideFrom: profile}, nil
 }
 
 // sideChanged moves side pane id to its next state revision, which the next

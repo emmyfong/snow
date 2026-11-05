@@ -121,8 +121,8 @@ func TestLaunchWSL(t *testing.T) {
 // SNOW, and a Windows snow.exe that a hook runs from WSL sees the pane.
 func TestLaunchWSLForwardsSnow(t *testing.T) {
 	tests := []struct{ wslenv, want string }{
-		{"", "WSLENV=SNOW:SNOW_PANE:SNOW_SOCKET"},
-		{"GOPATH/l", "WSLENV=GOPATH/l:SNOW:SNOW_PANE:SNOW_SOCKET"},
+		{"", "WSLENV=SNOW:SNOW_PANE:SNOW_SOCKET:WSL_DISTRO_NAME"},
+		{"GOPATH/l", "WSLENV=GOPATH/l:SNOW:SNOW_PANE:SNOW_SOCKET:WSL_DISTRO_NAME"},
 	}
 	for _, tt := range tests {
 		t.Setenv("WSLENV", tt.wslenv)

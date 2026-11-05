@@ -14,8 +14,8 @@ import (
 // ErrUnknownPreset is returned for a layout name not in api.LayoutPresets.
 var ErrUnknownPreset = errors.New("unknown layout")
 
-// presets are the Templates of api.LayoutPresets. Files, viewer, and git
-// are side kinds that later epics register; until then a preset skips them.
+// presets are the Templates of api.LayoutPresets. Files and viewer are
+// side kinds that later epics register; until then a preset skips them.
 var presets = map[string]layout.Template{
 	"ide": {Axis: layout.Horizontal, Ratios: []float64{0.2, 0.6, 0.2}, Children: []layout.Template{
 		{Kind: "files"},

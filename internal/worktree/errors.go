@@ -1,15 +1,19 @@
 package worktree
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/emmyfong/snow/internal/git"
+)
 
 // The failures a caller can act on. Each comes wrapped with git's own
 // message, so test for one with errors.Is.
 var (
 	// ErrNoGit means git is not installed, or not in the distribution.
-	ErrNoGit = errors.New("git is not installed")
+	ErrNoGit = git.ErrNoGit
 	// ErrNotRepo means the folder is not in a git repository, or the
 	// repository has no checkout.
-	ErrNotRepo = errors.New("not a git repository")
+	ErrNotRepo = git.ErrNotRepo
 	// ErrNoCommits means the repository has no commit to branch from.
 	ErrNoCommits = errors.New("the repository has no commits")
 	// ErrBadBranch means git does not accept the branch name.
