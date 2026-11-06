@@ -799,7 +799,7 @@ func TestRuntimeModelChoice(t *testing.T) {
 		ids = append(ids, m.ID)
 	}
 	if !slices.Equal(ids, []string{"default", "opus", "haiku"}) {
-		t.Fatalf("models = %q", ids)
+		t.Fatalf("models = %q, error %q", ids, list.Providers[0].Err)
 	}
 	chatInputOf(c, pane, api.ChatInputModel, func(in *api.ChatInput) { in.Model, in.Effort = "claude-code/opus", "high" })
 	c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Model == "claude-code/opus" && s.Effort == "high" })
