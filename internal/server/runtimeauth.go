@@ -67,7 +67,7 @@ func (s *Server) changeRuntimeAuth(ctx context.Context, facts runtimeFacts, id s
 
 func (s *Server) logoutRuntime(ctx context.Context, facts runtimeFacts, connection clauderuntime.Connection) error {
 	options := s.opts.Chat.Runtime
-	profile, err := clauderuntime.NewProfile(options.Root, connection.ID, connection.Auth)
+	profile, err := clauderuntime.ProfileFor(options.Root, connection)
 	if err != nil {
 		return err
 	}

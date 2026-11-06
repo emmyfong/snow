@@ -36,6 +36,10 @@ type Profile struct {
 	ID        string
 	Auth      AuthMode
 	ConfigDir string
+	// Distro is the WSL distribution the connection runs in; empty for the
+	// machine Snow runs on. A WSL ConfigDir is under that user's home, and
+	// only the distribution knows the home, so ConfigDir is shown, not used.
+	Distro string
 }
 
 // NewProfile returns the connection's native configuration location under root.
@@ -45,6 +49,20 @@ func NewProfile(root, id string, auth AuthMode) (Profile, error) {
 		return Profile{}, ErrProfile
 	}
 	return Profile{ID: id, Auth: auth, ConfigDir: filepath.Join(root, "connections", id, "claude")}, nil
+}
+
+// ProfileFor returns c's profile: a native folder under root, or for a WSL
+// connection a folder inside its distribution.
+func ProfileFor(root string, c Connection) (Profile, error) {
+	p, err := NewProfile(root, c.ID, c.Auth)
+	if err != nil || c.Distro == "" {
+		return p, err
+	}
+	if strings.ContainsAny(c.Distro, "\x00\r\n") {
+		return Profile{}, ErrProfile
+	}
+	p.Distro, p.ConfigDir = c.Distro, "~/"+wslConfigBase+"/"+c.ID+"/claude"
+	return p, nil
 }
 
 func validID(id string) bool {
@@ -62,6 +80,10 @@ func validID(id string) bool {
 // Prepare creates the private native connection directory. WSL connections must
 // prepare their directory inside that distribution instead.
 func (p Profile) Prepare() error {
+	if p.Distro != "" {
+		// The launch script creates it, owner-only, inside the distribution.
+		return nil
+	}
 	if !validID(p.ID) || !filepath.IsAbs(p.ConfigDir) || p.Auth != Subscription && p.Auth != APIKey {
 		return ErrProfile
 	}

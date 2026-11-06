@@ -73,7 +73,6 @@ func TestRuntimeRejectsShellWrappers(t *testing.T) {
 	}
 	for _, program := range []shell.Profile{
 		{}, {Path: "claude.cmd"}, {Path: "cmd.exe", CmdLine: "claude.cmd"},
-		{Path: "wsl.exe", Distro: "Ubuntu"},
 	} {
 		if _, err := p.ChatLaunch(program, "", "", RunOptions{}); !errors.Is(err, ErrExecutable) {
 			t.Errorf("unsafe native executable accepted: %v", err)

@@ -35,7 +35,7 @@ func (o *RuntimeOptions) program(host shell.Profile) (shell.Profile, error) {
 }
 
 func (o *RuntimeOptions) profile(connection clauderuntime.Connection) (clauderuntime.Profile, string, error) {
-	profile, err := clauderuntime.NewProfile(o.Root, connection.ID, connection.Auth)
+	profile, err := clauderuntime.ProfileFor(o.Root, connection)
 	if err != nil {
 		return clauderuntime.Profile{}, "", err
 	}

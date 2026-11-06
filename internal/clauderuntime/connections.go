@@ -27,7 +27,7 @@ type Connection struct {
 // a machine account or falling back to API billing.
 func CreateConnection(root, distro string, auth AuthMode) (Connection, error) {
 	c := Connection{Version: 1, ID: strings.ToLower(rand.Text()), Auth: auth, Distro: distro, Name: "Claude Code"}
-	p, err := NewProfile(root, c.ID, auth)
+	p, err := ProfileFor(root, c)
 	if err != nil {
 		return Connection{}, err
 	}
@@ -38,7 +38,11 @@ func CreateConnection(root, distro string, auth AuthMode) (Connection, error) {
 	if err != nil {
 		return Connection{}, fmt.Errorf("encode connection: %w", err)
 	}
-	path := filepath.Join(filepath.Dir(p.ConfigDir), "connection.json")
+	dir := filepath.Join(root, "connections", c.ID)
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return Connection{}, fmt.Errorf("create connection folder: %w", err)
+	}
+	path := filepath.Join(dir, "connection.json")
 	if err := private.WriteAtomic(path, private.Bytes(data)); err != nil {
 		return Connection{}, fmt.Errorf("save connection: %w", err)
 	}

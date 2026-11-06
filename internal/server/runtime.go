@@ -116,7 +116,7 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 			if err != nil {
 				return err
 			}
-			profile, profileErr := clauderuntime.NewProfile(s.opts.Chat.Runtime.Root, connection.ID, connection.Auth)
+			profile, profileErr := clauderuntime.ProfileFor(s.opts.Chat.Runtime.Root, connection)
 			if profileErr != nil {
 				return profileErr
 			}

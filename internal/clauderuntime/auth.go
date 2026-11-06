@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 
 	"github.com/emmyfong/snow/internal/shell"
 )
@@ -47,7 +46,7 @@ func parseAuthStatus(data []byte, code int, profile Profile) (AuthStatus, error)
 		ConfigDirectory string `json:"configDirectory"`
 	}
 	if (code != 0 && code != 1) || json.Unmarshal(data, &wire) != nil || wire.LoggedIn == nil ||
-		wire.ConfigDirectory == "" || filepath.Clean(wire.ConfigDirectory) != filepath.Clean(profile.ConfigDir) {
+		!profile.configDirMatches(wire.ConfigDirectory) {
 		return AuthStatus{}, fmt.Errorf("%w: cannot verify selected profile authentication", ErrProtocol)
 	}
 	if !*wire.LoggedIn {

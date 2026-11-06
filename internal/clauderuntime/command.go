@@ -60,7 +60,7 @@ func (p Profile) ChatLaunch(program shell.Profile, folder, key string, options R
 		l.Args = append(l.Args, "--model="+options.Model)
 	}
 	l.Env = append(l.Env, "CLAUDE_CODE_SDK_READS_SESSION_STATE=1")
-	return l, nil
+	return p.finish(program, folder, l), nil
 }
 
 // AuthLaunch uses the same isolated native profile and setting sources as chat.
@@ -84,17 +84,35 @@ func (p Profile) AuthLaunch(program shell.Profile, folder, key, operation string
 	case "status":
 		l.Args = append(l.Args, "--json")
 	}
-	return l, nil
+	return p.finish(program, folder, l), nil
+}
+
+// finish turns a native launch into one for p's environment. It runs last,
+// after every argument and variable is in place, so a WSL launch forwards
+// all of them.
+func (p Profile) finish(program shell.Profile, folder string, l shell.Launch) shell.Launch {
+	if p.Distro == "" {
+		return l
+	}
+	return p.wslCommand(program, folder, l)
 }
 
 func (p Profile) command(program shell.Profile, folder, key string) (shell.Launch, error) {
+	if program.Distro != p.Distro {
+		// A connection runs only in its own environment, never another's login.
+		return shell.Launch{}, fmt.Errorf("%w: connection belongs to another environment", ErrProfile)
+	}
 	ext := strings.ToLower(filepath.Ext(program.Path))
-	if program.Path == "" || program.Distro != "" || program.CmdLine != "" || ext == ".cmd" || ext == ".bat" {
+	if program.Path == "" || program.CmdLine != "" || ext == ".cmd" || ext == ".bat" {
 		// The official Python SDK also refuses Windows batch wrappers. Passing
 		// structured JSON through cmd's expansion rules is not a safe argv path.
 		return shell.Launch{}, ErrExecutable
 	}
 	l := shell.Launch{Path: program.Path, Args: slices.Clone(program.Args), Dir: folder}
+	if p.Distro != "" {
+		// finish puts wsl.exe and its arguments in front; Claude's start here.
+		l.Args, l.Dir = nil, ""
+	}
 	l.Args = append(l.Args, "--setting-sources", "")
 	return p.Launch(l, os.Environ(), key)
 }
