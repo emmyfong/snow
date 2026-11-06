@@ -24,7 +24,7 @@ func (m *Model) RuntimeInput(kind, id, run, text string) *api.ChatInput {
 }
 
 func init() {
-	if err := Register(command.Command{Name: "agent", Desc: "Connect Claude Code through Snow", Group: command.GroupModel},
+	if err := Register(command.Command{Name: "connect", Desc: "Connect Claude Code to this chat", Group: command.GroupModel},
 		func(host Host, _ string) { host.Ask(AskRuntime) }); err != nil {
 		panic(err)
 	}
