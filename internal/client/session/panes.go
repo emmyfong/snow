@@ -209,8 +209,6 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 			return m.openModelPicker(id)
 		case chat.AskLogin:
 			return m.openLoginPicker(id)
-		case chat.AskRuntime:
-			return m.openRuntimePicker(id)
 		case chat.AskLogout:
 			return m.askLogout(id)
 		case chat.AskResume:

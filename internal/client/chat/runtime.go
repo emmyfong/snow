@@ -1,12 +1,6 @@
 package chat
 
-import (
-	"github.com/emmyfong/snow/internal/client/command"
-	"github.com/emmyfong/snow/pkg/api"
-)
-
-// AskRuntime opens Snow-owned coding runtime connections.
-const AskRuntime = "runtime"
+import "github.com/emmyfong/snow/pkg/api"
 
 // RuntimeInfo identifies the connection behind this pane, or nil for direct API.
 func (m *Model) RuntimeInfo() *api.RuntimeInfo { return m.snap.Runtime }
@@ -21,11 +15,4 @@ func (m *Model) RuntimeInput(kind, id, run, text string) *api.ChatInput {
 	input := m.chatInput(kind, text)
 	input.ID, input.Run = id, run
 	return input
-}
-
-func init() {
-	if err := Register(command.Command{Name: "connect", Desc: "Connect Claude Code to this chat", Group: command.GroupModel},
-		func(host Host, _ string) { host.Ask(AskRuntime) }); err != nil {
-		panic(err)
-	}
 }
