@@ -39,11 +39,11 @@ func (s *Server) useRuntime(c *client, pane int, facts runtimeFacts, id string) 
 
 func (s *Server) createRuntimeConversation(pane int, facts runtimeFacts, connection clauderuntime.Connection) (*claudeConversation, api.ChatSnapshot, error) {
 	w, err := s.opts.Chat.Store.Create(convstore.Meta{Folder: facts.folder, Profile: facts.profile,
-		Created: time.Now(), Model: "claude-code/default", Runtime: &convstore.RuntimeMeta{Kind: "claude-code", Connection: connection.ID}})
+		Created: time.Now(), Model: clauderuntime.DefaultModel, Runtime: &convstore.RuntimeMeta{Kind: "claude-code", Connection: connection.ID}})
 	if err != nil {
 		return nil, api.ChatSnapshot{}, err
 	}
-	snapshot := api.ChatSnapshot{Pane: pane, Conversation: w.ID(), Model: "claude-code/default", Mode: api.ChatModeAsk,
+	snapshot := api.ChatSnapshot{Pane: pane, Conversation: w.ID(), Model: clauderuntime.DefaultModel, Mode: api.ChatModeAsk,
 		State: api.ChatStateIdle, Runtime: &api.RuntimeInfo{Kind: "claude-code", Connection: connection.ID,
 			Auth: string(connection.Auth), Environment: runtimeEnvironment(connection.Distro)}}
 	runtime, err := s.runtimeConversation(func() int { return pane }, facts, connection, w, snapshot)
@@ -56,8 +56,8 @@ func (s *Server) createRuntimeConversation(pane int, facts runtimeFacts, connect
 
 func (s *Server) runtimeConversation(pane func() int, facts runtimeFacts, connection clauderuntime.Connection, writer *convstore.Writer, snapshot api.ChatSnapshot) (*claudeConversation, error) {
 	runtime, err := clauderuntime.NewConversation(clauderuntime.ConversationOptions{Writer: writer, Snapshot: snapshot,
-		Start: func(ctx context.Context, session string) (*clauderuntime.Client, error) {
-			return s.startRuntime(ctx, connection, facts.host, facts.folder, session, pane())
+		Start: func(ctx context.Context, request clauderuntime.StartRequest) (*clauderuntime.Client, error) {
+			return s.startRuntime(ctx, connection, facts.host, facts.folder, request, pane())
 		}, Events: func(event api.ChatEvent) {
 			event.Pane = pane()
 			if event.Pane == 0 {

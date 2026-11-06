@@ -273,3 +273,64 @@ func TestTopBarModelClickOpensThePicker(t *testing.T) {
 		t.Fatal("the model click did not open the picker")
 	}
 }
+
+// runtimeModelScreen is modelScreen with a Claude Code chat.
+func runtimeModelScreen(t *testing.T, cols, rows int) (*Model, *recorder) {
+	t.Helper()
+	m, r := modelScreen(t, cols, rows, "claude-code/default")
+	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", Model: "claude-code/default", Mode: "ask",
+		State: api.ChatStateIdle, Runtime: &api.RuntimeInfo{Kind: "claude-code", Connection: "k3j9qa", Auth: "subscription"}})
+	return m, r
+}
+
+// runtimeModelList is what a Claude Code chat's pane gets: its Claude
+// Code's models.
+func runtimeModelList() *api.ModelList {
+	levels := []string{"low", "medium", "high", "xhigh", "max"}
+	return &api.ModelList{Pane: 2, Providers: []api.ProviderModels{{Name: "claude-code", Title: "Claude Code", Connected: true,
+		Models: []api.ModelInfo{
+			{ID: "default", DisplayName: "Default (recommended)", Efforts: levels},
+			{ID: "opus", DisplayName: "Opus", Efforts: levels},
+			{ID: "haiku", DisplayName: "Haiku", Efforts: []string{}},
+		}}}}
+}
+
+// TestRuntimeModelPicker: /model in a Claude Code chat asks for that pane's
+// models and shows only them; the shared provider list never replaces them.
+// It offers no "save as default", and ctrl+d only uses the choice.
+func TestRuntimeModelPicker(t *testing.T) {
+	m, r := runtimeModelScreen(t, 100, 30)
+	typeSlash(m, "/model")
+	var asked *api.ModelListRequest
+	for _, msg := range r.sent {
+		if req, ok := msg.(*api.ModelListRequest); ok {
+			asked = req
+		}
+	}
+	if asked == nil || asked.Pane != 2 {
+		t.Fatalf("model list request: %+v, want one for pane 2", asked)
+	}
+	m.Update(runtimeModelList())
+	m.Update(modelList())
+	s := ansi.Strip(content(m))
+	if !strings.Contains(s, "Opus") || strings.Contains(s, "Claude Sonnet 5.5") || strings.Contains(s, "ctrl+d") {
+		t.Fatalf("Claude Code picker:\n%s", s)
+	}
+	m.Update(press(tea.KeyDown, 0, ""))
+	m.Update(press('d', tea.ModCtrl, ""))
+	if in := lastModelInput(r); in == nil || in.Model != "claude-code/opus" || in.SaveDefault {
+		t.Fatalf("ctrl+d sent %+v, want opus without saving", in)
+	}
+}
+
+// TestRuntimeModelPickerGolden draws the Claude Code model picker.
+func TestRuntimeModelPickerGolden(t *testing.T) {
+	for _, size := range [][2]int{{120, 40}, {80, 24}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			m, _ := runtimeModelScreen(t, size[0], size[1])
+			typeSlash(m, "/model")
+			m.Update(runtimeModelList())
+			golden.RequireEqual(t, content(m))
+		})
+	}
+}

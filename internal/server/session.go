@@ -45,6 +45,8 @@ type state struct {
 	runtimeAuth   map[string]bool // connection authentication operation in progress
 	runtimeLogins map[string]*runtimeLogin
 	runtimeReady  map[string]bool // a runtime started since the last sign-in change
+	// runtimeModels holds the models each connection's Claude Code reported.
+	runtimeModels map[string][]api.ModelInfo
 }
 
 type session struct {

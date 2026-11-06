@@ -7,15 +7,20 @@ import (
 )
 
 // ModelListRequest asks the server for the providers and the models they
-// offer. Force asks for a fresh list, ignoring the server's cache.
+// offer. Force asks for a fresh list, ignoring the server's cache. Pane,
+// when it is a Claude Code chat, asks for the models that chat's Claude
+// Code offers instead.
 type ModelListRequest struct {
 	Force bool `json:"force,omitempty"`
+	Pane  int  `json:"pane,omitempty"`
 }
 
 // ModelList is the server's answer to ModelListRequest: one entry per
-// provider, in the order the picker shows them.
+// provider, in the order the picker shows them. Pane is set when the list
+// is for that Claude Code chat only.
 type ModelList struct {
 	Providers []ProviderModels `json:"providers"`
+	Pane      int              `json:"pane,omitempty"`
 }
 
 // ProviderModels is one provider and its models.

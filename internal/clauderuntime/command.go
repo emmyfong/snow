@@ -27,8 +27,11 @@ type MCPServer struct {
 // RunOptions selects explicit runtime features for a chat process.
 type RunOptions struct {
 	Resume string
-	Model  string
-	MCP    map[string]MCPServer
+	// Model is the chat's model, "claude-code/<alias>"; Claude Code's own
+	// default takes no flag. Effort is a level from api.EffortLevels, or
+	// empty for Claude's choice.
+	Model, Effort string
+	MCP           map[string]MCPServer
 }
 
 // ChatLaunch builds the official SDK's native streaming/control invocation.
@@ -61,8 +64,11 @@ func (p Profile) ChatLaunch(program shell.Profile, folder, key string, options R
 	if options.Resume != "" {
 		l.Args = append(l.Args, "--resume="+options.Resume)
 	}
-	if options.Model != "" {
-		l.Args = append(l.Args, "--model="+options.Model)
+	if flag := modelFlag(options.Model); flag != "" {
+		l.Args = append(l.Args, "--model="+flag)
+	}
+	if options.Effort != "" {
+		l.Args = append(l.Args, "--effort="+options.Effort)
 	}
 	l.Env = append(l.Env, "CLAUDE_CODE_SDK_READS_SESSION_STATE=1")
 	return p.finish(program, folder, l), nil

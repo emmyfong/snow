@@ -122,7 +122,11 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 	body = append(body, "")
 	body = append(body, efforts...)
 	body = append(body, m.statusLine(th, inner-1))
-	body = append(body, " "+ui.KeyHints(th, hints, inner-1))
+	shown := hints
+	if m.noSave {
+		shown = hints[:len(hints)-1]
+	}
+	body = append(body, " "+ui.KeyHints(th, shown, inner-1))
 	l.box = ui.Panel(th, ui.PanelOptions{Title: "Model", Body: strings.Join(body, "\n"), Width: w})
 	return l, true
 }
@@ -156,7 +160,7 @@ func pad(s string, width int) string {
 }
 
 // hints are the picker's keys, most important first so a narrow picker
-// keeps the ones a user needs.
+// keeps the ones a user needs. Save is last, so NoSave drops it.
 var hints = []ui.Hint{
 	{Key: "↑↓", Desc: "move"},
 	{Key: "enter", Desc: "use"},

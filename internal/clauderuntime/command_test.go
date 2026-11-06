@@ -93,3 +93,33 @@ func TestNpmClaudeMessage(t *testing.T) {
 		t.Fatalf("err = %v, want a message that names the native install", err)
 	}
 }
+
+// TestChatLaunchModelAndEffort: a chosen model passes its alias and effort;
+// Claude Code's default passes neither flag.
+func TestChatLaunchModelAndEffort(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		options RunOptions
+		want    []string
+		absent  string
+	}{
+		{RunOptions{Model: "claude-code/opus", Effort: "high"}, []string{"--model=opus", "--effort=high"}, ""},
+		{RunOptions{Model: "claude-code/default"}, nil, "--model"},
+	} {
+		l, err := p.ChatLaunch(shell.Profile{Path: "claude"}, "", "", tt.options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range tt.want {
+			if !slices.Contains(l.Args, want) {
+				t.Errorf("%+v: args %q lack %s", tt.options, l.Args, want)
+			}
+		}
+		if tt.absent != "" && slices.ContainsFunc(l.Args, func(a string) bool { return strings.HasPrefix(a, tt.absent) }) {
+			t.Errorf("%+v: args %q have %s", tt.options, l.Args, tt.absent)
+		}
+	}
+}

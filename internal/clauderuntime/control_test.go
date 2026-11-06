@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ func TestControlRequestsAndPermissions(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	result, err := c.Initialize(ctx)
-	if err != nil || string(result) != `{"commands":[]}` {
+	if err != nil || !strings.HasPrefix(string(result), `{"commands":[]`) {
 		t.Fatalf("initialize: %s, %v", result, err)
 	}
 	if frame := nextClientFrame(t, c); frame.Type != "system" {

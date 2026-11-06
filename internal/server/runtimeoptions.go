@@ -72,7 +72,7 @@ func (o *RuntimeOptions) profile(connection clauderuntime.Connection) (clauderun
 	return profile, key.Reveal(), nil
 }
 
-func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Connection, host shell.Profile, folder, session string, pane int) (*clauderuntime.Client, error) {
+func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Connection, host shell.Profile, folder string, request clauderuntime.StartRequest, pane int) (*clauderuntime.Client, error) {
 	options := s.opts.Chat.Runtime
 	if connection.Distro != host.Distro {
 		return nil, fmt.Errorf("%w: connection belongs to a different runtime environment", clauderuntime.ErrProfile)
@@ -105,7 +105,8 @@ func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Conn
 		return nil, fmt.Errorf("find Snow for runtime tools: %w", err)
 	}
 	env := map[string]string{transport.EnvPane: strconv.Itoa(pane), transport.EnvSocket: s.opts.Socket}
-	launch, err := profile.ChatLaunch(program, folder, key, clauderuntime.RunOptions{Resume: session,
+	launch, err := profile.ChatLaunch(program, folder, key, clauderuntime.RunOptions{Resume: request.Session,
+		Model: request.Model, Effort: request.Effort,
 		MCP: map[string]clauderuntime.MCPServer{"snow": {Command: executable, Args: []string{"mcp"}, Env: env}},
 	})
 	if err != nil {

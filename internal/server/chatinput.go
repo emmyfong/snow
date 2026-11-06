@@ -65,7 +65,10 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 	case api.ChatInputRetry:
 		err = conv.Retry()
 	case api.ChatInputModel:
-		if err = s.switchModel(c, in.Pane, conv, in.Model, in.Effort); err == nil && in.SaveDefault {
+		// A Claude Code model is never the default for new chats, which use
+		// a provider's models.
+		_, runtime := conv.(*claudeConversation)
+		if err = s.switchModel(c, in.Pane, conv, in.Model, in.Effort); err == nil && in.SaveDefault && !runtime {
 			s.saveDefault(c, in, oldModel, oldEffort)
 		}
 	case api.ChatInputEffort:

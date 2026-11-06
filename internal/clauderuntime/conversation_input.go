@@ -3,6 +3,8 @@ package clauderuntime
 import (
 	"errors"
 	"fmt"
+	"strings"
+
 	"github.com/emmyfong/snow/internal/convstore"
 
 	"github.com/emmyfong/snow/pkg/api"
@@ -58,6 +60,8 @@ func (s *conversationState) input(input api.ChatInput) error {
 			return nil
 		}
 		return errors.New("this Claude connection uses Claude's approval rules; Snow cannot broaden them")
+	case api.ChatInputModel:
+		return s.switchModel(input.Model, input.Effort)
 	case api.ChatInputRetry:
 		return errors.New("runtime submissions are never retried automatically. Send a new explicit message")
 	default:
@@ -65,16 +69,38 @@ func (s *conversationState) input(input api.ChatInput) error {
 	}
 }
 
+// switchModel makes the next start use model and effort. Claude takes them
+// only when it starts, so a live Claude restarts at the next message.
+func (s *conversationState) switchModel(model, effort string) error {
+	if !strings.HasPrefix(model, ModelPrefix) {
+		return errors.New("a Claude Code chat uses Claude Code's models. Choose one under Claude Code")
+	}
+	if s.snapshot.Running {
+		return errors.New("wait for this run to finish before you change the model")
+	}
+	s.emit(api.ChatEvent{Kind: api.ChatEventModel, Model: model, Effort: effort})
+	s.restart = s.worker != nil
+	return nil
+}
+
 func (s *conversationState) begin(text string) error {
 	if s.mayHaveRun && s.snapshot.Runtime.Session == "" {
 		return errors.New("the runtime did not provide a resumable session ID. Start a new conversation")
 	}
+	if s.restart && s.worker != nil {
+		// Ending the live Claude first; the stop sends text when it is done.
+		s.restart, s.afterStop = false, text
+		s.stop(nil)
+		return nil
+	}
+	s.restart = false
 	if s.worker == nil {
 		s.worker = newRunWorker(s.options.Start)
 		s.ready, s.results = s.worker.ready, s.worker.results
 		s.stopQueries = s.worker.stopQueries
 	}
-	if err := s.worker.submit(operation{kind: "prompt", text: text, session: s.snapshot.Runtime.Session}); err != nil {
+	if err := s.worker.submit(operation{kind: "prompt", text: text, session: s.snapshot.Runtime.Session,
+		model: s.snapshot.Model, effort: s.snapshot.Effort}); err != nil {
 		return err
 	}
 	s.failure, s.resultSeen, s.streamed = nil, false, false

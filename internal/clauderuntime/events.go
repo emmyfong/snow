@@ -88,9 +88,9 @@ func (s *conversationState) frame(frame Frame) error {
 	case "system":
 		switch message.Subtype {
 		case "init":
-			if message.Model != "" {
-				s.emit(api.ChatEvent{Kind: api.ChatEventModel, Model: "claude-code/" + message.Model})
-			}
+			// The model Claude reports here is what it resolved the chat's
+			// choice to. The chat keeps its choice, so a later start still
+			// follows Claude's default, and its effort is kept.
 		case "session_state_changed":
 			s.sessionState = message.State
 			if message.State != "idle" {

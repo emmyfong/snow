@@ -35,10 +35,19 @@ func (p Peer) Write(message any) {
 	}
 }
 
-// Ack acknowledges a correlated control request.
+// Ack acknowledges a correlated control request. The reply carries the
+// model list Claude Code's initialize reply has.
 func (p Peer) Ack(message map[string]json.RawMessage) {
 	p.Write(map[string]any{"type": "control_response", "response": map[string]any{
-		"subtype": "success", "request_id": message["request_id"], "response": map[string]any{"commands": []string{}}}})
+		"subtype": "success", "request_id": message["request_id"], "response": map[string]any{"commands": []string{},
+			"models": Models}}})
+}
+
+// Models is the model list a fixture's initialize reply carries.
+var Models = []map[string]any{
+	{"value": "default", "displayName": "Default (recommended)", "supportedEffortLevels": []string{"low", "medium", "high", "xhigh", "max"}},
+	{"value": "opus", "displayName": "Opus", "supportedEffortLevels": []string{"low", "medium", "high", "xhigh", "max"}},
+	{"value": "haiku", "displayName": "Haiku"},
 }
 
 // Permission emits a tool decision request.

@@ -15,8 +15,14 @@ import (
 type ConversationOptions struct {
 	Writer   *convstore.Writer
 	Snapshot api.ChatSnapshot
-	Start    func(context.Context, string) (*Client, error)
+	Start    func(context.Context, StartRequest) (*Client, error)
 	Events   func(api.ChatEvent)
+}
+
+// StartRequest is what a new Claude process starts with: the session to
+// resume, if any, and the chat's model ("claude-code/<alias>") and effort.
+type StartRequest struct {
+	Session, Model, Effort string
 }
 
 // Conversation owns a Claude chat's queue and controls. Claude owns model
@@ -154,7 +160,10 @@ type conversationState struct {
 	mayHaveRun       bool
 	sawText          bool
 	afterStop        string
-	stopUnconfirmed  bool
+	// restart makes the next message start a new Claude, on the same
+	// session, so it takes a model or effort chosen while one was live.
+	restart         bool
+	stopUnconfirmed bool
 }
 
 func (s *conversationState) loop() {

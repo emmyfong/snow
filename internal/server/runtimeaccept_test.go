@@ -617,7 +617,7 @@ func TestNoStartDuringSignInChange(t *testing.T) {
 	server := New(options)
 	t.Cleanup(server.Close)
 	server.call(func(st *state) { st.runtimeAuth = map[string]bool{connection.ID: true} })
-	if _, err := server.startRuntime(context.Background(), connection, shell.Profile{}, t.TempDir(), "", 1); !errors.Is(err, errAuthChanging) {
+	if _, err := server.startRuntime(context.Background(), connection, shell.Profile{}, t.TempDir(), clauderuntime.StartRequest{}, 1); !errors.Is(err, errAuthChanging) {
 		t.Fatalf("start during a sign-in change: %v", err)
 	}
 	if lines := readFixtureLog(t, log); len(lines) != 0 {
@@ -742,4 +742,52 @@ func TestFailedSignInKeepsWindow(t *testing.T) {
 	nextLayout(t, r.c, func(l *api.Layout) bool { _, shown := paneAgent(l, opened.LoginPane); return shown })
 	r.c.Send(&api.Command{Op: api.OpClose, Target: opened.LoginPane})
 	nextLayout(t, r.c, func(l *api.Layout) bool { _, shown := paneAgent(l, opened.LoginPane); return !shown })
+}
+
+// TestRuntimeModelChoice: /model in a Claude Code chat lists the models
+// that chat's Claude Code reports, for that pane only. A chosen model and
+// effort reach the next run as Claude Code's flags.
+func TestRuntimeModelChoice(t *testing.T) {
+	log := useFixtureLog(t)
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "conversation-fast")
+	server := New(options)
+	t.Cleanup(server.Close)
+	c := connect(t, server, 100, 30)
+	pane := openChat(t, c)
+	useTestRuntime(t, c, pane)
+	c.Send(&api.ModelListRequest{Pane: pane})
+	var list *api.ModelList
+	deadline := time.Now().Add(apitest.Wait)
+	for list == nil && time.Now().Before(deadline) {
+		m, _ := c.Next(100 * time.Millisecond)
+		if l, isList := m.(*api.ModelList); isList && l.Pane == pane {
+			list = l
+		}
+	}
+	if list == nil || len(list.Providers) != 1 || list.Providers[0].Name != "claude-code" {
+		t.Fatalf("model list for the Claude Code chat: %+v", list)
+	}
+	var ids []string
+	for _, m := range list.Providers[0].Models {
+		ids = append(ids, m.ID)
+	}
+	if !slices.Equal(ids, []string{"default", "opus", "haiku"}) {
+		t.Fatalf("models = %q", ids)
+	}
+	chatInputOf(c, pane, api.ChatInputModel, func(in *api.ChatInput) { in.Model, in.Effort = "claude-code/opus", "high" })
+	c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Model == "claude-code/opus" && s.Effort == "high" })
+	chatInputOf(c, pane, api.ChatInputEffort, func(in *api.ChatInput) { in.Effort = "max" })
+	c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Effort == "max" })
+	chatInputOf(c, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "hello" })
+	c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return idle(s) && s.Turn == 1 })
+	var chat string
+	for _, line := range readFixtureLog(t, log) {
+		if strings.HasPrefix(line, "chat ") {
+			chat = line
+		}
+	}
+	if !strings.Contains(chat, "--model=opus") || !strings.Contains(chat, "--effort=max") {
+		t.Fatalf("run arguments: %q, want --model=opus --effort=max", chat)
+	}
 }

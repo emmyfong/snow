@@ -68,7 +68,9 @@ type Model struct {
 	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
 	modelPick  *modelpick.Model          // the model picker, when open
 	modelList  api.ModelList             // the server's last model list
-	modelPane  int                       // the pane modelPick chooses a model for
+	// runtimeModels is the last model list of each Claude Code chat pane.
+	runtimeModels map[int]api.ModelList
+	modelPane     int // the pane modelPick chooses a model for
 	// gatewayEvery is how often an open picker asks again while a gateway
 	// starts. Tests shorten it.
 	gatewayEvery     time.Duration

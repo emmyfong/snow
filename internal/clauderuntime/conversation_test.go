@@ -18,6 +18,7 @@ type conversationHarness struct {
 	store            *convstore.Store
 	events           chan api.ChatEvent
 	starts           atomic.Int32
+	last             atomic.Pointer[StartRequest]
 	allowStopFailure bool
 }
 
@@ -32,13 +33,14 @@ func newConversationHarness(t *testing.T, mode string) *conversationHarness {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h := &conversationHarness{store: store, events: make(chan api.ChatEvent, 256)}
+	h := &conversationHarness{store: store, events: make(chan api.ChatEvent, 4096)}
 	launch := testLaunch(t, mode)
 	h.c, err = NewConversation(ConversationOptions{Writer: w,
 		Snapshot: api.ChatSnapshot{Pane: 1, Model: "claude-code/default", Mode: api.ChatModeAsk,
 			Runtime: &api.RuntimeInfo{Kind: "claude-code", Connection: "selected", Auth: "subscription"}},
-		Start: func(ctx context.Context, _ string) (*Client, error) {
+		Start: func(ctx context.Context, request StartRequest) (*Client, error) {
 			h.starts.Add(1)
+			h.last.Store(&request)
 			return Connect(ctx, launch)
 		}, Events: func(event api.ChatEvent) { h.events <- event },
 	})
@@ -225,5 +227,34 @@ func TestConversationAuthenticationFence(t *testing.T) {
 	state := h.c.Snapshot()
 	if state.Running || !state.QueuePaused || len(state.Queue) != 1 || h.starts.Load() != 1 {
 		t.Fatalf("authentication resumed queued model work: %+v", state)
+	}
+}
+
+// TestConversationModelSwitch: a Claude Code chat takes only Claude Code's
+// models, never while a run is active. A chosen model and effort reach the
+// next start, and a live Claude restarts on the same session to take them.
+func TestConversationModelSwitch(t *testing.T) {
+	h := newConversationHarness(t, "conversation-fast")
+	if err := h.c.Input(api.ChatInput{Kind: api.ChatInputModel, Model: "anthropic/claude-opus-5-5"}); err == nil {
+		t.Fatal("accepted a model of another provider")
+	}
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputModel, Model: "claude-code/haiku"})
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "first"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.Turn == 1 && !s.Running })
+	if got := h.last.Load(); got == nil || got.Model != "claude-code/haiku" {
+		t.Fatalf("first start: %+v, want haiku", got)
+	}
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputModel, Model: "claude-code/opus", Effort: "high"})
+	if s := h.c.Snapshot(); s.Model != "claude-code/opus" || s.Effort != "high" {
+		t.Fatalf("snapshot after switch: %s %s", s.Model, s.Effort)
+	}
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "second"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.Turn == 2 && !s.Running })
+	got := h.last.Load()
+	if s := h.c.Snapshot(); s.Model != "claude-code/opus" || s.Effort != "high" {
+		t.Fatalf("the run replaced the chosen model: %s %s", s.Model, s.Effort)
+	}
+	if h.starts.Load() != 2 || got.Model != "claude-code/opus" || got.Effort != "high" || got.Session != "backend-session" {
+		t.Fatalf("after switch: %d starts, last %+v; want a restart with opus, high, on the same session", h.starts.Load(), got)
 	}
 }

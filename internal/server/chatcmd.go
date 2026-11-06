@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/emmyfong/snow/internal/clauderuntime"
 	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -56,6 +57,9 @@ func (s *Server) effortsOf(model string) ([]string, error) {
 	o := s.opts.Chat
 	if !ok || o == nil {
 		return nil, fmt.Errorf("%q is not provider/model", model)
+	}
+	if strings.HasPrefix(model, clauderuntime.ModelPrefix) {
+		return s.runtimeEfforts(model)
 	}
 	var models []provider.Model
 	var known, loading bool

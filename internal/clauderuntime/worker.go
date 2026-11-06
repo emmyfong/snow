@@ -12,6 +12,7 @@ import (
 // stays available for stop, queue updates and arriving runtime events.
 type operation struct {
 	kind, id, text, session string
+	model, effort           string // for a prompt that starts Claude
 	allow                   bool
 	input                   json.RawMessage
 	ids                     []string
@@ -33,10 +34,10 @@ type runWorker struct {
 	results     chan operationResult
 	done        chan struct{}
 	stopQueries chan chan []stopTaskRef
-	start       func(context.Context, string) (*Client, error)
+	start       func(context.Context, StartRequest) (*Client, error)
 }
 
-func newRunWorker(start func(context.Context, string) (*Client, error)) *runWorker {
+func newRunWorker(start func(context.Context, StartRequest) (*Client, error)) *runWorker {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &runWorker{ctx: ctx, cancel: cancel, operations: make(chan operation, 16),
 		ready: make(chan *Client, 1), results: make(chan operationResult, 16), done: make(chan struct{}),
@@ -74,7 +75,7 @@ func (w *runWorker) perform(ctx context.Context, op operation) error {
 			return ErrClosed
 		}
 		var err error
-		client, err = w.start(ctx, op.session)
+		client, err = w.start(ctx, StartRequest{Session: op.session, Model: op.model, Effort: op.effort})
 		if err != nil {
 			return err
 		}

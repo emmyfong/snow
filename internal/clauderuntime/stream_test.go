@@ -193,7 +193,7 @@ func TestStreamHelper(_ *testing.T) {
 		}
 	}
 	switch mode {
-	case "conversation", "conversation-stop", "conversation-children", "conversation-children-unconfirmed":
+	case "conversation", "conversation-fast", "conversation-stop", "conversation-children", "conversation-children-unconfirmed":
 		runtimetest.Conversation(mode)
 	case "control", "reuse-control":
 		controlHelper(mode == "reuse-control")
