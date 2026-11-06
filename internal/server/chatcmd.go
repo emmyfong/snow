@@ -6,13 +6,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/provider"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
 // switchModel makes the next turn of conv, in pane, use model and effort.
-func (s *Server) switchModel(c *client, pane int, conv *agent.Conversation, model, effort string) error {
+func (s *Server) switchModel(c *client, pane int, conv conversation, model, effort string) error {
 	if err := conv.SwitchModel(model, effort); err != nil {
 		return err
 	}
@@ -30,7 +29,7 @@ func (s *Server) switchModel(c *client, pane int, conv *agent.Conversation, mode
 // setEffort makes the next turn use effort with the pane's model; an empty
 // effort lets the provider choose. A level the model does not take is
 // refused with the levels it does take.
-func (s *Server) setEffort(c *client, pane int, conv *agent.Conversation, model, effort string) error {
+func (s *Server) setEffort(c *client, pane int, conv conversation, model, effort string) error {
 	if model == "" {
 		return errors.New("no model: choose one before setting the effort")
 	}

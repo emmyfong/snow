@@ -109,6 +109,10 @@ func (m *Model) middleRow() string {
 func (m *Model) activity() string {
 	what := "working"
 	switch m.snap.State {
+	case api.ChatStateStarting:
+		what = "starting Claude Code"
+	case api.ChatStateStopping:
+		what = "stopping owned work"
 	case api.ChatStateTool:
 		what = "running a tool"
 	case api.ChatStateApproval:

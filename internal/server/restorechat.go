@@ -15,7 +15,7 @@ import (
 // session restores: resuming reads the conversation file, which the model
 // goroutine must never wait for.
 type restoredChat struct {
-	conv *agent.Conversation
+	conv conversation
 	// snap is the pane's snapshot; Pane is set when the pane gets its ID.
 	snap            api.ChatSnapshot
 	folder, profile string
@@ -59,6 +59,10 @@ func (s *Server) resumeSavedChat(sp store.Pane) *restoredChat {
 	paneID := func() int { return int(pane.Load()) }
 	r, err := s.reopenConversation(paneID, sp.Profile, sp.Conversation)
 	if err == nil {
+		if r.runtimeSnapshot != nil {
+			return &restoredChat{conv: r.conv, snap: *r.runtimeSnapshot, folder: r.folder.Path,
+				profile: r.cfg.Shell.Name, pane: pane}
+		}
 		model, effort, mode := agent.StateOf(r.loaded)
 		return &restoredChat{
 			conv: r.conv, snap: replaySnapshot(0, r.conv, r.loaded, model, effort, mode),

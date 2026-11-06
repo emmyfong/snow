@@ -41,7 +41,9 @@ type state struct {
 	// so an unchanged layout is not written again.
 	remembered map[string]string
 	// marks are the commits Snow saw agents make, for the git pane.
-	marks commitMarks
+	marks         commitMarks
+	runtimeAuth   map[string]bool // connection authentication operation in progress
+	runtimeLogins map[string]*runtimeLogin
 }
 
 type session struct {

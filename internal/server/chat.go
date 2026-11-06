@@ -46,6 +46,9 @@ type ChatOptions struct {
 	// may read the OS key store, so the server runs them off the state
 	// goroutine. Nil refuses auth requests.
 	Auth Auth
+	// Runtime enables Snow-owned external runtime connections alongside the
+	// direct-API loop. All runtime I/O stays off the state goroutine.
+	Runtime *RuntimeOptions
 	// ModelTTL is how long a fetched model list stays fresh. Zero means
 	// DefaultModelTTL.
 	ModelTTL time.Duration
@@ -99,7 +102,7 @@ func (o *ChatOptions) now() time.Time {
 // chatPane is the conversation a chat pane shows. The model goroutine owns
 // snap; conv is safe from any goroutine.
 type chatPane struct {
-	conv *agent.Conversation
+	conv conversation
 	snap api.ChatSnapshot
 	// folder and profile are where the conversation works, as its file
 	// records them: the history list shows the conversations of the same
@@ -140,7 +143,7 @@ func (s *Server) startChat(id int, profile, dir, model, effort string) (*pane, e
 
 // newSnapshot is the snapshot of chat pane id showing conv, with no
 // transcript and no turn running.
-func newSnapshot(id int, conv *agent.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
+func newSnapshot(id int, conv conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
 	return api.ChatSnapshot{
 		Pane: id, Agent: string(conv.Agent()), Conversation: conv.ID(),
 		Model: model, Effort: effort, Mode: string(mode), State: api.ChatStateIdle,

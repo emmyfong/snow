@@ -72,6 +72,8 @@ linters:
           allow:
             - $gostd
             - github.com/emmyfong/snow/internal/shell
+            - github.com/emmyfong/snow/internal/private
+            - github.com/emmyfong/snow/internal/convstore
             - github.com/emmyfong/snow/pkg/api
         tools-know-only-shell:
           files: ["**/internal/tool/**", "!$test"]

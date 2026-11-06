@@ -59,6 +59,8 @@ const (
 	TypePaneKinds
 	TypeSidePaneState
 	TypeSidePaneAction
+	TypeRuntimeRequest
+	TypeRuntimeConnections
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -72,6 +74,10 @@ type Message interface {
 // newMessage returns an empty message of type t, or nil if t is unknown.
 func newMessage(t MsgType) Message {
 	switch t {
+	case TypeRuntimeRequest:
+		return &RuntimeRequest{}
+	case TypeRuntimeConnections:
+		return &RuntimeConnections{}
 	case TypeHello:
 		return &Hello{}
 	case TypeWelcome:
@@ -281,6 +287,8 @@ type PaneInfo struct {
 	Profile string `json:"profile"`
 	Folder  string `json:"folder,omitempty"` // the program's folder, when the shell reports it
 	Focused bool   `json:"focused,omitempty"`
+	// Purpose identifies a temporary user-only view, such as "sign-in".
+	Purpose string `json:"purpose,omitempty"`
 	// AgentState is the state of the agent in the pane, one of the
 	// Agent* values: from snow hook for a terminal pane, from the chat
 	// for a chat pane. Empty when no agent has reported.

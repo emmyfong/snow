@@ -16,6 +16,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/mouse"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/resumepick"
+	"github.com/emmyfong/snow/internal/client/runtimepick"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -70,17 +71,22 @@ type Model struct {
 	modelPane  int                       // the pane modelPick chooses a model for
 	// gatewayEvery is how often an open picker asks again while a gateway
 	// starts. Tests shorten it.
-	gatewayEvery time.Duration
-	firstRun     map[int]bool      // panes the first-run flow ran for
-	over         *overlay          // the mode picker, resume picker, or help, when open
-	resume       *resumepick.Model // the resume picker, when over is it
-	authPick     *authpick.Model   // the login picker, when open
-	authPane     int               // the pane authPick serves
-	authList     api.AuthList      // the server's last provider key list
-	authWait     map[int]bool      // panes waiting for the first-run key list
-	authAfter    map[int]bool      // panes to open the model picker for after a login
-	loginPane    int               // the pane whose login check runs, or 0
-	logoutPane   int               // the pane whose /logout waits for a key list, or 0
+	gatewayEvery     time.Duration
+	firstRun         map[int]bool      // panes the first-run flow ran for
+	over             *overlay          // the mode picker, resume picker, or help, when open
+	resume           *resumepick.Model // the resume picker, when over is it
+	authPick         *authpick.Model   // the login picker, when open
+	runtimePick      *runtimepick.Model
+	runtimePane      int
+	runtimeSeq       uint64
+	runtimeRequestID string
+	runtimeAfter     string
+	authPane         int          // the pane authPick serves
+	authList         api.AuthList // the server's last provider key list
+	authWait         map[int]bool // panes waiting for the first-run key list
+	authAfter        map[int]bool // panes to open the model picker for after a login
+	loginPane        int          // the pane whose login check runs, or 0
+	logoutPane       int          // the pane whose /logout waits for a key list, or 0
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
@@ -153,6 +159,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.AuthList:
 		return m.setAuthList(msg)
+	case *api.RuntimeConnections:
+		return m.runtimeConnections(msg)
 	case *api.Login:
 		return m.loginDone(msg)
 	case *api.Logout:
@@ -196,6 +204,8 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		return m.mouseMsg(msg)
 	case tea.PasteMsg:
 		switch c := m.focusedOwn(); {
+		case m.authPick != nil:
+			m.authPick.Paste(msg.Content)
 		case m.over != nil && m.over.paste != nil:
 			m.over.paste(msg.Content)
 		case m.modal():

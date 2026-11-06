@@ -11,22 +11,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/emmyfong/snow/internal/clauderuntime/runtimetest"
 	"github.com/emmyfong/snow/internal/shell"
 )
 
 func startTestStream(t *testing.T, mode string) *Stream {
 	t.Helper()
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := StartStream(shell.Launch{Path: exe, Args: []string{"-test.run=^TestStreamHelper$"},
-		Env: []string{"SNOW_CLAUDE_STREAM_TEST=" + mode}})
+	s, err := StartStream(testLaunch(t, mode))
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = s.Stop() })
 	return s
+}
+
+func testLaunch(t *testing.T, mode string) shell.Launch {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return shell.Launch{Path: exe, Args: []string{"-test.run=^TestStreamHelper$"},
+		Env: []string{"SNOW_CLAUDE_STREAM_TEST=" + mode}}
 }
 
 func nextFrame(t *testing.T, s *Stream) Frame {
@@ -106,11 +112,17 @@ func TestStreamProtocolFailure(t *testing.T) {
 	}
 }
 
-func TestStreamBoundsSlowConsumer(t *testing.T) {
+func TestStreamSlowConsumerRemainsStoppable(t *testing.T) {
 	s := startTestStream(t, "flood")
-	waitStream(t, s)
-	if !errors.Is(s.Err(), ErrBackpressure) {
-		t.Fatalf("terminal error %v, want ErrBackpressure", s.Err())
+	deadline := time.Now().Add(10 * time.Second)
+	for len(s.frames) < cap(s.frames) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if len(s.frames) != cap(s.frames) {
+		t.Fatal("fixture did not fill the bounded frame queue")
+	}
+	if err := s.Stop(); err != nil {
+		t.Fatalf("stop could not release a full frame queue: %v", err)
 	}
 }
 
@@ -169,6 +181,10 @@ func TestStreamHelper(_ *testing.T) {
 		}
 	}
 	switch mode {
+	case "conversation", "conversation-stop", "conversation-children", "conversation-children-unconfirmed":
+		runtimetest.Conversation(mode)
+	case "control", "reuse-control":
+		controlHelper(mode == "reuse-control")
 	case "malformed":
 		write("private-input invalid json")
 	case "missing-type":

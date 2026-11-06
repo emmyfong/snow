@@ -25,9 +25,6 @@ func (s *Stream) read() {
 		case <-s.stopping:
 			return
 		case s.frames <- frame:
-		default:
-			s.finish(ErrBackpressure)
-			return
 		}
 	}
 	select {

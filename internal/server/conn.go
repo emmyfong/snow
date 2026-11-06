@@ -130,6 +130,8 @@ func (s *Server) read(c *client) {
 			s.search(c, m)
 		case *api.ChatInput:
 			s.chatInput(c, m)
+		case *api.RuntimeRequest:
+			s.runtimeRequest(c, m)
 		case *api.ModelListRequest:
 			s.modelList(c, m)
 		case *api.ConversationListRequest:

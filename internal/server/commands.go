@@ -126,6 +126,9 @@ func (st *state) apply(sess *session, cmd *api.Command) error {
 
 // applyToPane performs a pane command on pane p of window w.
 func (st *state) applyToPane(sess *session, w *window, p *pane, cmd *api.Command) error {
+	if w.ephemeral && cmd.Op == api.OpSplit {
+		return errors.New("open a new window while sign-in is running")
+	}
 	id := layout.PaneID(p.id)
 	cols, rows := sess.area()
 	dir := directions[cmd.Args[api.ArgDir]]

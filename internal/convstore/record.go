@@ -36,14 +36,15 @@ type Record interface{ Type() Type }
 
 // Meta is the first record of every file.
 type Meta struct {
-	Version int       `json:"version"`
-	ID      string    `json:"id"`
-	Title   string    `json:"title,omitempty"`
-	Folder  string    `json:"folder"`
-	Profile string    `json:"profile,omitempty"`
-	Created time.Time `json:"created"`
-	Model   string    `json:"model"` // "provider/model"
-	Effort  string    `json:"effort,omitempty"`
+	Version int          `json:"version"`
+	ID      string       `json:"id"`
+	Title   string       `json:"title,omitempty"`
+	Folder  string       `json:"folder"`
+	Profile string       `json:"profile,omitempty"`
+	Created time.Time    `json:"created"`
+	Model   string       `json:"model"` // "provider/model"
+	Effort  string       `json:"effort,omitempty"`
+	Runtime *RuntimeMeta `json:"runtime,omitempty"`
 }
 
 // User is a message the user sent.

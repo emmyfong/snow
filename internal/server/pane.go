@@ -32,6 +32,7 @@ type pane struct {
 	// fetching is set while a goroutine reads the busy pane's frame for the
 	// frame loop; owned by the model goroutine.
 	fetching bool
+	purpose  string // sign-in panes are excluded from agent tools and saved sessions
 	// agent is the state snow hook last reported for the agent in this
 	// terminal pane, at agentAt; owned by the model goroutine.
 	agent   string

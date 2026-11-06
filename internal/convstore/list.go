@@ -122,6 +122,12 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 		first   = true
 		renamed bool
 	)
+	noteUser := func(text string) {
+		e.Turns++
+		if !renamed && e.Title == "" {
+			e.Title = titleFrom(text)
+		}
+	}
 	err := eachLine(path, func(_ int, b []byte, _ bool) {
 		if first {
 			first = false
@@ -143,7 +149,7 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 			e.LastActivity = h.At
 		}
 		switch h.Type {
-		case TypeUser, TypeRename, TypeModelSwitch:
+		case TypeUser, TypeRename, TypeModelSwitch, TypeRuntimeEvent:
 		default:
 			return
 		}
@@ -152,11 +158,18 @@ func (s *Store) entry(id string, f os.DirEntry) Entry {
 			return
 		}
 		switch r := r.(type) {
-		case *User:
-			e.Turns++
-			if !renamed && e.Title == "" {
-				e.Title = titleFrom(r.Text)
+		case *RuntimeEvent:
+			if r.Title != "" {
+				e.Title, renamed = r.Title, true
 			}
+			if r.Model != "" {
+				e.Model = r.Model
+			}
+			if r.User != "" {
+				noteUser(r.User)
+			}
+		case *User:
+			noteUser(r.Text)
 		case *Rename:
 			e.Title, renamed = r.Title, true
 		case *ModelSwitch:

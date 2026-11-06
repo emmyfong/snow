@@ -306,7 +306,7 @@ func agentLauncher(detected []shell.Profile, hooks shell.Hooks, agents *agentSet
 				return term.Spec{}, "", fmt.Errorf("%w: %q", ErrUnknownProfile, profile)
 			}
 			l := p.Launch(hooks, folderFor(p, dir))
-			spec := term.Spec{Path: l.Path, Args: l.Args, Env: l.Env, Dir: l.Dir, CmdLine: l.CmdLine}
+			spec := launchSpec(l)
 			if err := agents.apply(p.Name, &spec); err != nil {
 				return term.Spec{}, "", err
 			}

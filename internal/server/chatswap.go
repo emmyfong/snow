@@ -18,7 +18,7 @@ var errStopTurn = errors.New("a turn is running. Press Esc to stop the turn firs
 // paneFacts is what a swap needs from the model goroutine.
 type paneFacts struct {
 	found, running  bool
-	conv            *agent.Conversation // the pane's conversation now
+	conv            conversation // the pane's conversation now
 	profile, dir    string
 	model, effort   string
 	elsewhere       int    // pane that shows the wanted conversation, 0 if none
@@ -75,6 +75,21 @@ func (s *Server) newChat(c *client, pane int) error {
 	if err := f.busy(); err != nil {
 		return err
 	}
+	if _, runtime := f.conv.(*claudeConversation); runtime {
+		facts, err := s.runtimeFacts(c, pane, string(f.conv.Agent()))
+		if err != nil {
+			return err
+		}
+		connection, err := s.runtimeConnection(facts, facts.snapshot.Runtime.Connection)
+		if err != nil {
+			return err
+		}
+		conv, snapshot, err := s.createRuntimeConversation(pane, facts, connection)
+		if err != nil {
+			return err
+		}
+		return s.adoptExpected(c, pane, f.conv, conv, snapshot, facts.folder)
+	}
 	cfg := s.chatConfig(pane, f.profile, f.dir)
 	conv, err := s.startConversation(cfg, convstore.Meta{Model: f.model, Effort: f.effort})
 	if err != nil {
@@ -109,6 +124,9 @@ func (s *Server) resumeChat(c *client, pane int, id string) error {
 	}
 	if err != nil {
 		return err
+	}
+	if r.runtimeSnapshot != nil {
+		return s.adoptExpected(c, pane, f.conv, r.conv, *r.runtimeSnapshot, r.folder.Path)
 	}
 	// A mode that stops all questions comes back only in the folder the user
 	// chose it for: a file from another folder, or one copied in, starts
@@ -157,14 +175,24 @@ func checkFolder(dir string) error {
 // session its snapshot. The old conversation closes off the model
 // goroutine; if the pane is gone or started a turn meanwhile, conv closes
 // instead.
-func (s *Server) adopt(c *client, pane int, conv *agent.Conversation, snap api.ChatSnapshot, dir string) error {
-	var old *agent.Conversation
+func (s *Server) adopt(c *client, pane int, conv conversation, snap api.ChatSnapshot, dir string) error {
+	return s.adoptExpected(c, pane, nil, conv, snap, dir)
+}
+
+func (s *Server) adoptExpected(c *client, pane int, expected, conv conversation, snap api.ChatSnapshot, dir string) error {
+	var old conversation
 	var err error
 	s.call(func(st *state) {
 		p := st.paneOf(c, pane)
 		switch {
 		case p == nil || p.chat == nil:
 			err = fmt.Errorf("no chat in pane %d", pane)
+			return
+		case expected != nil && p.chat.conv != expected:
+			err = errors.New("this pane changed conversations while the connection opened")
+			return
+		case snap.Runtime != nil && st.runtimeAuth[snap.Runtime.Connection]:
+			err = errors.New("connection authentication is being updated")
 			return
 		case p.chat.snap.Running:
 			err = errStopTurn

@@ -23,6 +23,9 @@ var (
 	// ErrDelivery means a submitted write may have reached the runtime. The
 	// caller must preserve the input and must not automatically submit it again.
 	ErrDelivery = errors.New("runtime input delivery is uncertain")
+	// ErrStop means process-tree cleanup failed. A protocol failure alone does
+	// not mean usage can continue after cleanup was confirmed.
+	ErrStop = errors.New("runtime process cleanup failed")
 )
 
 // MaxFrameBytes bounds a single protocol message, including large tool results.
@@ -89,8 +92,9 @@ func StartStream(launch shell.Launch) (*Stream, error) {
 	return s, nil
 }
 
-// Frames yields ordered runtime envelopes. If the bounded queue fills, the run
-// fails visibly instead of dropping a permission request or growing indefinitely.
+// Frames yields ordered runtime envelopes. A full bounded queue pauses this
+// stream's reader instead of dropping requests or growing indefinitely. Stop
+// bypasses the queue and releases the reader even if nobody consumes frames.
 func (s *Stream) Frames() <-chan Frame { return s.frames }
 
 // Done closes after the process and its descendants have been stopped.
@@ -168,6 +172,9 @@ func (s *Stream) finish(cause error) {
 		go func() {
 			closeErr := errors.Join(s.input.Close(), s.output.Close())
 			stopErr := s.process.Stop(time.Second)
+			if stopErr != nil {
+				stopErr = errors.Join(ErrStop, stopErr)
+			}
 			<-s.readDone
 			s.err = errors.Join(cause, closeErr, stopErr)
 			close(s.frames)

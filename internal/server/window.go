@@ -14,11 +14,12 @@ const statusRows = 1
 
 // window is one tab of a session: a layout tree and the panes in it.
 type window struct {
-	index   int
-	name    string
-	tree    *layout.Tree
-	panes   map[int]*pane
-	focused int // pane ID
+	index     int
+	name      string
+	tree      *layout.Tree
+	panes     map[int]*pane
+	focused   int  // pane ID
+	ephemeral bool // official sign-in view; no layout or transcript is saved
 }
 
 // area is the size panes are laid out in: the session minus the status bar.
@@ -93,17 +94,22 @@ func (st *state) newWindowWith(sess *session, open func(id, cols, rows int) (*pa
 		return nil, err
 	}
 	st.nextPane++
+	return st.addWindow(sess, p, false), nil
+}
+
+func (st *state) addWindow(sess *session, p *pane, ephemeral bool) *window {
 	w := &window{
-		index:   sess.freeIndex(),
-		name:    p.name(),
-		tree:    layout.New(layout.PaneID(id)),
-		panes:   map[int]*pane{id: p},
-		focused: id,
+		index:     sess.freeIndex(),
+		name:      p.name(),
+		tree:      layout.New(layout.PaneID(p.id)),
+		panes:     map[int]*pane{p.id: p},
+		focused:   p.id,
+		ephemeral: ephemeral,
 	}
 	sess.windows = append(sess.windows, w)
 	slices.SortFunc(sess.windows, func(a, b *window) int { return a.index - b.index })
 	sess.active = w.index
-	return w, nil
+	return w
 }
 
 // splitPane splits pane target of w on side d and opens a pane of kind in

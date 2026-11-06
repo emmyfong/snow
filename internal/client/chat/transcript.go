@@ -101,6 +101,8 @@ func (m *Model) draw() {
 		switch e.Kind {
 		case api.ChatEntryUser:
 			text(ui.EntryUser, e.Text, false)
+		case api.ChatEntryAnswer:
+			text(ui.EntryUser, "Answer saved in Snow:\n"+e.Text, false)
 		case api.ChatEntryAssistant:
 			text(ui.EntryAgent, e.Text, e.Cut)
 		case api.ChatEntryThinking:

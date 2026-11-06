@@ -13,6 +13,17 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		return
 	}
 	switch e.Kind {
+	case ChatEventError:
+		if e.Error != nil {
+			errorCopy := *e.Error
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryError, Turn: s.Turn, Error: &errorCopy})
+		}
+	case ChatEventRuntime:
+		if e.Runtime != nil {
+			runtime := *e.Runtime
+			runtime.Tasks = append([]RuntimeTask(nil), runtime.Tasks...)
+			s.Runtime = &runtime
+		}
 	case ChatEventTurnStarted:
 		// A new turn moves on from an open question.
 		s.Running, s.Turn, s.Question = true, e.Turn, nil
@@ -29,17 +40,26 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryTool, Turn: s.Turn, Tool: &t})
 		}
 	case ChatEventApproval:
+		if e.Approval == nil {
+			s.Pending = nil
+		}
 		if e.Approval != nil {
 			a := *e.Approval
 			s.Pending = &a
 			s.changeTool(a.ID, func(t *ChatTool) { t.Diff = a.Diff })
 		}
 	case ChatEventQuestion:
+		if e.Question == nil {
+			s.Question = nil
+		}
 		if e.Question != nil {
 			q := *e.Question
 			s.Question = &q
 		}
 	case ChatEventAnswered:
+		if s.Runtime != nil && e.Text != "" {
+			s.Entries = append(s.Entries, ChatEntry{Kind: ChatEntryAnswer, Turn: s.Turn, Text: e.Text})
+		}
 		if e.Question != nil && s.Question != nil && s.Question.ID == e.Question.ID {
 			s.Question = nil
 		}
@@ -56,6 +76,9 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		}
 	case ChatEventTurnEnded:
 		s.Running, s.Pending = false, nil
+		if s.Runtime != nil {
+			s.Question = nil
+		}
 		if e.Reason != ChatEndDone {
 			s.cutReply(e.Turn)
 		}
@@ -69,12 +92,17 @@ func (s *ChatSnapshot) Apply(e *ChatEvent) {
 		s.State = e.State
 	case ChatEventQueue:
 		s.Queue = append([]string(nil), e.Queue...)
+		s.QueuePaused = e.Paused
 	case ChatEventUsage:
 		if e.Usage != nil {
 			u := *e.Usage
 			s.Usage = &u
 			if u.Priced {
-				s.Cost += u.Cost
+				if u.Cumulative {
+					s.Cost = u.Cost
+				} else {
+					s.Cost += u.Cost
+				}
 			}
 			s.noteReported(&u)
 		}

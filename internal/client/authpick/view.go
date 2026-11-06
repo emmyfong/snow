@@ -20,10 +20,11 @@ const (
 // layout is where the picker goes and what it shows. listTop and listRows
 // are screen cells, for mapping a click to a provider.
 type layout struct {
-	box               string
-	x, y, w, h        int
-	listTop, listRows int
-	listItems         []int // provider index per list row
+	box                                   string
+	x, y, w, h                            int
+	listTop, listRows                     int
+	listItems                             []int // provider index per list row
+	hintY, submitX, submitW, backX, backW int
 }
 
 // View draws the picker centered on a window of cols by rows cells and
@@ -44,10 +45,22 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) Result {
 	if !ok || x < l.x || x >= l.x+l.w || y < l.y || y >= l.y+l.h {
 		return Cancelled
 	}
+	if m.stage == stageKey && y == l.hintY {
+		if x >= l.submitX && x < l.submitX+l.submitW {
+			return m.submit()
+		}
+		if x >= l.backX && x < l.backX+l.backW {
+			m.stage, m.key, m.note = stageList, nil, ""
+			return Open
+		}
+	}
 	if m.stage == stageList && y >= l.listTop && y < l.listTop+l.listRows {
 		i := y - l.listTop
 		if i >= 0 && i < len(l.listItems) {
 			m.selected = l.listItems[i]
+			if p, ok := m.Provider(); ok && p.Runtime != "" {
+				return Runtime
+			}
 			m.startKey()
 		}
 	}
@@ -106,7 +119,11 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 			return layout{}, false
 		}
 		title := providerTitle(p)
-		addLines(wrap("Paste the API key for "+title+". Snow checks it before it saves it.", inner-1, 3))
+		instructions := "Paste the API key for " + title + ". Snow checks it before it saves it."
+		if p.Runtime != "" {
+			instructions = "Save an API key for this Snow connection. API billing applies. Model availability is checked when you send."
+		}
+		addLines(wrap(instructions, inner-1, 3))
 		var extra []string
 		if p.KeyURL != "" {
 			extra = append(extra, wrapMuted("Create a key at "+p.KeyURL+".", 2)...)
@@ -131,7 +148,11 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 		switch {
 		case m.stage == stageChecking:
 			body = append(body, "")
-			add(muted.Render("Checking the key with " + title + "..."))
+			checking := "Checking the key with " + title + "..."
+			if p.Runtime != "" {
+				checking = "Saving the connection key..."
+			}
+			add(muted.Render(checking))
 		case m.note != "":
 			body = append(body, "")
 			for _, line := range wrap(m.note, inner-1, maxNoteRows) {
@@ -149,6 +170,23 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 	l.h = h
 	l.x, l.y = max((cols-w)/2, 0), max((rows-h)/2, 0)
 	l.listTop = l.y + 1
+	if m.stage == stageKey {
+		plain := ansi.Strip(ui.KeyHints(th, m.hints(), inner-1))
+		l.hintY = l.y + len(body)
+		for _, hint := range m.hints() {
+			start := strings.Index(plain, hint.Key+" ")
+			if start < 0 {
+				continue
+			}
+			x, width := l.x+2+ansi.StringWidth(plain[:start]), ansi.StringWidth(hint.Key+" "+hint.Desc)
+			if hint.Key == "enter" {
+				l.submitX, l.submitW = x, width
+			}
+			if hint.Key == "esc" {
+				l.backX, l.backW = x, width
+			}
+		}
+	}
 	l.box = ui.Panel(th, ui.PanelOptions{Title: m.title(), Body: strings.Join(body, "\n"), Width: w})
 	return l, true
 }
@@ -182,6 +220,9 @@ func (m *Model) title() string {
 func (m *Model) hints() []ui.Hint {
 	if m.stage == stageChecking {
 		return checkingHints
+	}
+	if provider, ok := m.Provider(); ok && provider.Runtime != "" {
+		return runtimeKeyHints
 	}
 	return keyHints
 }
@@ -218,6 +259,8 @@ func providerTitle(p api.ProviderAuth) string {
 // status says where a provider's key comes from, or why it has none.
 func status(p api.ProviderAuth) string {
 	switch {
+	case p.Runtime != "":
+		return "subscription or API key"
 	case p.NoKey:
 		return "no key needed"
 	case p.Err != "":
@@ -232,7 +275,8 @@ func status(p api.ProviderAuth) string {
 }
 
 var (
-	listHints     = []ui.Hint{{Key: "↑↓", Desc: "move"}, {Key: "enter", Desc: "choose"}, {Key: "esc", Desc: "close"}}
-	keyHints      = []ui.Hint{{Key: "enter", Desc: "check"}, {Key: "esc", Desc: "back"}}
-	checkingHints = []ui.Hint{{Key: "esc", Desc: "close"}}
+	listHints       = []ui.Hint{{Key: "↑↓", Desc: "move"}, {Key: "enter", Desc: "choose"}, {Key: "esc", Desc: "close"}}
+	keyHints        = []ui.Hint{{Key: "enter", Desc: "check"}, {Key: "esc", Desc: "back"}}
+	checkingHints   = []ui.Hint{{Key: "esc", Desc: "close"}}
+	runtimeKeyHints = []ui.Hint{{Key: "enter", Desc: "save key"}, {Key: "esc", Desc: "back"}}
 )

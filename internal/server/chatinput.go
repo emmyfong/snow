@@ -17,7 +17,7 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		s.refuse(c, api.CodeBadCommand, err)
 		return
 	}
-	var conv *agent.Conversation
+	var conv conversation
 	queued := 0
 	snapModel := ""
 	oldModel, oldEffort := "", ""
@@ -56,6 +56,12 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		err = conv.Reply(agent.QuestionReply{ID: in.ID, Picked: in.Picked, Other: in.Text})
 	case api.ChatInputInterrupt:
 		err = conv.Interrupt()
+	case api.ChatInputSendNow, api.ChatInputResumeQueue, api.ChatInputStopTask:
+		if runtime, ok := conv.(*claudeConversation); ok {
+			err = runtime.input(*in)
+		} else {
+			err = errors.New("this control is available only for an external runtime chat")
+		}
 	case api.ChatInputRetry:
 		err = conv.Retry()
 	case api.ChatInputModel:
@@ -79,7 +85,7 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 // because its pane closed has nothing to report to; one that closed because
 // the pane now shows another conversation lost the user's input, and c is
 // told so.
-func (s *Server) finishInput(c *client, in *api.ChatInput, conv *agent.Conversation, err error) {
+func (s *Server) finishInput(c *client, in *api.ChatInput, conv conversation, err error) {
 	switch {
 	case err == nil:
 	case !errors.Is(err, agent.ErrClosed):

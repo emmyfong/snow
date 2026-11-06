@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/internal/convstore"
@@ -52,7 +53,8 @@ func chatOptions(cfg config.Config) (*server.ChatOptions, error) {
 	return &server.ChatOptions{
 		Store: store, Providers: reg, Tools: tool.Builtin(), HideEnv: hide,
 		DefaultModel: model, DefaultEffort: cfg.Chat.Effort,
-		Auth: auth,
+		Auth:    auth,
+		Runtime: &server.RuntimeOptions{Root: filepath.Join(credDir, "runtimes"), Keys: keys},
 		ProviderStatuses: func() []api.ProviderModels {
 			statuses := signin.Statuses(ps, keys)
 			out := make([]api.ProviderModels, len(statuses))

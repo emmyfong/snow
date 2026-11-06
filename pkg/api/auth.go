@@ -21,9 +21,11 @@ type AuthList struct {
 
 // ProviderAuth is one provider and the state of its API key.
 type ProviderAuth struct {
-	Name   string `json:"name"` // the provider's part of a model name, for example "anthropic"
-	Title  string `json:"title,omitempty"`
-	KeyURL string `json:"keyURL,omitempty"` // the vendor's page where the user creates a key
+	// Runtime opens a runtime-owned sign-in flow instead of a provider key.
+	Runtime string `json:"runtime,omitempty"`
+	Name    string `json:"name"` // the provider's part of a model name, for example "anthropic"
+	Title   string `json:"title,omitempty"`
+	KeyURL  string `json:"keyURL,omitempty"` // the vendor's page where the user creates a key
 	// Source is where the key comes from, in words for people, for example
 	// "environment" or "OS credential store". Empty when no key is saved.
 	Source string `json:"source,omitempty"`

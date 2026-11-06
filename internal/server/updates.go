@@ -79,6 +79,7 @@ func (st *state) layout(sess *session) *api.Layout {
 				Profile:    p.profile,
 				Folder:     folder,
 				Focused:    int(id) == w.focused,
+				Purpose:    p.purpose,
 				AgentState: p.agentNow(),
 				Driven:     p.driven(),
 				Worktree:   p.worktree,
