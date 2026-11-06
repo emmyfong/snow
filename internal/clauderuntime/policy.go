@@ -95,14 +95,25 @@ func ReadPolicy(dir string) (Policy, error) {
 func (p Policy) Check(auth AuthMode) error {
 	switch {
 	case auth == APIKey && p.ForceLoginMethod != "":
-		return fmt.Errorf("%w: your organization requires %s sign-in, and Claude Code refuses API keys", ErrPolicy, loginName(p.ForceLoginMethod))
+		return policyError("Your organization requires " + loginName(p.ForceLoginMethod) + " sign-in, and Claude Code refuses API keys.")
 	case auth == Subscription && p.ForceLoginMethod != "" && p.ForceLoginMethod != "claudeai":
-		return fmt.Errorf("%w: your organization requires %s sign-in, not a Claude subscription", ErrPolicy, loginName(p.ForceLoginMethod))
+		return policyError("Your organization requires " + loginName(p.ForceLoginMethod) + " sign-in, not a Claude plan.")
 	case auth == Subscription && p.SuppliesKey:
-		return fmt.Errorf("%w: your organization's policy supplies an API key, which Claude Code uses instead of a subscription sign-in", ErrPolicy)
+		return policyError("Your organization's policy supplies an API key, which Claude Code uses instead of a plan sign-in.")
 	}
 	return nil
 }
+
+// PolicyError is an ErrPolicy whose message is only the reason, ready to
+// show the user.
+type PolicyError struct{ Reason string }
+
+func (e *PolicyError) Error() string { return e.Reason }
+
+// Is makes errors.Is(err, ErrPolicy) true.
+func (e *PolicyError) Is(target error) bool { return target == ErrPolicy }
+
+func policyError(reason string) error { return &PolicyError{Reason: reason} }
 
 func loginName(method string) string {
 	switch method {

@@ -60,7 +60,9 @@ func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runt
 	if id == 0 {
 		return errors.New("the chat changed before sign-in started")
 	}
-	preamble := fmt.Sprintf("Claude Code sign-in for %s.\r\nComplete the official browser or manual-code flow below. Close this view to cancel.\r\n\r\n", runtimeEnvironment(connection.Distro))
+	preamble := fmt.Sprintf("Claude Code sign-in (%s). This sign-in is only for Snow.\r\n"+
+		"Sign in in the browser. If the browser cannot return here, it shows a code:\r\n"+
+		"paste the code below and press Enter. Close this window to cancel.\r\n\r\n", runtimeEnvironment(connection.Distro))
 	terminal, err := term.Start(launchSpec(launch), cols, rows, term.Options{Scrollback: 200, Preamble: preamble})
 	if err != nil {
 		return err

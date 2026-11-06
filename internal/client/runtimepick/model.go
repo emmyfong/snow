@@ -4,6 +4,7 @@ package runtimepick
 
 import (
 	"fmt"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/authpick"
@@ -38,6 +39,8 @@ type Model struct {
 	actions     bool
 	chosen      Action
 	pending     string
+	ignored     []string
+	failure     string // the last refused operation, shown above the choices
 }
 
 // New opens a connection list while its metadata loads.
@@ -50,15 +53,17 @@ func New() *Model {
 // SetList replaces metadata without importing any standalone CLI account.
 func (m *Model) SetList(response *api.RuntimeConnections) {
 	m.connections = append([]api.RuntimeConnection(nil), response.Connections...)
+	m.ignored = response.Ignored
 	if response.Selected != "" {
 		m.selected = response.Selected
 	}
+	m.failure = ""
 	if response.State == "error" {
 		if m.key != nil {
 			m.key.Fail(response.Message)
 			return
 		}
-		m.list.SetTitle(response.Message)
+		m.failure = response.Message
 	} else if m.pending == api.RuntimeSaveKey {
 		m.key = nil
 	}
@@ -81,39 +86,116 @@ func (m *Model) connection() (api.RuntimeConnection, bool) {
 func (m *Model) rebuild() {
 	m.choices = nil
 	if connection, ok := m.connection(); m.actions && ok {
-		m.list.SetTitle("Claude Code: " + connection.Environment)
-		auth, login := "Subscription", "Sign in with subscription"
-		kind := api.RuntimeLogin
-		if connection.Auth == "api-key" {
-			auth, login, kind = "API billing", "Enter an API key", "key"
-		}
-		m.choices = append(m.choices,
-			choice{label: "Use for this chat", hint: auth + "; no task starts", action: Action{Kind: api.RuntimeUse, Connection: connection.ID}},
-			choice{label: login, hint: "Separate Snow account", action: Action{Kind: kind, Connection: connection.ID}},
-			choice{label: "Check connection", hint: connection.Status, action: Action{Kind: api.RuntimeStatus, Connection: connection.ID}},
-			choice{label: "Sign out of this connection", hint: "Keep saved conversations", action: Action{Kind: api.RuntimeLogout, Connection: connection.ID}},
-			choice{label: "Back to connections", action: Action{Kind: "back"}})
+		m.rebuildActions(connection)
 	} else {
-		m.actions = false
-		m.list.SetTitle("Claude Code connections")
-		for _, connection := range m.connections {
-			auth := "Subscription"
-			if connection.Auth == "api-key" {
-				auth = "API billing"
-			}
-			id := connection.ID[:min(6, len(connection.ID))]
-			m.choices = append(m.choices, choice{label: connection.Name + " (" + id + ")", hint: auth + ", " + connection.Environment,
-				action: Action{Kind: "open", Connection: connection.ID}})
-		}
-		m.choices = append(m.choices,
-			choice{label: "Add a subscription connection", hint: "Sign in through Snow", action: Action{Kind: api.RuntimeCreate, Auth: "subscription"}},
-			choice{label: "Add an API-key connection", hint: "Separate API billing", action: Action{Kind: api.RuntimeCreate, Auth: "api-key"}})
+		m.rebuildList()
 	}
 	var rows [][]string
 	for _, choice := range m.choices {
 		rows = append(rows, []string{choice.label, choice.hint})
 	}
 	m.list.SetRows(rows)
+}
+
+// rebuildList shows every connection with its state and billing, then the
+// two ways to add one.
+func (m *Model) rebuildList() {
+	m.actions = false
+	m.list.SetTitle("Claude Code connections")
+	detail := "Each connection has its own Claude Code sign-in, separate from the claude command."
+	if len(m.connections) == 0 {
+		detail = "Snow keeps its own Claude Code sign-in, separate from the claude command. Choose how Claude Code is paid for."
+	}
+	if len(m.ignored) > 0 {
+		detail += " Snow ignores " + strings.Join(m.ignored, ", ") + " from this machine."
+	}
+	m.list.SetDetail(m.withFailure(detail))
+	for _, connection := range m.connections {
+		short := "Claude plan"
+		if connection.Auth == "api-key" {
+			short = "API billing"
+		}
+		m.choices = append(m.choices, choice{label: name(connection) + "  " + statusText(connection),
+			hint: short + ", " + connection.Environment, action: Action{Kind: "open", Connection: connection.ID}})
+	}
+	m.choices = append(m.choices,
+		choice{label: "Add: sign in with a Claude plan", hint: billing("subscription"), action: Action{Kind: api.RuntimeCreate, Auth: "subscription"}},
+		choice{label: "Add: use an API key", hint: billing("api-key"), action: Action{Kind: api.RuntimeCreate, Auth: "api-key"}})
+}
+
+// rebuildActions shows what the user can do with one connection. A
+// connection the policy blocks offers no way to use or sign in to it.
+func (m *Model) rebuildActions(connection api.RuntimeConnection) {
+	m.list.SetTitle(name(connection) + ", " + connection.Environment)
+	detail := billing(connection.Auth) + ". " + statusText(connection) + "."
+	if connection.Reason != "" {
+		detail += " " + connection.Reason
+	}
+	m.list.SetDetail(m.withFailure(detail))
+	id := connection.ID
+	if connection.Status != "blocked" {
+		m.choices = append(m.choices, choice{label: "Use for this chat", hint: "No task starts", action: Action{Kind: api.RuntimeUse, Connection: id}})
+		if connection.Auth == "api-key" {
+			m.choices = append(m.choices, choice{label: "Enter an API key", hint: "Saved for this connection only", action: Action{Kind: "key", Connection: id}})
+		} else {
+			m.choices = append(m.choices, choice{label: "Sign in", hint: "Opens Claude's sign-in in a Snow window", action: Action{Kind: api.RuntimeLogin, Connection: id}})
+		}
+	}
+	signOut := "Keeps saved chats"
+	if connection.Auth == "api-key" {
+		signOut = "Removes the saved key; keeps saved chats"
+	}
+	m.choices = append(m.choices,
+		choice{label: "Check status", hint: "No model request", action: Action{Kind: api.RuntimeStatus, Connection: id}},
+		choice{label: "Sign out", hint: signOut, action: Action{Kind: api.RuntimeLogout, Connection: id}},
+		choice{label: "Back to connections", action: Action{Kind: "back"}})
+}
+
+func (m *Model) withFailure(detail string) string {
+	if m.failure == "" {
+		return detail
+	}
+	return m.failure
+}
+
+func name(c api.RuntimeConnection) string {
+	return c.Name + " (" + c.ID[:min(6, len(c.ID))] + ")"
+}
+
+// billing says in plain words who pays for a route.
+func billing(auth string) string {
+	if auth == "api-key" {
+		return "Billed to your API account"
+	}
+	return "Uses your Claude plan"
+}
+
+// statusText says a connection's state. Signed in and ready are separate:
+// ready needs a runtime that started. Unknown never reads as signed out.
+func statusText(c api.RuntimeConnection) string {
+	switch c.Status {
+	case "signed-in":
+		if c.Ready {
+			return "Signed in, ready"
+		}
+		return "Signed in"
+	case "key-saved":
+		if c.Ready {
+			return "Key saved, ready"
+		}
+		return "Key saved"
+	case "signed-out":
+		if c.Auth == "api-key" {
+			return "No key saved"
+		}
+		return "Signed out"
+	case "blocked":
+		return "Blocked by policy"
+	}
+	if c.Reason != "" {
+		return "Status unknown"
+	}
+	return "Not checked yet"
 }
 
 // Action returns the operation selected by the most recent Accepted result.
@@ -177,7 +259,10 @@ func (m *Model) result(result picker.Result) picker.Result {
 		m.selected, m.actions = action.Connection, true
 		m.rebuild()
 		m.list.Select(0)
-		return picker.Open
+		// Checking runs Claude's status command, which sends no model request.
+		m.chosen = Action{Kind: api.RuntimeStatus, Connection: action.Connection}
+		m.pending = m.chosen.Kind
+		return picker.Accepted
 	case "back":
 		m.actions = false
 		m.rebuild()

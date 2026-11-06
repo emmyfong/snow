@@ -56,6 +56,22 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			}
 			os.Exit(0)
 		}
+		if mode == "login-manual" && argument == "login" {
+			// A browser callback that failed: the login prints a sign-in
+			// address and waits for the code the browser shows.
+			if _, err := fmt.Fprint(os.Stdout, "Browser did not open. Visit this address to sign in:\r\n"+
+				"https://example.invalid/oauth/authorize?state=fixture\r\n\r\nPaste code here if prompted > "); err != nil {
+				os.Exit(2)
+			}
+			code, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil || strings.TrimSpace(code) != "fixture-code" {
+				os.Exit(1)
+			}
+			if err := os.WriteFile(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"), []byte("yes"), 0o600); err != nil {
+				os.Exit(2)
+			}
+			os.Exit(0)
+		}
 		if mode == "login" && argument == "login" {
 			if _, err := fmt.Fprintln(os.Stdout, "Finish sign-in: private-login-code"); err != nil {
 				os.Exit(2)
@@ -73,7 +89,7 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			if os.Getenv("ANTHROPIC_API_KEY") != "" {
 				method = "api_key"
 			}
-			if mode == "login" {
+			if mode == "login" || mode == "login-manual" {
 				_, err := os.Stat(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"))
 				loggedIn = err == nil
 				if !loggedIn {

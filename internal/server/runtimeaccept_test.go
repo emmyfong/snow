@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/internal/clauderuntime"
 	"github.com/emmyfong/snow/internal/credential"
@@ -499,5 +500,40 @@ func TestRestartStartsNoLoginOrTurn(t *testing.T) {
 	time.Sleep(300 * time.Millisecond)
 	if after := readFixtureLog(t, log); len(after) != before {
 		t.Fatalf("restart started Claude: %v", after[before:])
+	}
+}
+
+// TestSignInPaneManualCodeGolden: when the browser cannot return to Claude,
+// the sign-in window shows Snow's note on the code fallback and Claude's own
+// prompt, and a pasted code finishes the sign-in.
+func TestSignInPaneManualCodeGolden(t *testing.T) {
+	for _, size := range []struct{ cols, rows int }{{80, 24}, {120, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size.cols, size.rows), func(t *testing.T) {
+			options, _, _ := chatOptions(t)
+			options.Chat.Runtime = runtimeOptions(t, "login-manual")
+			server := New(options)
+			t.Cleanup(server.Close)
+			c := connect(t, server, size.cols, size.rows)
+			pane := openChat(t, c)
+			chat := c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Agent != "" })
+			r := &runtimeChat{t: t, c: c, pane: pane, agent: chat.Agent}
+			id := r.create("subscription")
+			c.Send(&api.RuntimeRequest{RequestID: "login", Pane: pane, Agent: r.agent, Action: api.RuntimeLogin, Connection: id})
+			opened := runtimeReply(t, c)
+			if opened.LoginPane == 0 {
+				t.Fatalf("sign-in did not open: %+v", opened)
+			}
+			c.WaitScreen("Paste code here if prompted >")
+			golden.RequireEqual(t, c.Screen())
+			c.Send(&api.Input{Pane: opened.LoginPane, Paste: "fixture-code\r"})
+			for {
+				if response := runtimeReply(t, c); response.RequestID == "login" {
+					if response.Connections[0].Status != "signed-in" {
+						t.Fatalf("pasted code did not sign in: %+v", response)
+					}
+					return
+				}
+			}
+		})
 	}
 }
