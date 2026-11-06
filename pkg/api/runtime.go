@@ -30,6 +30,8 @@ type RuntimeTask struct {
 
 // RuntimeRequest asks for a connection operation in a chat's workspace.
 // Key travels only in the protected local protocol and is never formatted.
+// Create adds a connection only when it works: a Claude plan connection
+// signs in first, and an API key connection comes with its Key.
 type RuntimeRequest struct {
 	RequestID  string `json:"requestId,omitempty"`
 	Pane       int    `json:"pane"`
@@ -50,6 +52,9 @@ const (
 	RuntimeCancelLogin = "cancel-login"
 	RuntimeSaveKey     = "save-key"
 	RuntimeLogout      = "logout"
+	// RuntimeRemove signs a connection out and deletes it with its saved
+	// key. Saved chats that used it stay.
+	RuntimeRemove = "remove"
 )
 
 // ErrInvalidRuntime means a connection request is incomplete or unsupported.
@@ -64,10 +69,10 @@ func (r *RuntimeRequest) Validate() error {
 	switch r.Action {
 	case RuntimeList:
 	case RuntimeCreate:
-		if r.Auth != "subscription" && r.Auth != "api-key" {
+		if r.Auth != "subscription" && r.Auth != "api-key" || (r.Auth == "api-key") != (r.Key != "") {
 			return ErrInvalidRuntime
 		}
-	case RuntimeUse, RuntimeLogin, RuntimeCancelLogin, RuntimeLogout, RuntimeStatus:
+	case RuntimeUse, RuntimeLogin, RuntimeCancelLogin, RuntimeLogout, RuntimeStatus, RuntimeRemove:
 		if r.Connection == "" {
 			return ErrInvalidRuntime
 		}
@@ -78,7 +83,7 @@ func (r *RuntimeRequest) Validate() error {
 	default:
 		return ErrInvalidRuntime
 	}
-	if r.Key != "" && r.Action != RuntimeSaveKey {
+	if r.Key != "" && r.Action != RuntimeSaveKey && r.Action != RuntimeCreate {
 		return ErrInvalidRuntime
 	}
 	return nil

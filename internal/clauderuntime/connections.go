@@ -22,9 +22,10 @@ type Connection struct {
 	Name    string   `json:"name"`
 }
 
-// CreateConnection saves a new private connection. A missing runtime or failed
-// login leaves this profile available for the user to finish, without importing
-// a machine account or falling back to API billing.
+// CreateConnection saves a new private connection. It imports no machine
+// account and never falls back to API billing. A caller that adds one for
+// the user removes it again with RemoveConnection when its first sign-in
+// or key fails.
 func CreateConnection(root, distro string, auth AuthMode) (Connection, error) {
 	c := Connection{Version: 1, ID: strings.ToLower(rand.Text()), Auth: auth, Distro: distro, Name: "Claude Code"}
 	p, err := ProfileFor(root, c)
@@ -47,6 +48,20 @@ func CreateConnection(root, distro string, auth AuthMode) (Connection, error) {
 		return Connection{}, fmt.Errorf("save connection: %w", err)
 	}
 	return c, nil
+}
+
+// RemoveConnection deletes a connection's folder: its metadata and, on
+// this machine, its Claude sign-in. A WSL connection's sign-in lives in
+// its distribution; RemoveLaunch deletes that first. Saved chats are kept
+// elsewhere and stay.
+func RemoveConnection(root, id string) error {
+	if !filepath.IsAbs(root) || !validID(id) {
+		return ErrProfile
+	}
+	if err := os.RemoveAll(filepath.Join(root, "connections", id)); err != nil {
+		return fmt.Errorf("remove connection: %w", err)
+	}
+	return nil
 }
 
 // LoadConnection reads a connection by opaque identity. Metadata cannot redirect

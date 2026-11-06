@@ -29,6 +29,7 @@ type runtimeChat struct {
 	c     *apitest.Client
 	pane  int
 	agent string
+	root  string
 }
 
 func newRuntimeChat(t *testing.T, server *Server) *runtimeChat {
@@ -36,7 +37,7 @@ func newRuntimeChat(t *testing.T, server *Server) *runtimeChat {
 	c := connect(t, server, 100, 30)
 	pane := openChat(t, c)
 	chat := c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Agent != "" })
-	return &runtimeChat{t: t, c: c, pane: pane, agent: chat.Agent}
+	return &runtimeChat{t: t, c: c, pane: pane, agent: chat.Agent, root: server.opts.Chat.Runtime.Root}
 }
 
 // do sends one connection request and returns its answer.
@@ -55,13 +56,38 @@ func (r *runtimeChat) do(action, connection, auth, key string) *api.RuntimeConne
 	}
 }
 
+// create saves a connection that has not signed in or saved a key yet, as
+// one from before #290 or one whose sign-in the user later ended. Adding one
+// through Snow signs in first; the tests for that use RuntimeCreate.
 func (r *runtimeChat) create(auth string) string {
 	r.t.Helper()
-	response := r.do(api.RuntimeCreate, "", auth, "")
-	if response.State == "error" || response.Selected == "" {
-		r.t.Fatalf("create %s connection: %+v", auth, response)
+	return seedConnection(r.t, r.root, auth)
+}
+
+func seedConnection(t *testing.T, root, auth string) string {
+	t.Helper()
+	connection, err := clauderuntime.CreateConnection(root, "", clauderuntime.AuthMode(auth))
+	if err != nil {
+		t.Fatal(err)
 	}
-	return response.Selected
+	return connection.ID
+}
+
+// connectionDirs lists the connection folders on disk.
+func connectionDirs(t *testing.T, root string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Join(root, "connections"))
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, entry := range entries {
+		names = append(names, entry.Name())
+	}
+	return names
 }
 
 func (r *runtimeChat) status(id string) api.RuntimeConnection {
@@ -444,7 +470,7 @@ func TestManagedPolicyConflictShown(t *testing.T) {
 	r := newRuntimeChat(t, server)
 
 	writeRule("claudeai")
-	response := r.do(api.RuntimeCreate, "", "api-key", "")
+	response := r.do(api.RuntimeCreate, "", "api-key", "sk-ant-refused")
 	if response.State != "error" || !strings.Contains(response.Message, "requires Claude subscription sign-in") {
 		t.Fatalf("API-key route not refused clearly: %+v", response)
 	}
@@ -535,7 +561,7 @@ func TestSignInPaneManualCodeGolden(t *testing.T) {
 			c := connect(t, server, size.cols, size.rows)
 			pane := openChat(t, c)
 			chat := c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Agent != "" })
-			r := &runtimeChat{t: t, c: c, pane: pane, agent: chat.Agent}
+			r := &runtimeChat{t: t, c: c, pane: pane, agent: chat.Agent, root: server.opts.Chat.Runtime.Root}
 			id := r.create("subscription")
 			c.Send(&api.RuntimeRequest{RequestID: "login", Pane: pane, Agent: r.agent, Action: api.RuntimeLogin, Connection: id})
 			opened := runtimeReply(t, c)
@@ -755,7 +781,7 @@ func TestRuntimeModelChoice(t *testing.T) {
 	t.Cleanup(server.Close)
 	c := connect(t, server, 100, 30)
 	pane := openChat(t, c)
-	useTestRuntime(t, c, pane)
+	useTestRuntime(t, server, c, pane)
 	c.Send(&api.ModelListRequest{Pane: pane})
 	var list *api.ModelList
 	deadline := time.Now().Add(apitest.Wait)
@@ -789,5 +815,117 @@ func TestRuntimeModelChoice(t *testing.T) {
 	}
 	if !strings.Contains(chat, "--model=opus") || !strings.Contains(chat, "--effort=max") {
 		t.Fatalf("run arguments: %q, want --model=opus --effort=max", chat)
+	}
+}
+
+// TestFailedFirstSignInLeavesNoConnection: adding a Claude plan connection
+// signs in first. A sign-in that fails leaves no connection and no folder
+// behind (#290).
+func TestFailedFirstSignInLeavesNoConnection(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login-fail")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	for range 2 {
+		response := r.do(api.RuntimeCreate, "", "subscription", "")
+		if len(response.Connections) != 0 || response.Selected != "" {
+			t.Fatalf("a failed sign-in kept its connection: %+v", response)
+		}
+		if !strings.Contains(response.Message, "stays open") || !strings.Contains(response.Message, "not added") {
+			t.Fatalf("notice = %q, want the failure and that nothing was added", response.Message)
+		}
+	}
+	if dirs := connectionDirs(t, r.root); len(dirs) != 0 {
+		t.Fatalf("folders left behind: %q", dirs)
+	}
+}
+
+// TestFirstSignInAddsConnection: a sign-in that ends signed in keeps the
+// new connection, and no chat starts on it.
+func TestFirstSignInAddsConnection(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	r.c.Send(&api.RuntimeRequest{RequestID: "add", Pane: r.pane, Agent: r.agent, Action: api.RuntimeCreate, Auth: "subscription"})
+	opened := runtimeReply(t, r.c)
+	if opened.State != "signing-in" || opened.LoginPane == 0 || opened.Selected == "" {
+		t.Fatalf("sign-in did not open: %+v", opened)
+	}
+	r.c.WaitScreen("private-login-code")
+	r.c.Send(&api.Input{Pane: opened.LoginPane, Paste: "finish\r"})
+	var done *api.RuntimeConnections
+	for done == nil {
+		if response := runtimeReply(t, r.c); response.RequestID == "add" && response.State != "signing-in" {
+			done = response
+		}
+	}
+	if done.State == "error" || done.Selected != opened.Selected || len(done.Connections) != 1 || done.Connections[0].Status != api.RuntimeStatusSignedIn {
+		t.Fatalf("signed-in connection not kept: %+v", done)
+	}
+	if _, err := os.Stat(signedInMarker(r.root, done.Selected)); err != nil {
+		t.Fatalf("sign-in not in the connection's folder: %v", err)
+	}
+}
+
+// TestAPIKeyConnectionNeedsKey: an API key connection is added only with
+// its key. A key Snow cannot save adds nothing.
+func TestAPIKeyConnectionNeedsKey(t *testing.T) {
+	keyring.MockInit()
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "conversation-fast")
+	options.Chat.Runtime.Keys = credential.New(t.TempDir(), nil)
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	if got := r.do(api.RuntimeCreate, "", "api-key", "bad key with spaces"); got.State != "error" || len(got.Connections) != 0 {
+		t.Fatalf("a bad key added a connection: %+v", got)
+	}
+	if dirs := connectionDirs(t, r.root); len(dirs) != 0 {
+		t.Fatalf("folders left behind: %q", dirs)
+	}
+	added := r.do(api.RuntimeCreate, "", "api-key", "sk-ant-good")
+	if added.State == "error" || added.Selected == "" {
+		t.Fatalf("add API key connection: %+v", added)
+	}
+	if got := r.status(added.Selected); got.Status != api.RuntimeStatusKeySaved {
+		t.Fatalf("key not saved with the connection: %+v", got)
+	}
+}
+
+// TestRemoveConnection: removing a connection signs it out and deletes its
+// folder and saved key. A connection a chat uses is not removed.
+func TestRemoveConnection(t *testing.T) {
+	keyring.MockInit()
+	log := useFixtureLog(t)
+	keys := credential.New(t.TempDir(), nil)
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	options.Chat.Runtime.Keys = keys
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	plan, used := r.create("subscription"), r.create("subscription")
+	r.signIn(plan)
+	key := r.do(api.RuntimeCreate, "", "api-key", "sk-ant-remove").Selected
+	r.use(used)
+	if got := r.do(api.RuntimeRemove, used, "", ""); got.State != "error" || !strings.Contains(got.Message, "chat uses") {
+		t.Fatalf("a connection in use was removed: %+v", got)
+	}
+	for _, id := range []string{plan, key} {
+		if got := r.do(api.RuntimeRemove, id, "", ""); got.State == "error" || slices.ContainsFunc(got.Connections, func(c api.RuntimeConnection) bool { return c.ID == id }) {
+			t.Fatalf("remove %s: %+v", id, got)
+		}
+	}
+	if dirs := connectionDirs(t, r.root); !slices.Equal(dirs, []string{used}) {
+		t.Fatalf("folders = %q, want only the used connection", dirs)
+	}
+	if _, _, err := keys.GetStored("claude-connection-" + key); !errors.Is(err, credential.ErrNoKey) {
+		t.Fatalf("saved key not deleted: %v", err)
+	}
+	if !strings.Contains(ops(readFixtureLog(t, log)), "logout") {
+		t.Fatalf("the signed-in connection was not signed out first: %q", ops(readFixtureLog(t, log)))
 	}
 }

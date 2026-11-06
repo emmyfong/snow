@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/emmyfong/snow/internal/clauderuntime"
-	"github.com/emmyfong/snow/internal/credential"
 	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/pkg/api"
 )
@@ -60,39 +59,53 @@ func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
 	}
 	var login *runtimeLogin
 	if request.Action == api.RuntimeLogin {
-		loginCtx, cancelLogin := context.WithCancel(context.Background())
-		login = &runtimeLogin{connection: request.Connection, ctx: loginCtx, cancel: cancelLogin}
-		registered := false
-		s.call(func(st *state) {
-			if st.runtimeLogins[request.Connection] != nil {
-				return
-			}
-			if st.runtimeLogins == nil {
-				st.runtimeLogins = map[string]*runtimeLogin{}
-			}
-			st.runtimeLogins[request.Connection] = login
-			registered = true
-		})
-		if !registered {
-			cancelLogin()
-			s.refuse(c, api.CodeCommandFailed, errors.New("a sign-in attempt is already running for this connection"))
+		if login, err = s.newLogin(request.Connection); err != nil {
+			s.refuse(c, api.CodeCommandFailed, err)
 			return
 		}
 	}
 	go s.runtimeOperation(c, request, facts, login)
 }
 
+// newLogin registers a sign-in for connection, refusing a second one.
+func (s *Server) newLogin(connection string) (*runtimeLogin, error) {
+	ctx, cancel := context.WithCancel(context.Background())
+	login := &runtimeLogin{connection: connection, ctx: ctx, cancel: cancel}
+	registered := false
+	s.call(func(st *state) {
+		if st.runtimeLogins[connection] != nil {
+			return
+		}
+		if st.runtimeLogins == nil {
+			st.runtimeLogins = map[string]*runtimeLogin{}
+		}
+		st.runtimeLogins[connection] = login
+		registered = true
+	})
+	if !registered {
+		cancel()
+		return nil, errors.New("a sign-in attempt is already running for this connection")
+	}
+	return login, nil
+}
+
+// endLogin forgets a sign-in that ended.
+func (s *Server) endLogin(login *runtimeLogin) {
+	login.cancel()
+	s.call(func(st *state) {
+		if st.runtimeLogins[login.connection] == login {
+			delete(st.runtimeLogins, login.connection)
+		}
+	})
+}
+
 func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts runtimeFacts, login *runtimeLogin) {
 	if login != nil {
-		defer login.cancel()
-		defer s.call(func(st *state) {
-			if st.runtimeLogins[request.Connection] == login {
-				delete(st.runtimeLogins, request.Connection)
-			}
-		})
+		defer s.endLogin(login)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	if request.Action != api.RuntimeLogin {
+	// A sign-in waits for the user as long as they need.
+	if request.Action != api.RuntimeLogin && (request.Action != api.RuntimeCreate || request.Auth != string(clauderuntime.Subscription)) {
 		cancel()
 		ctx, cancel = context.WithTimeout(context.Background(), authTimeout)
 	}
@@ -108,31 +121,17 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 	switch request.Action {
 	case api.RuntimeList:
 	case api.RuntimeCreate:
-		if err = s.opts.Chat.Runtime.policy(facts.host.Distro, clauderuntime.AuthMode(request.Auth)); err == nil {
-			var connection clauderuntime.Connection
-			connection, err = clauderuntime.CreateConnection(s.opts.Chat.Runtime.Root, facts.host.Distro, clauderuntime.AuthMode(request.Auth))
-			selected = connection.ID
+		selected, status, message, err = s.createRuntime(ctx, c, request, facts)
+	case api.RuntimeRemove:
+		if err = s.removeRuntime(ctx, facts, request.Connection); err == nil {
+			selected, message = "", "Connection removed. Saved chats stay."
 		}
 	case api.RuntimeUse:
 		responseAgent, err = s.useRuntime(c, request.Pane, facts, request.Connection)
 	case api.RuntimeSaveKey:
 		err = s.changeRuntimeAuth(ctx, facts, request.Connection, func(connection clauderuntime.Connection) error {
-			if connection.Auth != clauderuntime.APIKey || s.opts.Chat.Runtime.Keys == nil {
-				return clauderuntime.ErrCredential
-			}
-			if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
-				return err
-			}
-			key, keyErr := credential.NewKey(request.Key)
-			if keyErr != nil {
-				return keyErr
-			}
-			profile, profileErr := clauderuntime.ProfileFor(s.opts.Chat.Runtime.Root, connection)
-			if profileErr != nil {
-				return profileErr
-			}
-			source, saveErr := s.opts.Chat.Runtime.Keys.Set(profile.CredentialID(), key)
-			message = fmt.Sprintf("API key saved in %s. API billing applies. Model availability is checked when you send.", source)
+			var saveErr error
+			message, saveErr = s.saveRuntimeKey(connection, request.Key)
 			return saveErr
 		})
 	case api.RuntimeLogout:
@@ -140,23 +139,7 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 			return s.logoutRuntime(ctx, facts, connection)
 		})
 	case api.RuntimeLogin:
-		err = s.changeRuntimeAuth(ctx, facts, request.Connection, func(connection clauderuntime.Connection) error {
-			return s.loginRuntime(c, request, facts, connection, login)
-		})
-		// Once the window opened, the sign-in may have changed even if the
-		// window then failed to close, so the state is read again.
-		if err == nil || errors.Is(err, context.Canceled) || login.pane != 0 {
-			closeErr := err
-			status, message, err = s.runtimeLoginStatus(ctx, facts, request.Connection)
-			var failed *signInFailed
-			switch {
-			case err != nil:
-			case errors.As(closeErr, &failed):
-				message = failed.Error()
-			case closeErr != nil && !errors.Is(closeErr, context.Canceled):
-				message += " The sign-in window did not close cleanly: " + closeErr.Error()
-			}
-		}
+		status, message, err = s.signIn(ctx, c, request, facts, login)
 	case api.RuntimeCancelLogin:
 		if _, connectionErr := s.runtimeConnection(facts, request.Connection); connectionErr != nil {
 			err = connectionErr

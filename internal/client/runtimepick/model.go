@@ -37,6 +37,8 @@ type Model struct {
 	choices     []choice
 	selected    string
 	actions     bool
+	removing    bool // asking whether to remove the selected connection
+	adding      bool // the key field is for a new API key connection
 	chosen      Action
 	pending     string
 	ignored     []string
@@ -64,12 +66,10 @@ func (m *Model) SetList(response *api.RuntimeConnections) {
 			return
 		}
 		m.failure = response.Message
-	} else if m.pending == api.RuntimeSaveKey {
-		m.key = nil
+	} else if m.pending == api.RuntimeSaveKey || m.pending == api.RuntimeCreate {
+		m.key, m.adding = nil, false
 	}
-	if m.pending == api.RuntimeCreate {
-		m.actions = true
-	}
+	m.removing = false
 	m.pending = ""
 	m.rebuild()
 }
@@ -85,7 +85,9 @@ func (m *Model) connection() (api.RuntimeConnection, bool) {
 
 func (m *Model) rebuild() {
 	m.choices = nil
-	if connection, ok := m.connection(); m.actions && ok {
+	if connection, ok := m.connection(); m.actions && ok && m.removing {
+		m.rebuildRemove(connection)
+	} else if m.actions && ok {
 		m.rebuildActions(connection)
 	} else {
 		m.rebuildList()
@@ -120,7 +122,7 @@ func (m *Model) rebuildList() {
 	}
 	m.choices = append(m.choices,
 		choice{label: "Add: sign in with a Claude plan", hint: billing("subscription"), action: Action{Kind: api.RuntimeCreate, Auth: "subscription"}},
-		choice{label: "Add: use an API key", hint: billing("api-key"), action: Action{Kind: api.RuntimeCreate, Auth: "api-key"}})
+		choice{label: "Add: use an API key", hint: billing("api-key"), action: Action{Kind: "add-key"}})
 }
 
 // rebuildActions shows what the user can do with one connection. A
@@ -148,7 +150,22 @@ func (m *Model) rebuildActions(connection api.RuntimeConnection) {
 	m.choices = append(m.choices,
 		choice{label: "Check status", hint: "No model request", action: Action{Kind: api.RuntimeStatus, Connection: id}},
 		choice{label: "Sign out", hint: signOut, action: Action{Kind: api.RuntimeLogout, Connection: id}},
+		choice{label: "Remove connection", hint: "Asks first; keeps saved chats", action: Action{Kind: "ask-remove"}},
 		choice{label: "Back to connections", action: Action{Kind: "back"}})
+}
+
+// rebuildRemove asks before a connection is removed, and says what goes
+// and what stays.
+func (m *Model) rebuildRemove(connection api.RuntimeConnection) {
+	m.list.SetTitle("Remove " + name(connection) + "?")
+	gone := "Snow signs this connection out and deletes its sign-in."
+	if connection.Auth == "api-key" {
+		gone = "Snow deletes this connection and its saved API key."
+	}
+	m.list.SetDetail(m.withFailure(gone + " Your saved chats stay."))
+	m.choices = append(m.choices,
+		choice{label: "Remove", hint: "Cannot be undone", action: Action{Kind: api.RuntimeRemove, Connection: connection.ID}},
+		choice{label: "Keep it", action: Action{Kind: "keep"}})
 }
 
 // withFailure puts the last failure before detail, so the connection's own
@@ -211,7 +228,7 @@ func (m *Model) Action() Action {
 func (m *Model) Key(key tea.Key) picker.Result {
 	if m.key != nil {
 		if key.Code == tea.KeyEscape {
-			m.key = nil
+			m.key, m.adding = nil, false
 			return picker.Open
 		}
 		return m.keyResult(m.key.Key(key))
@@ -236,13 +253,17 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) picker.Result {
 
 func (m *Model) keyResult(result authpick.Result) picker.Result {
 	if result == authpick.Cancelled {
-		m.key = nil
+		m.key, m.adding = nil, false
 		return picker.Open
 	}
 	if result != authpick.Submit {
 		return picker.Open
 	}
 	m.chosen = Action{Kind: api.RuntimeSaveKey, Connection: m.selected, Key: m.key.KeyValue()}
+	if m.adding {
+		// Snow saves a new API key connection only together with its key.
+		m.chosen = Action{Kind: api.RuntimeCreate, Auth: "api-key", Key: m.key.KeyValue()}
+	}
 	m.pending = m.chosen.Kind
 	return picker.Accepted
 }
@@ -269,9 +290,15 @@ func (m *Model) result(result picker.Result) picker.Result {
 		m.actions = false
 		m.rebuild()
 		return picker.Open
-	case "key":
-		m.key = authpick.New()
+	case "key", "add-key":
+		m.key, m.adding = authpick.New(), action.Kind == "add-key"
 		m.key.EnterKey(api.ProviderAuth{Name: "claude-code", Title: "Claude Code API key", Runtime: "claude-code"})
+		return picker.Open
+	case "ask-remove", "keep":
+		m.removing = action.Kind == "ask-remove"
+		m.rebuild()
+		// The question starts on "Keep it", so a stray Enter removes nothing.
+		m.list.Select(map[bool]int{true: 1, false: 0}[m.removing])
 		return picker.Open
 	}
 	m.chosen, m.pending = action, action.Kind

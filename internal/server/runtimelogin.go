@@ -18,6 +18,31 @@ type runtimeLogin struct {
 	terminal            *term.Pane
 }
 
+// signIn runs Claude's sign-in for login's connection, then reads the
+// state it left. Once the window opened, the sign-in may have changed even
+// if the window then failed to close, so the state is read again.
+func (s *Server) signIn(ctx context.Context, c *client, request *api.RuntimeRequest, facts runtimeFacts, login *runtimeLogin) (*api.RuntimeConnection, string, error) {
+	err := s.changeRuntimeAuth(ctx, facts, login.connection, func(connection clauderuntime.Connection) error {
+		return s.loginRuntime(c, request, facts, connection, login)
+	})
+	if err != nil && !errors.Is(err, context.Canceled) && login.pane == 0 {
+		return nil, "", err
+	}
+	closeErr := err
+	status, message, err := s.runtimeLoginStatus(ctx, facts, login.connection)
+	if err != nil {
+		return nil, "", err
+	}
+	var failed *signInFailed
+	switch {
+	case errors.As(closeErr, &failed):
+		message = failed.Error()
+	case closeErr != nil && !errors.Is(closeErr, context.Canceled):
+		message += " The sign-in window did not close cleanly: " + closeErr.Error()
+	}
+	return status, message, nil
+}
+
 func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runtimeFacts, connection clauderuntime.Connection, login *runtimeLogin) error {
 	if err := login.ctx.Err(); err != nil {
 		return err

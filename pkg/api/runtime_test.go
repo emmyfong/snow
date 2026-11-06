@@ -23,6 +23,11 @@ func TestRuntimeRequestHidesKey(t *testing.T) {
 		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeCreate, Auth: "automatic"}, false},
 		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeLogin, Key: "key", Connection: "selected"}, false},
 		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeUse}, false},
+		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeCreate, Auth: "api-key", Key: "key"}, true},
+		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeCreate, Auth: "api-key"}, false},
+		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeCreate, Auth: "subscription", Key: "key"}, false},
+		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeRemove, Connection: "selected"}, true},
+		{RuntimeRequest{Pane: 1, Agent: "agent", Action: RuntimeRemove}, false},
 		{RuntimeRequest{Action: RuntimeList}, false},
 	} {
 		if err := tc.request.Validate(); (err == nil) != tc.valid {

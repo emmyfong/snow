@@ -49,6 +49,21 @@ export CLAUDE_CONFIG_DIR="$dir"
 export WSLENV=SNOW_PANE:SNOW_SOCKET
 exec "$claude" "$@"`
 
+// wslRemoveScript deletes a WSL connection's folder in the distribution.
+// $1 is the connection ID, checked by validID.
+const wslRemoveScript = `set -eu
+rm -rf -- "$HOME/` + wslConfigBase + `/$1"`
+
+// RemoveLaunch deletes a WSL connection's sign-in inside its distribution.
+// It runs no Claude, so it works when Claude is missing there.
+func (p Profile) RemoveLaunch(program shell.Profile) (shell.Launch, error) {
+	if p.Distro == "" || program.Distro != p.Distro || !validID(p.ID) {
+		return shell.Launch{}, ErrProfile
+	}
+	args := append(slices.Clone(program.Args), "-e", "sh", "-c", wslRemoveScript, "snow-claude", p.ID)
+	return shell.Launch{Path: program.Path, Args: args, Hide: []string{"WSLENV"}}, nil
+}
+
 // wslCommand runs program's distribution through wsl.exe with the script.
 // Env entries become forwarded variables listed in a WSLENV of Snow's own,
 // replacing the user's, so the inherited list forwards nothing else.

@@ -15,7 +15,7 @@ func TestRuntimeSignInStaysInSnowAndDoesNotSaveTranscript(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := connect(t, server, 100, 30)
 	pane := openChat(t, client)
-	chat := useTestRuntime(t, client, pane)
+	chat := useTestRuntime(t, server, client, pane)
 	connection, agent := chat.Runtime.Connection, chat.Agent
 	client.Send(&api.RuntimeRequest{Pane: pane, Agent: agent, Action: api.RuntimeLogin, Connection: connection})
 	response := runtimeReply(t, client)
@@ -63,7 +63,7 @@ func TestRuntimeSignInCancelLeavesConnectionSignedOut(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := connect(t, server, 100, 30)
 	pane := openChat(t, client)
-	chat := useTestRuntime(t, client, pane)
+	chat := useTestRuntime(t, server, client, pane)
 	connection, agent := chat.Runtime.Connection, chat.Agent
 	client.Send(&api.RuntimeRequest{Pane: pane, Agent: agent, Action: api.RuntimeLogin, Connection: connection})
 	response := runtimeReply(t, client)

@@ -9,6 +9,9 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
+// runtimeClose is the step after a new connection's use: close the picker.
+const runtimeClose = "close"
+
 type runtimeChooser interface {
 	RuntimeInfo() *api.RuntimeInfo
 	ConnectionRequest(action, connection, auth, key string) *api.RuntimeRequest
@@ -38,6 +41,11 @@ func (m *Model) showRuntimePicker() tea.Cmd {
 				return nil
 			}
 			action := pick.Action()
+			if action.Kind == api.RuntimeCreate {
+				// A connection exists only once it works, so the chat
+				// switches to it as soon as it is added.
+				m.runtimeAfter = api.RuntimeUse
+			}
 			if action.Kind == api.RuntimeLogin {
 				chooser := m.own[m.runtimePane].(runtimeChooser)
 				if chooser.RuntimeInfo() == nil || chooser.RuntimeInfo().Connection != action.Connection {
@@ -84,10 +92,27 @@ func (m *Model) runtimeConnections(response *api.RuntimeConnections) tea.Cmd {
 		m.runtimeAfter = ""
 		return m.ShowError(response.Message)
 	}
-	if m.runtimeAfter == api.RuntimeLogin {
+	switch m.runtimeAfter {
+	case api.RuntimeLogin:
 		m.runtimeAfter = ""
 		m.sendRuntimeAction(runtimepick.Action{Kind: api.RuntimeLogin, Connection: response.Selected})
 		return nil
+	case api.RuntimeUse:
+		m.runtimeAfter = ""
+		// A failed sign-in added nothing, and its notice says so.
+		if response.Selected != "" {
+			m.runtimeAfter = runtimeClose
+			m.sendRuntimeAction(runtimepick.Action{Kind: api.RuntimeUse, Connection: response.Selected})
+		}
+		if response.Message != "" {
+			return m.showNotice(response.Message)
+		}
+		return nil
+	case runtimeClose:
+		m.runtimeAfter = ""
+		if m.runtimePick != nil {
+			m.runtimePick, m.over = nil, nil
+		}
 	}
 	if runtime := chooser.RuntimeInfo(); runtime != nil && runtime.Connection == response.Selected && m.runtimePick != nil && m.runtimePick.Action().Kind == api.RuntimeUse {
 		m.runtimePick, m.over = nil, nil

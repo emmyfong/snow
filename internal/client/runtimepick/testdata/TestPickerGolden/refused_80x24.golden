@@ -6,6 +6,7 @@
 [38;2;127;184;230m│[m   Sign in               Opens Claude's sign-in in a Snow window          [38;2;127;184;230m│[m
 [38;2;127;184;230m│[m   Check status          No model request                                 [38;2;127;184;230m│[m
 [38;2;127;184;230m│[m   Sign out              Keeps saved chats                                [38;2;127;184;230m│[m
+[38;2;127;184;230m│[m   Remove connection     Asks first; keeps saved chats                    [38;2;127;184;230m│[m
 [38;2;127;184;230m│[m   Back to connections                                                    [38;2;127;184;230m│[m
 [38;2;127;184;230m│[m                                                                          [38;2;127;184;230m│[m
 [38;2;127;184;230m│[m [38;2;127;184;230mEnter[m [38;2;107;124;140mchoose[m   [38;2;127;184;230mEsc[m [38;2;107;124;140mcancel[m                                                [38;2;127;184;230m│[m

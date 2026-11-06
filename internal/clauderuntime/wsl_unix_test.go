@@ -6,8 +6,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
+
+	"github.com/emmyfong/snow/internal/shell"
 )
 
 // TestWSLScriptRuns runs the script the WSL launch uses under a real sh,
@@ -58,5 +61,38 @@ func TestWSLScriptRuns(t *testing.T) {
 	}
 	if info.Mode().Perm() != 0o700 {
 		t.Errorf("folder mode = %v, want 0700", info.Mode().Perm())
+	}
+}
+
+// TestWSLRemoveScriptRuns runs RemoveLaunch's script under a real sh: it
+// deletes only its own connection's folder, and only for a WSL connection.
+func TestWSLRemoveScriptRuns(t *testing.T) {
+	home := t.TempDir()
+	for _, id := range []string{"c1", "c2"} {
+		if err := os.MkdirAll(filepath.Join(home, wslConfigBase, id, "claude"), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	ubuntu := shell.Profile{Kind: shell.KindClaude, Path: "wsl.exe", Args: []string{"-d", "Ubuntu"}, Distro: "Ubuntu"}
+	profile := Profile{ID: "c1", Distro: "Ubuntu"}
+	launch, err := profile.RemoveLaunch(ubuntu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// wsl.exe -d Ubuntu -e sh -c <script> snow-claude c1: run what follows -e.
+	args := launch.Args[slices.Index(launch.Args, "-e")+1:]
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Env = []string{"HOME=" + home, "PATH=/usr/bin:/bin"}
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("script failed: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(home, wslConfigBase, "c1")); !os.IsNotExist(err) {
+		t.Fatalf("c1 still exists: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(home, wslConfigBase, "c2", "claude")); err != nil {
+		t.Fatalf("another connection's folder went: %v", err)
+	}
+	if _, err := (Profile{ID: "c1"}).RemoveLaunch(shell.Profile{Path: "/usr/bin/claude"}); err == nil {
+		t.Fatal("a connection on this machine got a WSL remove")
 	}
 }

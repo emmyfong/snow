@@ -195,15 +195,11 @@ func runtimeReply(t *testing.T, c *apitest.Client) *api.RuntimeConnections {
 	return nil
 }
 
-func useTestRuntime(t *testing.T, c *apitest.Client, pane int) *api.ChatSnapshot {
+func useTestRuntime(t *testing.T, s *Server, c *apitest.Client, pane int) *api.ChatSnapshot {
 	t.Helper()
 	before := c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Agent != "" })
-	c.Send(&api.RuntimeRequest{Pane: pane, Agent: before.Agent, Action: api.RuntimeCreate, Auth: "subscription"})
-	created := runtimeReply(t, c)
-	if created.State == "error" || created.Selected == "" {
-		t.Fatalf("create runtime connection: %+v", created)
-	}
-	c.Send(&api.RuntimeRequest{Pane: pane, Agent: before.Agent, Action: api.RuntimeUse, Connection: created.Selected})
+	id := seedConnection(t, s.opts.Chat.Runtime.Root, "subscription")
+	c.Send(&api.RuntimeRequest{Pane: pane, Agent: before.Agent, Action: api.RuntimeUse, Connection: id})
 	used := runtimeReply(t, c)
 	if used.State == "error" {
 		t.Fatalf("use runtime connection: %+v", used)
@@ -218,7 +214,7 @@ func TestRuntimeChatRoundTrip(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := connect(t, server, 100, 30)
 	pane := openChat(t, client)
-	useTestRuntime(t, client, pane)
+	useTestRuntime(t, server, client, pane)
 	chatInputOf(client, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "original" })
 	first := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Question != nil })
 	firstID := first.Question.ID
@@ -246,7 +242,7 @@ func TestRuntimeChatFailurePreservesInput(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := connect(t, server, 100, 30)
 	pane := openChat(t, client)
-	useTestRuntime(t, client, pane)
+	useTestRuntime(t, server, client, pane)
 	chatInputOf(client, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "keep this exact request" })
 	client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
 	if !strings.Contains(client.ChatText(pane), "user: keep this exact request") || len(provider.Requests()) != 0 {
@@ -281,7 +277,7 @@ func TestRuntimeEventResync(t *testing.T) {
 	t.Cleanup(server.Close)
 	watch := connect(t, server, 100, 30)
 	pane := openChat(t, watch)
-	useTestRuntime(t, watch, pane)
+	useTestRuntime(t, server, watch, pane)
 	slow := connect(t, server, 100, 30)
 	slow.Send(&api.Attach{Session: "work"})
 	eventually(t, "slow runtime viewer to attach", func() bool { return server.clientCount() == 2 })
@@ -310,7 +306,7 @@ func TestRuntimeResumeKeepsSessionWithoutRestartingWork(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := connect(t, server, 100, 30)
 	pane := openChat(t, client)
-	useTestRuntime(t, client, pane)
+	useTestRuntime(t, server, client, pane)
 	chatInputOf(client, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "original" })
 	first := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return idle(s) && s.Turn == 1 })
 	conversation, generation := first.Conversation, first.Agent

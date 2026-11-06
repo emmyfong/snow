@@ -140,10 +140,18 @@ func TestPickerGolden(t *testing.T) {
 			Message: "claude is not installed in this WSL distribution. Install Claude Code in WSL Ubuntu."})
 		return m
 	}
+	confirm := func() *Model {
+		m := picked(ready)
+		m.list.Select(0)
+		m.Key(tea.Key{Code: tea.KeyEnter})
+		m.list.Select(len(m.choices) - 2)
+		m.Key(tea.Key{Code: tea.KeyEnter})
+		return m
+	}
 	for _, tt := range []struct {
 		name string
 		m    func() *Model
-	}{{"first", first}, {"list", list}, {"signedout", signedOut}, {"blocked", block}, {"refused", refused}} {
+	}{{"first", first}, {"list", list}, {"signedout", signedOut}, {"blocked", block}, {"refused", refused}, {"remove", confirm}} {
 		for _, size := range []struct{ cols, rows int }{{80, 24}, {120, 40}} {
 			t.Run(fmt.Sprintf("%s_%dx%d", tt.name, size.cols, size.rows), func(t *testing.T) {
 				box, _, _ := tt.m().View(theme.Default(), size.cols, size.rows)
@@ -163,5 +171,75 @@ func TestFailureKeepsReason(t *testing.T) {
 	m.SetList(&api.RuntimeConnections{Connections: []api.RuntimeConnection{unknown}, State: "error", Message: "Sign-in refused."})
 	if text := viewText(m, 120, 40); !strings.Contains(text, "Sign-in refused.") || !strings.Contains(text, "did not answer") {
 		t.Fatalf("view lost the failure or the reason:\n%s", text)
+	}
+}
+
+// choose selects the row labeled label and presses Enter.
+func choose(t *testing.T, m *Model, label string) picker.Result {
+	t.Helper()
+	for i, c := range m.choices {
+		if c.label == label {
+			m.list.Select(i)
+			return m.Key(tea.Key{Code: tea.KeyEnter})
+		}
+	}
+	t.Fatalf("no choice %q in %q", label, labels(m))
+	return picker.Open
+}
+
+// TestAddKeyAsksForKeyFirst: adding an API key connection asks for the key
+// before anything is created. Esc creates nothing; Enter sends the key with
+// the create (#290).
+func TestAddKeyAsksForKeyFirst(t *testing.T) {
+	m := picked()
+	if got := choose(t, m, "Add: use an API key"); got != picker.Open || m.key == nil {
+		t.Fatalf("adding a key connection did not ask for the key: %v", got)
+	}
+	m.Key(tea.Key{Code: tea.KeyEscape})
+	if m.key != nil || m.Action().Kind != "" {
+		t.Fatal("Esc left the key field open or chose an action")
+	}
+	choose(t, m, "Add: use an API key")
+	m.Paste("sk-ant-new")
+	if got := m.Key(tea.Key{Code: tea.KeyEnter}); got != picker.Accepted {
+		t.Fatalf("submitting the key: %v", got)
+	}
+	if a := m.Action(); a.Kind != api.RuntimeCreate || a.Auth != "api-key" || a.Key != "sk-ant-new" {
+		t.Fatalf("action = %v (auth %q), want create with the key", a, a.Auth)
+	}
+	m.SetList(&api.RuntimeConnections{State: "error", Message: "Snow could not save the key."})
+	if m.key == nil || !strings.Contains(viewText(m, 120, 40), "could not save") {
+		t.Fatal("a refused key closed the field or hid why")
+	}
+}
+
+// TestRemoveAsksFirst: removing a connection asks before it acts, and
+// "Keep it" goes back without acting.
+func TestRemoveAsksFirst(t *testing.T) {
+	m := picked(ready)
+	open(t, m, 0)
+	if got := choose(t, m, "Remove connection"); got != picker.Open {
+		t.Fatalf("remove acted without asking: %v", got)
+	}
+	if m.choices[m.list.Selected()].label != "Keep it" {
+		t.Fatal("the question does not start on Keep it")
+	}
+	if !strings.Contains(viewText(m, 120, 40), "saved chats stay") {
+		t.Fatalf("the question does not say what stays:\n%s", viewText(m, 120, 40))
+	}
+	choose(t, m, "Keep it")
+	if got := labels(m); got[0] != "Use for this chat" {
+		t.Fatalf("Keep it did not go back: %q", got)
+	}
+	choose(t, m, "Remove connection")
+	if got := choose(t, m, "Remove"); got != picker.Accepted {
+		t.Fatalf("confirming remove: %v", got)
+	}
+	if a := m.Action(); a.Kind != api.RuntimeRemove || a.Connection != ready.ID {
+		t.Fatalf("action = %v, want remove %s", a, ready.ID)
+	}
+	m.SetList(&api.RuntimeConnections{Connections: []api.RuntimeConnection{}, State: "updated"})
+	if got := labels(m); got[0] != "Add: sign in with a Claude plan" {
+		t.Fatalf("after removal: %q", got)
 	}
 }
