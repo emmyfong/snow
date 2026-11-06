@@ -40,11 +40,51 @@ func (p Profile) CheckAuth(ctx context.Context, program shell.Profile, folder, k
 	}
 	status, err := parseAuthStatus(output.Bytes(), code, p)
 	if err != nil {
+		if supportErr := p.CheckSupport(ctx, program, folder, key); errors.Is(supportErr, ErrOutdated) {
+			return AuthStatus{}, supportErr
+		}
 		if said := lastLine(diagnostics.String(), key); said != "" {
 			return AuthStatus{}, fmt.Errorf("%w. Claude said: %s", err, said)
 		}
 	}
 	return status, err
+}
+
+// ErrOutdated means the selected Claude Code has no sign-in commands.
+var ErrOutdated = errors.New("outdated Claude Code")
+
+// CheckSupport asks the selected Claude Code whether it has the sign-in
+// commands Snow uses. It asks for their help rather than comparing version
+// numbers: an older Claude Code prints its general help instead.
+func (p Profile) CheckSupport(ctx context.Context, program shell.Profile, folder, key string) error {
+	help, err := p.probe(ctx, program, folder, key, "auth", "--help")
+	if err != nil {
+		return err
+	}
+	if strings.Contains(help, "claude auth") {
+		return nil
+	}
+	version, err := p.probe(ctx, program, folder, key, "--version")
+	if err != nil {
+		return errors.Join(fmt.Errorf("%w: this Claude Code has no sign-in commands. Run claude update, then try again", ErrOutdated), err)
+	}
+	version = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(version), "(Claude Code)"))
+	return fmt.Errorf("%w: Claude Code %s has no sign-in commands. Run claude update, then try again", ErrOutdated, version)
+}
+
+// probe runs Claude with args in this connection's environment and returns
+// what it printed.
+func (p Profile) probe(ctx context.Context, program shell.Profile, folder, key string, args ...string) (string, error) {
+	l, err := p.command(program, folder, key)
+	if err != nil {
+		return "", err
+	}
+	l.Args = append(l.Args, args...)
+	var out statusOutput
+	if _, err := p.finish(program, folder, l).RunIO(ctx, &out, &out); err != nil {
+		return "", err
+	}
+	return out.String(), nil
 }
 
 // keyLike matches text shaped like an Anthropic key, which a diagnostic

@@ -148,7 +148,12 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 		if err == nil || errors.Is(err, context.Canceled) || login.pane != 0 {
 			closeErr := err
 			status, message, err = s.runtimeLoginStatus(ctx, facts, request.Connection)
-			if err == nil && closeErr != nil && !errors.Is(closeErr, context.Canceled) {
+			var failed *signInFailed
+			switch {
+			case err != nil:
+			case errors.As(closeErr, &failed):
+				message = failed.Error()
+			case closeErr != nil && !errors.Is(closeErr, context.Canceled):
 				message += " The sign-in window did not close cleanly: " + closeErr.Error()
 			}
 		}

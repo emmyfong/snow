@@ -42,6 +42,7 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 		return
 	}
 	fixtureLog()
+	fixtureProbe(mode)
 	for _, argument := range os.Args {
 		if argument == "logout" {
 			err := os.Remove(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"))
@@ -72,6 +73,12 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			}
 			os.Exit(0)
 		}
+		if mode == "login-fail" && argument == "login" {
+			if _, err := fmt.Fprintln(os.Stdout, "OAuth error: fixture-login-broke"); err != nil {
+				os.Exit(2)
+			}
+			os.Exit(1)
+		}
 		if (mode == "login" || mode == "login-status-bad") && argument == "login" {
 			if _, err := fmt.Fprintln(os.Stdout, "Finish sign-in: private-login-code"); err != nil {
 				os.Exit(2)
@@ -94,7 +101,7 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			if os.Getenv("ANTHROPIC_API_KEY") != "" {
 				method = "api_key"
 			}
-			if mode == "login" || mode == "login-manual" {
+			if mode == "login" || mode == "login-manual" || mode == "login-fail" {
 				_, err := os.Stat(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"))
 				loggedIn = err == nil
 				if !loggedIn {
@@ -115,6 +122,34 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 	runtimetest.Conversation(mode)
 }
 
+// fixtureProbe answers Snow's question whether this Claude Code has its
+// sign-in commands. In mode old it acts like Claude Code 2.1.39, which has
+// none: it prints its general help, and refuses the auth options.
+func fixtureProbe(mode string) {
+	args := strings.Join(os.Args, " ")
+	var out string
+	switch {
+	case mode == "old" && strings.Contains(args, " --version"):
+		out = "2.1.39 (Claude Code)"
+	case strings.Contains(args, " auth --help"):
+		out = "Usage: claude auth [options] [command]"
+		if mode == "old" {
+			out = "Usage: claude [options] [command] [prompt]"
+		}
+	case mode == "old" && strings.Contains(args, " auth "):
+		if _, err := fmt.Fprintln(os.Stderr, "error: unknown option '--json'"); err != nil {
+			os.Exit(2)
+		}
+		os.Exit(1)
+	default:
+		return
+	}
+	if _, err := fmt.Fprintln(os.Stdout, out); err != nil {
+		os.Exit(2)
+	}
+	os.Exit(0)
+}
+
 // fixtureLogVar names a file where the fixture records each start: the
 // operation, the arguments, and the variables that choose a login.
 const fixtureLogVar = "SNOW_TEST_RUNTIME_LOG"
@@ -128,6 +163,9 @@ func fixtureLog() {
 	for _, argument := range os.Args {
 		if argument == "status" || argument == "login" || argument == "logout" {
 			op = argument
+		}
+		if argument == "--help" || argument == "--version" {
+			op = "probe"
 		}
 	}
 	line := fmt.Sprintf("%s config=%s key=%s oauth=%s args=%s\n", op, os.Getenv("CLAUDE_CONFIG_DIR"),

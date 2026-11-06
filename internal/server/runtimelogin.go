@@ -36,6 +36,11 @@ func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runt
 	if err != nil {
 		return err
 	}
+	// An outdated Claude would end its sign-in window at once, too fast to
+	// read, so it is refused with the update step before the window opens.
+	if err := profile.CheckSupport(login.ctx, program, facts.folder, ""); err != nil {
+		return err
+	}
 	launch, err := profile.AuthLaunch(program, facts.folder, "", "login")
 	if err != nil {
 		return err
@@ -101,6 +106,16 @@ func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runt
 	case <-login.ctx.Done():
 	case <-s.quit:
 	}
+	if code, known := terminal.ExitStatus(); known && code != 0 && login.ctx.Err() == nil {
+		// Claude ended with an error that it printed in the window. Closing
+		// the window would hide it, so it stays until the user closes it.
+		s.call(func(st *state) {
+			if st.runtimeLogins[connection.ID] == login {
+				delete(st.runtimeLogins, connection.ID)
+			}
+		})
+		return &signInFailed{code: code}
+	}
 	closeErr := terminal.Close()
 	s.call(func(st *state) {
 		if st.runtimeLogins[connection.ID] == login {
@@ -121,6 +136,15 @@ func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runt
 		}
 	})
 	return closeErr
+}
+
+// signInFailed is a sign-in whose window stays open because Claude ended
+// with an error that it printed there.
+type signInFailed struct{ code int }
+
+// Error says where the reason is.
+func (e *signInFailed) Error() string {
+	return fmt.Sprintf("Claude sign-in failed (exit status %d). Its window stays open so you can read why. Close it when you are done", e.code)
 }
 
 func (s *Server) cancelRuntimeLogin(connection string) error {

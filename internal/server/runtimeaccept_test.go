@@ -693,3 +693,53 @@ func TestLoginCancelBeforeFinish(t *testing.T) {
 		}
 	}
 }
+
+// TestOldClaudeSaysUpdate: a Claude Code without sign-in commands is named
+// with its version and an update step, in the status and when the user
+// signs in. No sign-in window opens for it.
+func TestOldClaudeSaysUpdate(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "old")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	id := r.create("subscription")
+	if got := r.status(id); got.Status != api.RuntimeStatusUnknown || !strings.Contains(got.Reason, "2.1.39") ||
+		!strings.Contains(got.Reason, "claude update") {
+		t.Fatalf("status = %+v, want unknown with the version and the update step", got)
+	}
+	response := r.do(api.RuntimeLogin, id, "", "")
+	if response.State != "error" || response.LoginPane != 0 || !strings.Contains(response.Message, "claude update") {
+		t.Fatalf("sign-in = %+v, want an error that says to update, and no window", response)
+	}
+}
+
+// TestFailedSignInKeepsWindow: a sign-in that fails keeps its window open,
+// so its error can be read, and says so. Closing the window removes it.
+func TestFailedSignInKeepsWindow(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login-fail")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	id := r.create("subscription")
+	r.c.Send(&api.RuntimeRequest{RequestID: "login", Pane: r.pane, Agent: r.agent, Action: api.RuntimeLogin, Connection: id})
+	opened := runtimeReply(t, r.c)
+	if opened.LoginPane == 0 {
+		t.Fatalf("sign-in did not open: %+v", opened)
+	}
+	var finished *api.RuntimeConnections
+	for finished == nil {
+		if response := runtimeReply(t, r.c); response.RequestID == "login" {
+			finished = response
+		}
+	}
+	if !strings.Contains(finished.Message, "stays open") {
+		t.Fatalf("notice = %q, want that the window stays open", finished.Message)
+	}
+	r.c.WaitScreen("fixture-login-broke")
+	r.c.Send(&api.Command{Op: api.OpZoom, Target: opened.LoginPane})
+	nextLayout(t, r.c, func(l *api.Layout) bool { _, shown := paneAgent(l, opened.LoginPane); return shown })
+	r.c.Send(&api.Command{Op: api.OpClose, Target: opened.LoginPane})
+	nextLayout(t, r.c, func(l *api.Layout) bool { _, shown := paneAgent(l, opened.LoginPane); return !shown })
+}
