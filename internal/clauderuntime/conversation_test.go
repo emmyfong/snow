@@ -258,3 +258,35 @@ func TestConversationModelSwitch(t *testing.T) {
 		t.Fatalf("after switch: %d starts, last %+v; want a restart with opus, high, on the same session", h.starts.Load(), got)
 	}
 }
+
+func TestConversationProtocolErrorPreservesKind(t *testing.T) {
+	h := newConversationHarness(t, "conversation-invalid")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "keep the original"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	for len(h.events) > 0 {
+		event := <-h.events
+		if event.Kind == api.ChatEventTurnEnded && event.Error != nil {
+			if event.Error.Code != api.ChatErrRuntimeProtocol {
+				t.Fatalf("protocol error became %q: %s", event.Error.Code, event.Error.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("missing terminal protocol error")
+}
+
+func TestStopParentStopsDescendants(t *testing.T) {
+	h := newConversationHarness(t, "conversation-children-background")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "work with child tasks"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 4 })
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputInterrupt})
+	stopped := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	if stopped.Running {
+		t.Fatal("parent stayed active after acknowledged cleanup")
+	}
+	for _, task := range stopped.Runtime.Tasks {
+		if !terminalTask(task.State) {
+			t.Fatalf("owned task not stopped: %+v", task)
+		}
+	}
+}

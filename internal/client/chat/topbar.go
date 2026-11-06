@@ -34,6 +34,12 @@ func (m *Model) barOptions() ui.TopBarOptions {
 	if m.snap.Mode != "" {
 		o.Mode = "mode: " + m.snap.Mode
 	}
+	if m.snap.Runtime != nil {
+		o.Mode = ""
+		if m.usage {
+			o.Gauge = "context unavailable"
+		}
+	}
 	u := m.snap.Usage
 	if !m.usage || u == nil {
 		return o
@@ -45,9 +51,15 @@ func (m *Model) barOptions() ui.TopBarOptions {
 	} else {
 		o.Gauge = "ctx " + ui.ShortCount(used) + " tok"
 	}
+	if m.snap.Runtime != nil {
+		o.Gauge = "main " + ui.ShortCount(used) + " tok"
+	}
 	switch {
 	case m.snap.Cost > 0 || u.Priced:
 		o.Cost = ui.Dollars(m.snap.Cost) + " est."
+		if m.snap.Runtime != nil {
+			o.Cost = ui.Dollars(m.snap.Cost) + " API est."
+		}
 	case u.Window > 0:
 		o.Cost = ui.ShortCount(used) + " tok"
 	}

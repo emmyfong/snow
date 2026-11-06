@@ -11,6 +11,9 @@ import (
 // askLogout asks the server for the current key state, then confirms
 // removing the key /logout would remove.
 func (m *Model) askLogout(id int) tea.Cmd {
+	if chooser, ok := m.own[id].(runtimeChooser); ok && chooser.RuntimeInfo() != nil {
+		return m.openRuntimePicker(id)
+	}
 	if _, ok := m.own[id].(modelChooser); !ok {
 		return m.ShowError("Logout works in chat panes.")
 	}

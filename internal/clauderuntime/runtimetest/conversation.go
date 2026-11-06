@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 )
 
 // Peer runs only in a real helper subprocess. Failed assertions use
@@ -70,6 +71,18 @@ func Conversation(mode string) {
 			if json.Unmarshal(message["request"], &request) != nil {
 				os.Exit(3)
 			}
+			if request["subtype"] == "stop_task" && mode == "conversation-children-gated" {
+				gate := os.Getenv("SNOW_TEST_STOP_GATE")
+				if err := os.WriteFile(gate+".entered", nil, 0o600); err != nil {
+					os.Exit(6)
+				}
+				for {
+					if _, err := os.Stat(gate); err == nil {
+						break
+					}
+					time.Sleep(time.Millisecond)
+				}
+			}
 			p.Ack(message)
 			if request["subtype"] == "stop_task" && mode != "conversation-children-unconfirmed" {
 				p.Write(map[string]any{"type": "system", "subtype": "task_updated", "task_id": request["task_id"],
@@ -77,6 +90,10 @@ func Conversation(mode string) {
 			}
 		case `"user"`:
 			turn++
+			if mode == "conversation-invalid" {
+				p.Write(map[string]any{"type": "control_response", "response": map[string]string{"subtype": "invalid", "request_id": "bad"}})
+				continue
+			}
 			p.Write(map[string]string{"type": "system", "subtype": "init", "session_id": "backend-session", "model": "test-model"})
 			p.Write(map[string]string{"type": "system", "subtype": "session_state_changed", "state": "running"})
 			if mode == "conversation-stop" {
@@ -84,9 +101,13 @@ func Conversation(mode string) {
 				continue
 			}
 			if strings.HasPrefix(mode, "conversation-children") {
-				for _, task := range []struct{ id, parent string }{{"child", ""}, {"grandchild", "child"}, {"sibling", ""}} {
+				tasks := []struct{ id, parent, kind string }{{"child", "", "local_agent"}, {"grandchild", "child", "local_agent"}, {"sibling", "", "local_agent"}}
+				if mode == "conversation-children-background" {
+					tasks = append(tasks, struct{ id, parent, kind string }{"background", "child", "local_bash"})
+				}
+				for _, task := range tasks {
 					p.Write(map[string]any{"type": "system", "subtype": "task_started", "task_id": task.id,
-						"parent_task_id": task.parent, "run_id": "run-1", "task_type": "local_agent", "description": task.id})
+						"parent_task_id": task.parent, "run_id": "run-1", "task_type": task.kind, "description": task.id})
 				}
 				continue
 			}

@@ -227,7 +227,11 @@ func (s *conversationState) loop() {
 			if !ok {
 				s.frames = nil
 				if s.stopped == nil {
-					s.stop(ErrClosed)
+					cause := ErrClosed
+					if client := s.worker.client.Load(); client != nil {
+						cause = errors.Join(cause, client.Err())
+					}
+					s.stop(cause)
 				}
 			} else if err := s.frame(frame); err != nil {
 				s.stop(err)
@@ -246,7 +250,7 @@ func (s *conversationState) loop() {
 			if errors.Is(err, ErrStop) {
 				s.stopUnconfirmed = true
 				s.finishAuthPause(err)
-				s.emit(api.ChatEvent{Kind: api.ChatEventError, Error: &api.ChatError{Code: api.ChatErrOther,
+				s.emit(api.ChatEvent{Kind: api.ChatEventError, Error: &api.ChatError{Code: api.ChatErrRuntimeStop,
 					Message: "Claude did not confirm all owned work stopped. Check its tasks in the selected environment before closing."}})
 				for _, reply := range s.closing {
 					reply <- err

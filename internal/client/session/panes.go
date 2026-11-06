@@ -205,6 +205,8 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 	m.sendListRequest(id)
 	if a, ok := p.(asker); ok {
 		switch a.Asked() {
+		case chat.AskRunControls:
+			return m.openRuntimeControls(id)
 		case chat.AskPickModel:
 			return m.openModelPicker(id)
 		case chat.AskLogin:

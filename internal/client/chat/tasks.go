@@ -18,6 +18,9 @@ const maxTaskRows = 12
 // counts what is done and names the task in progress, and, while the list
 // is open, a row per task. No list draws nothing.
 func (m *Model) taskRows() []string {
+	if m.snap.Runtime != nil && m.width > 0 {
+		return m.runtimeControlRows()
+	}
 	tasks := m.snap.Tasks
 	if len(tasks) == 0 || m.width <= 0 {
 		return nil
@@ -81,6 +84,10 @@ func withHint(row, hint string, width int) string {
 
 // toggleTasks opens or closes the task list.
 func (m *Model) toggleTasks() {
+	if m.snap.Runtime != nil {
+		m.asked = AskRunControls
+		return
+	}
 	if len(m.snap.Tasks) > 0 {
 		m.tasksOpen = !m.tasksOpen
 	}

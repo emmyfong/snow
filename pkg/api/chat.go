@@ -172,15 +172,19 @@ type ChatError struct {
 // Chat error codes. They mirror the typed provider errors; a client shows
 // an unknown code as ChatErrOther.
 const (
-	ChatErrSave           = "save" // the conversation file could not be written
-	ChatErrNoKey          = "no-key"
-	ChatErrBadKey         = "bad-key"
-	ChatErrModelNotFound  = "model-not-found"
-	ChatErrRateLimited    = "rate-limited"
-	ChatErrOverloaded     = "overloaded"
-	ChatErrContextTooLong = "context-too-long"
-	ChatErrNetwork        = "network"
-	ChatErrOther          = "other"
+	ChatErrSave              = "save" // the conversation file could not be written
+	ChatErrNoKey             = "no-key"
+	ChatErrBadKey            = "bad-key"
+	ChatErrModelNotFound     = "model-not-found"
+	ChatErrRateLimited       = "rate-limited"
+	ChatErrOverloaded        = "overloaded"
+	ChatErrContextTooLong    = "context-too-long"
+	ChatErrNetwork           = "network"
+	ChatErrOther             = "other"
+	ChatErrRuntimeConnection = "runtime-connection"
+	ChatErrRuntimeProtocol   = "runtime-protocol"
+	ChatErrRuntimeDelivery   = "runtime-delivery"
+	ChatErrRuntimeStop       = "runtime-stop"
 )
 
 // Choices after a chat error. The server never takes one by itself.

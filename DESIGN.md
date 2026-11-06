@@ -1,6 +1,6 @@
 # Snow: product and architecture
 
-Updated 2026-11-04. This document separates agreed product direction from the
+Updated 2026-11-06. This document separates agreed product direction from the
 current implementation and proposed designs. GitHub Issues define executable
 scope. A proposal here does not authorize implementation or promise a release.
 Contributor rules live in [AGENTS.md](AGENTS.md).
@@ -32,7 +32,9 @@ Snow owns its connections. A Snow connection must stay separate from the standal
 Signing in or out in Snow never changes the standalone login. Login, status, run
 and sign-out for one connection use one profile and one environment (Windows or one
 WSL distribution). Isolation needs a real test for each sign-in route and platform.
-It is not yet proven (#276).
+Snow-owned connection setup shipped in #276 (PR #291). Automated tests cover
+profile and environment selection. Live isolation evidence remains specific to
+the tested sign-in route, CLI version, and platform.
 
 The user chooses subscription sign-in or an API key. Snow shows the route and its
 billing, and never falls back from one route to the other. A subscription login
@@ -72,21 +74,24 @@ report success (#263).
 
 ## Current foundation
 
-The architecture inspection below covers code through PR #251. Profiles and
-local gateway startup subsequently merged in PR #253. They provide the foundation
-for the broader setup experience; they do not implement rich runtime-backed chat.
+The foundation includes profiles and local gateways from PR #253, workspace
+panes, and Snow-owned Claude Code connections from PR #291. Epic #260 completes
+the chat interaction and stop controls. Restart recovery remains #264.
 
 - One Go binary runs a local server and a Bubble Tea TUI. No cgo.
 - One goroutine owns server state. Blocking I/O runs outside it (ADR 0007).
 - `pkg/api` is the only public package. Clients receive snapshots and events.
-- `internal/server/chat.go` directly uses `agent.Conversation`. The direct-API
-  path already has tools, approvals, questions, tasks, and durable conversations.
+- The server uses a narrow conversation interface. Its direct-API implementation
+  uses `agent.Conversation`; the Claude implementation uses `internal/clauderuntime`.
+  Runtime transport and disk I/O stay outside the server state goroutine.
 - `internal/provider` streams model API responses. It is not an agent-runtime API.
 - `internal/claudecode` integrates CLI hooks/settings. `internal/mcp` exposes
-  Snow pane tools. Rich external-runtime chat is additional work.
+  Snow pane tools. `internal/clauderuntime` owns the structured Claude process,
+  event translation, request identity, draft queue, and supported controls.
 - `internal/store` saves workspace state. `internal/convstore` saves direct-API
-  conversation records. External runtime state cannot be recreated from visible
-  transcript text alone.
+  records and a separate runtime display journal with its opaque session binding.
+  The external runtime owns its model history. Snow never replays that journal
+  through the direct-API agent to recreate a backend session.
 - The agents board and needs-you inbox exist. Agent identity is currently tied
   to panes. A Claude Code agent can start in its own worktree and window, with
   an optional role (#207). Only the role's permission mode is enforced.
@@ -96,7 +101,8 @@ for the broader setup experience; they do not implement rich runtime-backed chat
   The existing login request can carry an API key once to the local server.
   Do not describe the current protocol as a named pipe or entirely key-free.
 - `internal/credential` `Store.Get` reads host environment variables before saved
-  keys. A connection needs its own lookup (#276).
+  keys. Runtime connections use the saved-only `GetStored` path, scoped to their
+  connection identity. This leaves direct-API credential behavior separate.
 
 ## Proposed ownership and boundaries
 
@@ -293,8 +299,8 @@ This document grants no new authentication entitlement. ADR 0013's gateway
 lifecycle remains the baseline; packaging and routing require separate decisions.
 
 Before affected implementation, resolve: account eligibility for a Snow that other
-people install; the Go transport to Claude Code (a long-running process with stream
-JSON is a candidate, untested); what removing a connection does to saved history;
+people install; CLI version compatibility and live runtime behavior; WSL process cleanup
+verification; any deletion of saved history beyond removing a connection;
 app exit, detach and connection loss; checkpoint coverage; permission guarantees;
 OmniRoute packaging; and v2 acceptance evidence. Before v3 implementation, resolve
 the client contract, client order, remote scope, transport and desktop shell. Keep

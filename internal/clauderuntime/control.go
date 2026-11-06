@@ -60,7 +60,7 @@ func (c *Client) Frames() <-chan Frame { return c.frames }
 // Done closes after protocol handling and process cleanup finish.
 func (c *Client) Done() <-chan struct{} { return c.done }
 
-// Err returns the terminal error after Done closes.
+// Err returns the terminal error after Done closes or Frames is exhausted.
 func (c *Client) Err() error { return c.err }
 
 // Initialize performs the handshake used by Claude's official SDK. The returned
