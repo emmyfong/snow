@@ -36,7 +36,7 @@ esac
 umask 077
 dir="$HOME/` + wslConfigBase + `/$id/claude"
 mkdir -p "$dir"
-for name in $(env | sed -n -e 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(ANTHROPIC[A-Za-z0-9_]*\)=.*/\1/p'); do
+for name in $(env | sed -n -e 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(ANTHROPIC[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(` + bedrockKey + `\)=.*/\1/p'); do
 	unset "$name"
 done
 for name in $(env | sed -n 's/^` + wslVar + `\([A-Za-z0-9_]*\)=.*/\1/p'); do

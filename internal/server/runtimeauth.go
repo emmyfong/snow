@@ -43,7 +43,11 @@ func (s *Server) changeRuntimeAuth(ctx context.Context, facts runtimeFacts, id s
 	if busy {
 		return errors.New("connection authentication is already being updated")
 	}
-	defer s.call(func(st *state) { delete(st.runtimeAuth, id) })
+	defer s.call(func(st *state) {
+		delete(st.runtimeAuth, id)
+		// Whatever the change did, the next start proves readiness again.
+		delete(st.runtimeReady, id)
+	})
 	var paused []*claudeConversation
 	defer func() {
 		resumeCtx, cancel := context.WithTimeout(context.Background(), authTimeout)
@@ -99,34 +103,50 @@ func (s *Server) logoutRuntime(ctx context.Context, facts runtimeFacts, connecti
 	return nil
 }
 
+// connectionStatus asks the connection's own Claude for its sign-in state.
+// It never sends a model request. A failure to find out leaves the status
+// unknown, with the reason, and is not an error of the whole operation.
 func (s *Server) connectionStatus(ctx context.Context, facts runtimeFacts, connection clauderuntime.Connection) (api.RuntimeConnection, error) {
 	info := api.RuntimeConnection{ID: connection.ID, Name: connection.Name, Auth: string(connection.Auth),
 		Environment: runtimeEnvironment(connection.Distro), Status: "unknown"}
+	if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
+		if errors.Is(err, clauderuntime.ErrPolicy) {
+			info.Status = "blocked"
+		}
+		info.Reason = err.Error()
+		return info, nil
+	}
 	profile, key, err := s.opts.Chat.Runtime.profile(connection)
 	if errors.Is(err, clauderuntime.ErrSignIn) {
 		info.Status = "signed-out"
 		return info, nil
 	}
 	if err != nil {
-		return info, err
+		info.Reason = err.Error()
+		return info, nil
 	}
 	if connection.Auth == clauderuntime.APIKey {
 		info.Status = "key-saved"
-		return info, nil
+	} else {
+		program, err := s.opts.Chat.Runtime.program(facts.host)
+		if err != nil {
+			info.Reason = err.Error()
+			return info, nil
+		}
+		statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		status, err := profile.CheckAuth(statusCtx, program, facts.folder, key)
+		if err != nil {
+			info.Reason = err.Error()
+			return info, nil
+		}
+		info.Status = "signed-out"
+		if status.SignedIn {
+			info.Status = "signed-in"
+		}
 	}
-	program, err := s.opts.Chat.Runtime.program(facts.host)
-	if err != nil {
-		return info, err
-	}
-	statusCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-	status, err := profile.CheckAuth(statusCtx, program, facts.folder, key)
-	if err != nil {
-		return info, err
-	}
-	info.Status = "signed-out"
-	if status.SignedIn {
-		info.Status = "signed-in"
+	if info.Status != "signed-out" {
+		s.call(func(st *state) { info.Ready = st.runtimeReady[connection.ID] })
 	}
 	return info, nil
 }

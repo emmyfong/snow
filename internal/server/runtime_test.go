@@ -24,10 +24,11 @@ func runtimeOptions(t *testing.T, mode string) *RuntimeOptions {
 	if err != nil {
 		t.Fatal(err)
 	}
+	policy := t.TempDir()
 	return &RuntimeOptions{Root: t.TempDir(), Program: func(shell.Profile) (shell.Profile, error) {
 		return shell.Profile{Kind: shell.KindClaude, Path: executable,
 			Args: []string{"-test.run=^TestClaudeRuntimeFixture$", "--", "fixture-mode=" + mode}}, nil
-	}}
+	}, PolicyDir: func(string) string { return policy }}
 }
 
 func TestClaudeRuntimeFixture(_ *testing.T) {
@@ -40,7 +41,21 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 	if mode == "" {
 		return
 	}
+	fixtureLog()
 	for _, argument := range os.Args {
+		if argument == "logout" {
+			err := os.Remove(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"))
+			if err != nil && !os.IsNotExist(err) {
+				os.Exit(2)
+			}
+			os.Exit(0)
+		}
+		if mode == "status-bad" && argument == "status" {
+			if _, err := fmt.Fprintln(os.Stdout, `{"loggedIn":true,"authMethod":"claude.ai","configDirectory":"/not/this/connection"}`); err != nil {
+				os.Exit(2)
+			}
+			os.Exit(0)
+		}
 		if mode == "login" && argument == "login" {
 			if _, err := fmt.Fprintln(os.Stdout, "Finish sign-in: private-login-code"); err != nil {
 				os.Exit(2)
@@ -55,6 +70,9 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 		}
 		if argument == "status" {
 			loggedIn, method := true, "claude.ai"
+			if os.Getenv("ANTHROPIC_API_KEY") != "" {
+				method = "api_key"
+			}
 			if mode == "login" {
 				_, err := os.Stat(filepath.Join(os.Getenv("CLAUDE_CONFIG_DIR"), "fixture-signed-in"))
 				loggedIn = err == nil
@@ -74,6 +92,35 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 		}
 	}
 	runtimetest.Conversation(mode)
+}
+
+// fixtureLogVar names a file where the fixture records each start: the
+// operation, the arguments, and the variables that choose a login.
+const fixtureLogVar = "SNOW_TEST_RUNTIME_LOG"
+
+func fixtureLog() {
+	path := os.Getenv(fixtureLogVar)
+	if path == "" {
+		return
+	}
+	op := "chat"
+	for _, argument := range os.Args {
+		if argument == "status" || argument == "login" || argument == "logout" {
+			op = argument
+		}
+	}
+	line := fmt.Sprintf("%s config=%s key=%s oauth=%s args=%s\n", op, os.Getenv("CLAUDE_CONFIG_DIR"),
+		os.Getenv("ANTHROPIC_API_KEY"), os.Getenv("CLAUDE_CODE_OAUTH_TOKEN"), strings.Join(os.Args[1:], " "))
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
+	if err != nil {
+		os.Exit(2)
+	}
+	if _, err := f.WriteString(line); err != nil {
+		os.Exit(2)
+	}
+	if err := f.Close(); err != nil {
+		os.Exit(2)
+	}
 }
 
 func runtimeReply(t *testing.T, c *apitest.Client) *api.RuntimeConnections {

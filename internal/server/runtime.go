@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 
 	"github.com/emmyfong/snow/internal/clauderuntime"
 	"github.com/emmyfong/snow/internal/credential"
@@ -101,15 +102,20 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 	switch request.Action {
 	case api.RuntimeList:
 	case api.RuntimeCreate:
-		var connection clauderuntime.Connection
-		connection, err = clauderuntime.CreateConnection(s.opts.Chat.Runtime.Root, facts.host.Distro, clauderuntime.AuthMode(request.Auth))
-		selected = connection.ID
+		if err = s.opts.Chat.Runtime.policy(facts.host.Distro, clauderuntime.AuthMode(request.Auth)); err == nil {
+			var connection clauderuntime.Connection
+			connection, err = clauderuntime.CreateConnection(s.opts.Chat.Runtime.Root, facts.host.Distro, clauderuntime.AuthMode(request.Auth))
+			selected = connection.ID
+		}
 	case api.RuntimeUse:
 		responseAgent, err = s.useRuntime(c, request.Pane, facts, request.Connection)
 	case api.RuntimeSaveKey:
 		err = s.changeRuntimeAuth(ctx, facts, request.Connection, func(connection clauderuntime.Connection) error {
 			if connection.Auth != clauderuntime.APIKey || s.opts.Chat.Runtime.Keys == nil {
 				return clauderuntime.ErrCredential
+			}
+			if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
+				return err
 			}
 			var key credential.Key
 			key, err = credential.NewKey(request.Key)
@@ -184,7 +190,8 @@ func (s *Server) runtimeConnection(facts runtimeFacts, id string) (clauderuntime
 }
 
 func (s *Server) runtimeConnectionList(facts runtimeFacts, pane int, selected string) *api.RuntimeConnections {
-	response := &api.RuntimeConnections{Pane: pane, Agent: facts.snapshot.Agent, Selected: selected, Connections: []api.RuntimeConnection{}}
+	response := &api.RuntimeConnections{Pane: pane, Agent: facts.snapshot.Agent, Selected: selected, Connections: []api.RuntimeConnection{},
+		Ignored: clauderuntime.IgnoredHostVars(os.Environ())}
 	connections, err := clauderuntime.ListConnections(s.opts.Chat.Runtime.Root, facts.host.Distro)
 	if err != nil {
 		response.State, response.Message = "error", err.Error()

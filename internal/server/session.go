@@ -44,6 +44,7 @@ type state struct {
 	marks         commitMarks
 	runtimeAuth   map[string]bool // connection authentication operation in progress
 	runtimeLogins map[string]*runtimeLogin
+	runtimeReady  map[string]bool // a runtime started since the last sign-in change
 }
 
 type session struct {

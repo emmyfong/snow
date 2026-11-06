@@ -25,6 +25,9 @@ func (s *Server) loginRuntime(c *client, request *api.RuntimeRequest, facts runt
 	if connection.Auth != clauderuntime.Subscription {
 		return clauderuntime.ErrCredential
 	}
+	if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
+		return err
+	}
 	program, err := s.opts.Chat.Runtime.program(facts.host)
 	if err != nil {
 		return err

@@ -95,8 +95,14 @@ type RuntimeConnection struct {
 	Name        string `json:"name"`
 	Auth        string `json:"auth"`
 	Environment string `json:"environment"`
-	Status      string `json:"status"` // unknown, signed-out, signed-in, or key-saved
-	Reason      string `json:"reason,omitempty"`
+	// Status is unknown, signed-out, signed-in, key-saved, or blocked (by
+	// the organization's managed policy). Unknown is never shown as
+	// signed out.
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	// Ready means a runtime started on this connection since its last
+	// sign-in change. Signed in alone does not prove the runtime works.
+	Ready bool `json:"ready,omitempty"`
 }
 
 // RuntimeConnections answers a connection operation. LoginPane names an
@@ -110,6 +116,9 @@ type RuntimeConnections struct {
 	State       string              `json:"state,omitempty"`
 	Message     string              `json:"message,omitempty"`
 	LoginPane   int                 `json:"loginPane,omitempty"`
+	// Ignored names host variables, such as ANTHROPIC_API_KEY, that Snow
+	// keeps from every connection. They never choose a route.
+	Ignored []string `json:"ignored,omitempty"`
 }
 
 // Type implements Message.

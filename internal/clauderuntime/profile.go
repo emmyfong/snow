@@ -138,5 +138,30 @@ func (p Profile) Launch(l shell.Launch, inherited []string, key string) (shell.L
 
 func connectionVar(name string) bool {
 	name = strings.ToUpper(name)
-	return name == "CLAUDECODE" || strings.HasPrefix(name, "CLAUDE_") || strings.HasPrefix(name, "ANTHROPIC_")
+	return name == "CLAUDECODE" || strings.HasPrefix(name, "CLAUDE_") || strings.HasPrefix(name, "ANTHROPIC_") ||
+		name == bedrockKey
+}
+
+// bedrockKey is the Amazon Bedrock gateway's key. The gateway switches start
+// with CLAUDE_, but this key does not.
+const bedrockKey = "AWS_BEARER_TOKEN_BEDROCK"
+
+// hostAuthVars are inherited variables that would choose a route, a key, or
+// a gateway in a standalone Claude. Snow keeps them from every connection
+// and names the ones it finds, so the user knows they have no effect.
+var hostAuthVars = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
+	"ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+	bedrockKey, "CLAUDE_CONFIG_DIR"}
+
+// IgnoredHostVars returns the names in hostAuthVars that environ sets.
+func IgnoredHostVars(environ []string) []string {
+	var found []string
+	for _, entry := range environ {
+		name, value, _ := strings.Cut(entry, "=")
+		if value != "" && slices.ContainsFunc(hostAuthVars, func(v string) bool { return strings.EqualFold(v, name) }) {
+			found = append(found, strings.ToUpper(name))
+		}
+	}
+	slices.Sort(found)
+	return slices.Compact(found)
 }

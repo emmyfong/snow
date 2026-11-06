@@ -21,6 +21,22 @@ type RuntimeOptions struct {
 	// Program optionally resolves the installed external executable. Tests use
 	// a real subprocess protocol fixture; normal builds use shell.FindClaude.
 	Program func(shell.Profile) (shell.Profile, error)
+	// PolicyDir optionally replaces the managed settings folder of an
+	// environment. Tests use it; normal builds read the system folder.
+	PolicyDir func(distro string) string
+}
+
+// policy refuses a route that the environment's managed policy rules out.
+func (o *RuntimeOptions) policy(distro string, auth clauderuntime.AuthMode) error {
+	dir := clauderuntime.PolicyDir(distro)
+	if o.PolicyDir != nil {
+		dir = o.PolicyDir(distro)
+	}
+	p, err := clauderuntime.ReadPolicy(dir)
+	if err != nil {
+		return err
+	}
+	return p.Check(auth)
 }
 
 func (o *RuntimeOptions) program(host shell.Profile) (shell.Profile, error) {
@@ -64,6 +80,9 @@ func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Conn
 	if err != nil {
 		return nil, err
 	}
+	if err := options.policy(connection.Distro, connection.Auth); err != nil {
+		return nil, err
+	}
 	profile, key, err := options.profile(connection)
 	if err != nil {
 		return nil, err
@@ -87,5 +106,14 @@ func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Conn
 		return nil, err
 	}
 	launch.Hide = append(launch.Hide, s.opts.Chat.HideEnv...)
-	return clauderuntime.Connect(ctx, launch)
+	client, err := clauderuntime.Connect(ctx, launch)
+	if err == nil {
+		s.send(func(st *state) {
+			if st.runtimeReady == nil {
+				st.runtimeReady = map[string]bool{}
+			}
+			st.runtimeReady[connection.ID] = true
+		})
+	}
+	return client, err
 }

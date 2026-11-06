@@ -15,6 +15,9 @@ func (s *Server) useRuntime(c *client, pane int, facts runtimeFacts, id string) 
 	if err != nil {
 		return "", err
 	}
+	if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
+		return "", err
+	}
 	if facts.snapshot.Runtime != nil && facts.snapshot.Runtime.Connection == id {
 		return facts.snapshot.Agent, nil
 	}
