@@ -59,7 +59,8 @@ func (o *RuntimeOptions) profile(connection clauderuntime.Connection) (clauderun
 		return profile, "", nil
 	}
 	if o.Keys == nil {
-		return clauderuntime.Profile{}, "", clauderuntime.ErrSignIn
+		// Without a store Snow cannot tell whether a key was saved.
+		return clauderuntime.Profile{}, "", fmt.Errorf("%w: no credential store is available", clauderuntime.ErrCredential)
 	}
 	key, _, err := o.Keys.GetStored(profile.CredentialID())
 	if err != nil {
@@ -75,6 +76,11 @@ func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Conn
 	options := s.opts.Chat.Runtime
 	if connection.Distro != host.Distro {
 		return nil, fmt.Errorf("%w: connection belongs to a different runtime environment", clauderuntime.ErrProfile)
+	}
+	changing := false
+	s.call(func(st *state) { changing = st.runtimeAuth[connection.ID] })
+	if changing {
+		return nil, errAuthChanging
 	}
 	program, err := options.program(host)
 	if err != nil {

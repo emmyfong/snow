@@ -21,6 +21,7 @@ type runtimeFacts struct {
 
 func (s *Server) runtimeFacts(c *client, pane int, agent string) (runtimeFacts, error) {
 	var facts runtimeFacts
+	found := true
 	s.call(func(st *state) {
 		p := st.paneOf(c, pane)
 		if p == nil || p.chat == nil || p.chat.snap.Agent != agent {
@@ -29,11 +30,16 @@ func (s *Server) runtimeFacts(c *client, pane int, agent string) (runtimeFacts, 
 		facts.conversation, facts.snapshot = p.chat.conv, p.chat.snap
 		facts.folder, facts.profile = p.chat.folder, p.chat.profile
 		if s.launch.shell != nil {
-			facts.host, _ = s.launch.shell(p.profile)
+			facts.host, found = s.launch.shell(p.profile)
 		}
 	})
 	if facts.conversation == nil {
 		return runtimeFacts{}, errors.New("the chat changed before the connection request arrived")
+	}
+	if !found {
+		// A zero host is this machine. Using it for a chat whose shell is
+		// gone would move a WSL chat to another environment's login.
+		return runtimeFacts{}, fmt.Errorf("%w: this chat's shell profile %q no longer exists", clauderuntime.ErrProfile, facts.profile)
 	}
 	return facts, nil
 }
@@ -117,10 +123,9 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 			if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
 				return err
 			}
-			var key credential.Key
-			key, err = credential.NewKey(request.Key)
-			if err != nil {
-				return err
+			key, keyErr := credential.NewKey(request.Key)
+			if keyErr != nil {
+				return keyErr
 			}
 			profile, profileErr := clauderuntime.ProfileFor(s.opts.Chat.Runtime.Root, connection)
 			if profileErr != nil {
@@ -138,8 +143,14 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 		err = s.changeRuntimeAuth(ctx, facts, request.Connection, func(connection clauderuntime.Connection) error {
 			return s.loginRuntime(c, request, facts, connection, login)
 		})
-		if err == nil || errors.Is(err, context.Canceled) {
+		// Once the window opened, the sign-in may have changed even if the
+		// window then failed to close, so the state is read again.
+		if err == nil || errors.Is(err, context.Canceled) || login.pane != 0 {
+			closeErr := err
 			status, message, err = s.runtimeLoginStatus(ctx, facts, request.Connection)
+			if err == nil && closeErr != nil && !errors.Is(closeErr, context.Canceled) {
+				message += " The sign-in window did not close cleanly: " + closeErr.Error()
+			}
 		}
 	case api.RuntimeCancelLogin:
 		if _, connectionErr := s.runtimeConnection(facts, request.Connection); connectionErr != nil {
@@ -190,8 +201,11 @@ func (s *Server) runtimeConnection(facts runtimeFacts, id string) (clauderuntime
 }
 
 func (s *Server) runtimeConnectionList(facts runtimeFacts, pane int, selected string) *api.RuntimeConnections {
-	response := &api.RuntimeConnections{Pane: pane, Agent: facts.snapshot.Agent, Selected: selected, Connections: []api.RuntimeConnection{},
-		Ignored: clauderuntime.IgnoredHostVars(os.Environ())}
+	response := &api.RuntimeConnections{Pane: pane, Agent: facts.snapshot.Agent, Selected: selected, Connections: []api.RuntimeConnection{}}
+	if facts.host.Distro == "" {
+		// A distribution has its own environment, which Snow cannot read here.
+		response.Ignored = clauderuntime.IgnoredHostVars(os.Environ())
+	}
 	connections, unreadable, err := clauderuntime.ListConnections(s.opts.Chat.Runtime.Root, facts.host.Distro)
 	if err != nil {
 		response.State, response.Message = "error", err.Error()
@@ -199,11 +213,11 @@ func (s *Server) runtimeConnectionList(facts runtimeFacts, pane int, selected st
 	}
 	for _, connection := range connections {
 		response.Connections = append(response.Connections, api.RuntimeConnection{ID: connection.ID, Name: connection.Name,
-			Auth: string(connection.Auth), Environment: runtimeEnvironment(connection.Distro), Status: "unknown"})
+			Auth: string(connection.Auth), Environment: runtimeEnvironment(connection.Distro), Status: api.RuntimeStatusUnknown})
 	}
 	for _, broken := range unreadable {
 		response.Connections = append(response.Connections, api.RuntimeConnection{ID: broken.ID, Name: "Claude Code",
-			Environment: "unknown", Status: "unknown", Reason: "Snow cannot read this connection's saved settings: " + broken.Err.Error()})
+			Environment: "unknown", Status: api.RuntimeStatusUnknown, Reason: "Snow cannot read this connection's saved settings: " + broken.Err.Error()})
 	}
 	return response
 }

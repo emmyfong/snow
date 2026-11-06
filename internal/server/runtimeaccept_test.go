@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -552,5 +554,93 @@ func TestStatusIgnoresDiagnostics(t *testing.T) {
 	r := newRuntimeChat(t, server)
 	if got := r.status(connection.ID); got.Status != "signed-in" {
 		t.Fatalf("status = %+v, want signed in despite the warning", got)
+	}
+}
+
+// TestSignInNoticeTellsRealState: when the sign-in view closes and Snow
+// cannot check the state, the notice says so and never says signed out.
+func TestSignInNoticeTellsRealState(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login-status-bad")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	finished := r.signIn(r.create("subscription"))
+	if strings.Contains(finished.Message, "signed out") || !strings.Contains(finished.Message, "could not check") {
+		t.Fatalf("notice = %q, want that Snow could not check the state", finished.Message)
+	}
+}
+
+// TestMissingShellIsNotThisMachine: a chat whose shell profile is gone is
+// refused, not moved to this machine's connections.
+func TestMissingShellIsNotThisMachine(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	server.launch.shell = func(string) (shell.Profile, bool) { return shell.Profile{}, false }
+	r.c.Send(&api.RuntimeRequest{RequestID: "list", Pane: r.pane, Agent: r.agent, Action: api.RuntimeList})
+	if e := nextError(t, r.c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "no longer exists") {
+		t.Fatalf("list for a chat with no shell: %+v", e)
+	}
+}
+
+// TestNoStartDuringSignInChange: a chat that starts its runtime while the
+// connection's sign-in changes, such as one restored at that moment, is
+// refused instead of running on a half-changed login.
+func TestNoStartDuringSignInChange(t *testing.T) {
+	log := useFixtureLog(t)
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	connection, err := clauderuntime.CreateConnection(options.Chat.Runtime.Root, "", clauderuntime.Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := New(options)
+	t.Cleanup(server.Close)
+	server.call(func(st *state) { st.runtimeAuth = map[string]bool{connection.ID: true} })
+	if _, err := server.startRuntime(context.Background(), connection, shell.Profile{}, t.TempDir(), "", 1); !errors.Is(err, errAuthChanging) {
+		t.Fatalf("start during a sign-in change: %v", err)
+	}
+	if lines := readFixtureLog(t, log); len(lines) != 0 {
+		t.Fatalf("runtime ran during the change: %q", lines)
+	}
+}
+
+// TestIgnoredVarsOnlyForThisMachine: the host variables Snow ignores are
+// this machine's. A WSL chat does not list them: the distribution has its
+// own environment, which the launch script clears.
+func TestIgnoredVarsOnlyForThisMachine(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "host-key")
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	if response := r.do(api.RuntimeList, "", "", ""); !slices.Contains(response.Ignored, "ANTHROPIC_API_KEY") {
+		t.Fatalf("this machine: ignored = %q", response.Ignored)
+	}
+	server.launch.shell = func(string) (shell.Profile, bool) { return shell.Profile{Distro: "Ubuntu"}, true }
+	if response := r.do(api.RuntimeList, "", "", ""); len(response.Ignored) != 0 {
+		t.Fatalf("WSL: ignored = %q, want none", response.Ignored)
+	}
+}
+
+// TestNoKeyStoreIsUnknown: with no credential store, Snow cannot tell
+// whether an API-key connection has a key, so it shows unknown.
+func TestNoKeyStoreIsUnknown(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	options.Chat.Runtime.Keys = nil
+	connection, err := clauderuntime.CreateConnection(options.Chat.Runtime.Root, "", clauderuntime.APIKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	if got := r.status(connection.ID); got.Status != api.RuntimeStatusUnknown || got.Reason == "" {
+		t.Fatalf("status = %+v, want unknown with a reason", got)
 	}
 }

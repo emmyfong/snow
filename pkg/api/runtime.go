@@ -95,9 +95,8 @@ type RuntimeConnection struct {
 	Name        string `json:"name"`
 	Auth        string `json:"auth"`
 	Environment string `json:"environment"`
-	// Status is unknown, signed-out, signed-in, key-saved, or blocked (by
-	// the organization's managed policy). Unknown is never shown as
-	// signed out.
+	// Status is one of the RuntimeStatus* values. Unknown is never shown
+	// as signed out.
 	Status string `json:"status"`
 	Reason string `json:"reason,omitempty"`
 	// Ready means a runtime started on this connection since its last
@@ -116,8 +115,9 @@ type RuntimeConnections struct {
 	State       string              `json:"state,omitempty"`
 	Message     string              `json:"message,omitempty"`
 	LoginPane   int                 `json:"loginPane,omitempty"`
-	// Ignored names host variables, such as ANTHROPIC_API_KEY, that Snow
-	// keeps from every connection. They never choose a route.
+	// Ignored names this machine's variables, such as ANTHROPIC_API_KEY,
+	// that Snow keeps from every connection. They never choose a route.
+	// It is empty for a WSL chat, whose distribution has its own.
 	Ignored []string `json:"ignored,omitempty"`
 }
 
@@ -128,3 +128,12 @@ func (*RuntimeRequest) message()      {}
 // Type implements Message.
 func (*RuntimeConnections) Type() MsgType { return TypeRuntimeConnections }
 func (*RuntimeConnections) message()      {}
+
+// The sign-in states of a RuntimeConnection.
+const (
+	RuntimeStatusUnknown   = "unknown"    // Snow could not learn the state; Reason says why
+	RuntimeStatusSignedOut = "signed-out" // no sign-in, or no saved key for an API-key connection
+	RuntimeStatusSignedIn  = "signed-in"
+	RuntimeStatusKeySaved  = "key-saved"
+	RuntimeStatusBlocked   = "blocked" // the organization's managed policy refuses this route
+)

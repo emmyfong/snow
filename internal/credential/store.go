@@ -144,7 +144,7 @@ func (s *Store) GetStored(provider string) (Key, Source, error) {
 		}
 		return k, SourceFile, nil
 	}
-	return Key{}, 0, fmt.Errorf("%w for %s; set %s", ErrNoKey, provider, EnvVar(provider))
+	return Key{}, 0, fmt.Errorf("%w for %s", ErrNoKey, provider)
 }
 
 // APIKey returns provider's key value, for providers that read keys

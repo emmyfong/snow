@@ -2,6 +2,7 @@ package credential
 
 import (
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -17,8 +18,10 @@ func TestStoredKeyIgnoresEnvironment(t *testing.T) {
 			o := newFakeOS()
 			o.broken = !tc.os
 			s := newStore(env(map[string]string{"ANTHROPIC_API_KEY": "machine-key"}), o, t.TempDir(), nil)
-			if _, _, err := s.GetStored("anthropic"); !errors.Is(err, ErrNoKey) {
-				t.Fatalf("unsaved connection: %v, want ErrNoKey", err)
+			if _, _, err := s.GetStored("anthropic"); !errors.Is(err, ErrNoKey) || strings.Contains(err.Error(), "ANTHROPIC_API_KEY") {
+				// The environment never supplies a stored key, so the
+				// error must not tell the user to set it there.
+				t.Fatalf("unsaved connection: %v, want ErrNoKey with no variable hint", err)
 			}
 			if _, err := s.Set("anthropic", mustKey(t, "snow-key")); err != nil {
 				t.Fatal(err)

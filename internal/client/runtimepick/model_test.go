@@ -152,3 +152,16 @@ func TestPickerGolden(t *testing.T) {
 		}
 	}
 }
+
+// TestFailureKeepsReason: after a refused operation the failure shows, and
+// the connection's own reason stays visible beside it.
+func TestFailureKeepsReason(t *testing.T) {
+	unknown := api.RuntimeConnection{ID: "u2vb6t1yno", Name: "Claude Code", Auth: "subscription", Environment: "This machine",
+		Status: "unknown", Reason: "claude did not answer"}
+	m := picked(unknown)
+	open(t, m, 0)
+	m.SetList(&api.RuntimeConnections{Connections: []api.RuntimeConnection{unknown}, State: "error", Message: "Sign-in refused."})
+	if text := viewText(m, 120, 40); !strings.Contains(text, "Sign-in refused.") || !strings.Contains(text, "did not answer") {
+		t.Fatalf("view lost the failure or the reason:\n%s", text)
+	}
+}

@@ -146,9 +146,16 @@ func (s *Server) runtimeLoginStatus(ctx context.Context, facts runtimeFacts, id 
 	if err != nil {
 		return nil, "", err
 	}
-	message := "Sign-in view closed. The selected Snow connection is signed out."
-	if info.Status == "signed-in" {
+	var message string
+	switch info.Status {
+	case api.RuntimeStatusSignedIn:
 		message = "The selected Snow connection is signed in. No task was started."
+	case api.RuntimeStatusSignedOut:
+		message = "Sign-in view closed. The selected Snow connection is signed out."
+	case api.RuntimeStatusBlocked:
+		message = "Sign-in view closed. " + info.Reason
+	default:
+		message = "Sign-in view closed. Snow could not check the sign-in state: " + info.Reason
 	}
 	return &info, message, nil
 }

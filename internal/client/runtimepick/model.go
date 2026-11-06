@@ -133,7 +133,7 @@ func (m *Model) rebuildActions(connection api.RuntimeConnection) {
 	}
 	m.list.SetDetail(m.withFailure(detail))
 	id := connection.ID
-	if connection.Status != "blocked" {
+	if connection.Status != api.RuntimeStatusBlocked {
 		m.choices = append(m.choices, choice{label: "Use for this chat", hint: "No task starts", action: Action{Kind: api.RuntimeUse, Connection: id}})
 		if connection.Auth == "api-key" {
 			m.choices = append(m.choices, choice{label: "Enter an API key", hint: "Saved for this connection only", action: Action{Kind: "key", Connection: id}})
@@ -151,11 +151,13 @@ func (m *Model) rebuildActions(connection api.RuntimeConnection) {
 		choice{label: "Back to connections", action: Action{Kind: "back"}})
 }
 
+// withFailure puts the last failure before detail, so the connection's own
+// reason stays visible after a refused operation.
 func (m *Model) withFailure(detail string) string {
 	if m.failure == "" {
 		return detail
 	}
-	return m.failure
+	return m.failure + " " + detail
 }
 
 func name(c api.RuntimeConnection) string {
@@ -174,22 +176,22 @@ func billing(auth string) string {
 // ready needs a runtime that started. Unknown never reads as signed out.
 func statusText(c api.RuntimeConnection) string {
 	switch c.Status {
-	case "signed-in":
+	case api.RuntimeStatusSignedIn:
 		if c.Ready {
 			return "Signed in, ready"
 		}
 		return "Signed in"
-	case "key-saved":
+	case api.RuntimeStatusKeySaved:
 		if c.Ready {
 			return "Key saved, ready"
 		}
 		return "Key saved"
-	case "signed-out":
+	case api.RuntimeStatusSignedOut:
 		if c.Auth == "api-key" {
 			return "No key saved"
 		}
 		return "Signed out"
-	case "blocked":
+	case api.RuntimeStatusBlocked:
 		return "Blocked by policy"
 	}
 	if c.Reason != "" {

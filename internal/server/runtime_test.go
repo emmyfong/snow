@@ -50,7 +50,7 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			}
 			os.Exit(0)
 		}
-		if mode == "status-bad" && argument == "status" {
+		if (mode == "status-bad" || mode == "login-status-bad") && argument == "status" {
 			if _, err := fmt.Fprintln(os.Stdout, `{"loggedIn":true,"authMethod":"claude.ai","configDirectory":"/not/this/connection"}`); err != nil {
 				os.Exit(2)
 			}
@@ -72,7 +72,7 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			}
 			os.Exit(0)
 		}
-		if mode == "login" && argument == "login" {
+		if (mode == "login" || mode == "login-status-bad") && argument == "login" {
 			if _, err := fmt.Fprintln(os.Stdout, "Finish sign-in: private-login-code"); err != nil {
 				os.Exit(2)
 			}

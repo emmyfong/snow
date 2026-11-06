@@ -11,6 +11,11 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
+// errAuthChanging refuses a runtime start while its connection's sign-in
+// changes. Chats open at the change are paused; this covers one that starts
+// during it, such as a chat restored at that moment.
+var errAuthChanging = errors.New("this connection's sign-in is changing. Send again when it finishes")
+
 func (s *Server) changeRuntimeAuth(ctx context.Context, facts runtimeFacts, id string, change func(clauderuntime.Connection) error) error {
 	connection, err := s.runtimeConnection(facts, id)
 	if err != nil {
@@ -108,17 +113,17 @@ func (s *Server) logoutRuntime(ctx context.Context, facts runtimeFacts, connecti
 // unknown, with the reason, and is not an error of the whole operation.
 func (s *Server) connectionStatus(ctx context.Context, facts runtimeFacts, connection clauderuntime.Connection) (api.RuntimeConnection, error) {
 	info := api.RuntimeConnection{ID: connection.ID, Name: connection.Name, Auth: string(connection.Auth),
-		Environment: runtimeEnvironment(connection.Distro), Status: "unknown"}
+		Environment: runtimeEnvironment(connection.Distro), Status: api.RuntimeStatusUnknown}
 	if err := s.opts.Chat.Runtime.policy(connection.Distro, connection.Auth); err != nil {
 		if errors.Is(err, clauderuntime.ErrPolicy) {
-			info.Status = "blocked"
+			info.Status = api.RuntimeStatusBlocked
 		}
 		info.Reason = err.Error()
 		return info, nil
 	}
 	profile, key, err := s.opts.Chat.Runtime.profile(connection)
 	if errors.Is(err, clauderuntime.ErrSignIn) {
-		info.Status = "signed-out"
+		info.Status = api.RuntimeStatusSignedOut
 		return info, nil
 	}
 	if err != nil {
@@ -126,7 +131,7 @@ func (s *Server) connectionStatus(ctx context.Context, facts runtimeFacts, conne
 		return info, nil
 	}
 	if connection.Auth == clauderuntime.APIKey {
-		info.Status = "key-saved"
+		info.Status = api.RuntimeStatusKeySaved
 	} else {
 		program, err := s.opts.Chat.Runtime.program(facts.host)
 		if err != nil {
@@ -140,12 +145,12 @@ func (s *Server) connectionStatus(ctx context.Context, facts runtimeFacts, conne
 			info.Reason = err.Error()
 			return info, nil
 		}
-		info.Status = "signed-out"
+		info.Status = api.RuntimeStatusSignedOut
 		if status.SignedIn {
-			info.Status = "signed-in"
+			info.Status = api.RuntimeStatusSignedIn
 		}
 	}
-	if info.Status != "signed-out" {
+	if info.Status != api.RuntimeStatusSignedOut {
 		s.call(func(st *state) { info.Ready = st.runtimeReady[connection.ID] })
 	}
 	return info, nil
