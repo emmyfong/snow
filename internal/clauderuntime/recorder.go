@@ -17,7 +17,16 @@ type recorder struct {
 	failed chan error
 	done   chan struct{}
 	err    error // read after done closes
+	// text holds streamed text not yet queued. A reply arrives in hundreds
+	// of small pieces a second, more than the queue holds; merged, they
+	// rebuild the same reply. Only the controller goroutine touches it.
+	text        *api.ChatEvent
+	textSession string
 }
+
+// maxMergedText bounds one merged text record, so a long reply still
+// reaches the disk in parts while it streams.
+const maxMergedText = 16 << 10
 
 func newRecorder(w *convstore.Writer) *recorder {
 	r := &recorder{w: w, queue: make(chan convstore.RuntimeEvent, 256), failed: make(chan error, 1), done: make(chan struct{})}
@@ -26,6 +35,34 @@ func newRecorder(w *convstore.Writer) *recorder {
 }
 
 func (r *recorder) append(event api.ChatEvent, session string) error {
+	if event.Kind == api.ChatEventText && event.Error == nil {
+		if r.text != nil && r.textSession == session && len(r.text.Text)+len(event.Text) <= maxMergedText {
+			r.text.Text += event.Text
+			return nil
+		}
+		if err := r.flushText(); err != nil {
+			return err
+		}
+		r.text, r.textSession = &event, session
+		return nil
+	}
+	if err := r.flushText(); err != nil {
+		return err
+	}
+	return r.queueEvent(event, session)
+}
+
+// flushText queues the merged streamed text, if any.
+func (r *recorder) flushText() error {
+	if r.text == nil {
+		return nil
+	}
+	event, session := *r.text, r.textSession
+	r.text = nil
+	return r.queueEvent(event, session)
+}
+
+func (r *recorder) queueEvent(event api.ChatEvent, session string) error {
 	display, err := json.Marshal(event)
 	if err != nil {
 		return err
@@ -75,7 +112,8 @@ func (r *recorder) run() {
 }
 
 func (r *recorder) close() error {
+	flushErr := r.flushText()
 	close(r.queue)
 	<-r.done
-	return errors.Join(r.err, r.w.Close())
+	return errors.Join(flushErr, r.err, r.w.Close())
 }
