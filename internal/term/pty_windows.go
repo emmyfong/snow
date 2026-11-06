@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"syscall"
 
+	"github.com/charmbracelet/x/conpty"
 	"github.com/charmbracelet/x/xpty"
 	"golang.org/x/sys/windows"
 )
@@ -17,10 +18,16 @@ type windowsPTY struct {
 }
 
 func startPTY(spec Spec, cols, rows int) (PTY, error) {
-	p, err := xpty.NewConPty(cols, rows)
+	// Without INHERIT_CURSOR, ConPTY paints its whole empty screen over what
+	// the pane already shows, such as a preamble. With it, ConPTY asks the
+	// emulator for the cursor position and draws from there; the emulator
+	// answers through drain. xpty cannot pass flags: its options take
+	// Options by value.
+	c, err := conpty.New(cols, rows, windows.PSEUDOCONSOLE_INHERIT_CURSOR)
 	if err != nil {
 		return nil, fmt.Errorf("open conpty: %w", err)
 	}
+	p := &xpty.ConPty{ConPty: c}
 	cmd := command(spec)
 	if spec.CmdLine != "" {
 		cmd.SysProcAttr = &syscall.SysProcAttr{CmdLine: spec.CmdLine}
