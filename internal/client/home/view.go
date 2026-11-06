@@ -36,8 +36,11 @@ func (m *Model) View() tea.View {
 	field := ui.Input(th, in)
 	lines = append(lines, indent(strings.Split(ui.Panel(th, ui.PanelOptions{Body: field, Width: p.width}), "\n"), p.x)...)
 	notice := ""
-	if m.notice != "" {
+	switch {
+	case m.notice != "":
 		notice = indent([]string{lipgloss.NewStyle().Foreground(th.Error).Render(ansi.Truncate(m.notice, p.width, "…"))}, p.x)[0]
+	case m.tip != "":
+		notice = indent([]string{lipgloss.NewStyle().Foreground(th.Muted).Render(ansi.Truncate(m.tip, p.width, "…"))}, p.x)[0]
 	}
 	lines = append(lines, notice)
 	switch {

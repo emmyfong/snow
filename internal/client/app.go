@@ -9,6 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/home"
+	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -38,6 +39,7 @@ type app struct {
 	version     string           // Snow's version, for the home page
 	theme       theme.Theme      // the theme from the config, for the home page
 	sessOpts    []session.Option // what a session screen gets besides the theme, such as keys
+	keys        *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
 	saveTheme   func(name string) error
 	configPath  string    // the config file to watch for a new theme; "" watches nothing
 	configMod   time.Time // when the config file last changed, as last seen
@@ -60,6 +62,14 @@ type app struct {
 // not focused, so the server never mistakes it for a watching user.
 func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
 	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts, focused: true}
+}
+
+// setKeys gives the home page, now and when it comes back, the key table.
+func (a *app) setKeys(t *keys.Table) {
+	a.keys = t
+	if h, ok := a.screen.(*home.Model); ok {
+		h.SetKeys(t)
+	}
 }
 
 // newSession returns a session screen with the app's theme and options.
@@ -116,6 +126,9 @@ func (a *app) leave() {
 // any.
 func (a *app) showHome(notice string) {
 	h := home.New(a.version, a.theme)
+	if a.keys != nil {
+		h.SetKeys(a.keys)
+	}
 	h.SetNotice(notice)
 	a.show(h)
 	if a.sessions != nil {

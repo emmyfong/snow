@@ -132,13 +132,19 @@ func TestLoginSaved(t *testing.T) {
 	}
 }
 
-// TestFirstChatWithoutKeyOpensLogin: a chat with no model and no key opens
-// the login picker, and a saved key then opens the model picker.
-func TestFirstChatWithoutKeyOpensLogin(t *testing.T) {
+// TestFirstChatWithoutKeyOpensNothing: a chat with no model and no key
+// opens no popup, since a popup holds every key, Ctrl+b too (#287). Its
+// note points at /login; a key saved there then opens the model picker.
+func TestFirstChatWithoutKeyOpensNothing(t *testing.T) {
 	m, r := modelScreen(t, 100, 30, "")
 	m.Update(&api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Title: "Anthropic"}}})
-	if m.authPick == nil || m.modelPick != nil {
-		t.Fatal("a chat with no key did not open the login picker")
+	if m.modal() {
+		t.Fatal("a chat with no key opened a popup")
+	}
+	typeSlash(m, "/login")
+	m.Update(&api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Title: "Anthropic"}}})
+	if m.authPick == nil {
+		t.Fatal("/login did not open the login picker")
 	}
 	m.Update(press(tea.KeyEnter, 0, ""))
 	for _, ch := range "sk-test-123" {
@@ -163,6 +169,8 @@ func TestFirstChatWithoutKeyOpensLogin(t *testing.T) {
 // still reports the saved key and opens the model picker for an empty chat.
 func TestLoginCancelDuringCheck(t *testing.T) {
 	m, _ := modelScreen(t, 100, 30, "")
+	m.Update(&api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Title: "Anthropic"}}})
+	typeSlash(m, "/login")
 	m.Update(&api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Title: "Anthropic"}}})
 	m.Update(press(tea.KeyEnter, 0, ""))
 	for _, ch := range "sk-test-123" {

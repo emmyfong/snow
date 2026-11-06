@@ -33,8 +33,8 @@ func (m *Model) openModelPicker(id int) tea.Cmd {
 }
 
 // maybeStartChat opens the picker a chat first needs before its first
-// message: the model picker when a provider has a key, else the login
-// picker. It asks the server for the key list once for each pane; a cancel
+// message: the model picker when a provider has a key, else nothing, and
+// the chat's note points at /login. It asks the server for the key list once for each pane; a cancel
 // leaves the chat empty, and its next message says why it did not send.
 func (m *Model) maybeStartChat(id int) tea.Cmd {
 	if m.modelPick != nil || m.authPick != nil || m.firstRun[id] {

@@ -42,8 +42,10 @@ type Model struct {
 	hint       string   // a one-line tip from the server, such as running snow claude setup
 	cmdSel     int      // index into the matching commands
 	notice     string   // why the last command or request was refused
-	help       bool     // the help panel is open
-	naming     *naming  // the new name /rename asks for, when open
+	tip        string   // a hint in the notice's place, such as where the prefix keys work
+	keys       *keys.Table
+	help       bool    // the help panel is open
+	naming     *naming // the new name /rename asks for, when open
 	confirm    *confirm.Model
 	killing    string // the session the open popup would end
 	picking    bool   // the theme list is open
@@ -55,8 +57,11 @@ type Model struct {
 
 // New returns the home page for Snow version, drawn with th.
 func New(version string, th theme.Theme) *Model {
-	return &Model{version: version, theme: th, base: th, now: time.Now, selected: -1}
+	return &Model{version: version, theme: th, base: th, now: time.Now, selected: -1, keys: keys.Default()}
 }
+
+// SetKeys sets the key table, so the page names the configured prefix.
+func (m *Model) SetKeys(t *keys.Table) { m.keys = t }
 
 // SetNotice shows text under the input, such as why a session could not be
 // opened.
@@ -146,7 +151,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		m.help = false
 		return nil
 	}
-	m.notice = ""
+	m.notice, m.tip = "", ""
 	if m.naming != nil {
 		return m.namingKey(k)
 	}
@@ -158,6 +163,10 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	switch {
 	case k.Code == 'c' && k.Mod == tea.ModCtrl:
 		return func() tea.Msg { return QuitMsg{} }
+	case m.keys.IsPrefix(k) && k.Text == "":
+		// The help lists the prefix keys; without this the prefix did
+		// nothing here.
+		m.tip = m.keys.PrefixLabel() + " keys work inside a session. Press Enter to open one."
 	case k.Code == tea.KeyEscape:
 		if m.input == "" {
 			return func() tea.Msg { return QuitMsg{} }
