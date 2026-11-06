@@ -126,8 +126,9 @@ func (m *Model) setAuthList(list *api.AuthList) tea.Cmd {
 	return m.openModelAfterLogin(connected)
 }
 
-// openFirstChat opens what the first chat of a pane needs: the model picker
-// when a provider has a key, else the login picker.
+// openFirstChat opens the model picker for the first chat of a pane when a
+// provider has a key. Without a key it opens nothing: the chat's note
+// points at /login, and a popup there would hold Ctrl+b too (#287).
 func (m *Model) openFirstChat(connected, noProviders bool) tea.Cmd {
 	if len(m.authWait) == 0 {
 		return nil
@@ -147,7 +148,7 @@ func (m *Model) openFirstChat(connected, noProviders bool) tea.Cmd {
 	if connected || noProviders {
 		return m.showModelPicker(id, c)
 	}
-	return m.openLoginPicker(id)
+	return nil
 }
 
 // firstWaitingPane returns the waiting pane that has the focus, else the

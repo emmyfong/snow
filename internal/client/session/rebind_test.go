@@ -167,3 +167,39 @@ func TestSendPrefixSendsThePrefixNotTheKeyThatRanIt(t *testing.T) {
 		t.Fatalf("sent %q, want one ctrl+a", got)
 	}
 }
+
+// TestEscapePrefixOverAPopup: a prefix bound to Escape still closes a
+// popup with one press and starts the prefix, instead of recursing.
+func TestEscapePrefixOverAPopup(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Prefix = "Escape"
+	m, _ := withConfig(t, cfg)
+	m.Update(press(tea.KeyEscape, 0, ""))
+	m.Update(press('c', 0, "c"))
+	if m.picker == nil {
+		t.Fatal("Escape c did not open the new window picker")
+	}
+	m.Update(press(tea.KeyEscape, 0, ""))
+	if m.modal() || !m.prefixed {
+		t.Fatalf("Escape over the picker: modal %v, prefixed %v", m.modal(), m.prefixed)
+	}
+}
+
+// TestTypedPrefixStaysInATextPopup: a prefix with no modifier is a
+// character too; typed in the command prompt it stays text, so the
+// prompt keeps what the user typed.
+func TestTypedPrefixStaysInATextPopup(t *testing.T) {
+	cfg := config.Defaults().Keys
+	cfg.Prefix = "`"
+	m, _ := withConfig(t, cfg)
+	m.Update(press('`', 0, "`"))
+	m.Update(press(':', 0, ":"))
+	if m.prompt == nil {
+		t.Fatal("` : did not open the command prompt")
+	}
+	m.Update(press('a', 0, "a"))
+	m.Update(press('`', 0, "`"))
+	if m.prompt == nil || m.prefixed {
+		t.Fatalf("typing the prefix in the prompt: prompt open %v, prefixed %v", m.prompt != nil, m.prefixed)
+	}
+}
