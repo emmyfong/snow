@@ -48,7 +48,13 @@ const waitDelay = 2 * time.Second
 // command and every process it started, and returns ctx's error. When the
 // command exits, processes it left running are killed too.
 func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
-	cmd, tree, err := l.start(ctx, out)
+	return l.RunIO(ctx, out, out)
+}
+
+// RunIO is Run with stderr written to its own writer, for a command whose
+// stdout is data and whose stderr is only diagnostics.
+func (l Launch) RunIO(ctx context.Context, out, stderr io.Writer) (int, error) {
+	cmd, tree, err := l.startIO(ctx, nil, out, stderr)
 	if err != nil {
 		return -1, err
 	}
@@ -73,13 +79,13 @@ func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
 	return 0, nil
 }
 
-// start starts l with stdin closed and its output written to out, as the
-// leader of a process tree that a cancel of ctx kills.
-func (l Launch) start(ctx context.Context, out io.Writer) (*exec.Cmd, *tree, error) {
+// startIO starts l as the leader of a process tree that a cancel of ctx
+// kills. A nil in closes stdin.
+func (l Launch) startIO(ctx context.Context, in io.Reader, out, stderr io.Writer) (*exec.Cmd, *tree, error) {
 	cmd := exec.CommandContext(ctx, l.Path, l.Args...)
 	cmd.Dir = l.Dir
 	cmd.Env = append(hideVars(os.Environ(), l.Hide), l.Env...)
-	cmd.Stdout, cmd.Stderr = out, out
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = in, out, stderr
 	cmd.WaitDelay = waitDelay
 	tree, err := newTree(cmd, l.CmdLine)
 	if err != nil {

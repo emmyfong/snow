@@ -40,12 +40,15 @@ type ChatSnapshot struct {
 	// it; after an interrupt or a restart, an answer starts a new turn.
 	Question *ChatQuestion `json:"question,omitempty"`
 	// Tasks is the agent's task list, in order; absent means none.
-	Tasks []ChatTask `json:"tasks,omitempty"`
-	Queue []string   `json:"queue"`           // messages that wait for the running turn to end
-	Usage *ChatUsage `json:"usage,omitempty"` // of the last reply
+	Tasks       []ChatTask `json:"tasks,omitempty"`
+	Queue       []string   `json:"queue"` // messages that wait for the running turn to end
+	QueuePaused bool       `json:"queuePaused,omitempty"`
+	Usage       *ChatUsage `json:"usage,omitempty"` // of the last reply
 	// Cost is the estimated cost of the conversation's priced replies, in
 	// US dollars.
 	Cost float64 `json:"cost,omitempty"`
+	// Runtime is absent for Snow's direct-API loop.
+	Runtime *RuntimeInfo `json:"runtime,omitempty"`
 }
 
 // Chat states, in ChatSnapshot.State and ChatEvent.State.
@@ -54,6 +57,9 @@ const (
 	ChatStateStreaming = "streaming" // waiting for the model
 	ChatStateTool      = "tool"      // running a tool
 	ChatStateApproval  = "approval"  // waiting for the user's answer
+	ChatStateStarting  = "starting"
+	ChatStateStopping  = "stopping"
+	ChatStateStopped   = "stopped"
 )
 
 // ChatEntry is one item of a chat transcript.
@@ -83,6 +89,7 @@ const (
 	ChatEntryModel       = "model"       // the model changed from the next turn on
 	ChatEntryInterrupted = "interrupted" // the user stopped the turn
 	ChatEntryError       = "error"       // a turn, or a change, failed
+	ChatEntryAnswer      = "answer"      // an answer saved in Snow, including one not yet delivered
 	// ChatEntryReported says the vendor reported another model than the one
 	// the turn asked for.
 	ChatEntryReported = "reported"
@@ -143,6 +150,11 @@ type ChatUsage struct {
 	CacheWrite int     `json:"cacheWrite,omitempty"`
 	Cost       float64 `json:"cost,omitempty"` // in US dollars, estimated; valid when Priced
 	Priced     bool    `json:"priced,omitempty"`
+	// Cumulative means Cost is the runtime's session estimate, including prior
+	// turns and restored spend. Replace the total instead of adding it twice.
+	Cumulative bool `json:"cumulative,omitempty"`
+	// Scope describes the token counters when they exclude child agents.
+	Scope string `json:"scope,omitempty"`
 	// Window is the model's context window in tokens; 0 means unknown.
 	Window int `json:"window,omitempty"`
 }
@@ -200,6 +212,7 @@ type ChatEvent struct {
 	Tasks    []ChatTask    `json:"tasks,omitempty"`  // for ChatEventTasks: the whole list; absent means empty
 	State    string        `json:"state,omitempty"`  // for ChatEventState
 	Queue    []string      `json:"queue,omitempty"`  // for ChatEventQueue; absent means empty
+	Paused   bool          `json:"paused,omitempty"` // for ChatEventQueue
 	Usage    *ChatUsage    `json:"usage,omitempty"`  // for ChatEventUsage
 	Model    string        `json:"model,omitempty"`  // for ChatEventModel
 	Effort   string        `json:"effort,omitempty"` // for ChatEventModel
@@ -207,6 +220,8 @@ type ChatEvent struct {
 	// Error is why ChatEventTurnEnded failed, or why ChatEventModel or ChatEventMode
 	// could not be saved; the model or mode then stays as it was.
 	Error *ChatError `json:"error,omitempty"`
+	// Runtime updates external session identity and owned task state.
+	Runtime *RuntimeInfo `json:"runtime,omitempty"`
 }
 
 // Kinds of ChatEvent.
@@ -227,6 +242,8 @@ const (
 	ChatEventModel       = "model"
 	ChatEventMode        = "mode"
 	ChatEventTitle       = "title"
+	ChatEventRuntime     = "runtime"
+	ChatEventError       = "error" // an operation failed while the run can remain active
 )
 
 // How a turn ends, in ChatEvent.Reason.
@@ -261,6 +278,8 @@ type ChatInput struct {
 	// Picked holds the labels picked for ChatInputReply. A reply picks
 	// labels or types Text, not both.
 	Picked []string `json:"picked,omitempty"`
+	// Run identifies the current run of a runtime task for ChatInputStopTask.
+	Run string `json:"run,omitempty"`
 }
 
 // Approval modes a chat takes.
@@ -274,17 +293,20 @@ const MaxChatTitle = 120
 
 // Kinds of ChatInput.
 const (
-	ChatInputMessage   = "message"   // send Text; during a turn it waits in the queue
-	ChatInputAnswer    = "answer"    // answer approval request ID
-	ChatInputReply     = "reply"     // answer question ID with Picked or Text
-	ChatInputInterrupt = "interrupt" // stop the running turn
-	ChatInputRetry     = "retry"     // run the last turn again after a failure
-	ChatInputModel     = "model"     // make the next turn use Model with Effort
-	ChatInputNew       = "new"       // start a new conversation in this pane
-	ChatInputResume    = "resume"    // open the past conversation Conversation in this pane
-	ChatInputRename    = "rename"    // give the conversation the title Text
-	ChatInputMode      = "mode"      // set the approval mode to Mode
-	ChatInputEffort    = "effort"    // make the next turn use Effort; empty lets the provider choose
+	ChatInputMessage     = "message"      // send Text; during a turn it waits in the queue
+	ChatInputAnswer      = "answer"       // answer approval request ID
+	ChatInputReply       = "reply"        // answer question ID with Picked or Text
+	ChatInputInterrupt   = "interrupt"    // stop the running turn
+	ChatInputRetry       = "retry"        // run the last turn again after a failure
+	ChatInputModel       = "model"        // make the next turn use Model with Effort
+	ChatInputNew         = "new"          // start a new conversation in this pane
+	ChatInputResume      = "resume"       // open the past conversation Conversation in this pane
+	ChatInputRename      = "rename"       // give the conversation the title Text
+	ChatInputMode        = "mode"         // set the approval mode to Mode
+	ChatInputEffort      = "effort"       // make the next turn use Effort; empty lets the provider choose
+	ChatInputStopTask    = "stop-task"    // stop the owned runtime task ID and its descendants
+	ChatInputSendNow     = "send-now"     // explicitly stop owned work, then send Text
+	ChatInputResumeQueue = "resume-queue" // explicitly release paused messages
 )
 
 // Answers to an approval request.
@@ -311,7 +333,7 @@ func (in *ChatInput) Validate() error {
 		return fmt.Errorf("%w: text is over %d bytes", ErrInvalidChatInput, MaxChatMessage)
 	}
 	switch in.Kind {
-	case ChatInputMessage:
+	case ChatInputMessage, ChatInputSendNow:
 		if in.Text == "" {
 			return fmt.Errorf("%w: empty message", ErrInvalidChatInput)
 		}
@@ -354,7 +376,11 @@ func (in *ChatInput) Validate() error {
 		if in.Effort != "" && !slices.Contains(EffortLevels[:], in.Effort) {
 			return fmt.Errorf("%w: unknown effort %q", ErrInvalidChatInput, in.Effort)
 		}
-	case ChatInputInterrupt, ChatInputRetry, ChatInputNew:
+	case ChatInputInterrupt, ChatInputRetry, ChatInputNew, ChatInputResumeQueue:
+	case ChatInputStopTask:
+		if in.ID == "" {
+			return fmt.Errorf("%w: stop names no task", ErrInvalidChatInput)
+		}
 	default:
 		return fmt.Errorf("%w: unknown kind %q", ErrInvalidChatInput, in.Kind)
 	}

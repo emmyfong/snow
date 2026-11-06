@@ -42,7 +42,11 @@ func (s *Server) authList(c *client) {
 		s.refuse(c, api.CodeCommandFailed, err)
 		return
 	}
-	s.reply(c, &api.AuthList{Providers: auth.Providers()})
+	providers := auth.Providers()
+	if s.opts.Chat.Runtime != nil {
+		providers = append([]api.ProviderAuth{{Name: "claude-code", Title: "Claude Code", Runtime: "claude-code"}}, providers...)
+	}
+	s.reply(c, &api.AuthList{Providers: providers})
 }
 
 // login checks a key with its provider and saves it when the provider

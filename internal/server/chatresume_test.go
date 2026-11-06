@@ -287,7 +287,7 @@ func TestFinishInputTellsOfAReplacedConversation(t *testing.T) {
 	s, _, _ := newChatServer(t)
 	c := connect(t, s, 100, 30)
 	id := openChat(t, c)
-	var old *agent.Conversation
+	var old conversation
 	var cl *client
 	s.call(func(st *state) {
 		for k := range st.clients {

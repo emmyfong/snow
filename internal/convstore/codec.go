@@ -11,6 +11,8 @@ import (
 // version does not know.
 func newRecord(t Type) Record {
 	switch t {
+	case TypeRuntimeEvent:
+		return &RuntimeEvent{}
 	case TypeMeta:
 		return &Meta{}
 	case TypeUser:

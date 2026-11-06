@@ -107,6 +107,13 @@ func (s *Store) Get(provider string) (Key, Source, error) {
 		}
 		return k, SourceEnv, nil
 	}
+	return s.GetStored(provider)
+}
+
+// GetStored returns only a deliberately saved key, without reading the host
+// environment. Isolated runtime connections use this lookup so an inherited
+// API key cannot change their selected account or billing route.
+func (s *Store) GetStored(provider string) (Key, Source, error) {
 	works, err := s.osAvailable()
 	if err != nil {
 		return Key{}, 0, err
@@ -137,7 +144,7 @@ func (s *Store) Get(provider string) (Key, Source, error) {
 		}
 		return k, SourceFile, nil
 	}
-	return Key{}, 0, fmt.Errorf("%w for %s; set %s", ErrNoKey, provider, EnvVar(provider))
+	return Key{}, 0, fmt.Errorf("%w for %s", ErrNoKey, provider)
 }
 
 // APIKey returns provider's key value, for providers that read keys
@@ -199,6 +206,13 @@ func (s *Store) Delete(provider string) error {
 	if _, ok := s.env(provider); ok {
 		return fmt.Errorf("%w (%s)", ErrInEnvironment, EnvVar(provider))
 	}
+	return s.DeleteStored(provider)
+}
+
+// DeleteStored removes only a deliberately saved key. An inherited key does not
+// prevent removal and is never changed. Isolated connections pair this operation
+// with GetStored; legacy provider logout continues to use Delete.
+func (s *Store) DeleteStored(provider string) error {
 	works, err := s.osAvailable()
 	if err != nil {
 		return err

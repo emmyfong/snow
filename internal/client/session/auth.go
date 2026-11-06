@@ -12,6 +12,9 @@ import (
 // openLoginPicker shows the login picker over pane id and asks the server
 // for a fresh provider list.
 func (m *Model) openLoginPicker(id int) tea.Cmd {
+	if runtime, ok := m.own[id].(runtimeChooser); ok && runtime.RuntimeInfo() != nil {
+		return m.openRuntimePicker(id)
+	}
 	if _, ok := m.own[id].(modelChooser); !ok {
 		return m.ShowError("The login picker works in chat panes.")
 	}
@@ -62,6 +65,10 @@ func (m *Model) authMouse(msg tea.MouseMsg) tea.Cmd {
 // authResult applies what the login picker chose.
 func (m *Model) authResult(r authpick.Result) tea.Cmd {
 	switch r {
+	case authpick.Runtime:
+		pane := m.authPane
+		m.authPick, m.authPane = nil, 0
+		return m.openRuntimePicker(pane)
 	case authpick.Submit:
 		p, ok := m.authPick.Provider()
 		if !ok {

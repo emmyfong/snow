@@ -30,6 +30,7 @@ const (
 	Open      Result = iota // the picker stays open
 	Cancelled               // the user closed the picker
 	Submit                  // send a LoginRequest for Provider and KeyValue
+	Runtime                 // open the Snow-managed runtime connection picker
 )
 
 // maxKey bounds the key field so a stray paste cannot grow without bound.
@@ -115,9 +116,19 @@ func (m *Model) listKey(k tea.Key) Result {
 	case k.Code == tea.KeyDown || k.Text == "j":
 		m.selected = move(m.selected, 1, len(m.providers))
 	case k.Code == tea.KeyEnter:
+		if p, ok := m.Provider(); ok && p.Runtime != "" {
+			return Runtime
+		}
 		m.startKey()
 	}
 	return Open
+}
+
+// EnterKey reuses the masked API-key field for an explicitly selected runtime
+// connection. It does not perform provider discovery or a model request.
+func (m *Model) EnterKey(provider api.ProviderAuth) {
+	m.SetList([]api.ProviderAuth{provider})
+	m.stage, m.key, m.note = stageKey, nil, ""
 }
 
 // startKey opens the key field for the selected provider. A provider that

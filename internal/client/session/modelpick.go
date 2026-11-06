@@ -20,6 +20,9 @@ type modelChooser interface {
 	// SwitchModelInput returns the input that makes the next turn use
 	// model and effort. Save also makes it the default for new chats.
 	SwitchModelInput(model, effort string, save bool) *api.ChatInput
+	// RuntimeInfo is the chat's Claude Code connection, or nil for a chat
+	// that uses a provider directly.
+	RuntimeInfo() *api.RuntimeInfo
 }
 
 // openModelPicker shows the model picker over pane id and asks the server
@@ -58,13 +61,30 @@ func (m *Model) maybeStartChat(id int) tea.Cmd {
 func (m *Model) showModelPicker(id int, c modelChooser) tea.Cmd {
 	model, effort := c.ModelName()
 	pick := modelpick.New(model, effort)
-	pick.SetList(m.modelList.Providers)
+	request := &api.ModelListRequest{}
+	if c.RuntimeInfo() != nil {
+		// A Claude Code chat offers its own Claude Code's models only.
+		pick.NoSave()
+		request.Pane = id
+		if list, ok := m.runtimeModels[id]; ok {
+			pick.SetList(list.Providers)
+		}
+	} else {
+		pick.SetList(m.modelList.Providers)
+	}
 	if box, _, _ := pick.View(m.theme, m.cols, m.windowRows()); box == "" {
 		return m.ShowError("Window too small for the model picker")
 	}
 	m.modelPick, m.modelPane = pick, id
-	m.send(&api.ModelListRequest{})
+	m.send(request)
 	return nil
+}
+
+// pickingRuntime reports whether the open model picker is for a Claude
+// Code chat.
+func (m *Model) pickingRuntime() bool {
+	c, ok := m.own[m.modelPane].(modelChooser)
+	return m.modelPick != nil && ok && c.RuntimeInfo() != nil
 }
 
 // modelKey sends a key to the open model picker.
@@ -127,8 +147,18 @@ type gatewayCheckMsg struct{}
 // open one. While a gateway starts, it asks again until the gateway is ready
 // or failed.
 func (m *Model) setModelList(list *api.ModelList) tea.Cmd {
+	if list.Pane != 0 {
+		if m.runtimeModels == nil {
+			m.runtimeModels = map[int]api.ModelList{}
+		}
+		m.runtimeModels[list.Pane] = *list
+		if m.pickingRuntime() && m.modelPane == list.Pane {
+			m.modelPick.SetList(list.Providers)
+		}
+		return nil
+	}
 	m.modelList = *list
-	if m.modelPick == nil {
+	if m.modelPick == nil || m.pickingRuntime() {
 		return nil
 	}
 	m.modelPick.SetList(list.Providers)
@@ -140,7 +170,7 @@ func (m *Model) setModelList(list *api.ModelList) tea.Cmd {
 
 // checkGateways asks for the provider list again, while the picker is open.
 func (m *Model) checkGateways() tea.Cmd {
-	if m.modelPick == nil {
+	if m.modelPick == nil || m.pickingRuntime() {
 		return nil
 	}
 	m.send(&api.ModelListRequest{})

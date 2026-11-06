@@ -103,6 +103,9 @@ func (s *Server) modelList(c *client, req *api.ModelListRequest) {
 		s.refuse(c, api.CodeCommandFailed, ErrNoChat)
 		return
 	}
+	if req.Pane != 0 && s.runtimeModelList(c, req) {
+		return
+	}
 	statuses := o.providerStatuses()
 	s.call(func(st *state) {
 		if c.dropped {

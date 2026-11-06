@@ -94,11 +94,11 @@ func wslClaude(wsl, distro string) Profile {
 	return Profile{Name: claudeName(distro), Kind: KindClaude, Path: wsl, Args: []string{"-d", distro}, Distro: distro}
 }
 
-// claudeWhich prints the path of claude as the user's interactive login
-// shell finds it, so a PATH set in .profile or .bashrc (nvm, ~/.local/bin)
-// counts. Startup files may print other lines; the caller looks for the
-// path.
-const claudeWhich = `shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
+// ClaudeWhich is a POSIX sh script that prints the path of claude as the
+// user's interactive login shell finds it, so a PATH set in .profile or
+// .bashrc (nvm, ~/.local/bin) counts. Startup files may print other lines;
+// the caller looks for the path.
+const ClaudeWhich = `shell=$(getent passwd "$(id -un)" 2>/dev/null | cut -d: -f7)
 [ -n "$shell" ] || shell=${SHELL:-/bin/sh}
 exec "$shell" -lic 'command -v claude' </dev/null 2>/dev/null`
 
@@ -113,7 +113,7 @@ const claudeProbeTimeout = 20 * time.Second
 func claudeInDistro(wsl, distro string) (bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), claudeProbeTimeout)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, wsl, "-d", distro, "-e", "sh", "-c", claudeWhich)
+	cmd := exec.CommandContext(ctx, wsl, "-d", distro, "-e", "sh", "-c", ClaudeWhich)
 	HideWindow(cmd)
 	out, err := cmd.Output()
 	if _, exited := errors.AsType[*exec.ExitError](err); exited && ctx.Err() == nil {
@@ -125,7 +125,7 @@ func claudeInDistro(wsl, distro string) (bool, error) {
 	return foundClaude(string(out)), nil
 }
 
-// foundClaude reports whether the output of claudeWhich names a claude
+// foundClaude reports whether the output of ClaudeWhich names a claude
 // program.
 func foundClaude(out string) bool {
 	for line := range strings.Lines(out) {

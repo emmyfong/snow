@@ -1,6 +1,7 @@
 package authpick
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -320,5 +321,69 @@ func TestNoKeyProvider(t *testing.T) {
 	box, _, _ := m.View(theme.Default(), 80, 24)
 	if !strings.Contains(ansi.Strip(box), "no key needed") {
 		t.Fatalf("view:\n%s", ansi.Strip(box))
+	}
+}
+
+// runtimeKey is the key field the connection picker opens for one Snow
+// connection.
+func runtimeKey() *Model {
+	m := New()
+	m.EnterKey(api.ProviderAuth{Name: "claude-code", Title: "Claude Code API key", Runtime: "claude-code"})
+	return m
+}
+
+// TestRuntimeKeyGolden draws the connection key field, empty and typed, at
+// both sizes.
+func TestRuntimeKeyGolden(t *testing.T) {
+	for _, size := range []struct{ cols, rows int }{{80, 24}, {120, 40}} {
+		for _, typed := range []string{"", "sk-ant-123"} {
+			name := "empty"
+			if typed != "" {
+				name = "typed"
+			}
+			t.Run(fmt.Sprintf("%s_%dx%d", name, size.cols, size.rows), func(t *testing.T) {
+				m := runtimeKey()
+				typeText(m, typed)
+				box, _, _ := m.View(theme.Default(), size.cols, size.rows)
+				golden.RequireEqual(t, box)
+			})
+		}
+	}
+}
+
+// TestRuntimeKeyClicks: clicking "enter save key" submits the typed key,
+// clicking "esc back" leaves the field, and a runtime provider in the list
+// opens the connection picker instead of a key field.
+func TestRuntimeKeyClicks(t *testing.T) {
+	th := theme.Default()
+	for _, tt := range []struct {
+		hint  string
+		want  Result
+		stage stage
+	}{{"enter save key", Submit, stageChecking}, {"esc back", Open, stageList}} {
+		m := runtimeKey()
+		typeText(m, "sk-ant-123")
+		l, ok := m.layout(th, 80, 24)
+		if !ok {
+			t.Fatal("no layout")
+		}
+		rows := strings.Split(ansi.Strip(l.box), "\n")
+		row := rows[l.hintY-l.y]
+		x := strings.Index(row, tt.hint)
+		if x < 0 {
+			t.Fatalf("hint %q not on row %q", tt.hint, row)
+		}
+		if r := m.Click(th, 80, 24, l.x+ansi.StringWidth(row[:x]), l.hintY); r != tt.want || m.stage != tt.stage {
+			t.Fatalf("click %q: %v in stage %v, want %v in stage %v", tt.hint, r, m.stage, tt.want, tt.stage)
+		}
+	}
+	m := New()
+	m.SetList([]api.ProviderAuth{{Name: "claude-code", Title: "Claude Code", Runtime: "claude-code"}})
+	l, _ := m.layout(th, 80, 24)
+	if r := m.Click(th, 80, 24, l.x+2, l.listTop); r != Runtime {
+		t.Fatalf("runtime provider click: %v, want Runtime", r)
+	}
+	if r := m.Key(key(tea.KeyEnter)); r != Runtime {
+		t.Fatalf("runtime provider Enter: %v, want Runtime", r)
 	}
 }

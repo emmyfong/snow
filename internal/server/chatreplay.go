@@ -14,7 +14,7 @@ import (
 // the transcript is the one the user saw, and the pane is idle. The model,
 // effort, and mode are the ones the conversation starts with, which may
 // differ from the file's last (see resumeChat).
-func replaySnapshot(id int, conv *agent.Conversation, loaded *convstore.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
+func replaySnapshot(id int, conv conversation, loaded *convstore.Conversation, model, effort string, mode agent.Mode) api.ChatSnapshot {
 	snap := newSnapshot(id, conv, model, effort, mode)
 	cur := loaded.Meta.Model
 	turn, running := 0, false

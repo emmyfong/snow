@@ -31,6 +31,9 @@ func (st *state) toolPane(caller, id int) (*session, *pane, *api.Error) {
 		return nil, nil, e
 	}
 	if _, p := sess.findPane(id); p != nil {
+		if p.purpose == "sign-in" {
+			return nil, nil, &api.Error{Code: api.CodeCommandFailed, Message: "sign-in views are available only to the user"}
+		}
 		if p.term == nil {
 			return nil, nil, &api.Error{Code: api.CodeNotTerminal, Message: fmt.Sprintf("pane %d is a %s pane; it has no screen", id, p.kind())}
 		}
@@ -76,7 +79,7 @@ func (st *state) paneList(sess *session, caller int) *api.Panes {
 		rects := unzoomedRects(w.tree, cols, rows)
 		for _, id := range w.tree.Panes() {
 			p := w.panes[int(id)]
-			if p == nil || p.term == nil {
+			if p == nil || p.term == nil || p.purpose == "sign-in" {
 				continue
 			}
 			r := rects[id]

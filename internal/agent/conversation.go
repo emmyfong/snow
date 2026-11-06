@@ -85,6 +85,9 @@ type Conversation struct {
 // starts its goroutine. Meta.Folder is taken from cfg.Folder; an unset
 // Meta.Profile is cfg.Shell's name, and an unset Meta.Created is now.
 func Start(cfg Config, meta convstore.Meta) (*Conversation, error) {
+	if meta.Runtime != nil {
+		return nil, fmt.Errorf("%w: external conversation requires its runtime", ErrInvalid)
+	}
 	meta.Folder = cfg.Folder.Path
 	if meta.Profile == "" {
 		meta.Profile = cfg.Shell.Name
@@ -122,6 +125,9 @@ func Resume(cfg Config, id string) (*Conversation, *convstore.Conversation, erro
 // more records since the caller's read. The returned conversation is that
 // second read, which is the one to show.
 func ResumeLoaded(cfg Config, loaded *convstore.Conversation) (*Conversation, *convstore.Conversation, error) {
+	if loaded.Meta.Runtime != nil {
+		return nil, nil, fmt.Errorf("%w: external conversation requires its runtime", ErrInvalid)
+	}
 	id := loaded.Meta.ID
 	if loaded.Meta.Folder != cfg.Folder.Path {
 		return nil, nil, fmt.Errorf("resume conversation %s in %s: saved for %s: %w", id, cfg.Folder.Path, loaded.Meta.Folder, ErrFolderMismatch)

@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
@@ -23,6 +24,8 @@ const (
 	chrome = 4
 	// page is how many rows PgUp and PgDn move.
 	page = 5
+	// maxDetail is the most rows the detail text takes once wrapped.
+	maxDetail = 3
 )
 
 // Model is one open list popup.
@@ -32,6 +35,8 @@ type Model struct {
 	items []ui.ListItem
 	sel   int
 	note  string // shown in place of the rows while there are none
+	// detail is muted text above the rows, such as what a choice means.
+	detail string
 }
 
 // New returns a popup titled title with key hints in its bottom row.
@@ -48,6 +53,10 @@ func (m *Model) SetHints(h []ui.Hint) { m.hints = h }
 // SetNote sets the line shown while the popup has no rows, for example
 // "Loading..." or "Nothing saved yet".
 func (m *Model) SetNote(note string) { m.note = note }
+
+// SetDetail sets muted text drawn above the rows, wrapped to the popup and
+// cut to three rows. A window too short for it and a row drops it first.
+func (m *Model) SetDetail(detail string) { m.detail = detail }
 
 // SetRows replaces the rows; each row is its columns, left to right. The
 // selection stays on its index, kept in range.
@@ -115,10 +124,18 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 	if w < minWidth || rows < chrome+1 {
 		return layout{}, false
 	}
-	n := min(max(len(m.items), 1), maxRows, rows-chrome)
-	h := n + chrome
-	x, y := max((cols-w)/2, 0), max((rows-h)/2, 0)
 	inner := w - 2
+	detail := m.detailRows(th, inner-2)
+	extra := 0
+	if len(detail) > 0 {
+		extra = len(detail) + 1
+	}
+	if rows < chrome+extra+1 {
+		detail, extra = nil, 0
+	}
+	n := min(max(len(m.items), 1), maxRows, rows-chrome-extra)
+	h := n + chrome + extra
+	x, y := max((cols-w)/2, 0), max((rows-h)/2, 0)
 	var list string
 	var index []int
 	if len(m.items) == 0 {
@@ -129,8 +146,29 @@ func (m *Model) layout(th theme.Theme, cols, rows int) (layout, bool) {
 		list = indent(list)
 	}
 	body := list + "\n\n " + ui.KeyHints(th, m.hints, inner-1)
+	if len(detail) > 0 {
+		body = strings.Join(detail, "\n") + "\n\n" + body
+	}
 	box := ui.Panel(th, ui.PanelOptions{Title: m.title, Body: body, Width: w})
-	return layout{box: box, x: x, y: y, w: w, h: h, top: y + 1, n: n, index: index}, true
+	return layout{box: box, x: x, y: y, w: w, h: h, top: y + 1 + extra, n: n, index: index}, true
+}
+
+// detailRows wraps the detail to width cells, each row indented one cell
+// and muted, at most maxDetail rows.
+func (m *Model) detailRows(th theme.Theme, width int) []string {
+	if m.detail == "" || width < 1 {
+		return nil
+	}
+	lines := strings.Split(ansi.Wrap(m.detail, width, ""), "\n")
+	if len(lines) > maxDetail {
+		lines = lines[:maxDetail]
+		lines[maxDetail-1] = ansi.Truncate(lines[maxDetail-1], width, "…")
+	}
+	style := lipgloss.NewStyle().Foreground(th.Muted)
+	for i, line := range lines {
+		lines[i] = " " + style.Render(line)
+	}
+	return lines
 }
 
 // indent puts one blank cell before each line.

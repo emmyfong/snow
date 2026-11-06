@@ -83,7 +83,8 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool, claudecode, gateway, notify,
+                     convstore, agent, tool, claudecode, clauderuntime,
+                     gateway, notify,
                      mcp, worktree, git, later: skills, gate, editor
 pkg/api/             the only public package: API types for other clients
 ```
@@ -103,6 +104,9 @@ cmd/snow ──► client ──► pkg/api ◄── server ──► provider,
    │           │                       │    (the server runs agents; agents never import server,
    │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
+   │           │                       ├──► clauderuntime ──► shell, private, convstore, pkg/api
+   │           │                       │    (Snow's own Claude Code connections: sign-in, status,
+   │           │                       │    and the chat runtime, natively or in a WSL distribution)
    │           │                       ├──► worktree, git ──► shell  (worktree: a git worktree
    │           │                       │    per coding agent; git: runs the git command, in
    │           │                       │    the WSL distribution for a WSL folder, for worktree

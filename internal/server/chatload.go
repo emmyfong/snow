@@ -6,11 +6,13 @@ import (
 	"github.com/emmyfong/snow/internal/agent"
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/tool"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 // reopened is a saved conversation reopened for a chat pane.
 type reopened struct {
-	conv *agent.Conversation
+	conv            conversation
+	runtimeSnapshot *api.ChatSnapshot
 	// loaded is the file as read after the writer claim, which is the one to
 	// show: an earlier pane may have saved more since the first read.
 	loaded *convstore.Conversation
@@ -29,6 +31,9 @@ func (s *Server) reopenConversation(pane func() int, profile, id string) (*reope
 	loaded, err := s.opts.Chat.Store.Load(id)
 	if err != nil {
 		return nil, fmt.Errorf("load the conversation: %w", err)
+	}
+	if loaded.Meta.Runtime != nil {
+		return s.reopenRuntimeConversation(pane, profile, loaded)
 	}
 	folder := s.chatFolder(profile, loaded.Meta.Folder)
 	if folder.Distro == "" {

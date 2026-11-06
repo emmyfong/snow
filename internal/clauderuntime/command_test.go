@@ -1,0 +1,125 @@
+package clauderuntime
+
+import (
+	"encoding/json"
+	"errors"
+	"slices"
+	"strings"
+	"testing"
+
+	"github.com/emmyfong/snow/internal/shell"
+)
+
+func TestChatLaunchUsesOnlySelectedSettingsAndMCP(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := p.ChatLaunch(shell.Profile{Path: "/bin/claude"}, "/workspace", "", RunOptions{
+		Resume: "--unsafe-flag", MCP: map[string]MCPServer{"snow": {Command: "snow", Args: []string{"mcp"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, required := range []string{"--setting-sources", "--strict-mcp-config", "--permission-prompt-tool", "--resume=--unsafe-flag"} {
+		if !slices.Contains(l.Args, required) {
+			t.Errorf("missing %s", required)
+		}
+	}
+	if i := slices.Index(l.Args, "--setting-sources"); i < 0 || l.Args[i+1] != "" {
+		t.Fatal("inherited settings were enabled")
+	}
+	i := slices.Index(l.Args, "--mcp-config")
+	var config struct {
+		Servers map[string]MCPServer `json:"mcpServers"`
+	}
+	if i < 0 || json.Unmarshal([]byte(l.Args[i+1]), &config) != nil || len(config.Servers) != 1 || config.Servers["snow"].Command != "snow" {
+		t.Fatal("Snow MCP configuration was lost")
+	}
+	if l.Dir != "/workspace" || slices.Contains(l.Args, "--fallback-model") || slices.Contains(l.Args, "--dangerously-skip-permissions") {
+		t.Fatal("launch changed workspace, billing or permission policy")
+	}
+}
+
+func TestAuthLaunchSharesChatProfile(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := shell.Profile{Path: "/bin/claude"}
+	chat, err := p.ChatLaunch(program, "/workspace", "", RunOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	chat.Env = slices.DeleteFunc(chat.Env, func(value string) bool { return value == "CLAUDE_CODE_SDK_READS_SESSION_STATE=1" })
+	for _, operation := range []string{"login", "status", "logout"} {
+		launch, err := p.AuthLaunch(program, "/workspace", "", operation)
+		if err != nil || !slices.Equal(launch.Env, chat.Env) || !slices.Equal(launch.Hide, chat.Hide) {
+			t.Fatalf("%s changed connection environment: %v", operation, err)
+		}
+		if operation == "login" && !slices.Contains(launch.Args, "--claudeai") {
+			t.Fatal("subscription login did not select Claude account flow")
+		}
+	}
+	p.Auth = APIKey
+	if _, err := p.AuthLaunch(program, "", "explicit-key", "login"); !errors.Is(err, ErrCredential) {
+		t.Fatalf("API-key route opened browser login: %v", err)
+	}
+}
+
+func TestRuntimeRejectsShellWrappers(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, program := range []shell.Profile{
+		{}, {Path: "claude.cmd"}, {Path: "cmd.exe", CmdLine: "claude.cmd"},
+	} {
+		if _, err := p.ChatLaunch(program, "", "", RunOptions{}); !errors.Is(err, ErrExecutable) {
+			t.Errorf("unsafe native executable accepted: %v", err)
+		}
+	}
+}
+
+// TestNpmClaudeMessage: Claude Code installed through npm, which runs as
+// claude.cmd, is refused with a message that says what to install.
+func TestNpmClaudeMessage(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.AuthLaunch(shell.Profile{Path: `C:\Users\u\AppData\Roaming\npm\claude.cmd`}, "", "", "status")
+	if !errors.Is(err, ErrExecutable) || !strings.Contains(err.Error(), "native Claude Code") {
+		t.Fatalf("err = %v, want a message that names the native install", err)
+	}
+}
+
+// TestChatLaunchModelAndEffort: a chosen model passes its alias and effort;
+// Claude Code's default passes neither flag.
+func TestChatLaunchModelAndEffort(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		options RunOptions
+		want    []string
+		absent  string
+	}{
+		{RunOptions{Model: "claude-code/opus", Effort: "high"}, []string{"--model=opus", "--effort=high"}, ""},
+		{RunOptions{Model: "claude-code/default"}, nil, "--model"},
+	} {
+		l, err := p.ChatLaunch(shell.Profile{Path: "claude"}, "", "", tt.options)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, want := range tt.want {
+			if !slices.Contains(l.Args, want) {
+				t.Errorf("%+v: args %q lack %s", tt.options, l.Args, want)
+			}
+		}
+		if tt.absent != "" && slices.ContainsFunc(l.Args, func(a string) bool { return strings.HasPrefix(a, tt.absent) }) {
+			t.Errorf("%+v: args %q have %s", tt.options, l.Args, tt.absent)
+		}
+	}
+}

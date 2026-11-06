@@ -41,7 +41,12 @@ type Model struct {
 
 	ready   bool // SetList was called
 	touched bool // the user moved; a new list keeps their place
+	noSave  bool // the choice cannot become the default for new chats
 }
+
+// NoSave hides "save as default": a Claude Code chat's model is never the
+// default for new chats. Ctrl+d then only uses the choice.
+func (m *Model) NoSave() { m.noSave = true }
 
 // New opens a picker on the chat's current model and effort. Both may be
 // empty, as before the first model is chosen.
@@ -125,7 +130,7 @@ func (m *Model) accept(save bool) picker.Result {
 		m.note = "No model to choose."
 		return picker.Open
 	}
-	if save {
+	if save && !m.noSave {
 		return picker.Saved
 	}
 	return picker.Accepted

@@ -65,6 +65,10 @@ func (st *state) save(sess *session) {
 	st.stopEndTimer(sess.name)
 	st.savedAt[sess.name] = contentVersion(sess)
 	snap := st.snapshot(sess)
+	if len(snap.Windows) == 0 {
+		st.unsave(sess.name)
+		return
+	}
 	st.saved[sess.name] = store.Info{Name: sess.name, Saved: time.Now(), Windows: len(snap.Windows)}
 	st.srv.saver.Changed(snap)
 }

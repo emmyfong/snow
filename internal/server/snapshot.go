@@ -14,6 +14,9 @@ import (
 func (st *state) snapshot(sess *session) store.Snapshot {
 	snap := store.Snapshot{Name: sess.name, Active: sess.active}
 	for _, w := range sess.windows {
+		if w.ephemeral {
+			continue
+		}
 		sw := store.Window{Index: w.index, Name: w.name, Focused: w.focused}
 		if tree, err := json.Marshal(w.tree); err == nil {
 			sw.Layout = tree
@@ -44,6 +47,9 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 			sw.Panes = append(sw.Panes, sp)
 		}
 		snap.Windows = append(snap.Windows, sw)
+	}
+	if sess.window(snap.Active) != nil && sess.window(snap.Active).ephemeral && len(snap.Windows) > 0 {
+		snap.Active = snap.Windows[0].Index
 	}
 	return snap
 }

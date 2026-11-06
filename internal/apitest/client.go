@@ -34,6 +34,7 @@ type Client struct {
 	agents   *api.AgentList             // the last agent list
 	sides    map[int]*api.SidePaneState // pane ID → newest side pane state
 	kinds    *api.PaneKinds             // the last pane kind list
+	layout   *api.Layout                // the last layout, including messages consumed by another wait
 
 	// Updates counts PaneUpdates received; LastLen is the number of rows
 	// in the most recent one.
@@ -111,6 +112,8 @@ func (c *Client) Next(timeout time.Duration) (api.Message, error) {
 	select {
 	case r := <-c.incoming:
 		switch m := r.m.(type) {
+		case *api.Layout:
+			c.layout = m
 		case *api.PaneUpdate:
 			c.Updates++
 			c.LastLen = len(m.Lines)

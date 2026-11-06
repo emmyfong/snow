@@ -10,7 +10,7 @@ func runLogout(h Host, _ string) { h.Ask(AskLogout) }
 
 func init() {
 	if err := Register(command.Command{
-		Name: "login", Desc: "Save a provider key", Group: command.GroupModel,
+		Name: "login", Desc: "Sign in, or save a provider key", Group: command.GroupModel,
 	}, runLogin); err != nil {
 		panic(err)
 	}

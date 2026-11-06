@@ -41,6 +41,16 @@ func (m *Model) confirmClosePane() {
 	if what != "" {
 		what += ", "
 	}
+	if p.Purpose == "sign-in" {
+		m.confirm = &confirmation{popup: confirm.New("Cancel sign-in", "Close this sign-in attempt? Snow will check the connection afterward.", "Cancel sign-in"),
+			msg: &api.Command{Op: api.OpClose, Target: p.ID}}
+		return
+	}
+	if runtime, ok := m.own[p.ID].(runtimeChooser); ok && runtime.RuntimeInfo() != nil && p.AgentState != api.AgentIdle {
+		m.confirm = &confirmation{popup: confirm.New("Stop and close chat", "Stop this run and its owned child tasks, then close? Saved progress and paused drafts stay available.", "Stop and close"),
+			msg: &api.Command{Op: api.OpClose, Target: p.ID}}
+		return
+	}
 	m.confirm = &confirmation{
 		popup: confirm.New("Close pane", fmt.Sprintf("Close this pane (%s%d of %d)?", what, place, len(w.Panes)), "Close"),
 		msg:   &api.Command{Op: api.OpClose, Target: p.ID},

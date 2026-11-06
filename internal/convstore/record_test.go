@@ -11,6 +11,7 @@ import (
 // everyRecord holds one record of each type this package knows.
 var everyRecord = []Record{
 	&Meta{Version: Version, ID: testID, Title: "t", Folder: "/home/u/p", Profile: "bash", Created: at, Model: "anthropic/claude-opus-5-5", Effort: "high"},
+	&RuntimeEvent{At: at, Session: "backend-session", User: "task", Display: json.RawMessage(`{"kind":"turn-started","text":"task"}`)},
 	&User{At: at, Text: "Hello\nthere \"quoted\""},
 	&Assistant{At: at, Model: "claude-opus-5-5", Stop: "tool_use", Usage: &Usage{Input: 10, Output: 5, CacheRead: 2}, Blocks: []Block{
 		{Kind: BlockThinking, Text: "hmm", Signature: "sig"},
