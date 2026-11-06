@@ -490,6 +490,9 @@ func TestRestartStartsNoLoginOrTurn(t *testing.T) {
 	eventually(t, "the runtime chat saved", func() bool { return chatPaneOf(t, d, "work").Conversation == done.Conversation })
 	stopBySignal(first)
 	before := len(readFixtureLog(t, log))
+	if before == 0 {
+		t.Fatal("the first turn logged no Claude runs")
+	}
 
 	second := start()
 	c := connect(t, second, 100, 30)
@@ -499,10 +502,24 @@ func TestRestartStartsNoLoginOrTurn(t *testing.T) {
 	if restored.Runtime == nil || restored.Runtime.Connection != id || restored.Running {
 		t.Fatalf("restored chat lost its connection or runs: %+v", restored)
 	}
-	time.Sleep(300 * time.Millisecond)
-	if after := readFixtureLog(t, log); len(after) != before {
-		t.Fatalf("restart started Claude: %v", after[before:])
+	// The next turn is the ordering point: it must run exactly what the
+	// first turn ran, so any start the restore made shows as extra runs.
+	chatInputOf(c, restored.Pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "again" })
+	c.WaitChat(restored.Pane, func(s *api.ChatSnapshot) bool { return idle(s) && s.Turn == 2 })
+	after := readFixtureLog(t, log)
+	if ops(after[before:]) != ops(after[:before]) {
+		t.Fatalf("restart started Claude by itself: first turn ran %q, after restart %q", ops(after[:before]), ops(after[before:]))
 	}
+}
+
+// ops lists the operation of each fixture log line, such as "status chat".
+func ops(lines []string) string {
+	var out []string
+	for _, line := range lines {
+		op, _, _ := strings.Cut(line, " ")
+		out = append(out, op)
+	}
+	return strings.Join(out, " ")
 }
 
 // TestSignInPaneManualCodeGolden: when the browser cannot return to Claude,
@@ -642,5 +659,37 @@ func TestNoKeyStoreIsUnknown(t *testing.T) {
 	r := newRuntimeChat(t, server)
 	if got := r.status(connection.ID); got.Status != api.RuntimeStatusUnknown || got.Reason == "" {
 		t.Fatalf("status = %+v, want unknown with a reason", got)
+	}
+}
+
+// TestLoginCancelBeforeFinish forces the cancel to win: the sign-in never
+// finishes, the state reads signed out, and cancel never signs out.
+func TestLoginCancelBeforeFinish(t *testing.T) {
+	log := useFixtureLog(t)
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "login")
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	id := r.create("subscription")
+	r.c.Send(&api.RuntimeRequest{RequestID: "login", Pane: r.pane, Agent: r.agent, Action: api.RuntimeLogin, Connection: id})
+	if opened := runtimeReply(t, r.c); opened.LoginPane == 0 {
+		t.Fatalf("sign-in did not open: %+v", opened)
+	}
+	r.c.WaitScreen("private-login-code")
+	r.c.Send(&api.RuntimeRequest{RequestID: "cancel", Pane: r.pane, Agent: r.agent, Action: api.RuntimeCancelLogin, Connection: id})
+	var finished *api.RuntimeConnections
+	for finished == nil {
+		if response := runtimeReply(t, r.c); response.RequestID == "login" {
+			finished = response
+		}
+	}
+	if finished.State == "error" || finished.Connections[0].Status != api.RuntimeStatusSignedOut {
+		t.Fatalf("after cancel: %+v, want signed out", finished)
+	}
+	for _, line := range readFixtureLog(t, log) {
+		if strings.HasPrefix(line, "logout ") {
+			t.Fatal("cancel signed out")
+		}
 	}
 }

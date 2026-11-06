@@ -55,6 +55,9 @@ var keyLike = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`)
 // diagnostics, at most 200 characters, with key and anything key-shaped
 // hidden. Status diagnostics hold no tool data, unlike a chat's.
 func lastLine(text, key string) string {
+	// wsl.exe writes its own errors, such as an unknown distribution, in
+	// UTF-16; without the zero bytes the ASCII text reads plainly.
+	text = strings.ReplaceAll(text, "\x00", "")
 	lines := strings.Split(strings.TrimSpace(text), "\n")
 	line := strings.TrimSpace(lines[len(lines)-1])
 	if key != "" {

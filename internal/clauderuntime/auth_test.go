@@ -58,6 +58,7 @@ func TestStatusDiagnosticLine(t *testing.T) {
 		{"warning\nError: config is locked\n", "", "Error: config is locked"},
 		{"bad key sk-live-1234", "sk-live-1234", "bad key [key hidden]"},
 		{"Invalid API key sk-ant-api03-abcDEF_12-x", "", "Invalid API key [key hidden]"},
+		{"N\x00o\x00 \x00d\x00i\x00s\x00t\x00r\x00o\x00\r\x00\n\x00", "", "No distro"},
 	}
 	for _, tt := range tests {
 		if got := lastLine(tt.text, tt.key); got != tt.want {
