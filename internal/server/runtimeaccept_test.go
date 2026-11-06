@@ -537,3 +537,20 @@ func TestSignInPaneManualCodeGolden(t *testing.T) {
 		})
 	}
 }
+
+// TestStatusIgnoresDiagnostics: a warning Claude prints on stderr does not
+// turn a valid status into unknown.
+func TestStatusIgnoresDiagnostics(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "status-warn")
+	connection, err := clauderuntime.CreateConnection(options.Chat.Runtime.Root, "", clauderuntime.Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := New(options)
+	t.Cleanup(server.Close)
+	r := newRuntimeChat(t, server)
+	if got := r.status(connection.ID); got.Status != "signed-in" {
+		t.Fatalf("status = %+v, want signed in despite the warning", got)
+	}
+}

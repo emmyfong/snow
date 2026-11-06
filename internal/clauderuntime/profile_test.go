@@ -152,3 +152,19 @@ func TestConnectionRejectsWrongCredential(t *testing.T) {
 		}
 	}
 }
+
+// TestConnectionKeepsGitBashPath: the Git Bash path that native Windows
+// Claude Code needs passes through; every other Claude variable is hidden.
+func TestConnectionKeepsGitBashPath(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	l, err := p.Launch(shell.Launch{Path: "claude"}, []string{"CLAUDE_CODE_GIT_BASH_PATH=C:\\Git\\bin\\bash.exe", "CLAUDE_CODE_USE_BEDROCK=1"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(l.Hide, "CLAUDE_CODE_GIT_BASH_PATH") || !slices.Contains(l.Hide, "CLAUDE_CODE_USE_BEDROCK") {
+		t.Fatalf("hidden = %q, want the Git Bash path kept and the gateway switch hidden", l.Hide)
+	}
+}

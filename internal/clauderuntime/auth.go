@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/emmyfong/snow/internal/shell"
 )
@@ -28,15 +30,41 @@ func (p Profile) CheckAuth(ctx context.Context, program shell.Profile, folder, k
 	if err != nil {
 		return AuthStatus{}, err
 	}
-	var output statusOutput
-	code, err := launch.Run(ctx, &output)
+	var output, diagnostics statusOutput
+	code, err := launch.RunIO(ctx, &output, &diagnostics)
 	if err != nil {
 		return AuthStatus{}, err
 	}
 	if output.overflow {
 		return AuthStatus{}, fmt.Errorf("%w: authentication status exceeds limit", ErrProtocol)
 	}
-	return parseAuthStatus(output.Bytes(), code, p)
+	status, err := parseAuthStatus(output.Bytes(), code, p)
+	if err != nil {
+		if said := lastLine(diagnostics.String(), key); said != "" {
+			return AuthStatus{}, fmt.Errorf("%w. Claude said: %s", err, said)
+		}
+	}
+	return status, err
+}
+
+// keyLike matches text shaped like an Anthropic key, which a diagnostic
+// line must never carry into a status message.
+var keyLike = regexp.MustCompile(`sk-ant-[A-Za-z0-9_-]+`)
+
+// lastLine returns the last non-empty line of a status command's
+// diagnostics, at most 200 characters, with key and anything key-shaped
+// hidden. Status diagnostics hold no tool data, unlike a chat's.
+func lastLine(text, key string) string {
+	lines := strings.Split(strings.TrimSpace(text), "\n")
+	line := strings.TrimSpace(lines[len(lines)-1])
+	if key != "" {
+		line = strings.ReplaceAll(line, key, "[key hidden]")
+	}
+	line = keyLike.ReplaceAllString(line, "[key hidden]")
+	if runes := []rune(line); len(runes) > 200 {
+		line = string(runes[:200]) + "…"
+	}
+	return line
 }
 
 func parseAuthStatus(data []byte, code int, profile Profile) (AuthStatus, error) {
@@ -69,6 +97,7 @@ type statusOutput struct {
 	overflow bool
 }
 
+// Write keeps data up to 64 KiB and notes when more arrived.
 func (b *statusOutput) Write(data []byte) (int, error) {
 	const limit = 64 << 10
 	n := min(len(data), limit-b.Len())

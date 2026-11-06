@@ -3,6 +3,7 @@ package clauderuntime
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/emmyfong/snow/internal/convstore"
@@ -17,9 +18,9 @@ type recorder struct {
 	failed chan error
 	done   chan struct{}
 	err    error // read after done closes
-	// text holds streamed text not yet queued. A reply arrives in hundreds
-	// of small pieces a second, more than the queue holds; merged, they
-	// rebuild the same reply. Only the controller goroutine touches it.
+	// text holds streamed text or thinking not yet queued. Both arrive in
+	// hundreds of small pieces a second, more than the queue holds; merged,
+	// they rebuild the same entry. Only the controller goroutine touches it.
 	text        *api.ChatEvent
 	textSession string
 }
@@ -35,8 +36,8 @@ func newRecorder(w *convstore.Writer) *recorder {
 }
 
 func (r *recorder) append(event api.ChatEvent, session string) error {
-	if event.Kind == api.ChatEventText && event.Error == nil {
-		if r.text != nil && r.textSession == session && len(r.text.Text)+len(event.Text) <= maxMergedText {
+	if (event.Kind == api.ChatEventText || event.Kind == api.ChatEventThinking) && event.Error == nil {
+		if r.text != nil && r.text.Kind == event.Kind && r.textSession == session && len(r.text.Text)+len(event.Text) <= maxMergedText {
 			r.text.Text += event.Text
 			return nil
 		}
@@ -63,9 +64,25 @@ func (r *recorder) flushText() error {
 }
 
 func (r *recorder) queueEvent(event api.ChatEvent, session string) error {
-	display, err := json.Marshal(event)
+	record, err := r.record(event, session)
 	if err != nil {
 		return err
+	}
+	select {
+	case <-r.done:
+		return errors.Join(ErrClosed, r.err)
+	case r.queue <- record:
+		return nil
+	default:
+		return ErrBackpressure
+	}
+}
+
+// record turns event into the record saved for it.
+func (r *recorder) record(event api.ChatEvent, session string) (convstore.RuntimeEvent, error) {
+	display, err := json.Marshal(event)
+	if err != nil {
+		return convstore.RuntimeEvent{}, fmt.Errorf("encode runtime event: %w", err)
 	}
 	record := convstore.RuntimeEvent{At: time.Now(), Session: session, Display: display}
 	if event.Kind == api.ChatEventTurnStarted {
@@ -77,14 +94,7 @@ func (r *recorder) queueEvent(event api.ChatEvent, session string) error {
 	if event.Kind == api.ChatEventModel && event.Error == nil {
 		record.Model = event.Model
 	}
-	select {
-	case <-r.done:
-		return errors.Join(ErrClosed, r.err)
-	case r.queue <- record:
-		return nil
-	default:
-		return ErrBackpressure
-	}
+	return record, nil
 }
 
 func (r *recorder) run() {
@@ -112,7 +122,20 @@ func (r *recorder) run() {
 }
 
 func (r *recorder) close() error {
-	flushErr := r.flushText()
+	var flushErr error
+	if r.text != nil {
+		// The writer still drains the queue, so waiting for room is safe,
+		// and the last piece of a reply is not lost to a full queue.
+		var record convstore.RuntimeEvent
+		if record, flushErr = r.record(*r.text, r.textSession); flushErr == nil {
+			select {
+			case r.queue <- record:
+			case <-r.done:
+				flushErr = errors.Join(ErrClosed, r.err)
+			}
+		}
+		r.text = nil
+	}
 	close(r.queue)
 	<-r.done
 	return errors.Join(flushErr, r.err, r.w.Close())

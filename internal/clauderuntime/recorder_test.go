@@ -9,10 +9,19 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// TestRecorderKeepsUpWithStreamedText: a reply streamed in many small pieces
-// does not fill the save queue, which would end the run, and the saved
-// history still rebuilds the whole reply in order.
+// TestRecorderKeepsUpWithStreamedText: a reply or its thinking streamed in
+// many small pieces does not fill the save queue, which would end the run,
+// and the saved history still rebuilds it whole and in order.
 func TestRecorderKeepsUpWithStreamedText(t *testing.T) {
+	for _, kind := range []struct {
+		event string
+		entry string
+	}{{api.ChatEventText, api.ChatEntryAssistant}, {api.ChatEventThinking, api.ChatEntryThinking}} {
+		t.Run(kind.event, func(t *testing.T) { recordStreamed(t, kind.event, kind.entry) })
+	}
+}
+
+func recordStreamed(t *testing.T, kind, entry string) {
 	store, err := convstore.Open(t.TempDir())
 	if err != nil {
 		t.Fatal(err)
@@ -29,7 +38,7 @@ func TestRecorderKeepsUpWithStreamedText(t *testing.T) {
 	}
 	const pieces = 5000
 	for i := range pieces {
-		if err := r.append(api.ChatEvent{Kind: api.ChatEventText, Pane: 1, Text: string(rune('a' + i%26))}, "s"); err != nil {
+		if err := r.append(api.ChatEvent{Kind: kind, Pane: 1, Text: string(rune('a' + i%26))}, "s"); err != nil {
 			t.Fatalf("piece %d: %v", i, err)
 		}
 	}
@@ -59,7 +68,7 @@ func TestRecorderKeepsUpWithStreamedText(t *testing.T) {
 	}
 	var got string
 	for _, e := range snapshot.Entries {
-		if e.Kind == api.ChatEntryAssistant {
+		if e.Kind == entry {
 			got += e.Text
 		}
 	}

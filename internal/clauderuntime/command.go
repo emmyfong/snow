@@ -42,9 +42,14 @@ func (p Profile) ChatLaunch(program shell.Profile, folder, key string, options R
 	}
 	config := struct {
 		Servers map[string]MCPServer `json:"mcpServers"`
-	}{Servers: options.MCP}
-	if config.Servers == nil {
-		config.Servers = map[string]MCPServer{}
+	}{Servers: map[string]MCPServer{}}
+	for name, server := range options.MCP {
+		if p.Distro != "" {
+			// Claude runs in the distribution, where a Windows program
+			// starts only by its /mnt path.
+			server.Command = shell.WSLPath(server.Command)
+		}
+		config.Servers[name] = server
 	}
 	mcp, err := json.Marshal(config)
 	if err != nil {
@@ -103,7 +108,11 @@ func (p Profile) command(program shell.Profile, folder, key string) (shell.Launc
 		return shell.Launch{}, fmt.Errorf("%w: connection belongs to another environment", ErrProfile)
 	}
 	ext := strings.ToLower(filepath.Ext(program.Path))
-	if program.Path == "" || program.CmdLine != "" || ext == ".cmd" || ext == ".bat" {
+	if ext == ".cmd" || ext == ".bat" {
+		return shell.Launch{}, fmt.Errorf("%w: Claude Code installed through npm runs as %s, which Snow cannot start safely. "+
+			"Install the native Claude Code (claude.exe), or use WSL", ErrExecutable, filepath.Base(program.Path))
+	}
+	if program.Path == "" || program.CmdLine != "" {
 		// The official Python SDK also refuses Windows batch wrappers. Passing
 		// structured JSON through cmd's expansion rules is not a safe argv path.
 		return shell.Launch{}, ErrExecutable

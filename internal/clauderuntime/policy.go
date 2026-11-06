@@ -27,10 +27,16 @@ type Policy struct {
 	// SuppliesKey is true when the policy gives Claude an API key, token,
 	// or key helper, which Claude prefers over a subscription sign-in.
 	SuppliesKey bool
+	// Gateway is true when the policy sends Claude through a cloud gateway
+	// or another address, which neither Snow route uses.
+	Gateway bool
 }
 
 // policyKeyVars are managed env entries that take over authentication.
 var policyKeyVars = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN"}
+
+// policyGatewayVars are managed env entries that send Claude elsewhere.
+var policyGatewayVars = []string{"CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY", "ANTHROPIC_BASE_URL"}
 
 // PolicyDir is the folder of the managed settings files for a connection's
 // environment: the native system folder, or /etc/claude-code inside a WSL
@@ -87,6 +93,11 @@ func ReadPolicy(dir string) (Policy, error) {
 				p.SuppliesKey = true
 			}
 		}
+		for _, name := range policyGatewayVars {
+			if _, ok := wire.Env[name]; ok {
+				p.Gateway = true
+			}
+		}
 	}
 	return p, nil
 }
@@ -94,6 +105,8 @@ func ReadPolicy(dir string) (Policy, error) {
 // Check returns an ErrPolicy that says why the policy does not allow auth.
 func (p Policy) Check(auth AuthMode) error {
 	switch {
+	case p.Gateway:
+		return policyError("Your organization's policy sends Claude Code through a gateway, which Snow connections do not use.")
 	case auth == APIKey && p.ForceLoginMethod != "":
 		return policyError("Your organization requires " + loginName(p.ForceLoginMethod) + " sign-in, and Claude Code refuses API keys.")
 	case auth == Subscription && p.ForceLoginMethod != "" && p.ForceLoginMethod != "claudeai":
@@ -108,6 +121,7 @@ func (p Policy) Check(auth AuthMode) error {
 // show the user.
 type PolicyError struct{ Reason string }
 
+// Error returns the reason.
 func (e *PolicyError) Error() string { return e.Reason }
 
 // Is makes errors.Is(err, ErrPolicy) true.

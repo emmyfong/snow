@@ -170,6 +170,18 @@ func TestStreamBlockedInputIsCancellable(t *testing.T) {
 	}
 }
 
+// TestStreamExplainsMissingClaude: a launch that cannot find claude, such
+// as the WSL script in a distribution without it, ends with a message that
+// says so, and still keeps Claude's diagnostic output out of the error.
+func TestStreamExplainsMissingClaude(t *testing.T) {
+	s := startTestStream(t, "not-installed")
+	waitStream(t, s)
+	if err := s.Err(); !errors.Is(err, ErrClosed) || !strings.Contains(err.Error(), "not installed") ||
+		strings.Contains(err.Error(), "private-input") {
+		t.Fatalf("terminal error %v, want a not-installed message without diagnostics", err)
+	}
+}
+
 func TestStreamHelper(_ *testing.T) {
 	mode := os.Getenv("SNOW_CLAUDE_STREAM_TEST")
 	if mode == "" {
@@ -193,6 +205,11 @@ func TestStreamHelper(_ *testing.T) {
 		write(strings.Repeat("x", MaxFrameBytes+1))
 	case "exit":
 		os.Exit(3)
+	case "not-installed":
+		if _, err := fmt.Fprintln(os.Stderr, "private-input diagnostic"); err != nil {
+			os.Exit(2)
+		}
+		os.Exit(notInstalledCode)
 	case "flood":
 		for range 100 {
 			write(`{"type":"assistant"}`)

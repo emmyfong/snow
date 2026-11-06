@@ -192,7 +192,7 @@ func (s *Server) runtimeConnection(facts runtimeFacts, id string) (clauderuntime
 func (s *Server) runtimeConnectionList(facts runtimeFacts, pane int, selected string) *api.RuntimeConnections {
 	response := &api.RuntimeConnections{Pane: pane, Agent: facts.snapshot.Agent, Selected: selected, Connections: []api.RuntimeConnection{},
 		Ignored: clauderuntime.IgnoredHostVars(os.Environ())}
-	connections, err := clauderuntime.ListConnections(s.opts.Chat.Runtime.Root, facts.host.Distro)
+	connections, unreadable, err := clauderuntime.ListConnections(s.opts.Chat.Runtime.Root, facts.host.Distro)
 	if err != nil {
 		response.State, response.Message = "error", err.Error()
 		return response
@@ -200,6 +200,10 @@ func (s *Server) runtimeConnectionList(facts runtimeFacts, pane int, selected st
 	for _, connection := range connections {
 		response.Connections = append(response.Connections, api.RuntimeConnection{ID: connection.ID, Name: connection.Name,
 			Auth: string(connection.Auth), Environment: runtimeEnvironment(connection.Distro), Status: "unknown"})
+	}
+	for _, broken := range unreadable {
+		response.Connections = append(response.Connections, api.RuntimeConnection{ID: broken.ID, Name: "Claude Code",
+			Environment: "unknown", Status: "unknown", Reason: "Snow cannot read this connection's saved settings: " + broken.Err.Error()})
 	}
 	return response
 }

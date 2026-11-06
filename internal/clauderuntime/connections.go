@@ -78,19 +78,21 @@ func LoadConnection(root, id string) (Connection, error) {
 
 // ListConnections returns only connections in the selected environment. An
 // account from another WSL distribution or the host is never offered as a
-// substitute for the current project's connection.
-func ListConnections(root, distro string) ([]Connection, error) {
+// substitute for the current project's connection. Saved connections Snow
+// cannot read come back apart, with the reason.
+func ListConnections(root, distro string) ([]Connection, []Unreadable, error) {
 	if !filepath.IsAbs(root) {
-		return nil, ErrProfile
+		return nil, nil, ErrProfile
 	}
 	dirs, err := os.ReadDir(filepath.Join(root, "connections"))
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("list connections: %w", err)
+		return nil, nil, fmt.Errorf("list connections: %w", err)
 	}
 	var connections []Connection
+	var unreadable []Unreadable
 	for _, dir := range dirs {
 		if !dir.IsDir() || !validID(dir.Name()) {
 			continue
@@ -100,11 +102,20 @@ func ListConnections(root, distro string) ([]Connection, error) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			// Its environment is unknown, so every environment lists it.
+			unreadable = append(unreadable, Unreadable{ID: dir.Name(), Err: err})
+			continue
 		}
 		if c.Distro == distro {
 			connections = append(connections, c)
 		}
 	}
-	return connections, nil
+	return connections, unreadable, nil
+}
+
+// Unreadable is a saved connection Snow cannot read. One broken file must
+// not hide the other connections.
+type Unreadable struct {
+	ID  string
+	Err error
 }

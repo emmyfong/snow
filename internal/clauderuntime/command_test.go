@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/shell"
@@ -77,5 +78,18 @@ func TestRuntimeRejectsShellWrappers(t *testing.T) {
 		if _, err := p.ChatLaunch(program, "", "", RunOptions{}); !errors.Is(err, ErrExecutable) {
 			t.Errorf("unsafe native executable accepted: %v", err)
 		}
+	}
+}
+
+// TestNpmClaudeMessage: Claude Code installed through npm, which runs as
+// claude.cmd, is refused with a message that says what to install.
+func TestNpmClaudeMessage(t *testing.T) {
+	p, err := NewProfile(t.TempDir(), "selected", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = p.AuthLaunch(shell.Profile{Path: `C:\Users\u\AppData\Roaming\npm\claude.cmd`}, "", "", "status")
+	if !errors.Is(err, ErrExecutable) || !strings.Contains(err.Error(), "native Claude Code") {
+		t.Fatalf("err = %v, want a message that names the native install", err)
 	}
 }

@@ -1,6 +1,7 @@
 package clauderuntime
 
 import (
+	"encoding/json"
 	"errors"
 	"slices"
 	"strings"
@@ -125,5 +126,33 @@ func TestWSLConfigDirMatch(t *testing.T) {
 		if got := p.configDirMatches(tt.dir); got != tt.want {
 			t.Errorf("configDirMatches(%q) = %v, want %v", tt.dir, got, tt.want)
 		}
+	}
+}
+
+// TestWSLChatReachesPaneTools: Claude in a distribution starts Snow's pane
+// tools through the Windows snow.exe by its /mnt path. The pane and socket
+// values stay as they are: snow.exe reads them on the Windows side.
+func TestWSLChatReachesPaneTools(t *testing.T) {
+	p, err := ProfileFor(t.TempDir(), Connection{ID: "c1", Auth: Subscription, Distro: "Ubuntu"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	program := shell.Profile{Kind: shell.KindClaude, Path: "wsl.exe", Args: []string{"-d", "Ubuntu"}, Distro: "Ubuntu"}
+	l, err := p.ChatLaunch(program, "/home/u/work", "", RunOptions{MCP: map[string]MCPServer{"snow": {
+		Command: `C:\Program Files\snow\snow.exe`, Args: []string{"mcp"},
+		Env: map[string]string{"SNOW_PANE": "3", "SNOW_SOCKET": `C:\Users\u\snow.sock`}}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	config := l.Args[slices.Index(l.Args, "--mcp-config")+1]
+	var got struct {
+		Servers map[string]MCPServer `json:"mcpServers"`
+	}
+	if err := json.Unmarshal([]byte(config), &got); err != nil {
+		t.Fatal(err)
+	}
+	snow := got.Servers["snow"]
+	if snow.Command != "/mnt/c/Program Files/snow/snow.exe" || snow.Env["SNOW_SOCKET"] != `C:\Users\u\snow.sock` {
+		t.Fatalf("pane tools in WSL: %+v", snow)
 	}
 }

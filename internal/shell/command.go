@@ -48,7 +48,13 @@ const waitDelay = 2 * time.Second
 // command and every process it started, and returns ctx's error. When the
 // command exits, processes it left running are killed too.
 func (l Launch) Run(ctx context.Context, out io.Writer) (int, error) {
-	cmd, tree, err := l.start(ctx, out)
+	return l.RunIO(ctx, out, out)
+}
+
+// RunIO is Run with stderr written to its own writer, for a command whose
+// stdout is data and whose stderr is only diagnostics.
+func (l Launch) RunIO(ctx context.Context, out, stderr io.Writer) (int, error) {
+	cmd, tree, err := l.startIO(ctx, nil, out, stderr)
 	if err != nil {
 		return -1, err
 	}

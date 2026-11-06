@@ -28,8 +28,8 @@ func TestConnectionsKeepAccountsAndEnvironmentsSeparate(t *testing.T) {
 		distro string
 		want   int
 	}{{"", 2}, {"Ubuntu", 1}, {"Debian", 1}, {"missing", 0}} {
-		connections, err := ListConnections(root, tc.distro)
-		if err != nil || len(connections) != tc.want {
+		connections, unreadable, err := ListConnections(root, tc.distro)
+		if err != nil || len(connections) != tc.want || len(unreadable) != 0 {
 			t.Fatalf("environment %q: %d connections, %v", tc.distro, len(connections), err)
 		}
 		for _, connection := range connections {
@@ -55,5 +55,29 @@ func TestConnectionCannotRedirectItsIdentity(t *testing.T) {
 	}
 	if _, err := LoadConnection(root, connection.ID); !errors.Is(err, ErrProfile) {
 		t.Fatalf("changed connection identity accepted: %v", err)
+	}
+}
+
+// TestBrokenConnectionHidesNoOther: a connection whose saved file Snow
+// cannot read is reported by its ID, and every readable one still lists.
+func TestBrokenConnectionHidesNoOther(t *testing.T) {
+	root := t.TempDir()
+	good, err := CreateConnection(root, "", Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(root, "connections", "broken1")
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "connection.json"), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	connections, unreadable, err := ListConnections(root, "")
+	if err != nil || len(connections) != 1 || connections[0].ID != good.ID {
+		t.Fatalf("readable connections: %+v, %v", connections, err)
+	}
+	if len(unreadable) != 1 || unreadable[0].ID != "broken1" || unreadable[0].Err == nil {
+		t.Fatalf("unreadable connections: %+v", unreadable)
 	}
 }

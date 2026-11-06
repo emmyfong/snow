@@ -34,6 +34,8 @@ func TestPolicyCheck(t *testing.T) {
 		{"drop-in wins", map[string]string{"managed-settings.json": `{"forceLoginMethod":"console"}`,
 			"managed-settings.d/10-a.json": `{"forceLoginMethod":"claudeai"}`}, true, false},
 		{"hidden drop-in ignored", map[string]string{"managed-settings.d/.x.json": `{"forceLoginMethod":"console"}`}, true, true},
+		{"gateway switch", map[string]string{"managed-settings.json": `{"env":{"CLAUDE_CODE_USE_BEDROCK":"1"}}`}, false, false},
+		{"gateway address", map[string]string{"managed-settings.json": `{"env":{"ANTHROPIC_BASE_URL":"https://proxy.example"}}`}, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

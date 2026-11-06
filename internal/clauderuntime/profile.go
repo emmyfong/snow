@@ -138,9 +138,16 @@ func (p Profile) Launch(l shell.Launch, inherited []string, key string) (shell.L
 
 func connectionVar(name string) bool {
 	name = strings.ToUpper(name)
+	if name == gitBashVar {
+		return false
+	}
 	return name == "CLAUDECODE" || strings.HasPrefix(name, "CLAUDE_") || strings.HasPrefix(name, "ANTHROPIC_") ||
 		name == bedrockKey
 }
+
+// gitBashVar tells Claude Code on Windows where Git Bash is. It chooses no
+// route or account, and Claude may not start without it.
+const gitBashVar = "CLAUDE_CODE_GIT_BASH_PATH"
 
 // bedrockKey is the Amazon Bedrock gateway's key. The gateway switches start
 // with CLAUDE_, but this key does not.
@@ -149,8 +156,9 @@ const bedrockKey = "AWS_BEARER_TOKEN_BEDROCK"
 // hostAuthVars are inherited variables that would choose a route, a key, or
 // a gateway in a standalone Claude. Snow keeps them from every connection
 // and names the ones it finds, so the user knows they have no effect.
-var hostAuthVars = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN",
-	"ANTHROPIC_BASE_URL", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX", "CLAUDE_CODE_USE_FOUNDRY",
+var hostAuthVars = []string{"ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_PROFILE",
+	"ANTHROPIC_BASE_URL", "ANTHROPIC_CUSTOM_HEADERS", "CLAUDE_CODE_USE_BEDROCK", "CLAUDE_CODE_USE_VERTEX",
+	"CLAUDE_CODE_USE_FOUNDRY", "ANTHROPIC_BEDROCK_BASE_URL", "ANTHROPIC_VERTEX_BASE_URL", "ANTHROPIC_FOUNDRY_API_KEY",
 	bedrockKey, "CLAUDE_CONFIG_DIR"}
 
 // IgnoredHostVars returns the names in hostAuthVars that environ sets.

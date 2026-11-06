@@ -2,7 +2,6 @@ package clauderuntime
 
 import (
 	"path"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -23,8 +22,12 @@ const wslVar = "SNOW_RT_"
 // wslScript starts Claude inside the distribution. It finds claude the way
 // the user's login shell does (nvm, ~/.local/bin), but runs it from plain
 // sh, so startup files that export a key or a helper never apply, and
-// their output never mixes into the protocol. $1 is the connection ID,
-// checked by validID; the rest are Claude's arguments.
+// their output never mixes into the protocol. Only the folder is made
+// owner-only: Claude keeps the user's umask for the files it writes. A
+// missing claude exits with notInstalledCode, 127.
+// WSLENV lets the Windows snow.exe that Claude starts for pane tools see
+// its pane and socket. $1 is the connection ID, checked by validID; the
+// rest are Claude's arguments.
 const wslScript = `set -eu
 id=$1
 shift
@@ -33,17 +36,17 @@ case $claude in
 /*) ;;
 *) echo "snow: claude is not installed in this WSL distribution" >&2; exit 127 ;;
 esac
-umask 077
 dir="$HOME/` + wslConfigBase + `/$id/claude"
-mkdir -p "$dir"
+(umask 077; mkdir -p "$dir")
 for name in $(env | sed -n -e 's/^\(CLAUDE[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(ANTHROPIC[A-Za-z0-9_]*\)=.*/\1/p' -e 's/^\(` + bedrockKey + `\)=.*/\1/p'); do
-	unset "$name"
+	[ "$name" = ` + gitBashVar + ` ] || unset "$name"
 done
 for name in $(env | sed -n 's/^` + wslVar + `\([A-Za-z0-9_]*\)=.*/\1/p'); do
 	eval "export $name=\"\$` + wslVar + `$name\""
 	unset "` + wslVar + `$name"
 done
 export CLAUDE_CONFIG_DIR="$dir"
+export WSLENV=SNOW_PANE:SNOW_SOCKET
 exec "$claude" "$@"`
 
 // wslCommand runs program's distribution through wsl.exe with the script.
@@ -76,7 +79,7 @@ func (p Profile) wslCommand(program shell.Profile, folder string, l shell.Launch
 // knows, so it matches by its fixed tail.
 func (p Profile) configDirMatches(dir string) bool {
 	if p.Distro == "" {
-		return dir != "" && filepath.Clean(dir) == filepath.Clean(p.ConfigDir)
+		return dir != "" && samePath(dir, p.ConfigDir)
 	}
 	if !path.IsAbs(dir) {
 		return false

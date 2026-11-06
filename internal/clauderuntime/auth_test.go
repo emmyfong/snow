@@ -48,3 +48,20 @@ func TestAuthStatusRejectsRouteAndProfileConflicts(t *testing.T) {
 		t.Fatalf("unknown schema became signed out: %v", err)
 	}
 }
+
+// TestStatusDiagnosticLine: a status failure carries Claude's last
+// diagnostic line, with any key hidden, and a warning on stderr never
+// breaks parsing of the JSON on stdout.
+func TestStatusDiagnosticLine(t *testing.T) {
+	tests := []struct{ text, key, want string }{
+		{"", "", ""},
+		{"warning\nError: config is locked\n", "", "Error: config is locked"},
+		{"bad key sk-live-1234", "sk-live-1234", "bad key [key hidden]"},
+		{"Invalid API key sk-ant-api03-abcDEF_12-x", "", "Invalid API key [key hidden]"},
+	}
+	for _, tt := range tests {
+		if got := lastLine(tt.text, tt.key); got != tt.want {
+			t.Errorf("lastLine(%q) = %q, want %q", tt.text, got, tt.want)
+		}
+	}
+}

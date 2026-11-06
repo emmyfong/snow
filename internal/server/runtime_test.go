@@ -85,6 +85,11 @@ func TestClaudeRuntimeFixture(_ *testing.T) {
 			os.Exit(0)
 		}
 		if argument == "status" {
+			if mode == "status-warn" {
+				if _, err := fmt.Fprintln(os.Stderr, "warning: a newer Claude Code is available"); err != nil {
+					os.Exit(2)
+				}
+			}
 			loggedIn, method := true, "claude.ai"
 			if os.Getenv("ANTHROPIC_API_KEY") != "" {
 				method = "api_key"
