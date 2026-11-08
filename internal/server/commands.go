@@ -85,6 +85,9 @@ var changesTree = map[string]bool{
 
 // apply performs one validated command on sess.
 func (st *state) apply(sess *session, cmd *api.Command) error {
+	if cmd.Op == api.OpOpenFile {
+		return st.openFile(sess, cmd)
+	}
 	switch cmd.Op {
 	case api.OpNewWindow:
 		profile, dir := st.newPaneArgs(sess, cmd, 0)

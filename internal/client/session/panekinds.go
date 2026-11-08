@@ -6,8 +6,9 @@ import "github.com/emmyfong/snow/pkg/api"
 // The server draws a terminal itself. Any other kind not listed here gets
 // an unknownPane, so a newer server's pane never breaks this client.
 var ownKinds = map[string]func(m *Model, id int) ownPane{
-	api.PaneChat: func(m *Model, id int) ownPane { return newChatPane(id, m.theme, m.now, !m.hideUsage) },
-	api.PaneGit:  func(m *Model, id int) ownPane { return newGitPane(id, m.theme) },
+	api.PaneChat:  func(m *Model, id int) ownPane { return newChatPane(id, m.theme, m.now, !m.hideUsage) },
+	api.PaneGit:   func(m *Model, id int) ownPane { return newGitPane(id, m.theme) },
+	api.PaneFiles: func(m *Model, id int) ownPane { return newFilesPane(id, m.theme) },
 }
 
 // newOwnPane returns the pane for kind, or nil for a terminal pane.

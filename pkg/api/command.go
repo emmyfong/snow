@@ -33,6 +33,10 @@ const (
 	// OpLayout arranges the window holding pane Target as a preset from
 	// LayoutPresets.
 	OpLayout = "layout" // name
+	// OpOpenFile opens path, at an optional one-based line, in the window
+	// that holds pane Target. Before the viewer exists the files pane
+	// selects it.
+	OpOpenFile = "open-file" // path; optional line
 )
 
 // LayoutPreset is one window arrangement that OpLayout applies.
@@ -184,6 +188,17 @@ func (c *Command) Validate() error {
 		}
 		if _, set := c.Args[ArgAgent]; set {
 			return fmt.Errorf("%w: open takes no agent", ErrInvalidCommand)
+		}
+		return needTarget()
+	case OpOpenFile:
+		if c.Args[ArgPath] == "" {
+			return fmt.Errorf("%w: open-file needs a path", ErrInvalidCommand)
+		}
+		if _, ok := c.Args[ArgLine]; ok {
+			line, err := strconv.Atoi(c.Args[ArgLine])
+			if err != nil || line < 1 {
+				return fmt.Errorf("%w: open-file line %q must be a positive whole number", ErrInvalidCommand, c.Args[ArgLine])
+			}
 		}
 		return needTarget()
 	}
