@@ -203,3 +203,9 @@ Snow runs inside another terminal. Test against these:
 ```sh
 go test <touched-packages>
 ```
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

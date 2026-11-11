@@ -92,3 +92,9 @@ If nothing is ready, say why: list the blocked epics and their blockers.
 ## 5. Hand off
 
 Start the `issue-handler` skill with the chosen epic or issue number.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

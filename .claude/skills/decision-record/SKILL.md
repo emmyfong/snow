@@ -47,3 +47,9 @@ through git. If every agent must follow the decision, carry its agreed direction
 in `DESIGN.md`, and add a contributor rule to `AGENTS.md` only when needed. Use
 existing authorization for documentation updates. Ask before expanding the
 decision or changing documentation distribution policy.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

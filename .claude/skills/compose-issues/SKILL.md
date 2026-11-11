@@ -78,15 +78,20 @@ before approval.
 
 ## 4. Draft the bodies
 
-- Use the sections in `references/body-sections.md`.
+- Use the sections in `references/body-sections.md`. Every sub-issue also
+  meets `references/implementer-ready.md`: another agent must build it alone,
+  with no question to the user.
 - Write each body to `.context/compose/<key>.md`. Use `NEW-<key>` for issue
   numbers that do not exist yet.
 - Keep one glossary in `.context/compose/glossary.md` so all bodies use the
   same terms.
-- With more than six bodies, you may delegate drafting to subagents. Ask the
-  user which model to use. Give each subagent the glossary, the section
-  rules, and one body to write.
-- Review every body against the checklist in `references/body-sections.md`.
+- With more than six bodies, you may delegate drafting to subagents. Use the
+  model the user chose; ask only if no choice exists. Give each subagent the
+  glossary, the section rules, and one epic or one body to write. For a large
+  program, use the `plan-program` skill: it runs a drafter and an independent
+  verifier per workstream.
+- Review every body against the checklist in `references/body-sections.md`
+  and the readiness check in `references/implementer-ready.md`.
 
 ## 5. Approve the bodies
 
@@ -162,3 +167,9 @@ numbers, the labels applied, and the counts of created and retitled issues.
 Identify which epics are ready for `issue-handler`, which are blocked, and which
 remain parked or require an unresolved product decision. Publication does not
 authorize implementation.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

@@ -51,3 +51,9 @@ Report what changed, what was measured, quality and usage outcomes, missing data
 and reproducible settings. Recommend adoption, rejection, or a specific next
 experiment. Do not turn results from one runtime or task into a universal saving.
 File implementation work through the existing issue workflow only when warranted.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

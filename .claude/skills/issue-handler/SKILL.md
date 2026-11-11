@@ -187,3 +187,9 @@ A sub-issue or epic whose acceptance is a written finding answers a question.
 Put the finding in the PR body and, if it settles a decision, in an ADR with
 the `decision-record` skill. Mark spike code as throwaway in the PR. Keep it
 only if the user says so. The PR title type is `docs` for the finding.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.
