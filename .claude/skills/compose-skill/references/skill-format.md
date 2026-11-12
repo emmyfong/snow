@@ -61,6 +61,6 @@ your task.
 - [ ] No rule contradicts `AGENTS.md` or another skill.
 - [ ] Under about 200 lines; long detail is in `references/`.
 - [ ] Ends with "Improve this skill".
-- [ ] `grep -n '—' .claude/skills/<name>/` prints nothing.
+- [ ] `grep -rn '—' .claude/skills/<name>/` prints nothing.
 - [ ] The `AGENTS.md` catalog lists the skill with a one-line purpose.
 - [ ] A changelog entry records the evidence and the test.

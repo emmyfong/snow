@@ -7,8 +7,9 @@ description: Create, change, or repair one of Snow's shared skills in .claude/sk
 
 A skill is a short, shared procedure that any agent (Claude Code, Codex,
 OpenCode) can open by path and follow. Skills improve themselves: an agent that
-finds a gap fixes the skill at once and logs the fix. The user reviews logged
-fixes in batches before they reach `main`.
+finds a gap fixes the skill at once and logs the fix. A fix can reach `main`
+inside the PR of the task that found it. The user reviews the logged fixes in
+batches, and an entry stays `pending review` until then.
 
 ## When to change a skill
 
@@ -26,9 +27,10 @@ before you add an approval gate, remove one, or widen what a skill may publish.
 ## Where to edit
 
 Skill files are committed. Edit them in a worktree on a branch, never in the
-main checkout. If your own task already has a worktree, edit there and keep the
-skill change in a separate commit. Otherwise use the open skills branch the user
-named, or ask for one.
+main checkout. If your task has a worktree, edit there: the fix ships in that
+task's PR (user decision, 2026-11-12). Keep it in its own `docs(skills):`
+commit, and name it under "Skill changes" in the PR body. Without a task
+worktree, use the open skills branch the user named, or ask for one.
 
 ## 1. Find the right home
 
@@ -87,9 +89,10 @@ commit: `docs(skills): <summary>`.
 
 The user reviews pending entries in batches. When asked to prepare a batch:
 
-1. List every `pending review` entry with its diff summary.
+1. List every `pending review` entry with its diff summary and where it is
+   (on `main` through a PR, or on an open branch).
 2. Ask the user which entries to keep, change, or revert.
-3. Apply the answers, set kept entries to `Status: accepted`, and open one PR
+3. Apply the answers and set kept entries to `Status: accepted`. Open one PR
    for the batch. Ask before a docs-only PR, as `AGENTS.md` requires.
 
 ## Improve this skill

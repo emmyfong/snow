@@ -27,9 +27,10 @@ same briefs to that host's subagents.
 
 1. Record the scope, the user's decisions, and their dates in
    `.context/compose/program/PROGRAM.md`. Record the planning commit:
-   `git rev-parse origin/main`.
+   `git fetch origin && git rev-parse origin/main`.
 2. Collect the inventory once, for every drafter to read:
    ```sh
+   mkdir -p .context/compose/program
    gh issue list --state open --limit 300 --json number,title,labels,body > .context/compose/program/issues.json
    ```
 3. Split the program into workstreams. A workstream is a user-visible area with
@@ -51,8 +52,13 @@ same briefs to that host's subagents.
    structure rules in `compose-issues` step 2 and that every cited issue and
    path exists.
 4. Loop: send the fix list to the drafter (continue the same drafter if the
-   host allows it). Stop at pass, or after three rounds. Then fix or decide
-   the rest yourself.
+   host allows it). Stop at pass, or after three rounds. Then fix the rest
+   yourself, and ask the user about any product choice. Write each fix list
+   to a file and send its path, so the drafter and the next verifier read the
+   same text.
+5. A verifier often cannot open a page that needs a sign-in, such as a design
+   canvas. Read it yourself and put the values in the brief. Reject a fix that
+   only says "add a blocker until the page is read".
 
 ## 3. Curate and ask
 
@@ -72,19 +78,39 @@ same briefs to that host's subagents.
    `compose-issues/references/implementer-ready.md`.
 2. Verify each body with a fresh verifier. Loop as in step 2.4.
 3. Curate, then present the bodies for approval (`compose-issues` step 5).
+   For a large workstream, publish a page (on Claude Code, an Artifact) with
+   each epic, its sub-issues, priorities, and blockers, the user's decisions,
+   and a numbered list of the defaults the drafters chose. Ask about the
+   defaults that change behavior. Let the user name numbers to change.
+4. If an answer changes a decision that bodies already use, rework every body
+   that depends on it and verify those bodies again before you publish.
 
 ## 5. Publish
 
 Publish approved workstreams with `compose-issues` steps 6 to 8. Keep the
 draft-to-number mapping in `.context/compose/program/PUBLISHED.md`, so a later
-workstream can link to earlier issues. Report which epics are ready for
+workstream can link to earlier issues. For more than a few issues, write a
+manifest (key, body file, issue number or new, title, labels, parent,
+blockers) and a script that records each finished operation in a state file.
+A rerun then skips the done work. Report which epics are ready for
 `issue-handler` and which are blocked.
 
 ## Rules
 
 - A subagent's report is a claim. Check each fact that the plan depends on.
 - A drafter never decides a product question. It writes the question and a
-  recommendation.
+  recommendation. A default it picks for user-visible behavior (a label, a
+  button set, a permission scope) is a question too. It marks the line
+  "Recommendation, user confirms at bodies approval".
+- Drafters and verifiers do not run the programs the plan is about: no
+  probes, logins, or servers. A fact that needs a probe becomes a step in the
+  issue, with a stop rule. The implementer runs it with the user's approval,
+  in an isolated profile (for example, a temporary `CODEX_HOME`), and never
+  starts a machine-wide service. These limits are instructions only; the host
+  does not enforce them. After each drafter, check `git status` and the
+  repository's recent issue activity.
+- Prefer one way to do a thing. A second mode, preset, or compatibility rule
+  needs a reason from the user.
 - Keep `.context/CONTEXT.md` current with the `context` skill after each
   approved workstream, so a compaction or a new session can continue.
 - Keep briefs self-contained: a subagent sees only its brief and the files it

@@ -45,4 +45,9 @@ issue numbers. Follow `body-sections.md` and `implementer-ready.md` exactly.
 - ASD-STE100 style. No em-dashes. Terms from the glossary or the code; add a
   new term to the end of your file under "Glossary additions".
 - Do not publish, edit GitHub, commit, or change files outside your folder.
+- Run only read-only commands: `git`, `grep`, `gh issue view`, `gh issue
+  list`, and `gh api` GET. No probes, logins, or servers of the tools you plan
+  for. Write a needed probe as an issue step.
+- A default you choose for user-visible behavior is not decided. Mark it
+  "Recommendation, user confirms at bodies approval".
 - Finish with a short report: files written, open questions, unverified facts.

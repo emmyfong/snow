@@ -8,7 +8,7 @@ and prove the work without a question to the user.
 Add these sections to the sub-issue body from `body-sections.md`, after
 `## Scope`. Keep each one short and exact.
 
-```markdown
+````markdown
 ## Starting points
 - `internal/<pkg>/<file>.go`: `<Func or Type>` <what it does now, in one line>
 - <Every file the change reads or edits, found by reading the code, not guessed.>
@@ -43,7 +43,7 @@ go test ./internal/<pkg>/... -run '<TestName>'
 ## Open questions
 - <None, or each question with the planner's recommendation. A sub-issue with
   an open question that changes behavior is not ready: mark it blocked.>
-```
+````
 
 ## Rules
 

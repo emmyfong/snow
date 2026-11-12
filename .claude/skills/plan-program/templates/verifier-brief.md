@@ -22,6 +22,8 @@ Read only. Do not edit any file. Do not touch GitHub except to read.
 4. Look for conflicts with accepted decisions, and for product decisions the
    draft made without the user.
 5. Run `grep -n '—'` on the files.
+6. Read only. Run only `git`, `grep`, `gh issue view`, `gh issue list`, and
+   `gh api` GET. Do not run the tools the plan is about.
 
 ## Return exactly
 ```

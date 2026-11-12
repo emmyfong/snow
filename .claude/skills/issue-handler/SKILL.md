@@ -107,7 +107,8 @@ Work one sub-issue at a time, in the approved order.
   is available; do not require an absent plugin. Repeated attempts should add evidence.
 - Scope grows: pause the affected work and ask about the consequential change.
   Continue independent authorized work. Put new scope in an agreed sub-issue or
-  epic, not silently in this PR.
+  epic, not silently in this PR. One exception: a skill fix from
+  `compose-skill` ships in this PR, in its own commit.
 
 ## 5. Review the branch
 
@@ -139,7 +140,8 @@ Offer to post the review report as the PR's first comment.
 Write the body to `<wt>/.context/pr-<epic>.md` from
 `.github/pull_request_template.md`. Put one `Closes #<n>` line for the epic and
 one for each sub-issue this PR completes. GitHub needs a keyword per issue.
-Fill the summary and how it was tested. Follow AGENTS.md authorship rules. Then:
+Fill the summary and how it was tested. List any skill fixes under "Skill
+changes", with their changelog entries. Follow AGENTS.md authorship rules. Then:
 
 ```sh
 gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<epic>.md
