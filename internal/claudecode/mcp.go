@@ -76,53 +76,102 @@ func (m MCP) displayName() string {
 // Command is the command Claude Code runs for the server, for people.
 func (m MCP) Command() string { return shellQuote(m.Exe) + " mcp" }
 
-// Status reports whether Claude Code has Snow's MCP server registered at
-// user scope. A server of the same name in another scope is not Snow's, so
-// it does not count.
+// ErrMCPUnverifiable means Claude Code's output does not identify a
+// registration that Snow can safely compare or change.
+var ErrMCPUnverifiable = errors.New("claudecode: cannot verify Snow's MCP registration; run claude mcp get snow directly for details")
+
+type mcpState uint8
+
+const (
+	mcpMissing mcpState = iota
+	mcpCurrent
+	mcpStale
+	mcpOtherScope
+)
+
+// Status reports whether the user-scope registration runs the intended Snow
+// executable with its MCP argument. An unknown output format is an error.
 func (m MCP) Status() (bool, error) {
+	state, err := m.status()
+	return state == mcpCurrent, err
+}
+
+func (m MCP) status() (mcpState, error) {
 	if !m.Installed() {
-		return false, nil
+		return mcpMissing, nil
 	}
 	out, err := m.output("mcp", "get", serverName)
-	switch {
-	case err == nil:
-		return userScope(out), nil
-	case errors.Is(err, ErrNoServer):
-		return false, nil
+	if errors.Is(err, ErrNoServer) {
+		return mcpMissing, nil
 	}
-	return false, err
+	if err != nil {
+		return mcpMissing, err
+	}
+	return m.registration(out)
 }
 
-// userScope reports whether `claude mcp get` found the server in the user
-// scope, which Snow manages. A scope Snow does not know counts as the user's,
-// so a setup does not add a second server that `get` cannot tell apart.
-func userScope(out []byte) bool {
+func (m MCP) registration(out []byte) (mcpState, error) {
+	fields := make(map[string]string)
 	for _, line := range strings.Split(string(out), "\n") {
-		if after, ok := strings.CutPrefix(strings.TrimSpace(line), "Scope:"); ok {
-			return strings.Contains(after, "User")
+		key, value, ok := strings.Cut(strings.TrimLeft(strings.TrimSuffix(line, "\r"), " \t"), ":")
+		if !ok || (key != "Scope" && key != "Type" && key != "Command" && key != "Args") {
+			continue
 		}
+		if _, duplicate := fields[key]; duplicate {
+			return mcpMissing, ErrMCPUnverifiable
+		}
+		fields[key] = strings.TrimPrefix(value, " ")
 	}
-	return true
+	switch fields["Scope"] {
+	case "Project config (shared via .mcp.json)", "Local config (private to you in this project)":
+		return mcpOtherScope, nil
+	case "User config (available in all your projects)":
+	default:
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	if fields["Type"] != "stdio" || fields["Command"] == "" {
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	if _, ok := fields["Args"]; !ok {
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	// Claude prints the command separately from its joined arguments. Treat
+	// the whole field as a path, preserving spaces, quotes and backslashes.
+	if fields["Command"] == m.Exe && fields["Args"] == "mcp" {
+		return mcpCurrent, nil
+	}
+	return mcpStale, nil
 }
 
-// Add registers Snow's MCP server at user scope. A server Snow added before
-// is replaced, so a moved snow program is updated. A server of the same name
-// in another scope stays: Claude Code's add puts Snow's own scope first.
+// Add registers Snow's MCP server at user scope. An unchanged registration
+// is left alone. A stale user registration is replaced and verified. Other
+// scopes stay intact because every write explicitly selects user scope.
 func (m MCP) Add() error {
 	if !m.Installed() {
 		return fmt.Errorf("%s: %w", m.displayName(), ErrNoServer)
 	}
-	set, err := m.Status()
-	if err != nil {
+	state, err := m.status()
+	if err != nil || state == mcpCurrent {
 		return err
 	}
-	if set {
+	if state == mcpStale {
 		if _, err := m.output("mcp", "remove", "--scope", "user", serverName); err != nil && !errors.Is(err, ErrNoServer) {
 			return err
 		}
 	}
-	_, err = m.output("mcp", "add", "--scope", "user", serverName, "--", m.Exe, "mcp")
-	return err
+	if _, err := m.output("mcp", "add", "--scope", "user", serverName, "--", m.Exe, "mcp"); err != nil {
+		return err
+	}
+	if state == mcpStale {
+		current, err := m.Status()
+		if err != nil {
+			return err
+		}
+		if !current {
+			return fmt.Errorf("%s: %w", m.displayName(), ErrMCPUnverifiable)
+		}
+	}
+	return nil
 }
 
 // Remove unregisters Snow's MCP server from user scope.

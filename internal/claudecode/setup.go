@@ -137,15 +137,19 @@ func registerMCP(m MCP, in *bufio.Reader, out io.Writer) error {
 		_, err := fmt.Fprintf(out, "%s: Claude Code is not on PATH, so Snow did not add its MCP server.\n", m.displayName())
 		return err
 	}
-	set, err := m.Status()
+	state, err := m.status()
 	if err != nil {
 		return err
 	}
-	if set {
+	if state == mcpCurrent {
 		_, err = fmt.Fprintf(out, "%s: Snow's MCP server is already set.\n", m.displayName())
 		return err
 	}
-	if err := describeMCP(out, m, true); err != nil {
+	if state == mcpStale {
+		if _, err := fmt.Fprintf(out, "%s: Snow's MCP server is stale.\nSnow updates its user registration to:\n  %s\nUpdate it? [y/N] ", m.displayName(), m.Command()); err != nil {
+			return err
+		}
+	} else if err := describeMCP(out, m, true); err != nil {
 		return err
 	}
 	if !yes(in) {
@@ -166,11 +170,11 @@ func unregisterMCP(m MCP, in *bufio.Reader, out io.Writer) error {
 		_, err := fmt.Fprintf(out, "%s: Claude Code is not on PATH, so Snow has no MCP server to remove.\n", m.displayName())
 		return err
 	}
-	set, err := m.Status()
+	state, err := m.status()
 	if err != nil {
 		return err
 	}
-	if !set {
+	if state != mcpCurrent && state != mcpStale {
 		_, err = fmt.Fprintf(out, "%s: no Snow MCP server to remove.\n", m.displayName())
 		return err
 	}
@@ -211,12 +215,16 @@ func reportMCP(m MCP, out io.Writer) error {
 		_, err := fmt.Fprintf(out, "%s: Claude Code is not on PATH, so Snow has no MCP server to report.\n", m.displayName())
 		return err
 	}
-	set, err := m.Status()
+	state, err := m.status()
 	if err != nil {
 		return err
 	}
-	if set {
+	if state == mcpCurrent {
 		_, err = fmt.Fprintf(out, "%s: Snow's MCP server is set.\n", m.displayName())
+		return err
+	}
+	if state == mcpStale {
+		_, err = fmt.Fprintf(out, "%s: Snow's MCP server is stale. Run snow claude setup to update it.\n", m.displayName())
 		return err
 	}
 	_, err = fmt.Fprintf(out, "%s: Snow's MCP server is not set. Run snow claude setup.\n", m.displayName())

@@ -73,8 +73,33 @@ func TestMCPHelperCLI(t *testing.T) {
 		write(os.Stderr, "No MCP server found with name: other")
 	case "misleading":
 		write(os.Stderr, "Claude config is corrupt: No MCP server settings can be read")
+	case "unverifiable":
+		write(os.Stdout, "Unknown successful CLI output")
+		os.Exit(0)
+	case "stale-registration":
+		commandFile := log + ".command"
+		command, err := os.ReadFile(commandFile)
+		if err != nil && !errors.Is(err, os.ErrNotExist) {
+			t.Fatal(err)
+		}
+		if err != nil {
+			command = []byte("/old/Snow's app/snow")
+		}
+		cliArgs := args[2:]
+		switch {
+		case isGet(cliArgs):
+			write(os.Stdout, "snow:\n  Scope: User config (available in all your projects)\n  Type: stdio\n  Command: "+string(command)+"\n  Args: mcp")
+		case isRemove(cliArgs):
+		case len(cliArgs) == 8 && cliArgs[0] == "mcp" && cliArgs[1] == "add":
+			if err := os.WriteFile(commandFile, []byte(cliArgs[6]), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Fatalf("unexpected CLI arguments %q", cliArgs)
+		}
+		os.Exit(0)
 	case "user":
-		write(os.Stdout, "snow:\n  Scope: User config (available in all your projects)")
+		write(os.Stdout, "snow:\n  Scope: User config (available in all your projects)\n  Type: stdio\n  Command: /opt/snow\n  Args: mcp")
 		os.Exit(0)
 	case "project":
 		write(os.Stdout, "snow:\n  Scope: Project config (shared via .mcp.json)")
