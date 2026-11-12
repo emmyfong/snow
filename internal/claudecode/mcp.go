@@ -169,10 +169,8 @@ func (m MCP) outputContext(ctx context.Context, args ...string) ([]byte, error) 
 			return nil, ErrNoServer
 		}
 	}
-	if msg := stderrLine(stderr.String()); msg != "" {
-		return nil, fmt.Errorf("%s: claude %s: %w: %s", m.displayName(), strings.Join(args, " "), err, msg)
-	}
-	return nil, fmt.Errorf("%s: claude %s: %w", m.displayName(), strings.Join(args, " "), err)
+	return nil, fmt.Errorf("%s: claude %s: %w; %s; run this command directly for details",
+		m.displayName(), strings.Join(args, " "), err, mcpDiagnostic(stderr.String()))
 }
 
 func missingServer(args []string, diagnostic string) bool {
@@ -193,12 +191,17 @@ func missingServer(args []string, diagnostic string) bool {
 // isGet reports whether args ask claude for one MCP server.
 func isGet(args []string) bool { return len(args) >= 2 && args[0] == "mcp" && args[1] == "get" }
 
-// stderrLine returns the last non-empty line of a command's standard error,
-// where claude says what went wrong.
-func stderrLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) == 0 {
-		return ""
+// mcpDiagnostic uses fixed summaries because CLI errors can contain config
+// values, request headers, or credentials anywhere in their text.
+func mcpDiagnostic(stderr string) string {
+	s := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(s, "config") && (strings.Contains(s, "corrupt") || strings.Contains(s, "parse") || strings.Contains(s, "unexpected token") || strings.Contains(s, "invalid")):
+		return "Claude reported invalid configuration"
+	case strings.Contains(s, "permission denied") || strings.Contains(s, "access is denied"):
+		return "Claude reported a permission error"
+	case strings.Contains(s, "unknown command") || strings.Contains(s, "unknown option"):
+		return "Claude does not support this command or option"
 	}
-	return strings.TrimSpace(lines[len(lines)-1])
+	return "Claude command failed"
 }

@@ -54,8 +54,21 @@ func TestMCPHelperCLI(t *testing.T) {
 		write(os.Stderr, `{"apiKey":"secret-not-for-errors"}`)
 		write(os.Stderr, "Claude config is corrupt: unexpected token")
 		os.Exit(7)
+	case "corrupt-inline":
+		write(os.Stderr, `Claude config is corrupt: {"apiKey":"secret-not-for-errors"}`)
+		os.Exit(7)
+	case "headers":
+		write(os.Stderr, `Request failed: {"headers":{"Authorization":"Bearer secret-not-for-errors"}}`)
+		os.Exit(7)
+	case "token":
+		write(os.Stderr, "Authentication failed for secret-not-for-errors")
+		os.Exit(7)
 	case "unknown":
 		write(os.Stderr, "Unknown CLI failure")
+	case "permission":
+		write(os.Stderr, "Permission denied reading Claude config")
+	case "unsupported":
+		write(os.Stderr, "Unknown command: mcp")
 	case "other-name":
 		write(os.Stderr, "No MCP server found with name: other")
 	case "misleading":
@@ -70,6 +83,21 @@ func TestMCPHelperCLI(t *testing.T) {
 		t.Fatalf("unknown helper mode %q", mode)
 	}
 	os.Exit(1)
+}
+
+func TestMCPCLIDiagnosticsDoNotExposeCredentials(t *testing.T) {
+	for _, mode := range []string{"corrupt-inline", "headers", "token"} {
+		t.Run(mode, func(t *testing.T) {
+			m, _ := mcpCLI(t, mode)
+			_, err := m.Status()
+			if err == nil || strings.Contains(err.Error(), "secret-not-for-errors") {
+				t.Fatalf("Status exposed a credential or lost the failure: %v", err)
+			}
+			if _, ok := errors.AsType[*exec.ExitError](err); !ok {
+				t.Fatalf("Status lost the CLI exit error: %v", err)
+			}
+		})
+	}
 }
 
 func TestMCPCLITimeout(t *testing.T) {
@@ -144,11 +172,14 @@ func TestMCPStatusCLI(t *testing.T) {
 		mode string
 		set  bool
 		fail bool
+		want string
 	}{
 		{mode: "missing"},
 		{mode: "missing-legacy"},
-		{mode: "corrupt", fail: true},
-		{mode: "unknown", fail: true},
+		{mode: "corrupt", fail: true, want: "Claude reported invalid configuration"},
+		{mode: "unknown", fail: true, want: "Claude command failed"},
+		{mode: "permission", fail: true, want: "Claude reported a permission error"},
+		{mode: "unsupported", fail: true, want: "Claude does not support this command or option"},
 		{mode: "other-name", fail: true},
 		{mode: "misleading", fail: true},
 		{mode: "user", set: true},
@@ -164,7 +195,7 @@ func TestMCPStatusCLI(t *testing.T) {
 				if _, ok := errors.AsType[*exec.ExitError](err); !ok {
 					t.Fatalf("Status lost the CLI exit error: %v", err)
 				}
-				if tt.mode == "corrupt" && !strings.Contains(err.Error(), "Claude config is corrupt: unexpected token") {
+				if !strings.Contains(err.Error(), tt.want) || !strings.Contains(err.Error(), "claude mcp get snow") || !strings.Contains(err.Error(), "run this command directly for details") {
 					t.Fatalf("Status lost the diagnostic: %v", err)
 				}
 				if strings.Contains(err.Error(), "secret-not-for-errors") {
@@ -189,7 +220,7 @@ func TestMCPLookupFailureStopsWrites(t *testing.T) {
 			case "add":
 				err = m.Add()
 			}
-			if err == nil || !strings.Contains(err.Error(), "Claude config is corrupt: unexpected token") {
+			if err == nil || !strings.Contains(err.Error(), "Claude reported invalid configuration") {
 				t.Fatalf("%s = %v; output %q", operation, err, out.String())
 			}
 			calls, readErr := os.ReadFile(log)
