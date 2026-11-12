@@ -49,10 +49,17 @@ func argsServer(t *testing.T, roles []Role) (*Server, string) {
 	}
 	out := filepath.Join(t.TempDir(), "args")
 	opts := claudeOptions(nil, nil)
+	shell := opts.Spec
+	opts.agentProfile = func(p string) bool { return strings.HasPrefix(p, "Claude Code") }
 	opts.Spec = func(profile, dir string) (term.Spec, string, error) {
+		// Only agent panes write the file. A shell pane that wrote it too
+		// would race the agent, and the file would hold the shell's empty
+		// arguments (#356).
+		if !opts.agentProfile(profile) {
+			return shell(profile, dir)
+		}
 		return term.Spec{Path: exe, Args: []string{"-test.run=^TestHelperAgentArgs$", "--"}, Env: []string{helperArgs + "=" + out}, Dir: dir}, profile, nil
 	}
-	opts.agentProfile = func(p string) bool { return strings.HasPrefix(p, "Claude Code") }
 	opts.Roles, opts.RolesDir = roles, t.TempDir()
 	s := New(opts)
 	t.Cleanup(s.Close)
