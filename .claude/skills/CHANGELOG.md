@@ -10,6 +10,7 @@ A fix may reach `main` in the PR of the task that found it. The user reviews
 - Test: fresh Luna scenario evaluation correctly handled model confirmation, four-slot allocation, conflicting/blocked issues, failed checks, stale review, unavailable compaction, and an uncertain writer process. Clarified pre-launch manager-side work after the walkthrough. Both structural validators and relative-link checks passed.
 - Status: pending review
 
+
 ## 2026-11-12 compose-skill, issue-handler: a skill fix ships in the task's PR
 - Evidence: the #353 review found that "edit in your task's worktree"
   conflicted with the batch review and with the issue-handler scope rule. The
