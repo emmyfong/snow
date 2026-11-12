@@ -86,3 +86,9 @@ material whose intended lifetime is unclear:
   shared direction in `DESIGN.md` when needed by other contributors.
 - Temporary notes can leave with the worktree after required handoff information
   is preserved. Do not treat an unfinished task as disposable history.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.

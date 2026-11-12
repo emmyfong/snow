@@ -44,6 +44,13 @@ relevant to the current task and their needed references.
 - `decision-record`: record an agreed architecture decision.
 - `evaluate-context`: evaluate context policies by task quality and total usage.
 - `tui`: design or change Snow's terminal interface.
+- `plan-program`: plan many epics with drafting and verifying subagents.
+- `compose-skill`: create or fix a skill, test it, and log it for review.
+
+Skills improve themselves. When a skill step fails or the user corrects you
+while you follow one, fix the skill with `compose-skill` and log the change in
+`.claude/skills/CHANGELOG.md`. The fix may ship in your task's PR, in its own
+commit. The user reviews logged changes in batches.
 
 Use tools available in the active environment. A Claude-specific tool name in a
 skill is not a requirement to install a plugin or invent an unavailable tool.

@@ -78,15 +78,20 @@ before approval.
 
 ## 4. Draft the bodies
 
-- Use the sections in `references/body-sections.md`.
+- Use the sections in `references/body-sections.md`. Every sub-issue also
+  meets `references/implementer-ready.md`: another agent must build it alone,
+  with no question to the user.
 - Write each body to `.context/compose/<key>.md`. Use `NEW-<key>` for issue
   numbers that do not exist yet.
 - Keep one glossary in `.context/compose/glossary.md` so all bodies use the
   same terms.
-- With more than six bodies, you may delegate drafting to subagents. Ask the
-  user which model to use. Give each subagent the glossary, the section
-  rules, and one body to write.
-- Review every body against the checklist in `references/body-sections.md`.
+- With more than six bodies, you may delegate drafting to subagents. Use the
+  model the user chose; ask only if no choice exists. Give each subagent the
+  glossary, the section rules, and one epic or one body to write. For a large
+  program, use the `plan-program` skill: it runs a drafter and an independent
+  verifier per workstream.
+- Review every body against the checklist in `references/body-sections.md`
+  and the readiness check in `references/implementer-ready.md`.
 
 ## 5. Approve the bodies
 
@@ -109,7 +114,24 @@ bodies. Then apply parent and blocker links. Never leave temporary bodies as the
 reported finished result.
 
 Bodies go only through `--body-file` and titles only in single quotes. A
-double-quoted body loses backticks and `$` text.
+double-quoted body loses backticks and `$` text. A script that calls `gh` with
+an argument list (no shell) is also safe.
+
+Prepare each body file before you publish it:
+
+- Remove planning headers (`Title:`, `Labels:`, `Existing:`, a first `#`
+  line). The issue holds the title and labels.
+- A body for an existing issue may end with `## Revision`. Do not post that
+  section in the body. Post it as one comment on the issue: "Body revised on
+  <date>. Changes:" and the list. A new issue has no revision section.
+- Resolve every planning key, not only `NEW-<key>`: bare keys such as `UX-2`
+  or `CLAUDE-2.2`, and keys of existing issues (map them to `#<n>`). Leave file
+  names such as `UX-2.2.md` alone.
+- Replace references to local planning files (`STRUCTURE.md`, glossary
+  drafts) with the issue they describe. The implementer cannot read them.
+
+When `gh issue create` fails, list the newest issues before you retry. A
+GraphQL error can follow a create that succeeded.
 
 ```sh
 gh issue create -R "$R" --title '[Feature] <title>' --body-file .context/compose/<key>-allocation.md \
@@ -136,6 +158,11 @@ BLOCKER_ID=$(gh api "repos/$R/issues/<earlier>" --jq .id)
 gh api -X POST "repos/$R/issues/<later>/dependencies/blocked_by" -F issue_id="$BLOCKER_ID"
 ```
 
+An issue has only one parent. Before you link a sub-issue, check that it has
+none (`gh api repos/$R/issues/<n>/parent` returns 404), or that it is already
+under the right epic. Read an issue's current blockers
+(`repos/$R/issues/<n>/dependencies/blocked_by`) and add only the missing ones.
+
 Every arrow in the DAG becomes a blocked-by link. State it in the body too.
 Remove obsolete blockers only when that removal was approved. Preserve closed
 children and verify the final native links, not only the rendered issue body.
@@ -152,8 +179,9 @@ Read every posted body back:
 gh issue view <n> -R "$R" --json body --jq .body
 ```
 
-Check that code spans, diagrams, and `#N` references survived. Repost from the
-file if not.
+Compare each posted body with its prepared body file, exactly (a script can do this). Check
+that code spans, diagrams, and `#N` references survived. Repost from the file
+if not. Count the native sub-issues of each epic.
 
 ## 8. Report
 
@@ -162,3 +190,9 @@ numbers, the labels applied, and the counts of created and retitled issues.
 Identify which epics are ready for `issue-handler`, which are blocked, and which
 remain parked or require an unresolved product decision. Publication does not
 authorize implementation.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, or the user corrected you while
+you followed it, fix this skill now with the `compose-skill` skill. Then continue
+your task.
