@@ -147,6 +147,10 @@ func (m MCP) output(args ...string) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mcpTimeout)
 	defer cancel()
+	return m.outputContext(ctx, args...)
+}
+
+func (m MCP) outputContext(ctx context.Context, args ...string) ([]byte, error) {
 	argv := append(append([]string{}, m.Args...), args...)
 	cmd := exec.CommandContext(ctx, m.Program, argv...)
 	var stderr bytes.Buffer
@@ -155,18 +159,35 @@ func (m MCP) output(args ...string) ([]byte, error) {
 	if err == nil {
 		return out, nil
 	}
-	// `claude mcp get` exits nonzero when the server is not there, and
-	// `claude mcp remove` says so when the user scope has none. Both are
-	// answers, not failures.
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("%s: claude %s: %w", m.displayName(), strings.Join(args, " "), ctx.Err())
+	}
+	// Only Claude's named-server diagnostics prove absence. Configuration
+	// failures and unknown output must not authorize a registration write.
 	if _, exited := errors.AsType[*exec.ExitError](err); exited {
-		if isGet(args) || strings.Contains(stderr.String(), "No MCP server") {
-			return nil, fmt.Errorf("%w: %s", ErrNoServer, stderrLine(stderr.String()))
+		if missingServer(args, stderr.String()) {
+			return nil, ErrNoServer
 		}
 	}
 	if msg := stderrLine(stderr.String()); msg != "" {
 		return nil, fmt.Errorf("%s: claude %s: %w: %s", m.displayName(), strings.Join(args, " "), err, msg)
 	}
 	return nil, fmt.Errorf("%s: claude %s: %w", m.displayName(), strings.Join(args, " "), err)
+}
+
+func missingServer(args []string, diagnostic string) bool {
+	if len(args) < 3 || args[0] != "mcp" || (args[1] != "get" && args[1] != "remove") || args[len(args)-1] != serverName {
+		return false
+	}
+	if args[1] == "remove" && strings.TrimSpace(diagnostic) == `No MCP server named "snow" in user scope` {
+		return len(args) == 5 && args[2] == "--scope" && args[3] == "user"
+	}
+	switch strings.TrimSpace(diagnostic) {
+	case `No MCP server named "snow". Run ` + "`claude mcp add`" + ` to add one.`,
+		"No MCP server found with name: snow":
+		return true
+	}
+	return false
 }
 
 // isGet reports whether args ask claude for one MCP server.
