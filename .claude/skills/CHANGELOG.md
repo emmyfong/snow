@@ -4,6 +4,12 @@ Agents add an entry at the top for every skill change (see `compose-skill`).
 A fix may reach `main` in the PR of the task that found it. The user reviews
 `pending review` entries in batches.
 
+## 2026-11-12 compose-skill: approve improvements before separate skill work
+- Evidence: user revised the immediate-edit and same-task-PR policy after #354. Tracked in #359.
+- Change: require a concrete proposal and approval before agent-initiated edits; honor explicit requests; use a dedicated issue, worktree, and PR. Align all current Improve this skill sections and remove the issue-handler exception.
+- Test: fresh Luna walkthrough kept unapproved discoveries unchanged, honored explicit authorization, respected refusal, continued independent work, and separated routine review fixes from new permission scope. Clarified publication scope after the walkthrough; structural validation passed.
+- Status: pending review
+
 ## 2026-11-12 compose-skill, issue-handler: a skill fix ships in the task's PR
 - Evidence: the #353 review found that "edit in your task's worktree"
   conflicted with the batch review and with the issue-handler scope rule. The

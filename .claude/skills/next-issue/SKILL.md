@@ -95,6 +95,7 @@ Start the `issue-handler` skill with the chosen epic or issue number.
 
 ## Improve this skill
 
-When a step here was wrong, missing, or unclear, or the user corrected you while
-you followed it, fix this skill now with the `compose-skill` skill. Then continue
-your task.
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

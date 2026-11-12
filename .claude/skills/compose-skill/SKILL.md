@@ -1,36 +1,52 @@
 ---
 name: compose-skill
-description: Create, change, or repair one of Snow's shared skills in .claude/skills/, test it on a realistic scenario, and log the change for the user's batch review. Use when the user asks for a new skill or a skill change, when a skill step failed or the user corrected an agent who followed a skill, and when another skill's "Improve this skill" step sends you here.
+description: Propose improvements to Snow's shared skills, then implement approved changes in a dedicated issue, worktree, and PR with validation. Use when the user asks for a new skill or a skill change, when a skill step failed or the user corrected an agent who followed a skill, and when another skill's "Improve this skill" step sends you here.
 ---
 
 # Compose and improve skills
 
-A skill is a short, shared procedure that any agent (Claude Code, Codex,
-OpenCode) can open by path and follow. Skills improve themselves: an agent that
-finds a gap fixes the skill at once and logs the fix. A fix can reach `main`
-inside the PR of the task that found it. The user reviews the logged fixes in
-batches, and an entry stays `pending review` until then.
+A skill is a shared procedure that any supported agent can read by path.
+An agent can identify and propose improvements. The user approves the scope
+before the agent edits skill instructions. Approved skill work has its own
+issue, worktree, and PR.
 
-## When to change a skill
+## Before editing: propose and obtain approval
 
-Change a skill only for evidence from real use:
+Use evidence from real work: a failed or ambiguous step, a user correction,
+conflicting instructions, or an obsolete command. Do not change skills for taste
+or duplicate a rule that already lives in `AGENTS.md`.
 
-- A step was wrong, missing, or ambiguous, and an agent lost time or erred.
-- The user corrected an agent who followed the skill.
-- Two skills contradict each other or `AGENTS.md`.
-- A command, path, label, or tool in the skill no longer exists.
+Show the user a concise proposal with:
 
-Do not change a skill for taste, a one-off task, or a rule that already lives in
-`AGENTS.md`. Never weaken a safety, authorship, or approval rule. Ask the user
-before you add an approval gate, remove one, or widen what a skill may publish.
+- The observed problem and its evidence.
+- The proposed correction and the affected files or skills.
+- Any change to behavior, permissions, approval, cost, or publication scope.
+- The intended dedicated skill issue, worktree, validation, and PR.
+
+Do not edit skill files before approval. A request to fix task output does not
+by itself authorize changing the workflow. Silence and a subagent's suggestion
+are not approval. Keep evidence in the current task's working notes and continue
+independent authorized work while the proposal is pending. If the user declines,
+leave the skills unchanged and record the decision in the task handoff.
+
+An explicit user request to create or change a skill is approval for that scope.
+Reuse earlier approval for the same change. Do not add a redundant confirmation.
+Resolve only consequential choices that the request leaves open. Revisions needed
+to validate an approved change stay in scope; a new policy change needs approval.
 
 ## Where to edit
 
-Skill files are committed. Edit them in a worktree on a branch, never in the
-main checkout. If your task has a worktree, edit there: the fix ships in that
-task's PR (user decision, 2026-11-12). Keep it in its own `docs(skills):`
-commit, and name it under "Skill changes" in the PR body. Without a task
-worktree, use the open skills branch the user named, or ask for one.
+After approval, create or select the dedicated skill issue. Follow `issue-handler`
+for its linked branch and separate worktree under `.worktrees/`. Keep the original
+implementation worktree unchanged. If already working in the dedicated approved
+skill worktree, continue there; do not create recursive worktrees for routine
+review fixes. Never edit skills in the main checkout.
+
+Keep the skill files, related shared rules, and changelog in the dedicated PR.
+Approval covers this normal issue and PR workflow unless the user limits the
+request to exploration, a draft, or local changes. Preserve that limit. Do not
+bundle an improvement into an unrelated task PR, even as a separate commit.
+Never weaken an approval or authorship rule without explicit authorization.
 
 ## 1. Find the right home
 
@@ -85,17 +101,24 @@ Add one entry to the top of `.claude/skills/CHANGELOG.md`:
 Keep the changelog, the skill files, and the `AGENTS.md` catalog in one
 commit: `docs(skills): <summary>`.
 
-## 5. Batch review
+## 5. Review and publish
 
-The user reviews pending entries in batches. When asked to prepare a batch:
+Run the documentation checks and `review-wave` on the dedicated skill branch.
+Resolve verified findings within the approved scope. Record the scenario results
+in the changelog. Open the dedicated PR through `issue-handler` when its checks
+pass. Use the publication scope recorded before editing: normal implementation
+approval includes opening this dedicated PR, unless the user requested a draft,
+local-only work, or a final approval before publication. Do not add a new final
+approval gate. Report the PR and leave merging to the user.
+Do not claim the skill is active on main before it is merged.
 
-1. List every `pending review` entry with its diff summary and where it is
-   (on `main` through a PR, or on an open branch).
-2. Ask the user which entries to keep, change, or revert.
-3. Apply the answers and set kept entries to `Status: accepted`. Open one PR
-   for the batch. Ask before a docs-only PR, as `AGENTS.md` requires.
+The changelog is evidence, not retroactive approval. Keep new entries `pending
+review` until the user accepts them. Historical entries describe earlier policy;
+they do not override current instructions. When asked for a batch review, show
+the pending entries and ask which to keep, change, or revert. Apply approved
+changes through the same dedicated workflow.
 
 ## Improve this skill
 
-If this skill failed you, fix it with itself: follow steps 1 to 4 on
-`compose-skill`.
+Use this skill's proposal and approval steps for improvements to this skill too.
+Do not edit it automatically because it suggested changing itself.
