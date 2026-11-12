@@ -45,6 +45,8 @@ relevant to the current task and their needed references.
 - `evaluate-context`: evaluate context policies by task quality and total usage.
 - `tui`: design or change Snow's terminal interface.
 - `plan-program`: plan many epics with drafting and verifying subagents.
+- `agent-orchestration`: coordinate parallel issue implementation and verification teams.
+- `manage-subagents`: manage delegated objectives, capacity, verification, and handoffs.
 - `compose-skill`: create or fix a skill, test it, and log it for review.
 
 Skills improve themselves. When a skill step fails or the user corrects you
