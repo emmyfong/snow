@@ -58,7 +58,9 @@ Write `.context/orchestration/PROGRAM.md` with:
 
 Assign owners for shared verification resources too. Some tools, including
 golangci-lint, hold a global run lock. Serialize those checks across worktrees;
-record lock contention as scheduling, not a code failure.
+record lock contention as scheduling, not a code failure. Reserve a quiet
+verification phase for load-sensitive tests. A timing failure under concurrent
+heavy checks needs a controlled rerun; do not waive the check or raise its limit.
 
 Give shared files one writer. Serialize conflicting work or define a narrow
 interface before launching dependent implementation. Do not duplicate a helper
@@ -113,6 +115,7 @@ Report PRs, unresolved decisions, and actual runtime limitations to the user.
 
 ## Improve this skill
 
-When a step here was wrong, missing, or unclear, or the user corrected you while
-you followed it, fix this skill now with the `compose-skill` skill. Then continue
-your task.
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

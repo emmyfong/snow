@@ -6,7 +6,7 @@ A fix may reach `main` in the PR of the task that found it. The user reviews
 
 ## 2026-11-12 agent-orchestration and manage-subagents: verified parallel delivery
 - Evidence: user requested parallel Sol workers with Luna teams, explicit model and thinking confirmation, verification loops, and 40% compaction in #355.
-- Change: add manager and subagent lifecycle workflows; reuse issue-handler, review-wave, context, and compose-skill. Document host capacity, shared lint-lock scheduling observed in #292, and compaction enforcement limits.
+- Change: add manager and subagent lifecycle workflows; reuse issue-handler, review-wave, context, and compose-skill. Document host capacity, shared lint-lock scheduling observed in #292, and compaction enforcement limits. Follow the user's revised approval-first, separate skill PR policy (#359).
 - Test: fresh Luna scenario evaluation correctly handled model confirmation, four-slot allocation, conflicting/blocked issues, failed checks, stale review, unavailable compaction, and an uncertain writer process. Clarified pre-launch manager-side work after the walkthrough. Both structural validators and relative-link checks passed.
 - Status: pending review
 
