@@ -171,3 +171,45 @@ func TestCloseGivesUpOnStuckPTYClose(t *testing.T) {
 		t.Fatal("Close hung on a PTY close that never returns")
 	}
 }
+
+// slowCloseStuckReadPTY is a PTY whose Close takes delay and whose Read
+// never returns.
+type slowCloseStuckReadPTY struct {
+	*stuckReadPTY
+	delay time.Duration
+}
+
+func (s *slowCloseStuckReadPTY) Close() error {
+	time.Sleep(s.delay)
+	return s.fakePTY.Close()
+}
+
+// TestCloseWaitsOnceInAll: a slow PTY close and a stuck read share one
+// closeWait, and a second Close returns the first one's error at once.
+func TestCloseWaitsOnceInAll(t *testing.T) {
+	defer func(d time.Duration) { closeWait = d }(closeWait)
+	closeWait = 400 * time.Millisecond
+	pty := &slowCloseStuckReadPTY{
+		stuckReadPTY: &stuckReadPTY{fakePTY: newFakePTY(), block: make(chan struct{})},
+		delay:        300 * time.Millisecond,
+	}
+	defer close(pty.block)
+	p := newPane(pty, 80, 24, Options{})
+	start := time.Now()
+	err := p.Close()
+	elapsed := time.Since(start)
+	if !errors.Is(err, ErrCloseTimeout) {
+		t.Fatalf("Close = %v, want ErrCloseTimeout", err)
+	}
+	// Two separate limits would take about 700 ms.
+	if !raceDetector && elapsed > 600*time.Millisecond {
+		t.Fatalf("Close took %v, want about one closeWait (%v)", elapsed, closeWait)
+	}
+	start = time.Now()
+	if again := p.Close(); !errors.Is(again, err) {
+		t.Fatalf("second Close = %v, want %v", again, err)
+	}
+	if d := time.Since(start); d > 50*time.Millisecond {
+		t.Fatalf("second Close took %v, want at once", d)
+	}
+}

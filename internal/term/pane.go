@@ -17,12 +17,13 @@ import (
 // goroutine may outlive the pane. It signals an incompatible vt version.
 var ErrReplyPipe = errors.New("term: emulator reply pipe is not closable")
 
-// ErrCloseTimeout means Close gave up waiting for the pane's goroutines,
-// for example a read from the PTY that never returned. They are left
-// running, and the emulator stays open for them.
+// ErrCloseTimeout means Close gave up waiting for the PTY to close or for
+// the pane's goroutines to stop, for example a read from the PTY that never
+// returned. They are left running, and the emulator stays open for them.
 var ErrCloseTimeout = errors.New("term: pane goroutines did not stop")
 
-// closeWait bounds how long Close waits for the pane's goroutines.
+// closeWait bounds how long Close waits for the PTY close and the pane's
+// goroutines together.
 var closeWait = 5 * time.Second
 
 // Pane is one program on a PTY plus the screen its output draws. All methods
