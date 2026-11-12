@@ -274,18 +274,29 @@ func (p *Pane) ExitStatus() (int, bool) {
 // The order matters. vt's Close is not locked and races with a goroutine
 // blocked in Read, so Close wakes that reader by closing the reply pipe
 // (which is safe concurrently), waits for every goroutine, and only then
-// closes the emulator. It waits at most closeWait, then returns
-// ErrCloseTimeout: a stuck PTY read must not hang the server.
+// closes the emulator. It waits at most closeWait in all, then returns
+// ErrCloseTimeout: a stuck PTY read or PTY close must not hang the server.
 func (p *Pane) Close() error {
 	p.closeOnce.Do(func() {
 		p.stop()
-		ptyErr := p.pty.Close()
+		deadline := time.After(closeWait)
+		// On Windows the PTY close can block in CancelIoEx (#356), so it
+		// runs apart from the wait.
+		ptyClosed := make(chan error, 1)
+		go func() { ptyClosed <- p.pty.Close() }()
 		pipeErr := p.closeReplyPipe()
+		var ptyErr error
+		select {
+		case ptyErr = <-ptyClosed:
+		case <-deadline:
+			p.closeErr = errors.Join(pipeErr, ErrCloseTimeout)
+			return
+		}
 		stopped := make(chan struct{})
 		go func() { p.wg.Wait(); close(stopped) }()
 		select {
 		case <-stopped:
-		case <-time.After(closeWait):
+		case <-deadline:
 			// A goroutine still running may write to the emulator, so it
 			// must not be closed under it.
 			p.closeErr = errors.Join(ptyErr, pipeErr, ErrCloseTimeout)

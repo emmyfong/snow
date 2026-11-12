@@ -139,3 +139,35 @@ func TestCloseGivesUpOnStuckRead(t *testing.T) {
 		t.Fatal("Close hung on a read that never returns")
 	}
 }
+
+// stuckClosePTY is a PTY whose Close never returns, as a ConPTY close can
+// when CancelIoEx blocks on the output pipe (#356).
+type stuckClosePTY struct {
+	*fakePTY
+	block chan struct{}
+}
+
+func (s *stuckClosePTY) Close() error {
+	<-s.block
+	return s.fakePTY.Close()
+}
+
+// TestCloseGivesUpOnStuckPTYClose: a PTY close that never returns must not
+// hang Close, and so the server's shutdown.
+func TestCloseGivesUpOnStuckPTYClose(t *testing.T) {
+	defer func(d time.Duration) { closeWait = d }(closeWait)
+	closeWait = 100 * time.Millisecond
+	pty := &stuckClosePTY{fakePTY: newFakePTY(), block: make(chan struct{})}
+	defer close(pty.block)
+	p := newPane(pty, 80, 24, Options{})
+	done := make(chan error, 1)
+	go func() { done <- p.Close() }()
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrCloseTimeout) {
+			t.Fatalf("Close = %v, want ErrCloseTimeout", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Close hung on a PTY close that never returns")
+	}
+}
