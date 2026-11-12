@@ -66,6 +66,19 @@ func argsServer(t *testing.T, roles []Role) (*Server, string) {
 	return s, out
 }
 
+// TestRoleArgsServerShell: a non-agent pane stays a shell, so it cannot
+// overwrite the helper agent's arguments with an empty argument list.
+func TestRoleArgsServerShell(t *testing.T) {
+	dir := t.TempDir()
+	s, out := argsServer(t, nil)
+	c := connect(t, s, 100, 30)
+	attachIn(t, c, dir)
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Fatalf("shell wrote the agent's arguments file: %v", err)
+	}
+}
+
 // TestRoleProfileInstructions: an agent started in a role gets that role's
 // permission mode and only that role's instructions, from a file.
 func TestRoleProfileInstructions(t *testing.T) {
