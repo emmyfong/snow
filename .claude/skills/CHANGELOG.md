@@ -1,8 +1,15 @@
 # Skill changelog
 
 Agents add an entry at the top for every skill change (see `compose-skill`).
-A fix may reach `main` in the PR of the task that found it. The user reviews
-`pending review` entries in batches.
+Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
+`pending review` entries. Historical entries record the policy at their date;
+they do not override the current approval rules.
+
+## 2026-11-12 compose-skill: approve improvements before separate skill work
+- Evidence: user revised the immediate-edit and same-task-PR policy after #354. Tracked in #359.
+- Change: require a concrete proposal and approval before agent-initiated edits; honor explicit requests; use a dedicated issue, worktree, and PR. Align all current Improve this skill sections and remove the issue-handler exception.
+- Test: fresh Luna walkthrough kept unapproved discoveries unchanged, honored explicit authorization, respected refusal, continued independent work, and separated routine review fixes from new permission scope. Clarified publication scope after the walkthrough; structural validation passed.
+- Status: pending review
 
 ## 2026-11-12 agent-orchestration and manage-subagents: verified parallel delivery
 - Evidence: user requested parallel Sol workers with Luna teams, explicit model and thinking confirmation, verification loops, and 40% compaction in #355.

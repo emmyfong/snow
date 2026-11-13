@@ -107,8 +107,8 @@ Work one sub-issue at a time, in the approved order.
   is available; do not require an absent plugin. Repeated attempts should add evidence.
 - Scope grows: pause the affected work and ask about the consequential change.
   Continue independent authorized work. Put new scope in an agreed sub-issue or
-  epic, not silently in this PR. One exception: a skill fix from
-  `compose-skill` ships in this PR, in its own commit.
+  epic, not silently in this PR. For a skill improvement, use `compose-skill`:
+  propose it, obtain approval, and use a dedicated issue, worktree, and PR.
 
 ## 5. Review the branch
 
@@ -140,8 +140,8 @@ Offer to post the review report as the PR's first comment.
 Write the body to `<wt>/.context/pr-<epic>.md` from
 `.github/pull_request_template.md`. Put one `Closes #<n>` line for the epic and
 one for each sub-issue this PR completes. GitHub needs a keyword per issue.
-Fill the summary and how it was tested. List any skill fixes under "Skill
-changes", with their changelog entries. Follow AGENTS.md authorship rules. Then:
+Fill the summary and how it was tested. A dedicated skill PR includes its
+changelog entries and validation. Follow AGENTS.md authorship rules. Then:
 
 ```sh
 gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<epic>.md
@@ -192,6 +192,7 @@ only if the user says so. The PR title type is `docs` for the finding.
 
 ## Improve this skill
 
-When a step here was wrong, missing, or unclear, or the user corrected you while
-you followed it, fix this skill now with the `compose-skill` skill. Then continue
-your task.
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.
