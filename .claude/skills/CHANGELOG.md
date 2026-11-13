@@ -1,8 +1,9 @@
 # Skill changelog
 
 Agents add an entry at the top for every skill change (see `compose-skill`).
-A fix may reach `main` in the PR of the task that found it. The user reviews
-`pending review` entries in batches.
+Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
+`pending review` entries. Historical entries record the policy at their date;
+they do not override the current approval rules.
 
 ## 2026-11-12 compose-skill: approve improvements before separate skill work
 - Evidence: user revised the immediate-edit and same-task-PR policy after #354. Tracked in #359.
