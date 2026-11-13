@@ -45,12 +45,17 @@ relevant to the current task and their needed references.
 - `evaluate-context`: evaluate context policies by task quality and total usage.
 - `tui`: design or change Snow's terminal interface.
 - `plan-program`: plan many epics with drafting and verifying subagents.
-- `compose-skill`: create or fix a skill, test it, and log it for review.
+- `agent-orchestration`: coordinate parallel issue implementation and verification teams.
+- `manage-subagents`: manage delegated objectives, capacity, verification, and handoffs.
+- `compose-skill`: propose skill improvements and deliver approved changes.
 
-Skills improve themselves. When a skill step fails or the user corrects you
-while you follow one, fix the skill with `compose-skill` and log the change in
-`.claude/skills/CHANGELOG.md`. The fix may ship in your task's PR, in its own
-commit. The user reviews logged changes in batches.
+Skill improvements need user approval. When you find a problem, use
+`compose-skill` to propose the correction before editing any skill. An explicit
+user request or existing approval authorizes its stated scope; do not ask again.
+Track approved skill work in a dedicated issue, separate worktree, and separate
+PR. Do not include it in an unrelated implementation PR. Log the evidence and
+validation in `.claude/skills/CHANGELOG.md`. Continue independent authorized task
+work while a proposal waits for an answer. Only the user merges the skill PR.
 
 Use tools available in the active environment. A Claude-specific tool name in a
 skill is not a requirement to install a plugin or invent an unavailable tool.
