@@ -11,6 +11,13 @@ they do not override the current approval rules.
 - Test: fresh Luna walkthrough kept unapproved discoveries unchanged, honored explicit authorization, respected refusal, continued independent work, and separated routine review fixes from new permission scope. Clarified publication scope after the walkthrough; structural validation passed.
 - Status: pending review
 
+## 2026-11-12 agent-orchestration and manage-subagents: verified parallel delivery
+- Evidence: user requested parallel Sol workers with Luna teams, explicit model and thinking confirmation, verification loops, and 40% compaction in #355.
+- Change: add manager and subagent lifecycle workflows; reuse issue-handler, review-wave, context, and compose-skill. Document host capacity, shared lint-lock scheduling observed in #292, and compaction enforcement limits. Follow the user's revised approval-first, separate skill PR policy (#359).
+- Test: fresh Luna scenario evaluation correctly handled model confirmation, four-slot allocation, conflicting/blocked issues, failed checks, stale review, unavailable compaction, and an uncertain writer process. Clarified pre-launch manager-side work after the walkthrough. Both structural validators and relative-link checks passed.
+- Status: pending review
+
+
 ## 2026-11-12 compose-skill, issue-handler: a skill fix ships in the task's PR
 - Evidence: the #353 review found that "edit in your task's worktree"
   conflicted with the batch review and with the issue-handler scope rule. The
