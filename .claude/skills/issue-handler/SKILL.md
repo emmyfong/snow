@@ -37,6 +37,30 @@ gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state==
 - If the user problem, scope, or design is unclear, use `plan-with-user` before
   implementation. Ask about consequential ambiguity; retain previous answers.
 
+## Assignment and execution scope
+
+Before implementation, verify that the selected issue or epic is assigned on
+GitHub to the person the agent represents. Use `gh api user --jq .login` for
+the authenticated account unless the user explicitly names another assignee.
+Read `gh issue view <n> --json assignees` and check that person's login.
+If assignment is missing, use `next-issue` to assign the authorized work and
+verify the result. Do not implement until assignment succeeds. Do not remove
+or override another person's assignment without explicit user direction.
+
+Work only on the selected assigned issue or epic and its agreed sub-issues.
+An epic assignment covers those children for the epic's one-PR workflow;
+check child assignees too and resolve another person's ownership before work.
+Assignment is necessary, but does not authorize every issue assigned to the
+same account. Do not pick up adjacent issues, change unrelated code, or expand
+acceptance without the user's direction. Report discoveries and continue the
+assigned scope. A direct request to finish an issue authorizes assigning it;
+selection or investigation alone does not authorize implementation.
+
+For delegated work, retain the assigned human owner and record the manager's
+bounded subtask and worktree. Use `manage-subagents` to coordinate writers.
+Multiple agents can share one GitHub account; an assignee does not reserve a
+file or permit concurrent edits. Recheck ownership on takeover or resumption.
+
 ## 2. Set up the worktree
 
 Branch type from the epic's labels: `bug` gives `fix`, `docs` gives `docs`,

@@ -82,3 +82,9 @@ they do not override the current approval rules.
   against `plan-program` and `compose-issues`; the first live run is the
   planning program of 2026-11-10.
 - Status: pending review
+
+## 2026-11-14: Assign selected issues before implementation (#364)
+
+- Evidence: the user requested explicit ownership while coordinating #260 and #293; both issues had no GitHub assignee.
+- Change: issue-handler requires verified assignment and limits execution to the selected scope. next-issue can assign authorized selected work before handoff. It preserves other owners, checks child ownership, and separates account assignment from agent writer coordination.
+- Validation: local scenarios cover recommendations only, explicit implementation, an issue owned by another person, assignment failure, and two agents sharing one account. Structural validation and whitespace checks run locally. Independent review is pending because the selected Luna reviewers reached their usage limit.
