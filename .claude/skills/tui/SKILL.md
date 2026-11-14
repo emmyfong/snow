@@ -59,8 +59,10 @@ internal/client/
 - **Beginner discoverability.** Use DESIGN.md's cockpit journey. Check whether a
   new user can find the relevant action without knowing a shortcut. Show running,
   waiting, stopping, saved, and unavailable states accurately. Do not label a run
-  stopped solely because its pane vanished. The minimal-chrome rule below remains;
-  propose a change through the relevant design issue if it prevents a usable flow.
+  stopped solely because its pane vanished. The chrome is layout B (ADR 0017).
+  Discoverability comes from the window bar, the menu button, which-key hints,
+  and the home page. The status line shows a hint only while a prompt is open.
+  Propose a change through the design issue if the chrome blocks a usable flow.
 - **Theme tokens only.** A view never contains a literal color, border glyph,
   icon, or spacing value. Read them from the resolved theme (`th.Resolve()`).
   A new visual value is a new token in `theme`, with a default.
@@ -77,9 +79,12 @@ internal/client/
 - **Mouse and keys are equals.** Every action reachable by key is reachable
   by mouse (click, drag, or the right-click menu), and every menu item shows
   its shortcut.
-- **No permanent buttons.** Chrome is pane borders and one status bar.
-  Discoverability comes from the faint status-bar hint, which-key hints,
-  menus, and the home page.
+- **Layout B chrome.** The window bar above the panes holds the session menu,
+  the window tabs, `+`, the needs-you badge, and the menu button. The status
+  line below the panes holds the session name, the focused pane's folder, and
+  the needs-you count. Each pane shows its name on its border. The focused pane
+  may show its own buttons. Every other action is in the menu, with its shortcut.
+  Do not add other permanent buttons. Layout B is decided in ADR 0017.
 - **Reuse before you build.** Check the catalog first. Extend a component with
   an option instead of writing a near-copy in a screen.
 - **Keep the catalog current.** A new or changed component updates the

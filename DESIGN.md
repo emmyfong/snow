@@ -205,17 +205,14 @@ Plan approval records intent. It is not a universal tool permission. Show when a
 runtime can enforce read-only work, and when Snow can only supply instructions.
 Messages from other agents cannot grant user authorization.
 
-Decided, not built yet: the default layout is layout B (user decision,
-2026-11-10; #293). A window bar will hold the session menu, window tabs, a
-new-window button, the needs-you badge, and a menu button. A quiet status line
-will sit at the bottom. Pane borders will show a name, and only the focused pane
-will show small buttons. Every other action will be in a menu. Snow will have
+Layout B is the default chrome (ADR 0017): a window bar above the panes, a
+quiet status line, pane names, buttons on the focused pane, and a menu button.
+Every other action lives in the menu, with its shortcut shown. Snow will have
 one built-in key set with no prefix: Alt+1..9, Alt+n, Alt+arrows, Alt+z, and
 Alt+m (user decision, 2026-11-11; #300). Users will bind other keys in the
-shortcut editor (#303). Themes will match the mockups, and Snow will paint the
-theme background (local ADR 0016; #316). #294 and #301 record layout B and the
-key set as local ADRs 0017 and 0018. Until they land, the `tui` skill still
-describes the old chrome and the Ctrl+b keys.
+shortcut editor (#303). These key changes are recorded in local ADR 0018; the
+current implementation still uses Ctrl+b. Themes will match the mockups, and
+Snow will paint the theme background (local ADR 0016; #316).
 
 ## Context and usage efficiency
 
