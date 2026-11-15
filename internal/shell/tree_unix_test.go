@@ -15,7 +15,8 @@ import (
 )
 
 // TestSignalZombieGroup: a group whose only process has exited but is not
-// yet reaped is gone. macOS answers EPERM for such a group (#279).
+// yet reaped is gone. Only macOS answers EPERM for such a group (#279);
+// elsewhere the signal succeeds, and this guards the nil result.
 func TestSignalZombieGroup(t *testing.T) {
 	cmd := exec.CommandContext(context.Background(), "/bin/sh", "-c", "exit 0")
 	tr, err := newTree(cmd, "")

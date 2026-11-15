@@ -33,6 +33,8 @@ func (t *tree) terminate() error { return t.signal(syscall.SIGTERM) }
 // but is not yet reaped (#279). A real permission error looks the same, so
 // signal 0 to the leader alone tells them apart: Snow may signal a leader
 // it started, alive or not yet reaped, and a reaped leader answers ESRCH.
+// The probe sees the leader only: a process Snow may not signal, left in
+// the group after the leader exited, is not reported.
 func (t *tree) signal(sig syscall.Signal) error {
 	pid := t.cmd.Process.Pid
 	err := syscall.Kill(-pid, sig)
