@@ -30,7 +30,6 @@ internal/client/
   convrow/       the cells of one past-conversation row (`convrow.Columns`): the resume picker and an empty chat's list of recent conversations share it
   modelpick/     the model and effort picker (`/model`)
   authpick/      the provider key picker (`/login`)
-  runtimepick/   Snow-owned Claude Code connections, opened from /login; explicit subscription or API-key route and environment
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys
   command/       the command registry (names, arguments, where each runs, fuzzy match); the home page and the session command popup bind their own behavior
   agents/        the agents board (Ctrl+b w) and needs-you inbox (Ctrl+b i): the board lists every agent of the session from api.AgentList over the whole window area, with kind, state, how long, folder, and a chat's model and cost; the inbox lists every agent that waits for the user in every session; Enter focuses the agent's pane in both
@@ -45,7 +44,6 @@ internal/client/
   copymode/      scrollback, search, selection
   chat/          a chat pane: transcript from ChatSnapshot and ChatEvent, the recent conversations of its folder while it is empty (`recent.go`: Up, Down, Enter or a click resumes, typing starts a new one, `Ctrl+a` shows every folder), tool cells, the approval box, the question box, the task list, the message being typed, scrolling; its slash commands bind through `chat.Register` and the narrow `chat.Host`, and a command that opens a popup asks the session with an `Ask*` constant
   textdiff/      line diffs for edit cells and the approval box
-  session/runtimecontrols.go  Claude Code run controls reuse listpick; the chat row and Ctrl+T open parent/child stop, interrupt-and-send, and explicit draft release. Runtime approvals offer one-time Yes or No. Native chat keeps its task list and approval modes.
   gitpane/       the git pane (api.GitState): the branch, the staged and other changes, one file's diff, the commit message box, the worktrees with the agent that works in each (`worktree.go`: Enter focuses it, else opens a terminal there), and the history, where a commit shows its agent only when the server saw the agent make it, else "unknown"; keys and clicks become api.SidePaneAction or api.Command, and git runs on the server
 ```
 
@@ -205,3 +203,10 @@ Snow runs inside another terminal. Test against these:
 ```sh
 go test <touched-packages>
 ```
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

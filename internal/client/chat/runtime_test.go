@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"strings"
 	"testing"
 
@@ -44,6 +45,42 @@ func TestRuntimeRunControlsKeyboardAndMouse(t *testing.T) {
 	t.Fatal("run controls were not discoverable")
 }
 
+func TestRuntimeApprovalKeyboardAndMouse(t *testing.T) {
+	keyboard := waiting(t, 80, 24)
+	keyboard.snap.Runtime = &api.RuntimeInfo{Kind: "claude-code"}
+	if in := typeKeys(keyboard, letter('y')); in == nil || in.Kind != api.ChatInputAnswer || in.ID != "w1" || in.Decision != api.ChatDecisionYes {
+		t.Fatalf("keyboard approval sent %+v", in)
+	}
+	mouse := waiting(t, 80, 24)
+	mouse.snap.Runtime = &api.RuntimeInfo{Kind: "claude-code"}
+	mouse.View()
+	start, n := mouse.visible()
+	indent := ui.TranscriptIndent(mouse.width)
+	for _, hit := range mouse.drawn.hits {
+		if hit.box == 0 {
+			continue
+		}
+		options := mouse.boxOptions(mouse.pending(), mouse.width-indent)
+		for _, button := range ui.ChoiceButtons(options) {
+			if button.Index != 1 {
+				continue
+			}
+			row := button.Y + hit.box - 1 - start
+			y := mouse.barRows() + mouse.transcriptHeight() - n + row
+			in := mouse.Click(indent+button.X+1, y)
+			if in != nil || !mouse.box.reason {
+				t.Fatalf("mouse approval sent %+v:\n%s", in, screen(mouse))
+			}
+			in = mouse.Key(enter)
+			if in == nil || in.Kind != api.ChatInputAnswer || in.ID != "w1" || in.Decision != api.ChatDecisionNo {
+				t.Fatalf("mouse approval confirmation sent %+v", in)
+			}
+			return
+		}
+	}
+	t.Fatalf("no deny control sent input on screen:\n%s", screen(mouse))
+}
+
 func TestRuntimeSendNowPreservesInvalidDraft(t *testing.T) {
 	m, _ := newChat(80, 24)
 	for _, text := range []string{" ", strings.Repeat("x", api.MaxChatMessage+1)} {
@@ -60,7 +97,7 @@ func TestRuntimeSendNowPreservesInvalidDraft(t *testing.T) {
 }
 
 func TestRuntimeNeedsYouGolden(t *testing.T) {
-	for _, state := range []string{"approval", "question", "answered", "stopping", "stop-failed"} {
+	for _, state := range []string{"approval", "question", "answered", "stopping", "stop-failed", "unavailable"} {
 		for _, size := range [][2]int{{80, 24}, {120, 40}} {
 			t.Run(fmt.Sprintf("%s_%dx%d", state, size[0], size[1]), func(t *testing.T) {
 				m := waiting(t, size[0], size[1])
@@ -80,6 +117,10 @@ func TestRuntimeNeedsYouGolden(t *testing.T) {
 				}
 				if state == "stop-failed" {
 					m.Event(ev(api.ChatEvent{Kind: api.ChatEventError, Error: &api.ChatError{Code: api.ChatErrRuntimeStop, Message: "Claude did not confirm all owned work stopped. Check its tasks in the selected environment before closing."}}))
+				}
+				if state == "unavailable" {
+					m.Event(ev(api.ChatEvent{Kind: api.ChatEventError, Error: &api.ChatError{Code: api.ChatErrOther,
+						Message: "The runtime cancelled this request before the reply arrived. The reply was not applied."}}))
 				}
 				golden.RequireEqual(t, strings.Join(m.View(), "\n"))
 			})

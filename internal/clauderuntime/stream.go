@@ -51,21 +51,26 @@ type writeRequest struct {
 // Writes run on one worker, never under a lock or on the server owner goroutine.
 // Stop terminates the whole owned process tree and waits for pipe cleanup.
 type Stream struct {
-	process  *shell.Process
-	input    *os.File
-	output   *os.File
-	frames   chan Frame
-	writes   chan writeRequest
-	stopping chan struct{}
-	done     chan struct{}
-	readDone chan struct{}
-	once     sync.Once
-	err      error // read only after done closes
+	verifyStop func() error // WSL Linux-side receipt; nil for a native process group
+	process    *shell.Process
+	input      *os.File
+	output     *os.File
+	frames     chan Frame
+	writes     chan writeRequest
+	stopping   chan struct{}
+	done       chan struct{}
+	readDone   chan struct{}
+	once       sync.Once
+	err        error // read only after done closes
 }
 
 // StartStream launches a resolved, profile-configured Claude command. Diagnostic
 // output is not mixed into the protocol or retained in a login transcript.
 func StartStream(launch shell.Launch) (*Stream, error) {
+	return startStream(launch, nil)
+}
+
+func startStream(launch shell.Launch, verifyStop func() error) (*Stream, error) {
 	in, input, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("open Claude input: %w", err)
@@ -79,7 +84,7 @@ func StartStream(launch shell.Launch) (*Stream, error) {
 	if err != nil {
 		return nil, errors.Join(err, closeErr, input.Close(), output.Close())
 	}
-	s := &Stream{process: p, input: input, output: output,
+	s := &Stream{process: p, verifyStop: verifyStop, input: input, output: output,
 		frames: make(chan Frame, 64), writes: make(chan writeRequest, 16),
 		stopping: make(chan struct{}), done: make(chan struct{}), readDone: make(chan struct{})}
 	go s.read()
@@ -97,7 +102,7 @@ func StartStream(launch shell.Launch) (*Stream, error) {
 // bypasses the queue and releases the reader even if nobody consumes frames.
 func (s *Stream) Frames() <-chan Frame { return s.frames }
 
-// Done closes after the process and its descendants have been stopped.
+// Done closes after the cleanup attempt. Err reports unverified shutdown.
 func (s *Stream) Done() <-chan struct{} { return s.done }
 
 // Err returns the terminal transport error. Call it only after Done closes.
@@ -171,7 +176,11 @@ func (s *Stream) finish(cause error) {
 		close(s.stopping)
 		go func() {
 			closeErr := errors.Join(s.input.Close(), s.output.Close())
-			stopErr := s.process.Stop(time.Second)
+			var verifyErr error
+			if s.verifyStop != nil {
+				verifyErr = s.verifyStop()
+			}
+			stopErr := errors.Join(verifyErr, s.process.Stop(time.Second))
 			if stopErr != nil {
 				stopErr = errors.Join(ErrStop, stopErr)
 			}

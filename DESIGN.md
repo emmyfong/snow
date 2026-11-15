@@ -1,6 +1,6 @@
 # Snow: product and architecture
 
-Updated 2026-11-06. This document separates agreed product direction from the
+Updated 2026-11-04. This document separates agreed product direction from the
 current implementation and proposed designs. GitHub Issues define executable
 scope. A proposal here does not authorize implementation or promise a release.
 Contributor rules live in [AGENTS.md](AGENTS.md).
@@ -22,8 +22,11 @@ each runtime and connection must be verified before it is offered.
 The existing direct-API loop is secondary. It remains implemented. Removing it
 or promising equal investment in both paths is not part of this decision.
 
-Claude Code is the first runtime (#260). Codex and OpenCode follow later, in an
-order not yet set. Personal local use on Windows with WSL is the immediate scope.
+Claude Code is the first runtime (#260). Codex (#333) and OpenCode (#343) follow
+later, both at low priority. A runtime-neutral seam (#327) is extracted after
+the first Codex turn works (#337), from two working integrations. OpenCode
+builds on that seam. Personal local use on Windows with WSL is the immediate
+scope.
 Whether other people may use a Claude subscription through Snow is not settled.
 Snow makes no such claim.
 
@@ -32,15 +35,14 @@ Snow owns its connections. A Snow connection must stay separate from the standal
 Signing in or out in Snow never changes the standalone login. Login, status, run
 and sign-out for one connection use one profile and one environment (Windows or one
 WSL distribution). Isolation needs a real test for each sign-in route and platform.
-Snow-owned connection setup shipped in #276 (PR #291). Automated tests cover
-profile and environment selection. Live isolation evidence remains specific to
-the tested sign-in route, CLI version, and platform.
+#276 (PR #291) added Snow's own Claude Code connection. Each further route and
+platform needs its own isolation test.
 
 The user chooses subscription sign-in or an API key. Snow shows the route and its
 billing, and never falls back from one route to the other. A subscription login
 uses Claude's official flow, and Snow reads no OAuth tokens. An API key goes in
 Snow's credential store, scoped to the connection. Host environment variables must
-not choose the route (#276).
+not choose the route (#276, PR #291).
 
 OmniRoute is an intended integrated option for setup, connections, lifecycle,
 status, and available usage controls. Bundling versus guided installation is open.
@@ -74,35 +76,33 @@ report success (#263).
 
 ## Current foundation
 
-The foundation includes profiles and local gateways from PR #253, workspace
-panes, and Snow-owned Claude Code connections from PR #291. Epic #260 completes
-the chat interaction and stop controls. Restart recovery remains #264.
+The architecture inspection below covers code through PR #251. Profiles and
+local gateway startup subsequently merged in PR #253. They provide the foundation
+for the broader setup experience; they do not implement rich runtime-backed chat.
 
 - One Go binary runs a local server and a Bubble Tea TUI. No cgo.
 - One goroutine owns server state. Blocking I/O runs outside it (ADR 0007).
 - `pkg/api` is the only public package. Clients receive snapshots and events.
-- The server uses a narrow conversation interface. Its direct-API implementation
-  uses `agent.Conversation`; the Claude implementation uses `internal/clauderuntime`.
-  Runtime transport and disk I/O stay outside the server state goroutine.
+- `internal/server/chat.go` directly uses `agent.Conversation`. The direct-API
+  path already has tools, approvals, questions, tasks, and durable conversations.
 - `internal/provider` streams model API responses. It is not an agent-runtime API.
 - `internal/claudecode` integrates CLI hooks/settings. `internal/mcp` exposes
-  Snow pane tools. `internal/clauderuntime` owns the structured Claude process,
-  event translation, request identity, draft queue, and supported controls.
+  Snow pane tools. Rich external-runtime chat is additional work.
 - `internal/store` saves workspace state. `internal/convstore` saves direct-API
-  records and a separate runtime display journal with its opaque session binding.
-  The external runtime owns its model history. Snow never replays that journal
-  through the direct-API agent to recreate a backend session.
+  conversation records. External runtime state cannot be recreated from visible
+  transcript text alone.
 - The agents board and needs-you inbox exist. Agent identity is currently tied
   to panes. A Claude Code agent can start in its own worktree and window, with
   an optional role (#207). Only the role's permission mode is enforced.
-- `internal/client/session/panes.go` has a pane interface. #192 should extend
-  that seam instead of introducing a general plugin framework in advance.
+- `internal/client/session/panes.go` has a pane interface (from #192, closed).
+  New panes extend that seam instead of introducing a general plugin framework
+  in advance.
 - Transport uses framed JSON over Unix-domain sockets, including on Windows.
   The existing login request can carry an API key once to the local server.
   Do not describe the current protocol as a named pipe or entirely key-free.
 - `internal/credential` `Store.Get` reads host environment variables before saved
-  keys. Runtime connections use the saved-only `GetStored` path, scoped to their
-  connection identity. This leaves direct-API credential behavior separate.
+  keys. A Snow-owned connection reads its key with `Store.GetStored` instead
+  (#276, PR #291).
 
 ## Proposed ownership and boundaries
 
@@ -182,9 +182,9 @@ their older native-only designs are not automatically the implementation plan.
 
 | Experience | Scope and boundary | Existing epic |
 |---|---|---|
-| Mouse and layouts | Discoverable actions, split/resize/open panes, saved layouts | #184, #192 |
+| Mouse and layouts | Discoverable actions, split/resize/open panes, saved layouts | #184, #192 (closed); layout B #293, new-session dialog #307 |
 | Files | Tree, viewer, file/line references, external editor | #194 |
-| Git and worktrees | Changes, diffs, explicit git actions, isolated coding folders | #195, #207 |
+| Git and worktrees | Changes, diffs, explicit git actions, isolated coding folders | #195, #207 (closed) |
 | Instructions and skills | Show sources, discover and invoke skills, explain effective scope of toggles | #196 |
 | Context and usage | Report available data, distinguish unknowns, context occupancy and consumption | #197 |
 | Checkpoints | Explain exactly which files/state a restore affects; external effects are separate | #198 |
@@ -194,7 +194,7 @@ their older native-only designs are not automatically the implementation plan.
 | Planning | Goals, scope, open questions, editable plans and supported execution controls | #202 |
 | Permissions | Enforce at real execution boundaries; show external-runtime limits | #203 |
 | Multiple agents | User-directed launch, worktrees, status and bounded coordination | #205–208 |
-| Connections | Supported account paths, profiles, API providers and optional gateways | #193, #214, #229, #260 |
+| Connections | Supported account paths, profiles, API providers and optional gateways | #193, #214, #260; #229 (closed); Codex #333, OpenCode #343, seam #327 |
 
 The skills pane concerns the selected runtime's capabilities. Contributor skills
 in `.claude/skills/` guide agents building Snow. Shared Markdown does not guarantee
@@ -205,10 +205,17 @@ Plan approval records intent. It is not a universal tool permission. Show when a
 runtime can enforce read-only work, and when Snow can only supply instructions.
 Messages from other agents cannot grant user authorization.
 
-Keep the current minimal-chrome design while testing discoverability. Permanent
-buttons versus menus remains a UX choice for #71; beginner friendliness does not
-silently settle that choice. The supplied Claude artifact could not be inspected,
-so this document makes no claims about its visual layout.
+Decided, not built yet: the default layout is layout B (user decision,
+2026-11-10; #293). A window bar will hold the session menu, window tabs, a
+new-window button, the needs-you badge, and a menu button. A quiet status line
+will sit at the bottom. Pane borders will show a name, and only the focused pane
+will show small buttons. Every other action will be in a menu. Snow will have
+one built-in key set with no prefix: Alt+1..9, Alt+n, Alt+arrows, Alt+z, and
+Alt+m (user decision, 2026-11-11; #300). Users will bind other keys in the
+shortcut editor (#303). Themes will match the mockups, and Snow will paint the
+theme background (local ADR 0016; #316). #294 and #301 record layout B and the
+key set as local ADRs 0017 and 0018. Until they land, the `tui` skill still
+describes the old chrome and the Ctrl+b keys.
 
 ## Context and usage efficiency
 
@@ -263,12 +270,12 @@ Useful questions count positively; fewer tokens with wrong work is a regression.
 ## Proposed sequence and release evidence
 
 1. Publish consistent guidance and repair contradictory issue scopes. Address
-   daily-use reliability (#252, #219, #240, #249) alongside independent planning.
+   daily-use reliability (#249) alongside independent planning.
 2. Verify supported runtime/account paths. Prove one Snow chat integration with
    visible lifecycle and recoverable session identity. Build on the merged #229
    profile/gateway work and finish #200 without duplicating its completed tools.
    Claude Code is the first runtime, chosen with the user (#260).
-3. Establish usage and quality baselines. Add panes through #192. Connect planning,
+3. Establish usage and quality baselines. Add panes through the pane interface. Connect planning,
    skills, memory, files and git to actual runtime capabilities in small slices.
 4. Prove long-session continuation and selected efficiency changes. Add explicit
    parallel work and bounded messaging before automated delegation.
@@ -291,17 +298,24 @@ ADR 0011. Its replacement is local ADR 0014. This shared document carries the
 direction for contributors who do not have the local ADR files.
 
 Local ADR 0015 records Claude Code as the first runtime, Snow-owned connections,
-draft handling, and the stop rule. This document carries them for contributors
-who do not have the local file.
+draft handling, and the stop rule. The stop rule covers every runtime chat,
+including Codex and OpenCode (user decision, 2026-11-10). Local ADR 0016
+supersedes ADR 0009 for themes. This document carries them for contributors
+who do not have the local files.
 
 ADR 0012's older sign-in claims require current, route-specific verification.
 This document grants no new authentication entitlement. ADR 0013's gateway
 lifecycle remains the baseline; packaging and routing require separate decisions.
 
+Decided since the last revision: the Go transport to Claude Code is a
+long-running process with stream JSON (`internal/clauderuntime`). Leaving Snow
+keeps sessions running and asks first (#321). Quitting stops a running Claude
+chat and waits for its acknowledgement (#265). A lost connection ends the turn
+as failed and shows the chat as "saved, not running"; sending resumes it (#265,
+#266).
+
 Before affected implementation, resolve: account eligibility for a Snow that other
-people install; CLI version compatibility and live runtime behavior; WSL process cleanup
-verification; any deletion of saved history beyond removing a connection;
-app exit, detach and connection loss; checkpoint coverage; permission guarantees;
+people install; what removing a connection does to saved history; checkpoint coverage; permission guarantees;
 OmniRoute packaging; and v2 acceptance evidence. Before v3 implementation, resolve
 the client contract, client order, remote scope, transport and desktop shell. Keep
 these choices out of unrelated tickets so planning can continue independently.

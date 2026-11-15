@@ -39,7 +39,7 @@ func (p Profile) Models(ctx context.Context, program shell.Profile, folder strin
 	if err != nil {
 		return nil, err
 	}
-	stream, err := StartStream(launch)
+	stream, err := p.startStream(program, launch)
 	if err != nil {
 		return nil, err
 	}

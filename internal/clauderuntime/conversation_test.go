@@ -174,6 +174,20 @@ func TestConversationStopKeepsQueuePausedAndInvalidatesRequests(t *testing.T) {
 	}
 }
 
+func TestStopPendingRuntimeApproval(t *testing.T) {
+	h := newConversationHarness(t, "conversation-stop")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "original"})
+	pending := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.Pending != nil })
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputInterrupt})
+	stopped := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	if stopped.Pending != nil {
+		t.Fatalf("stopped runtime retained approval: %+v", stopped.Pending)
+	}
+	if err := h.c.Input(api.ChatInput{Kind: api.ChatInputAnswer, ID: pending.Pending.ID, Decision: api.ChatDecisionYes}); !errors.Is(err, ErrRequest) {
+		t.Fatalf("answer after acknowledged stop accepted: %v", err)
+	}
+}
+
 func TestConversationStopsOnlySelectedChildTree(t *testing.T) {
 	h := newConversationHarness(t, "conversation-children")
 	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "original"})
@@ -273,6 +287,34 @@ func TestConversationProtocolErrorPreservesKind(t *testing.T) {
 		}
 	}
 	t.Fatal("missing terminal protocol error")
+}
+
+func TestConversationSubmitNotRetried(t *testing.T) {
+	h := newConversationHarness(t, "conversation-exit-after-prompt")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "keep this exact request"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
+	if h.starts.Load() != 1 {
+		t.Fatalf("failed submission started %d runtimes; want one", h.starts.Load())
+	}
+	var preserved bool
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case event := <-h.events:
+			preserved = preserved || event.Kind == api.ChatEventTurnStarted && event.Text == "keep this exact request"
+			if event.Kind == api.ChatEventTurnEnded {
+				if event.Reason != api.ChatEndFailed || event.Error == nil {
+					t.Fatalf("unexpected failed turn event: %+v", event)
+				}
+				if !preserved {
+					t.Fatal("failed submission lost user text")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("missing failed turn event")
+		}
+	}
 }
 
 func TestStopParentStopsDescendants(t *testing.T) {

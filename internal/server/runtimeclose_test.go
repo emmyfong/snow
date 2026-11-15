@@ -1,10 +1,12 @@
 package server
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -13,13 +15,13 @@ func TestRuntimeChatCloseWaitsForStop(t *testing.T) {
 		t.Run(op, func(t *testing.T) {
 			gate := filepath.Join(t.TempDir(), "stop")
 			t.Setenv("SNOW_TEST_STOP_GATE", gate)
-			options, _, _ := chatOptions(t)
+			options, _, store := chatOptions(t)
 			options.Chat.Runtime = runtimeOptions(t, "conversation-children-gated")
 			server := New(options)
 			t.Cleanup(server.Close)
 			client := connect(t, server, 100, 30)
 			pane := openChat(t, client)
-			useTestRuntime(t, server, client, pane)
+			started := useTestRuntime(t, server, client, pane)
 			chatInputOf(client, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "original" })
 			client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 3 })
 			target := pane
@@ -41,6 +43,26 @@ func TestRuntimeChatCloseWaitsForStop(t *testing.T) {
 				server.call(func(st *state) { _, p := st.findChat(pane); present = p != nil })
 				return !present
 			})
+			loaded, err := store.Load(started.Conversation)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var savedText, savedSession bool
+			for _, record := range loaded.Records {
+				event, ok := record.(*convstore.RuntimeEvent)
+				if !ok {
+					continue
+				}
+				var display api.ChatEvent
+				if err := json.Unmarshal(event.Display, &display); err != nil {
+					t.Fatal(err)
+				}
+				savedText = savedText || event.User == "original"
+				savedSession = savedSession || event.Session == "backend-session"
+			}
+			if !savedText || !savedSession {
+				t.Fatalf("closed conversation lost user text or session: text=%v session=%v records=%+v", savedText, savedSession, loaded.Records)
+			}
 		})
 	}
 }
@@ -145,5 +167,62 @@ func TestRuntimeWindowCloseKeepsNewPane(t *testing.T) {
 		if p == nil || p.chat.closing {
 			t.Error("new pane was closed with the old window")
 		}
+	})
+}
+
+func TestRuntimeWindowCloseKeepsSameCountReplacement(t *testing.T) {
+	gate := filepath.Join(t.TempDir(), "stop")
+	t.Setenv("SNOW_TEST_STOP_GATE", gate)
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "conversation-children-gated")
+	server := New(options)
+	t.Cleanup(server.Close)
+	client := connect(t, server, 100, 30)
+	first := openChat(t, client)
+	useTestRuntime(t, server, client, first)
+	chatInputOf(client, first, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "first" })
+	client.WaitChat(first, func(s *api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 3 })
+	client.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgKind: api.PaneChat, api.ArgDir: api.DirRight}})
+	layout := nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	var second int
+	for _, p := range shownPanes(layout) {
+		if p.ID != first {
+			second = p.ID
+		}
+	}
+	useTestRuntime(t, server, client, second)
+	chatInputOf(client, second, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "second" })
+	client.WaitChat(second, func(s *api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 3 })
+	window := 0
+	server.call(func(st *state) { sess, _ := st.findChat(first); w, _ := sess.findPane(first); window = w.index })
+	client.Send(&api.Command{Op: api.OpCloseWindow, Target: window})
+	eventually(t, "both runtime stops to start", func() bool { _, err := os.Stat(gate + ".entered"); return err == nil })
+	client.Send(&api.Command{Op: api.OpLayout, Target: first, Args: map[string]string{api.ArgName: "focus"}})
+	_ = nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
+	client.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgKind: api.PaneChat, api.ArgDir: api.DirRight}})
+	layout = nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	var replacement int
+	for _, p := range shownPanes(layout) {
+		if p.ID != first {
+			replacement = p.ID
+		}
+	}
+	if replacement == 0 {
+		t.Fatal("split did not create a replacement pane")
+	}
+	// The target window now has two panes, matching its original count, but
+	// one original chat moved to another window and a new pane took its place.
+	if err := os.WriteFile(gate, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	eventually(t, "original runtimes to close", func() bool {
+		removed := true
+		server.call(func(st *state) {
+			_, firstPane := st.sessions["work"].findPane(first)
+			_, secondPane := st.sessions["work"].findPane(second)
+			_, replacementPane := st.sessions["work"].findPane(replacement)
+			removed = firstPane == nil && secondPane == nil && replacementPane != nil
+		})
+		return removed
 	})
 }

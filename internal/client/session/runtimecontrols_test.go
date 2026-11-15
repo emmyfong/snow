@@ -137,6 +137,17 @@ func TestCloseRuntimeChatCancel(t *testing.T) {
 	}
 }
 
+func TestRuntimeCloseConfirmGolden(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			m, _ := controlsScreen(t, size[0], size[1], "running")
+			m.focused().AgentState = api.AgentWorking
+			m.confirmClosePane()
+			golden.RequireEqual(t, content(m))
+		})
+	}
+}
+
 func TestRuntimeLogoutNeverSelectsUnrelatedProviderKey(t *testing.T) {
 	m, r := runtimeModelScreen(t, 80, 24)
 	m.authList = api.AuthList{Providers: []api.ProviderAuth{{Name: "anthropic", Connected: true}}}

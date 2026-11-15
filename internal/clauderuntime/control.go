@@ -9,6 +9,12 @@ import (
 	"sync"
 )
 
+const (
+	controlInitialize = "initialize"
+	controlInterrupt  = "interrupt"
+	controlStopTask   = "stop_task"
+)
+
 var (
 	// ErrRequest means a response names no current permission request.
 	ErrRequest = errors.New("runtime request is no longer pending")
@@ -66,13 +72,13 @@ func (c *Client) Err() error { return c.err }
 // Initialize performs the handshake used by Claude's official SDK. The returned
 // object reports capabilities; success does not certify an account or quota.
 func (c *Client) Initialize(ctx context.Context) (json.RawMessage, error) {
-	return c.call(ctx, map[string]any{"subtype": "initialize", "hooks": nil})
+	return c.call(ctx, map[string]any{"subtype": controlInitialize, "hooks": nil})
 }
 
 // Interrupt requests a main-turn interrupt. Its acknowledgement alone does not
 // establish that child tasks or other owned work have stopped.
 func (c *Client) Interrupt(ctx context.Context) error {
-	_, err := c.call(ctx, map[string]any{"subtype": "interrupt"})
+	_, err := c.call(ctx, map[string]any{"subtype": controlInterrupt})
 	return err
 }
 
@@ -82,7 +88,7 @@ func (c *Client) StopTask(ctx context.Context, id string) error {
 	if id == "" {
 		return ErrRequest
 	}
-	_, err := c.call(ctx, map[string]any{"subtype": "stop_task", "task_id": id})
+	_, err := c.call(ctx, map[string]any{"subtype": controlStopTask, "task_id": id})
 	return err
 }
 

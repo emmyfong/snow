@@ -11,6 +11,7 @@ import (
 // failure must remain visible even when the local process has already exited.
 func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) bool {
 	var panes []*pane
+	var originalWindow *window
 	switch cmd.Op {
 	case api.OpClose:
 		_, p := sess.findPane(cmd.Target)
@@ -19,6 +20,7 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 		}
 	case api.OpCloseWindow:
 		if w := sess.window(cmd.Target); w != nil {
+			originalWindow = w
 			for _, p := range w.panes {
 				panes = append(panes, p)
 			}
@@ -31,12 +33,14 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 		chat *chatPane
 	}
 	var chats []closingChat
+	var conversations []conversation
 	for _, p := range panes {
 		if p.chat != nil && p.chat.snap.Runtime != nil {
 			if p.chat.closing {
 				return true
 			}
 			chats = append(chats, closingChat{pane: p, chat: p.chat})
+			conversations = append(conversations, p.chat.conv)
 		}
 	}
 	if len(chats) == 0 {
@@ -51,8 +55,8 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 	go func() {
 		defer st.srv.closing.Done()
 		var stopErr error
-		for _, p := range chats {
-			stopErr = errors.Join(stopErr, p.chat.conv.Close())
+		for _, conv := range conversations {
+			stopErr = errors.Join(stopErr, conv.Close())
 		}
 		st.srv.send(func(current *state) {
 			if current.sessions[sess.name] != sess {
@@ -74,7 +78,16 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 				return
 			}
 			w := sess.window(request.Target)
-			if request.Op == api.OpCloseWindow && w != nil && len(w.panes) != len(panes) {
+			unchangedWindow := request.Op == api.OpCloseWindow && w == originalWindow && len(w.panes) == len(panes)
+			if unchangedWindow {
+				for _, p := range panes {
+					if w.panes[p.id] != p {
+						unchangedWindow = false
+						break
+					}
+				}
+			}
+			if request.Op == api.OpCloseWindow && !unchangedWindow {
 				// A later split was not part of the confirmed close. Remove only
 				// the original panes, whose runtimes have now stopped.
 				for _, p := range panes {

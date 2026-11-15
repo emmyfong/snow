@@ -90,6 +90,9 @@ func Conversation(mode string) {
 			}
 		case `"user"`:
 			turn++
+			if mode == "conversation-exit-after-prompt" {
+				os.Exit(6)
+			}
 			if mode == "conversation-invalid" {
 				p.Write(map[string]any{"type": "control_response", "response": map[string]string{"subtype": "invalid", "request_id": "bad"}})
 				continue
