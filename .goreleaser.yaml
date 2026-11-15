@@ -1,5 +1,7 @@
 # GoReleaser builds the release archives. The release workflow runs it on
-# v* tags. Check a change locally with: goreleaser release --snapshot --clean
+# v* tags. Check a change locally with one build at a time (the default runs
+# one per CPU and can exhaust memory on a laptop):
+#   GOFLAGS=-p=2 goreleaser release --snapshot --clean --parallelism 1
 version: 2
 
 project_name: snow
@@ -58,6 +60,27 @@ winget:
     repository:
       owner: emmyfong
       name: winget-pkgs
+
+# macOS: the Homebrew cask is written to dist/ and attached to the release,
+# never pushed by CI, like the winget manifests. No tap repository exists
+# yet. The binary is not signed (#369), so the cask clears the quarantine
+# attribute that would stop it on first launch.
+homebrew_casks:
+  - name: snow
+    ids: [snow]
+    binaries: [snow]
+    homepage: https://github.com/emmyfong/snow
+    description: A terminal for directing AI coding agents.
+    skip_upload: true
+    repository:
+      owner: emmyfong
+      name: homebrew-tap
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/snow"]
+          end
 
 changelog:
   sort: asc

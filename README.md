@@ -43,6 +43,43 @@ version or another folder, set the variables for `sh`, after the pipe:
 `curl -fsSL .../install.sh | SNOW_VERSION=v0.1.0 SNOW_INSTALL_DIR=~/bin sh`. On Debian and Ubuntu you can also install the `.deb` from the
 release: `sudo apt install ./snow_amd64.deb`.
 
+### macOS
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/emmyfong/snow/main/install.sh | sh
+```
+
+The script downloads the latest release for your Mac, checks it against
+the release's checksums, and installs `snow` to `~/.local/bin`. The same
+`SNOW_VERSION` and `SNOW_INSTALL_DIR` variables work as on Linux. macOS
+does not put `~/.local/bin` on your PATH by default, and the script tells
+you when it is missing. To add it, put this line in `~/.zshrc` and open a
+new terminal: `export PATH="$HOME/.local/bin:$PATH"`.
+
+Or download `snow_darwin_arm64.tar.gz` (Apple silicon) or
+`snow_darwin_amd64.tar.gz` (Intel) from the
+[latest release](https://github.com/emmyfong/snow/releases/latest),
+extract it (`tar -xzf snow_darwin_arm64.tar.gz`), and put `snow` in a
+folder on your `PATH`. The binary is not signed, so macOS blocks a copy
+that a browser downloaded. Clear the block for that one file:
+`xattr -d com.apple.quarantine ./snow`. The install script does not need
+this step.
+
+Each release also has a Homebrew cask, `snow.rb`. Homebrew installs a
+cask only from a tap, so put the cask in a local tap. Run these commands
+in the folder where you downloaded `snow.rb`:
+
+```sh
+brew tap-new --no-git "$USER/local"
+tap="$(brew --repository "$USER/local")"
+mkdir -p "$tap/Casks" && cp snow.rb "$tap/Casks/"
+brew install --cask "$USER/local/snow"
+```
+
+The cask clears the Gatekeeper block itself. To update, download the
+newer `snow.rb`, copy it to `"$(brew --repository "$USER/local")/Casks/"`,
+and run `brew upgrade --cask snow`.
+
 ### From source
 
 With Go installed: `go install github.com/emmyfong/snow/cmd/snow@latest`.
@@ -56,7 +93,7 @@ the checkout:
 try { $env:SNOW_SOURCE = "."; .\install.ps1 } finally { Remove-Item Env:SNOW_SOURCE -ErrorAction SilentlyContinue }
 ```
 
-In Linux or WSL: `SNOW_SOURCE=. sh install.sh`. The build runs code from
+In Linux, macOS, or WSL: `SNOW_SOURCE=. sh install.sh`. The build runs code from
 the checkout, and `go` may download its toolchain and modules, so build
 only a checkout you trust.
 

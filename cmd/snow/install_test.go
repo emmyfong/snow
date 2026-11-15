@@ -64,7 +64,7 @@ func runInstall(t *testing.T, release string) (string, string, error) {
 func runInstallEnv(t *testing.T, env ...string) (string, string, error) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
-		t.Skip("install.sh is for Linux and WSL")
+		t.Skip("install.sh is for Linux, macOS, and WSL")
 	}
 	for _, tool := range []string{"sh", "curl", "tar"} {
 		if _, err := exec.LookPath(tool); err != nil {
