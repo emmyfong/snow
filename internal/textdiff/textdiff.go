@@ -29,7 +29,7 @@ const maxCells = 1 << 20
 // added, or removed. The lines both texts start and end with are matched
 // first, so a small edit in a large file stays cheap.
 func Lines(before, after string) []Line {
-	a, b := split(before), split(after)
+	a, b := Split(before), Split(after)
 	pre := 0
 	for pre < len(a) && pre < len(b) && a[pre] == b[pre] {
 		pre++
@@ -64,7 +64,7 @@ func Counts(lines []Line) (added, removed int) {
 
 // split cuts s into lines. A final line break ends the last line; it does
 // not start an empty one.
-func split(s string) []string {
+func Split(s string) []string {
 	if s == "" {
 		return nil
 	}

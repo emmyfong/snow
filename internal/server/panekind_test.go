@@ -133,7 +133,7 @@ func TestPaneKindProtocol(t *testing.T) {
 	if _, e := apitest.Reply[*api.PaneKinds](c); e != nil {
 		t.Fatal(e)
 	}
-	want := []api.PaneKindInfo{{Name: api.PaneTerminal, Title: "Terminal"}, {Name: api.PaneGit, Title: "Git"}, {Name: api.PaneFiles, Title: "Files"}, {Name: "note", Title: "Note"}}
+	want := []api.PaneKindInfo{{Name: api.PaneTerminal, Title: "Terminal"}, {Name: api.PaneGit, Title: "Git"}, {Name: api.PaneFiles, Title: "Files"}, {Name: api.PaneViewer, Title: "Viewer"}, {Name: "note", Title: "Note"}}
 	if got := c.Kinds(); !slices.Equal(got, want) {
 		t.Fatalf("kinds %+v, want %+v", got, want)
 	}

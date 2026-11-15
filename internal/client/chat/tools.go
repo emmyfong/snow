@@ -8,8 +8,8 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/emmyfong/snow/internal/client/textdiff"
 	"github.com/emmyfong/snow/internal/client/ui"
+	"github.com/emmyfong/snow/internal/textdiff"
 	"github.com/emmyfong/snow/pkg/api"
 )
 

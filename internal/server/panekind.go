@@ -66,7 +66,7 @@ type paneKinds struct {
 // sideKinds returns Snow's own side kinds, with each of extra in place of
 // the one of its name, or added after them.
 func sideKinds(extra []sideKind) []sideKind {
-	kinds := []sideKind{gitKind(), filesKind()}
+	kinds := []sideKind{gitKind(), filesKind(), viewerKind()}
 	for _, x := range extra {
 		i := slices.IndexFunc(kinds, func(k sideKind) bool { return k.Name == x.Name })
 		if i < 0 {

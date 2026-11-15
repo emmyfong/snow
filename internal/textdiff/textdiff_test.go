@@ -66,7 +66,7 @@ func TestLinesRebuildsBoth(t *testing.T) {
 				after = append(after, l.Text)
 			}
 		}
-		if !slices.Equal(before, split(p[0])) || !slices.Equal(after, split(p[1])) {
+		if !slices.Equal(before, Split(p[0])) || !slices.Equal(after, Split(p[1])) {
 			t.Fatalf("pair %d does not rebuild", i)
 		}
 	}

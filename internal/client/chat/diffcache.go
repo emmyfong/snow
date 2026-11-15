@@ -1,8 +1,8 @@
 package chat
 
 import (
-	"github.com/emmyfong/snow/internal/client/textdiff"
 	"github.com/emmyfong/snow/internal/client/ui"
+	"github.com/emmyfong/snow/internal/textdiff"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
