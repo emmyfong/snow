@@ -2,6 +2,9 @@ package client
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -79,6 +82,16 @@ func TestConnectGivesUp(t *testing.T) {
 	}
 	if d := time.Since(start); d > 6*time.Second {
 		t.Fatalf("gave up after %v", d)
+	}
+}
+
+// TestConnectPathTooLong: a path the OS cannot dial is reported as too
+// long, and no server is started for it.
+func TestConnectPathTooLong(t *testing.T) {
+	path := filepath.Join(os.TempDir(), strings.Repeat("x", 120), "default.sock")
+	_, err := Connect(path, func() error { t.Fatal("started a server for a path it cannot dial"); return nil })
+	if !errors.Is(err, transport.ErrPathTooLong) {
+		t.Fatalf("Connect error = %v, want ErrPathTooLong", err)
 	}
 }
 

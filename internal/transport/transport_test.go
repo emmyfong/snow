@@ -176,3 +176,12 @@ func TestListenPathTooLong(t *testing.T) {
 		t.Fatalf("Listen error = %v, want ErrPathTooLong", err)
 	}
 }
+
+// TestDialPathTooLong: Dial refuses a path the OS cannot dial with
+// ErrPathTooLong, not the raw "invalid argument" from connect.
+func TestDialPathTooLong(t *testing.T) {
+	path := filepath.Join(os.TempDir(), strings.Repeat("x", 120), "default.sock")
+	if _, err := Dial(path); !errors.Is(err, ErrPathTooLong) {
+		t.Fatalf("Dial error = %v, want ErrPathTooLong", err)
+	}
+}
