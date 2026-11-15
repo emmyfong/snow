@@ -123,7 +123,7 @@ func Dial(path string) (net.Conn, error) { return DialTimeout(path, probeTimeout
 // DialTimeout is Dial with a limit of its own, for a caller with a tighter
 // budget, such as snow hook.
 func DialTimeout(path string, limit time.Duration) (net.Conn, error) {
-	// After the dial, EINVAL can mean other things, so the length is
+	// EINVAL from connect has more than one cause, so the length is
 	// checked first.
 	if err := checkPath(path); err != nil {
 		return nil, err
