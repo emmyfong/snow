@@ -41,11 +41,20 @@ func TestSignalForeignGroup(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root may signal every group")
 	}
-	pid := rootGroupLeader(t)
-	tr := &tree{cmd: &exec.Cmd{Process: &os.Process{Pid: pid}}}
-	if err := tr.signal(0); !errors.Is(err, syscall.EPERM) {
-		t.Fatalf("signal to root's group %d: %v, want EPERM", pid, err)
+	// A root process can exit between the scan and the signal. Its group then
+	// answers ESRCH, which signal reports as nil. Try each candidate until one
+	// still answers, so a process that exits mid-test does not fail the test.
+	for _, pid := range rootGroupLeaders(t) {
+		err := (&tree{cmd: &exec.Cmd{Process: &os.Process{Pid: pid}}}).signal(0)
+		if err == nil {
+			continue
+		}
+		if !errors.Is(err, syscall.EPERM) {
+			t.Fatalf("signal to root's group %d: %v, want EPERM", pid, err)
+		}
+		return
 	}
+	t.Skip("every root group leader has exited")
 }
 
 // waitZombie waits until pid has exited and is not reaped.
@@ -62,24 +71,27 @@ func waitZombie(t *testing.T, pid int) {
 	t.Fatalf("process %d did not become a zombie", pid)
 }
 
-// rootGroupLeader returns a process that root owns and that leads its own
-// group, other than init. It skips the test when there is none, as in some
+// rootGroupLeaders returns the processes that root owns and that lead their
+// own group, other than init. It skips the test when there is none, as in some
 // containers.
-func rootGroupLeader(t *testing.T) int {
+func rootGroupLeaders(t *testing.T) []int {
 	t.Helper()
 	out, err := exec.Command("ps", "-A", "-o", "pid=,pgid=,uid=").Output()
 	if err != nil {
 		t.Skipf("ps: %v", err)
 	}
+	var pids []int
 	for _, line := range strings.Split(string(out), "\n") {
 		f := strings.Fields(line)
 		if len(f) != 3 || f[0] != f[1] || f[2] != "0" {
 			continue
 		}
 		if pid, err := strconv.Atoi(f[0]); err == nil && pid > 1 {
-			return pid
+			pids = append(pids, pid)
 		}
 	}
-	t.Skip("no process group that root owns")
-	return 0
+	if len(pids) == 0 {
+		t.Skip("no process group that root owns")
+	}
+	return pids
 }
