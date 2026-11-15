@@ -164,3 +164,10 @@ Read the comment back with `gh pr view <pr> --comments` and check that the
 diagrams and code spans survived.
 
 A merged PR needs no review. Tell the user and stop.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

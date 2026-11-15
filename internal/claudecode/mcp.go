@@ -76,53 +76,102 @@ func (m MCP) displayName() string {
 // Command is the command Claude Code runs for the server, for people.
 func (m MCP) Command() string { return shellQuote(m.Exe) + " mcp" }
 
-// Status reports whether Claude Code has Snow's MCP server registered at
-// user scope. A server of the same name in another scope is not Snow's, so
-// it does not count.
+// ErrMCPUnverifiable means Claude Code's output does not identify a
+// registration that Snow can safely compare or change.
+var ErrMCPUnverifiable = errors.New("claudecode: cannot verify Snow's MCP registration; run claude mcp get snow directly for details")
+
+type mcpState uint8
+
+const (
+	mcpMissing mcpState = iota
+	mcpCurrent
+	mcpStale
+	mcpOtherScope
+)
+
+// Status reports whether the user-scope registration runs the intended Snow
+// executable with its MCP argument. An unknown output format is an error.
 func (m MCP) Status() (bool, error) {
+	state, err := m.status()
+	return state == mcpCurrent, err
+}
+
+func (m MCP) status() (mcpState, error) {
 	if !m.Installed() {
-		return false, nil
+		return mcpMissing, nil
 	}
 	out, err := m.output("mcp", "get", serverName)
-	switch {
-	case err == nil:
-		return userScope(out), nil
-	case errors.Is(err, ErrNoServer):
-		return false, nil
+	if errors.Is(err, ErrNoServer) {
+		return mcpMissing, nil
 	}
-	return false, err
+	if err != nil {
+		return mcpMissing, err
+	}
+	return m.registration(out)
 }
 
-// userScope reports whether `claude mcp get` found the server in the user
-// scope, which Snow manages. A scope Snow does not know counts as the user's,
-// so a setup does not add a second server that `get` cannot tell apart.
-func userScope(out []byte) bool {
+func (m MCP) registration(out []byte) (mcpState, error) {
+	fields := make(map[string]string)
 	for _, line := range strings.Split(string(out), "\n") {
-		if after, ok := strings.CutPrefix(strings.TrimSpace(line), "Scope:"); ok {
-			return strings.Contains(after, "User")
+		key, value, ok := strings.Cut(strings.TrimLeft(strings.TrimSuffix(line, "\r"), " \t"), ":")
+		if !ok || (key != "Scope" && key != "Type" && key != "Command" && key != "Args") {
+			continue
 		}
+		if _, duplicate := fields[key]; duplicate {
+			return mcpMissing, ErrMCPUnverifiable
+		}
+		fields[key] = strings.TrimPrefix(value, " ")
 	}
-	return true
+	switch fields["Scope"] {
+	case "Project config (shared via .mcp.json)", "Local config (private to you in this project)":
+		return mcpOtherScope, nil
+	case "User config (available in all your projects)":
+	default:
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	if fields["Type"] != "stdio" || fields["Command"] == "" {
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	if _, ok := fields["Args"]; !ok {
+		return mcpMissing, ErrMCPUnverifiable
+	}
+	// Claude prints the command separately from its joined arguments. Treat
+	// the whole field as a path, preserving spaces, quotes and backslashes.
+	if fields["Command"] == m.Exe && fields["Args"] == "mcp" {
+		return mcpCurrent, nil
+	}
+	return mcpStale, nil
 }
 
-// Add registers Snow's MCP server at user scope. A server Snow added before
-// is replaced, so a moved snow program is updated. A server of the same name
-// in another scope stays: Claude Code's add puts Snow's own scope first.
+// Add registers Snow's MCP server at user scope. An unchanged registration
+// is left alone. A stale user registration is replaced and verified. Other
+// scopes stay intact because every write explicitly selects user scope.
 func (m MCP) Add() error {
 	if !m.Installed() {
 		return fmt.Errorf("%s: %w", m.displayName(), ErrNoServer)
 	}
-	set, err := m.Status()
-	if err != nil {
+	state, err := m.status()
+	if err != nil || state == mcpCurrent {
 		return err
 	}
-	if set {
+	if state == mcpStale {
 		if _, err := m.output("mcp", "remove", "--scope", "user", serverName); err != nil && !errors.Is(err, ErrNoServer) {
 			return err
 		}
 	}
-	_, err = m.output("mcp", "add", "--scope", "user", serverName, "--", m.Exe, "mcp")
-	return err
+	if _, err := m.output("mcp", "add", "--scope", "user", serverName, "--", m.Exe, "mcp"); err != nil {
+		return err
+	}
+	if state == mcpStale {
+		current, err := m.Status()
+		if err != nil {
+			return err
+		}
+		if !current {
+			return fmt.Errorf("%s: %w", m.displayName(), ErrMCPUnverifiable)
+		}
+	}
+	return nil
 }
 
 // Remove unregisters Snow's MCP server from user scope.
@@ -147,6 +196,10 @@ func (m MCP) output(args ...string) ([]byte, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), mcpTimeout)
 	defer cancel()
+	return m.outputContext(ctx, args...)
+}
+
+func (m MCP) outputContext(ctx context.Context, args ...string) ([]byte, error) {
 	argv := append(append([]string{}, m.Args...), args...)
 	cmd := exec.CommandContext(ctx, m.Program, argv...)
 	var stderr bytes.Buffer
@@ -155,29 +208,49 @@ func (m MCP) output(args ...string) ([]byte, error) {
 	if err == nil {
 		return out, nil
 	}
-	// `claude mcp get` exits nonzero when the server is not there, and
-	// `claude mcp remove` says so when the user scope has none. Both are
-	// answers, not failures.
+	if ctx.Err() != nil {
+		return nil, fmt.Errorf("%s: claude %s: %w", m.displayName(), strings.Join(args, " "), ctx.Err())
+	}
+	// Only Claude's named-server diagnostics prove absence. Configuration
+	// failures and unknown output must not authorize a registration write.
 	if _, exited := errors.AsType[*exec.ExitError](err); exited {
-		if isGet(args) || strings.Contains(stderr.String(), "No MCP server") {
-			return nil, fmt.Errorf("%w: %s", ErrNoServer, stderrLine(stderr.String()))
+		if missingServer(args, stderr.String()) {
+			return nil, ErrNoServer
 		}
 	}
-	if msg := stderrLine(stderr.String()); msg != "" {
-		return nil, fmt.Errorf("%s: claude %s: %w: %s", m.displayName(), strings.Join(args, " "), err, msg)
+	return nil, fmt.Errorf("%s: claude %s: %w; %s; run this command directly for details",
+		m.displayName(), strings.Join(args, " "), err, mcpDiagnostic(stderr.String()))
+}
+
+func missingServer(args []string, diagnostic string) bool {
+	if len(args) < 3 || args[0] != "mcp" || (args[1] != "get" && args[1] != "remove") || args[len(args)-1] != serverName {
+		return false
 	}
-	return nil, fmt.Errorf("%s: claude %s: %w", m.displayName(), strings.Join(args, " "), err)
+	if args[1] == "remove" && strings.TrimSpace(diagnostic) == `No MCP server named "snow" in user scope` {
+		return len(args) == 5 && args[2] == "--scope" && args[3] == "user"
+	}
+	switch strings.TrimSpace(diagnostic) {
+	case `No MCP server named "snow". Run ` + "`claude mcp add`" + ` to add one.`,
+		"No MCP server found with name: snow":
+		return true
+	}
+	return false
 }
 
 // isGet reports whether args ask claude for one MCP server.
 func isGet(args []string) bool { return len(args) >= 2 && args[0] == "mcp" && args[1] == "get" }
 
-// stderrLine returns the last non-empty line of a command's standard error,
-// where claude says what went wrong.
-func stderrLine(s string) string {
-	lines := strings.Split(strings.TrimSpace(s), "\n")
-	if len(lines) == 0 {
-		return ""
+// mcpDiagnostic uses fixed summaries because CLI errors can contain config
+// values, request headers, or credentials anywhere in their text.
+func mcpDiagnostic(stderr string) string {
+	s := strings.ToLower(stderr)
+	switch {
+	case strings.Contains(s, "config") && (strings.Contains(s, "corrupt") || strings.Contains(s, "parse") || strings.Contains(s, "unexpected token") || strings.Contains(s, "invalid")):
+		return "Claude reported invalid configuration"
+	case strings.Contains(s, "permission denied") || strings.Contains(s, "access is denied"):
+		return "Claude reported a permission error"
+	case strings.Contains(s, "unknown command") || strings.Contains(s, "unknown option"):
+		return "Claude does not support this command or option"
 	}
-	return strings.TrimSpace(lines[len(lines)-1])
+	return "Claude command failed"
 }

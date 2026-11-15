@@ -79,7 +79,7 @@ screen ◄── vt emulator ◄── PTY output ◄── shell
 
 - ASD-STE100: short sentences, one idea each, active voice, imperative steps,
   plain words.
-- No em-dashes: `grep -n '—' .context/compose/*.md` prints nothing.
+- No em-dashes: `grep -rn '—' .context/compose/` prints nothing.
 - Industry-standard terms or terms from the codebase. Same term for the same
   thing in every body (check the glossary).
 - Issue references are `#N`. No `NEW-` placeholders remain before posting

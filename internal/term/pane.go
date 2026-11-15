@@ -17,12 +17,13 @@ import (
 // goroutine may outlive the pane. It signals an incompatible vt version.
 var ErrReplyPipe = errors.New("term: emulator reply pipe is not closable")
 
-// ErrCloseTimeout means Close gave up waiting for the pane's goroutines,
-// for example a read from the PTY that never returned. They are left
-// running, and the emulator stays open for them.
+// ErrCloseTimeout means Close gave up waiting for the PTY to close or for
+// the pane's goroutines to stop, for example a read from the PTY that never
+// returned. They are left running, and the emulator stays open for them.
 var ErrCloseTimeout = errors.New("term: pane goroutines did not stop")
 
-// closeWait bounds how long Close waits for the pane's goroutines.
+// closeWait bounds how long Close waits for the PTY close and the pane's
+// goroutines together.
 var closeWait = 5 * time.Second
 
 // Pane is one program on a PTY plus the screen its output draws. All methods
@@ -274,18 +275,29 @@ func (p *Pane) ExitStatus() (int, bool) {
 // The order matters. vt's Close is not locked and races with a goroutine
 // blocked in Read, so Close wakes that reader by closing the reply pipe
 // (which is safe concurrently), waits for every goroutine, and only then
-// closes the emulator. It waits at most closeWait, then returns
-// ErrCloseTimeout: a stuck PTY read must not hang the server.
+// closes the emulator. It waits at most closeWait in all, then returns
+// ErrCloseTimeout: a stuck PTY read or PTY close must not hang the server.
 func (p *Pane) Close() error {
 	p.closeOnce.Do(func() {
 		p.stop()
-		ptyErr := p.pty.Close()
+		deadline := time.After(closeWait)
+		// On Windows the PTY close can block in CancelIoEx (#356), so it
+		// runs apart from the wait.
+		ptyClosed := make(chan error, 1)
+		go func() { ptyClosed <- p.pty.Close() }()
 		pipeErr := p.closeReplyPipe()
+		var ptyErr error
+		select {
+		case ptyErr = <-ptyClosed:
+		case <-deadline:
+			p.closeErr = errors.Join(pipeErr, ErrCloseTimeout)
+			return
+		}
 		stopped := make(chan struct{})
 		go func() { p.wg.Wait(); close(stopped) }()
 		select {
 		case <-stopped:
-		case <-time.After(closeWait):
+		case <-deadline:
 			// A goroutine still running may write to the emulator, so it
 			// must not be closed under it.
 			p.closeErr = errors.Join(ptyErr, pipeErr, ErrCloseTimeout)

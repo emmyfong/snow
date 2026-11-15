@@ -37,6 +37,30 @@ gh api "repos/$R/issues/<n>/dependencies/blocked_by" --jq '.[] | select(.state==
 - If the user problem, scope, or design is unclear, use `plan-with-user` before
   implementation. Ask about consequential ambiguity; retain previous answers.
 
+## Assignment and execution scope
+
+Before implementation, verify that the selected issue or epic is assigned on
+GitHub to the person the agent represents. Use `gh api user --jq .login` for
+the authenticated account unless the user explicitly names another assignee.
+Read `gh issue view <n> --json assignees` and check that person's login.
+If assignment is missing, use `next-issue` to assign the authorized work and
+verify the result. Do not implement until assignment succeeds. Do not remove
+or override another person's assignment without explicit user direction.
+
+Work only on the selected assigned issue or epic and its agreed sub-issues.
+An epic assignment covers those children for the epic's one-PR workflow;
+check child assignees too and resolve another person's ownership before work.
+Assignment is necessary, but does not authorize every issue assigned to the
+same account. Do not pick up adjacent issues, change unrelated code, or expand
+acceptance without the user's direction. Report discoveries and continue the
+assigned scope. A direct request to finish an issue authorizes assigning it;
+selection or investigation alone does not authorize implementation.
+
+For delegated work, retain the assigned human owner and record the manager's
+bounded subtask and worktree. Use `manage-subagents` to coordinate writers.
+Multiple agents can share one GitHub account; an assignee does not reserve a
+file or permit concurrent edits. Recheck ownership on takeover or resumption.
+
 ## 2. Set up the worktree
 
 Branch type from the epic's labels: `bug` gives `fix`, `docs` gives `docs`,
@@ -107,7 +131,8 @@ Work one sub-issue at a time, in the approved order.
   is available; do not require an absent plugin. Repeated attempts should add evidence.
 - Scope grows: pause the affected work and ask about the consequential change.
   Continue independent authorized work. Put new scope in an agreed sub-issue or
-  epic, not silently in this PR.
+  epic, not silently in this PR. For a skill improvement, use `compose-skill`:
+  propose it, obtain approval, and use a dedicated issue, worktree, and PR.
 
 ## 5. Review the branch
 
@@ -139,7 +164,8 @@ Offer to post the review report as the PR's first comment.
 Write the body to `<wt>/.context/pr-<epic>.md` from
 `.github/pull_request_template.md`. Put one `Closes #<n>` line for the epic and
 one for each sub-issue this PR completes. GitHub needs a keyword per issue.
-Fill the summary and how it was tested. Follow AGENTS.md authorship rules. Then:
+Fill the summary and how it was tested. A dedicated skill PR includes its
+changelog entries and validation. Follow AGENTS.md authorship rules. Then:
 
 ```sh
 gh pr create --title '<type>(<scope>): <summary>' --body-file <wt>/.context/pr-<epic>.md
@@ -187,3 +213,10 @@ A sub-issue or epic whose acceptance is a written finding answers a question.
 Put the finding in the PR body and, if it settles a decision, in an ADR with
 the `decision-record` skill. Mark spike code as throwaway in the PR. Keep it
 only if the user says so. The PR title type is `docs` for the finding.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

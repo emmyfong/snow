@@ -16,6 +16,8 @@ type recorder struct {
 	// user is set while a server named snow is registered at user scope,
 	// other while one is registered at another scope only.
 	user, other bool
+	command     string
+	scope       string
 	calls       [][]string
 	err         error
 }
@@ -29,9 +31,17 @@ func (r *recorder) run(args []string) ([]byte, error) {
 	case isGet(args):
 		switch {
 		case r.user:
-			return []byte("snow:\n  Scope: User config (available in all your projects)\n"), nil
+			command := r.command
+			if command == "" {
+				command = "/opt/snow"
+			}
+			return []byte("snow:\n  Scope: User config (available in all your projects)\n  Type: stdio\n  Command: " + command + "\n  Args: mcp\n"), nil
 		case r.other:
-			return []byte("snow:\n  Scope: Project config (shared via .mcp.json)\n"), nil
+			scope := r.scope
+			if scope == "" {
+				scope = "Project config (shared via .mcp.json)"
+			}
+			return []byte("snow:\n  Scope: " + scope + "\n"), nil
 		}
 		return nil, ErrNoServer
 	case isRemove(args):
@@ -40,6 +50,10 @@ func (r *recorder) run(args []string) ([]byte, error) {
 		}
 		r.user = false
 		return nil, nil
+	}
+	if len(args) == 8 && args[0] == "mcp" && args[1] == "add" {
+		r.user = true
+		r.command = args[6]
 	}
 	return nil, nil
 }
@@ -79,7 +93,7 @@ func TestMCPStatus(t *testing.T) {
 }
 
 // TestMCPAdd: a first setup adds the server once; a setup over an existing
-// one replaces it, so a moved snow program is updated.
+// one leaves it unchanged.
 func TestMCPAdd(t *testing.T) {
 	fresh := &recorder{}
 	if err := fresh.mcp().Add(); err != nil {
@@ -94,7 +108,7 @@ func TestMCPAdd(t *testing.T) {
 	if err := again.mcp().Add(); err != nil {
 		t.Fatal(err)
 	}
-	want = []string{"mcp get snow", "mcp remove --scope user snow", "mcp add --scope user snow -- /opt/snow mcp"}
+	want = []string{"mcp get snow"}
 	if got := again.joined(); !equalLines(got, want) {
 		t.Fatalf("calls = %q, want %q", got, want)
 	}
@@ -104,13 +118,17 @@ func TestMCPAdd(t *testing.T) {
 // Snow's, so setup adds Snow's own and does not fail on a remove it cannot
 // make.
 func TestMCPAddOtherScope(t *testing.T) {
-	r := &recorder{other: true}
-	if err := r.mcp().Add(); err != nil {
-		t.Fatal(err)
-	}
-	want := []string{"mcp get snow", "mcp add --scope user snow -- /opt/snow mcp"}
-	if got := r.joined(); !equalLines(got, want) {
-		t.Fatalf("calls = %q, want %q", got, want)
+	for _, scope := range []string{"Project config (shared via .mcp.json)", "Local config (private to you in this project)"} {
+		t.Run(scope, func(t *testing.T) {
+			r := &recorder{other: true, scope: scope}
+			if err := r.mcp().Add(); err != nil {
+				t.Fatal(err)
+			}
+			want := []string{"mcp get snow", "mcp add --scope user snow -- /opt/snow mcp"}
+			if got := r.joined(); !equalLines(got, want) || !r.other {
+				t.Fatalf("calls = %q, want %q; other scope preserved = %v", got, want, r.other)
+			}
+		})
 	}
 }
 
@@ -192,7 +210,7 @@ func TestRegisterMCPAsks(t *testing.T) {
 	if err := registerMCP(r.mcp(), answer("y\n"), &out); err != nil {
 		t.Fatal(err)
 	}
-	if got := r.joined(); !strings.Contains(got[len(got)-1], "mcp add") {
+	if got := strings.Join(r.joined(), "\n"); !strings.Contains(got, "mcp add") {
 		t.Fatalf("calls = %q", got)
 	}
 	out.Reset()
@@ -254,7 +272,7 @@ func TestSetupAsksForBoth(t *testing.T) {
 	if strings.Count(out.String(), "[y/N]") != 2 {
 		t.Fatalf("setup asked %d times:\n%s", strings.Count(out.String(), "[y/N]"), out.String())
 	}
-	if got := r.joined(); !strings.Contains(got[len(got)-1], "mcp add") {
+	if got := strings.Join(r.joined(), "\n"); !strings.Contains(got, "mcp add") {
 		t.Fatalf("calls = %q", got)
 	}
 	if got, err := filepath.Glob(path); err != nil || len(got) != 1 {

@@ -51,3 +51,10 @@ Report what changed, what was measured, quality and usage outcomes, missing data
 and reproducible settings. Recommend adoption, rejection, or a specific next
 experiment. Do not turn results from one runtime or task into a universal saving.
 File implementation work through the existing issue workflow only when warranted.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

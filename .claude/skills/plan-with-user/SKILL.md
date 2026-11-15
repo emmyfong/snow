@@ -57,3 +57,10 @@ Do not start implementation or publish changes merely because planning is comple
 Return to the affected decision when evidence invalidates the design or materially
 changes scope. Explain what changed and the smallest viable alternatives. Do not
 silently expand the assignment, restart all planning, or interrupt for routine details.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.

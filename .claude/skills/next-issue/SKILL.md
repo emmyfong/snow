@@ -7,7 +7,8 @@ description: Choose the next epic to work on in Snow. Reads open epics and stand
 
 Find the open epics that are ready to start, rank them, and let the user pick.
 An epic is one PR. A standalone issue (no parent epic, no sub-issues) counts as
-an epic of one. This skill reads only. It changes nothing on GitHub.
+an epic of one. Discovery reads only. After the user selects work or delegates selection and
+implementation, this skill can assign that work before handing it off.
 
 ## 1. Collect
 
@@ -89,6 +90,35 @@ If the user already selected the work, retain that choice. Each option has:
 
 If nothing is ready, say why: list the blocked epics and their blockers.
 
-## 5. Hand off
+## 5. Assign the selected work, then hand off
 
-Start the `issue-handler` skill with the chosen epic or issue number.
+A request for recommendations alone authorizes no assignment or implementation.
+After the user selects work for implementation, or delegates both selection and
+implementation, assign only that selected epic or standalone issue. A direct
+request to finish a named issue already authorizes this step; do not ask again.
+
+Resolve the human owner. Default to `gh api user --jq .login`; use another
+person only when the user explicitly requests that assignment. Re-read the
+issue and its agreed children with `gh issue view <n> --json assignees`.
+If another person owns any of this work, stop the affected assignment and ask
+before takeover. Do not silently remove existing assignees. Read-only planning
+can continue. An epic's assignment covers its agreed children, but does not
+override another person's child assignment.
+
+Assign with `gh issue edit <n> --add-assignee <login>`, then re-read the issue
+to verify that login is present. If it is already assigned to that person,
+reuse it. If the write fails or ownership cannot be verified, report the
+problem and leave implementation pending. Assignment does not bypass blockers,
+in-progress branches, or the user's approved scope.
+
+Hand the chosen number, verified assignee, agreed children, and any worktree
+ownership to `issue-handler`. A manager gives each agent a bounded assignment;
+sharing the same GitHub account does not allow agents to choose each other's
+issues or write the same files.
+
+## Improve this skill
+
+When a step here was wrong, missing, or unclear, propose a correction through
+`compose-skill`. Obtain user approval before editing unless that change is already
+authorized. Use a dedicated skill issue, worktree, and PR. Continue independent
+task work while approval is pending.
