@@ -62,7 +62,7 @@ func Counts(lines []Line) (added, removed int) {
 	return added, removed
 }
 
-// split cuts s into lines. A final line break ends the last line; it does
+// Split cuts s into lines. A final line break ends the last line; it does
 // not start an empty one.
 func Split(s string) []string {
 	if s == "" {

@@ -47,6 +47,10 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 			return in
 		}
 	}
+	m.syncAt()
+	if in, ok := m.atKey(k); ok {
+		return in
+	}
 	if in, ok := m.recentKey(k); ok {
 		return in
 	}
@@ -99,6 +103,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 		if changed || k.Code == tea.KeyEnd {
 			m.Follow()
 		}
+		m.syncAt()
 	}
 	return nil
 }
@@ -107,6 +112,7 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 // message; they do not send it.
 func (m *Model) Paste(text string) {
 	m.insert(strings.ReplaceAll(text, "\r\n", "\n"))
+	m.syncAt()
 }
 
 // Retry returns the input that runs the failed turn again.

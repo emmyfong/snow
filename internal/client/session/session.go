@@ -65,6 +65,7 @@ type Model struct {
 	copy       *copymode.Model           // copy mode over a pane, when open
 	setClip    func(text string) tea.Cmd // puts text on the system clipboard
 	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
+	ownPress   *ownClick                 // a left press in a pane the client draws, until it moves or lets go
 	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
 	modelPick  *modelpick.Model          // the model picker, when open
 	modelList  api.ModelList             // the server's last model list
@@ -136,7 +137,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case *api.PaneUpdate:
 		m.applyUpdate(msg)
-	case *api.ChatSnapshot, *api.ChatEvent, *api.SidePaneState, ownTickMsg:
+	case *api.ChatSnapshot, *api.ChatEvent, *api.FileList, *api.SidePaneState, ownTickMsg:
 		return m.ownMsg(msg)
 	case tea.ColorProfileMsg:
 		// The terminal's color depth is known only now; text that would

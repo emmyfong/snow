@@ -67,8 +67,7 @@ func TestLayoutKeepsPanes(t *testing.T) {
 	_, termBefore := paneState(t, s, shell)
 
 	layoutCmd(c, chat, "ide")
-	var l *api.Layout
-	l = nextLayout(t, c, func(l *api.Layout) bool {
+	l := nextLayout(t, c, func(l *api.Layout) bool {
 		ps := shownPanes(l)
 		if len(ps) != 5 {
 			return false

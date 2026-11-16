@@ -68,9 +68,9 @@ func (m *Model) Note() string { return m.note }
 // changed. Removed lines take no syntax color; the view colors them.
 func (m *Model) highlight() {
 	h := fnv.New64a()
-	fmt.Fprintf(h, "%s\x00%s\x00", m.st.Path, m.th.Name)
+	_, _ = fmt.Fprintf(h, "%s\x00%s\x00", m.st.Path, m.th.Name)
 	for _, l := range m.st.Lines {
-		fmt.Fprintf(h, "%d\x00%s\x00", l.Number, l.Text)
+		_, _ = fmt.Fprintf(h, "%d\x00%s\x00", l.Number, l.Text)
 	}
 	key := fmt.Sprintf("%x", h.Sum64())
 	if key == m.hlKey {
@@ -179,7 +179,7 @@ func (m *Model) scrollBy(rows int) {
 }
 
 // Click selects no line; the viewer's text is read, not chosen.
-func (m *Model) Click(x, y int) api.Message { return nil }
+func (m *Model) Click(_, _ int) api.Message { return nil }
 
 // Scroll moves the text by rows, toward the start when positive.
 func (m *Model) Scroll(rows int) { m.scrollBy(-rows) }

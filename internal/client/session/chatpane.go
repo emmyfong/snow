@@ -26,6 +26,8 @@ func (c chatPane) Feed(msg api.Message) {
 		c.Event(msg)
 	case *api.ConversationList:
 		c.Conversations(msg)
+	case *api.FileList:
+		c.Files(msg)
 	}
 }
 

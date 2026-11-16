@@ -91,7 +91,7 @@ func (p *viewerPane) State() api.SideState {
 
 // Act implements sidePane. A client may only ask for a fresh read; opening
 // a file comes from the server's OpOpenFile.
-func (p *viewerPane) Act(action string, args map[string]string) error {
+func (p *viewerPane) Act(action string, _ map[string]string) error {
 	if action != api.ViewerActRefresh {
 		return fmt.Errorf("the viewer has no action %q", action)
 	}

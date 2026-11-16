@@ -35,7 +35,7 @@ func Read(path string) (Doc, error) {
 	if err != nil {
 		return Doc{}, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	st, err := f.Stat()
 	if err != nil {
 		return Doc{}, err

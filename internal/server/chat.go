@@ -281,7 +281,9 @@ func (st *state) syncChats(c *client) {
 				continue
 			}
 			c.chatLive[id] = true
-			st.enqueue(c, fitSnapshot(p.chat.snap))
+			snap := p.chat.snap
+			snap.Folder = p.chat.folder
+			st.enqueue(c, fitSnapshot(snap))
 		}
 	}
 }

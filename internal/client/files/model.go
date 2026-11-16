@@ -264,7 +264,7 @@ func (m *Model) action(action, path string) api.Message {
 // Click handles a left click at pane cell x, y. A click selects a row. A
 // click on the selected folder opens or closes it, and a click on the
 // selected file opens it.
-func (m *Model) Click(x, y int) api.Message {
+func (m *Model) Click(_ int, y int) api.Message {
 	if !m.loaded {
 		return nil
 	}
