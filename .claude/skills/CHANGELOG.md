@@ -100,4 +100,9 @@ they do not override the current approval rules.
 
 - Evidence: #295 and #298 replace bottom tabs and CloseCell. The original geometry had no top border for top-edge panes. The user approved reusing lower dividers and reserving top-edge headers without covering content.
 - Change: document WindowBar spans, quiet StatusBar, focused PaneButtons and runtime control entry points. Remove obsolete bottom-bar hit-target catalog entries. Record the accepted geometry in DESIGN.md and local ADR0017.
-- Validation: skill frontmatter and whitespace pass. Final code/API comparison and independent review remain pending #293 completion. Earlier guidance review corrected a false claim that ADR0018 already existed; the final wording keeps it pending under #301.
+- Validation: skill frontmatter and whitespace pass. Final code/API comparison and independent review passed against the accepted #293 implementation contract. A narrow split-chat scenario confirmed shared hit targets, header/content separation, and runtime-specific controls. Earlier guidance review corrected a false claim that ADR0018 already existed; the final wording keeps it pending under #301.
+## 2026-11-14: Assign selected issues before implementation (#364)
+
+- Evidence: the user requested explicit ownership while coordinating #260 and #293; both issues had no GitHub assignee.
+- Change: issue-handler requires verified assignment and limits execution to the selected scope. next-issue can assign authorized selected work before handoff. It preserves other owners, checks child ownership, and separates account assignment from agent writer coordination.
+- Validation: structural validation and whitespace checks passed. An independent Luna medium walkthrough confirmed that recommendations cause no writes; a direct implementation request assigns and verifies the selected issue; another owner or a friend-owned child stops affected work; assignment failure leaves implementation pending; and agents sharing an account keep their separate scopes. The reviewer found no material policy defect. The requested outcomes matched all scenarios.

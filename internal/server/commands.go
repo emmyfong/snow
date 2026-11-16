@@ -48,6 +48,9 @@ func (st *state) command(c *client, cmd *api.Command) {
 
 // run applies a validated cmd to sess, as command does.
 func (st *state) run(c *client, sess *session, cmd *api.Command) {
+	if st.deferRuntimeClose(c, sess, cmd) {
+		return
+	}
 	var notice string
 	var err error
 	if cmd.Op == api.OpLayout {

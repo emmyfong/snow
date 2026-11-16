@@ -234,6 +234,38 @@ func TestRuntimeChatRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRuntimeQuestionAnswer(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "conversation")
+	server := New(options)
+	t.Cleanup(server.Close)
+	client := connect(t, server, 100, 30)
+	pane := openChat(t, client)
+	useTestRuntime(t, server, client, pane)
+	chatInputOf(client, pane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "original" })
+	first := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Question != nil })
+	firstID, agent := first.Question.ID, first.Agent
+	for _, input := range []api.ChatInput{
+		{Pane: pane, Agent: "wrong-generation", Kind: api.ChatInputReply, ID: firstID, Picked: []string{"A", "B"}},
+		{Pane: pane, Agent: agent, Kind: api.ChatInputReply, ID: "stale-question", Picked: []string{"A", "B"}},
+	} {
+		client.Send(&input)
+		if problem := nextError(t, client); problem.Code != api.CodeCommandFailed {
+			t.Fatalf("wrong question reply rejection: %+v", problem)
+		}
+	}
+	chatInputOf(client, pane, api.ChatInputReply, func(in *api.ChatInput) { in.ID, in.Picked = firstID, []string{"A", "B"} })
+	second := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Question != nil && s.Question.ID != firstID })
+	client.Send(&api.ChatInput{Pane: pane, Agent: agent, Kind: api.ChatInputReply, ID: firstID, Picked: []string{"A"}})
+	if problem := nextError(t, client); problem.Code != api.CodeCommandFailed {
+		t.Fatalf("duplicate question reply not rejected: %+v", problem)
+	}
+	chatInputOf(client, pane, api.ChatInputReply, func(in *api.ChatInput) { in.ID, in.Text = second.Question.ID, "raw\nfree answer" })
+	approval := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Pending != nil })
+	chatInputOf(client, pane, api.ChatInputAnswer, func(in *api.ChatInput) { in.ID, in.Decision = approval.Pending.ID, api.ChatDecisionYes })
+	client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.State == api.ChatStateIdle && !s.Running })
+}
+
 func TestRuntimeChatFailurePreservesInput(t *testing.T) {
 	options, provider, _ := chatOptions(t)
 	options.Chat.Runtime = runtimeOptions(t, "conversation")
@@ -247,6 +279,19 @@ func TestRuntimeChatFailurePreservesInput(t *testing.T) {
 	client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
 	if !strings.Contains(client.ChatText(pane), "user: keep this exact request") || len(provider.Requests()) != 0 {
 		t.Fatal("runtime failure discarded input or fell back to an API provider")
+	}
+	stopped := client.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
+	var errors int
+	for _, entry := range stopped.Entries {
+		if entry.Kind == api.ChatEntryError {
+			errors++
+			if entry.Error == nil || entry.Error.Code != api.ChatErrRuntimeConnection {
+				t.Fatalf("runtime failure error was not typed as connection failure: %+v", entry)
+			}
+		}
+	}
+	if errors != 1 {
+		t.Fatalf("runtime failure has %d error entries; want one", errors)
 	}
 }
 

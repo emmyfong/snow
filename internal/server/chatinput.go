@@ -18,6 +18,7 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		return
 	}
 	var conv conversation
+	closing := false
 	queued := 0
 	snapModel := ""
 	oldModel, oldEffort := "", ""
@@ -25,10 +26,15 @@ func (s *Server) chatInput(c *client, in *api.ChatInput) {
 		oldModel, oldEffort = st.defaultModel, st.defaultEffort
 		if p := st.paneOf(c, in.Pane); p != nil && p.chat != nil && string(p.chat.conv.Agent()) == in.Agent {
 			conv, queued, snapModel = p.chat.conv, len(p.chat.snap.Queue), p.chat.snap.Model
+			closing = p.chat.closing
 		}
 	})
 	if conv == nil {
 		s.refuse(c, api.CodeCommandFailed, fmt.Errorf("no agent %s in pane %d", in.Agent, in.Pane))
+		return
+	}
+	if closing {
+		s.refuse(c, api.CodeCommandFailed, errors.New("this chat is closing or its runtime stop is unconfirmed"))
 		return
 	}
 	var err error
