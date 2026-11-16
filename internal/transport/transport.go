@@ -28,6 +28,14 @@ var (
 
 const probeTimeout = time.Second
 
+// checkPath returns ErrPathTooLong for a path the OS cannot bind or dial.
+func checkPath(path string) error {
+	if len(path) > maxPathLen {
+		return fmt.Errorf("%w: %d bytes: %s", ErrPathTooLong, len(path), path)
+	}
+	return nil
+}
+
 // Listen creates the socket at path for a server. It makes the socket's
 // folder private to the current user first.
 //
@@ -36,8 +44,8 @@ const probeTimeout = time.Second
 // until its listener closes. Others get ErrInUse. A socket left by a crashed
 // server is replaced; anything else at path is left alone and reported.
 func Listen(path string) (net.Listener, error) {
-	if len(path) > maxPathLen {
-		return nil, fmt.Errorf("%w: %d bytes: %s", ErrPathTooLong, len(path), path)
+	if err := checkPath(path); err != nil {
+		return nil, err
 	}
 	if err := private.Dir(filepath.Dir(path)); err != nil {
 		return nil, err
@@ -115,6 +123,11 @@ func Dial(path string) (net.Conn, error) { return DialTimeout(path, probeTimeout
 // DialTimeout is Dial with a limit of its own, for a caller with a tighter
 // budget, such as snow hook.
 func DialTimeout(path string, limit time.Duration) (net.Conn, error) {
+	// EINVAL from connect has more than one cause, so the length is
+	// checked first.
+	if err := checkPath(path); err != nil {
+		return nil, err
+	}
 	c, err := net.DialTimeout("unix", path, limit)
 	if err != nil {
 		if isRefused(err) || isAbsent(err) {
