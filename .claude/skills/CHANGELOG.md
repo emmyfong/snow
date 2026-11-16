@@ -95,3 +95,9 @@ they do not override the current approval rules.
   against `plan-program` and `compose-issues`; the first live run is the
   planning program of 2026-11-10.
 - Status: pending review
+
+## 2026-11-15: Layout component catalog and header geometry (#294)
+
+- Evidence: #295 and #298 replace bottom tabs and CloseCell. The original geometry had no top border for top-edge panes. The user approved reusing lower dividers and reserving top-edge headers without covering content.
+- Change: document WindowBar spans, quiet StatusBar, focused PaneButtons and runtime control entry points. Remove obsolete bottom-bar hit-target catalog entries. Record the accepted geometry in DESIGN.md and local ADR0017.
+- Validation: skill frontmatter and whitespace pass. Final code/API comparison and independent review remain pending #293 completion. Earlier guidance review corrected a false claim that ADR0018 already existed; the final wording keeps it pending under #301.
