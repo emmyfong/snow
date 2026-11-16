@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -290,11 +292,17 @@ func TestConversationProtocolErrorPreservesKind(t *testing.T) {
 }
 
 func TestConversationSubmitNotRetried(t *testing.T) {
+	receipt := filepath.Join(t.TempDir(), "prompt")
+	t.Setenv("SNOW_TEST_PROMPT_RECEIPT", receipt)
 	h := newConversationHarness(t, "conversation-exit-after-prompt")
 	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "keep this exact request"})
 	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
 	if h.starts.Load() != 1 {
 		t.Fatalf("failed submission started %d runtimes; want one", h.starts.Load())
+	}
+	delivered, err := os.ReadFile(receipt)
+	if err != nil || string(delivered) != "keep this exact request\n" {
+		t.Fatalf("fixture did not receive exactly one submitted prompt: text=%q err=%v", delivered, err)
 	}
 	var preserved bool
 	deadline := time.After(10 * time.Second)

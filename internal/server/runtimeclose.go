@@ -32,9 +32,11 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 		pane *pane
 		chat *chatPane
 	}
+	originalChats := make(map[*pane]*chatPane, len(panes))
 	var chats []closingChat
 	var conversations []conversation
 	for _, p := range panes {
+		originalChats[p] = p.chat
 		if p.chat != nil && p.chat.snap.Runtime != nil {
 			if p.chat.closing {
 				return true
@@ -62,14 +64,19 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 			if current.sessions[sess.name] != sess {
 				return
 			}
+			var remaining []*pane
 			for _, p := range panes {
 				_, live := sess.findPane(p.id)
-				if live != p {
-					return
+				if live == p && live.chat == originalChats[p] {
+					remaining = append(remaining, p)
 				}
 			}
 			if stopErr != nil {
 				for _, p := range chats {
+					_, live := sess.findPane(p.pane.id)
+					if live != p.pane || live.chat != p.chat {
+						continue
+					}
 					// Close keeps its final snapshot available after a cleanup failure.
 					// The controller already emitted the detailed runtime failure.
 					current.chatEvent(&api.ChatEvent{Pane: p.pane.id, Agent: p.chat.snap.Agent, Kind: api.ChatEventError,
@@ -78,7 +85,7 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 				return
 			}
 			w := sess.window(request.Target)
-			unchangedWindow := request.Op == api.OpCloseWindow && w == originalWindow && len(w.panes) == len(panes)
+			unchangedWindow := request.Op == api.OpCloseWindow && w == originalWindow && len(remaining) == len(panes) && len(w.panes) == len(panes)
 			if unchangedWindow {
 				for _, p := range panes {
 					if w.panes[p.id] != p {
@@ -90,14 +97,16 @@ func (st *state) deferRuntimeClose(c *client, sess *session, cmd *api.Command) b
 			if request.Op == api.OpCloseWindow && !unchangedWindow {
 				// A later split was not part of the confirmed close. Remove only
 				// the original panes, whose runtimes have now stopped.
-				for _, p := range panes {
+				for _, p := range remaining {
 					window, _ := sess.findPane(p.id)
 					current.removePane(sess, window, p.id)
 				}
-				current.enqueue(c, &api.Error{Code: api.CodeNotice, Message: "Closed the original panes. New panes opened during shutdown were kept."})
-			} else if err := current.apply(sess, &request); err != nil {
-				current.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
-				return
+				current.enqueue(c, &api.Error{Code: api.CodeNotice, Message: "Closed the remaining original panes. Later panes and conversations were kept."})
+			} else if len(remaining) > 0 {
+				if err := current.apply(sess, &request); err != nil {
+					current.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
+					return
+				}
 			}
 			if current.sessions[sess.name] == sess {
 				current.repaint(sess)

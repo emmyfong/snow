@@ -2,6 +2,7 @@ package clauderuntime
 
 import (
 	"context"
+	"errors"
 	"os"
 	"slices"
 	"testing"
@@ -9,6 +10,27 @@ import (
 
 	"github.com/emmyfong/snow/internal/shell"
 )
+
+func TestModelStopError(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want error
+	}{
+		{"clean", nil, nil},
+		{"closed", ErrClosed, nil},
+		{"stop failed", ErrStop, ErrStop},
+		{"closed and stop failed", errors.Join(ErrClosed, ErrStop), ErrStop},
+		{"protocol failed", ErrProtocol, ErrProtocol},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := modelStopError(tc.err)
+			if tc.want == nil && got != nil || tc.want != nil && !errors.Is(got, tc.want) {
+				t.Fatalf("model cleanup error = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
 
 // TestModelsFromInitialize: Snow reads Claude Code's models and their
 // effort levels from the initialize reply, with no model request.

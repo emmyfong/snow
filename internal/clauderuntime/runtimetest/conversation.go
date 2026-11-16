@@ -91,6 +91,21 @@ func Conversation(mode string) {
 		case `"user"`:
 			turn++
 			if mode == "conversation-exit-after-prompt" {
+				var prompt struct {
+					Content string `json:"content"`
+				}
+				if json.Unmarshal(message["message"], &prompt) != nil {
+					os.Exit(7)
+				}
+				receipt, err := os.OpenFile(os.Getenv("SNOW_TEST_PROMPT_RECEIPT"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o600)
+				if err != nil {
+					os.Exit(7)
+				}
+				_, writeErr := receipt.WriteString(prompt.Content + "\n")
+				closeErr := receipt.Close()
+				if writeErr != nil || closeErr != nil {
+					os.Exit(7)
+				}
 				os.Exit(6)
 			}
 			if mode == "conversation-invalid" {

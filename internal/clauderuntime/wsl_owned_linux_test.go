@@ -201,6 +201,35 @@ func TestWSLOwnedCleanupFailureIsNotHiddenByClosedStream(t *testing.T) {
 	}
 }
 
+func TestWSLOwnedNaturalClosePreservesCleanupFailure(t *testing.T) {
+	profile, program := ownedWSLFixture(t, true)
+	launch, err := profile.ChatLaunch(program, "", "", RunOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stream, err := profile.startStream(program, launch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := stream.Stop(); err != nil && !errors.Is(err, ErrStop) && !errors.Is(err, ErrClosed) {
+			t.Errorf("stop fixture stream: %v", err)
+		}
+	})
+	// EOF makes the real fixture exit before Stop, so the stream retains both
+	// its natural closure and the refused WSL cleanup receipt.
+	if err := stream.input.Close(); err != nil {
+		t.Fatal(err)
+	}
+	waitStream(t, stream)
+	if !errors.Is(stream.Err(), ErrClosed) || !errors.Is(stream.Err(), ErrStop) {
+		t.Fatalf("natural closure did not retain cleanup failure: %v", stream.Err())
+	}
+	if err := modelStopError(stream.Err()); !errors.Is(err, ErrStop) {
+		t.Fatalf("model cleanup hid the real stream's stop failure: %v", err)
+	}
+}
+
 func TestWSLOwnedMissingUtilityStartsNoRuntime(t *testing.T) {
 	run := t.TempDir()
 	marker := filepath.Join(run, "runtime-started")

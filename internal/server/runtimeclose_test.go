@@ -226,3 +226,71 @@ func TestRuntimeWindowCloseKeepsSameCountReplacement(t *testing.T) {
 		return removed
 	})
 }
+
+func TestRuntimeWindowCloseReconcilesChangedPane(t *testing.T) {
+	for _, replace := range []bool{false, true} {
+		name := "removed"
+		if replace {
+			name = "new conversation"
+		}
+		t.Run(name, func(t *testing.T) {
+			gate := filepath.Join(t.TempDir(), "stop")
+			t.Setenv("SNOW_TEST_STOP_GATE", gate)
+			options, _, _ := chatOptions(t)
+			options.Chat.Runtime = runtimeOptions(t, "conversation-children-gated")
+			server := New(options)
+			t.Cleanup(server.Close)
+			t.Cleanup(func() {
+				if err := os.WriteFile(gate, nil, 0o600); err != nil {
+					t.Error(err)
+				}
+			})
+			client := connect(t, server, 100, 30)
+			runtimePane := openChat(t, client)
+			useTestRuntime(t, server, client, runtimePane)
+			chatInputOf(client, runtimePane, api.ChatInputMessage, func(in *api.ChatInput) { in.Text = "original" })
+			client.WaitChat(runtimePane, func(s *api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 3 })
+			client.Send(&api.Command{Op: api.OpSplit, Target: runtimePane, Args: map[string]string{api.ArgKind: api.PaneChat, api.ArgDir: api.DirRight}})
+			layout := nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+			other := 0
+			for _, p := range shownPanes(layout) {
+				if p.ID != runtimePane {
+					other = p.ID
+				}
+			}
+			original := client.WaitChat(other, func(s *api.ChatSnapshot) bool { return s.Agent != "" }).Agent
+			window := 0
+			server.call(func(st *state) {
+				sess, _ := st.findChat(runtimePane)
+				w, _ := sess.findPane(runtimePane)
+				window = w.index
+			})
+			client.Send(&api.Command{Op: api.OpCloseWindow, Target: window})
+			eventually(t, "runtime stop to start", func() bool { _, err := os.Stat(gate + ".entered"); return err == nil })
+			replacement := ""
+			if replace {
+				chatInputOf(client, other, api.ChatInputNew, nil)
+				replacement = client.WaitChat(other, func(s *api.ChatSnapshot) bool { return s.Agent != original }).Agent
+			} else {
+				client.Send(&api.Command{Op: api.OpClose, Target: other})
+				_ = nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
+			}
+			if err := os.WriteFile(gate, nil, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			eventually(t, "remaining original runtime to close", func() bool {
+				removed := false
+				server.call(func(st *state) { _, p := st.findChat(runtimePane); removed = p == nil })
+				return removed
+			})
+			server.call(func(st *state) {
+				if replace {
+					_, p := st.findChat(other)
+					if p == nil || p.chat.snap.Agent != replacement {
+						t.Error("window close removed the replacement conversation")
+					}
+				}
+			})
+		})
+	}
+}
