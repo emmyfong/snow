@@ -30,10 +30,18 @@ func (t *tree) terminate() error { return t.signal(syscall.SIGTERM) }
 
 // signal sends sig to the group. ESRCH means the group is gone. macOS
 // answers EPERM instead when every process left in the group has exited
-// but is not yet reaped, so that is gone too: Snow started the group as
-// the same user, so it never lacks the permission itself.
+// but is not yet reaped (#279). A real permission error looks the same, so
+// signal 0 to the leader alone tells them apart: Snow may signal a leader
+// it started, alive or not yet reaped, and a reaped leader answers ESRCH.
+// The probe sees the leader only: a process Snow may not signal, left in
+// the group after the leader exited, is not reported.
 func (t *tree) signal(sig syscall.Signal) error {
-	if err := syscall.Kill(-t.cmd.Process.Pid, sig); err != nil && err != syscall.ESRCH && err != syscall.EPERM {
+	pid := t.cmd.Process.Pid
+	err := syscall.Kill(-pid, sig)
+	if err == syscall.EPERM && syscall.Kill(pid, 0) != syscall.EPERM {
+		return nil
+	}
+	if err != nil && err != syscall.ESRCH {
 		return err
 	}
 	return nil

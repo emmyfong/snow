@@ -170,9 +170,21 @@ func TestDialWithoutServer(t *testing.T) {
 	}
 }
 
-func TestListenPathTooLong(t *testing.T) {
+// TestPathTooLong: Listen and Dial refuse a path the OS cannot use with
+// ErrPathTooLong, not the raw "invalid argument" from bind or connect.
+func TestPathTooLong(t *testing.T) {
 	path := filepath.Join(os.TempDir(), strings.Repeat("x", 120), "default.sock")
-	if _, err := Listen(path); !errors.Is(err, ErrPathTooLong) {
-		t.Fatalf("Listen error = %v, want ErrPathTooLong", err)
+	for _, tc := range []struct {
+		name string
+		open func(string) error
+	}{
+		{"Listen", func(p string) error { _, err := Listen(p); return err }},
+		{"Dial", func(p string) error { _, err := Dial(p); return err }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.open(path); !errors.Is(err, ErrPathTooLong) {
+				t.Fatalf("%s error = %v, want ErrPathTooLong", tc.name, err)
+			}
+		})
 	}
 }
