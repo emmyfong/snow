@@ -75,7 +75,7 @@ func (st *state) layout(sess *session) *api.Layout {
 			info.Panes = append(info.Panes, api.PaneInfo{
 				ID:         int(id),
 				Kind:       p.kind(),
-				Rect:       api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
+				Rect:       api.Rect{X: r.X, Y: r.Y + paneHeaderRows, W: r.W, H: r.H},
 				Profile:    p.profile,
 				Folder:     folder,
 				Focused:    int(id) == w.focused,

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestDefaultIsFrost(t *testing.T) {
@@ -155,5 +156,28 @@ func TestAgentGlyphsFallBackWithoutColor(t *testing.T) {
 	}
 	if g := d.For(colorprofile.ANSI).Glyphs; g.AgentNeedsYou != "●" || g.Driven != "✎" {
 		t.Errorf("For(ANSI) changed the glyphs to %q and %q", g.AgentNeedsYou, g.Driven)
+	}
+}
+
+func TestPaneButtonGlyphsOneCell(t *testing.T) {
+	for _, th := range Builtin() {
+		for name, glyph := range map[string]string{"Model": th.Glyphs.Model, "Zoom": th.Glyphs.Zoom, "Close": th.Glyphs.Close} {
+			if width := ansi.StringWidth(glyph); width != 1 {
+				t.Errorf("%s %s width = %d, want 1", th.Name, name, width)
+			}
+		}
+	}
+}
+
+func TestChromeGlyphsFallBackWithoutColor(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.NoTTY, colorprofile.ASCII} {
+		g := Default().For(p).Glyphs
+		for name, tt := range map[string]struct{ got, want string }{
+			"Dropdown": {g.Dropdown, "v"}, "Menu": {g.Menu, "="}, "Model": {g.Model, "v"}, "Zoom": {g.Zoom, "+"}, "Close": {g.Close, "x"},
+		} {
+			if tt.got != tt.want {
+				t.Errorf("For(%s) %s=%q,want %q", p, name, tt.got, tt.want)
+			}
+		}
 	}
 }

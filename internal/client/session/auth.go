@@ -59,7 +59,7 @@ func (m *Model) authMouse(msg tea.MouseMsg) tea.Cmd {
 	if click.Button != tea.MouseLeft {
 		return m.authClose()
 	}
-	return m.authResult(m.authPick.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+	return m.authResult(m.authPick.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 }
 
 // authResult applies what the login picker chose.

@@ -111,6 +111,9 @@ func TestRestoreLayout(t *testing.T) {
 	if left.Rect.X >= right.Rect.X || left.Rect.Y != right.Rect.Y || !right.Focused {
 		t.Fatalf("panes %+v and %+v, want side by side with the right one focused", left, right)
 	}
+	if left.Rect.Y != 1 || right.Rect.Y != 1 || left.Rect.H != 21 || right.Rect.H != 21 {
+		t.Fatalf("restored pane content did not reserve the header: %+v, %+v", left.Rect, right.Rect)
+	}
 	if right.Profile == "no-such-profile" || right.Profile == "" {
 		t.Fatalf("pane with an unknown profile runs %q, want the default", right.Profile)
 	}

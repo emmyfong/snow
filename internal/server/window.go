@@ -8,9 +8,13 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// statusRows is the height of the status bar the client draws below the
-// panes. Panes are laid out in the rest of the session.
-const statusRows = 1
+// barRows reserves the window bar and status line. Panes are laid out in
+// the rows between them.
+const barRows = 2
+
+// paneHeaderRows adds the missing top edge. Internal dividers serve as the
+// other panes' headers, so the layout tree needs only this one extra row.
+const paneHeaderRows = 1
 
 // window is one tab of a session: a layout tree and the panes in it.
 type window struct {
@@ -22,9 +26,10 @@ type window struct {
 	ephemeral bool // official sign-in view; no layout or transcript is saved
 }
 
-// area is the size panes are laid out in: the session minus the status bar.
+// area is the layout canvas below the window bar and top pane header,
+// and above the status line. Pane terminal sizes use this canvas.
 func (sess *session) area() (cols, rows int) {
-	return sess.cols, max(sess.rows-statusRows, 1)
+	return sess.cols, max(sess.rows-barRows-paneHeaderRows, 1)
 }
 
 // window returns the window with index, or nil.

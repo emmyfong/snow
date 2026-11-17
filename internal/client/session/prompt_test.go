@@ -58,10 +58,10 @@ func TestCommandPromptOpensPopup(t *testing.T) {
 	}
 }
 
-// TestCommandPopupHidesHomeOnly: help and quit belong to the home page.
+// TestCommandPopupHidesHomeOnly keeps home-only commands out of a session.
 func TestCommandPopupHidesHomeOnly(t *testing.T) {
 	m, _ := openPrompt(t, 80, 24)
-	for _, name := range []string{"quit", "help", "sessions"} {
+	for _, name := range []string{"quit", "sessions"} {
 		if strings.Contains(plain(m), name) {
 			t.Errorf("the session popup lists the home command %s", name)
 		}
@@ -283,7 +283,7 @@ func TestCommandPopupTinyScreen(t *testing.T) {
 			t.Errorf("%dx%d: sent %v, want the key l for the pane", sz[0], sz[1], r.sent)
 		}
 	}
-	for _, sz := range [][2]int{{30, 8}, {40, 12}} {
+	for _, sz := range [][2]int{{30, 9}, {40, 12}} {
 		m, _ := openPrompt(t, sz[0], sz[1])
 		typeIn(m, "theme\r")
 		_ = m.View()

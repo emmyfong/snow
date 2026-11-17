@@ -106,3 +106,5 @@ func (m *Model) run(name string, k tea.Key) tea.Cmd {
 	}
 	return nil
 }
+
+func (m *Model) openNewWindow() tea.Cmd { return m.run("new-window", tea.Key{}) }

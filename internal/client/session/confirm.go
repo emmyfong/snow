@@ -117,7 +117,7 @@ func (m *Model) confirmKey(k tea.Key) {
 // click matters.
 func (m *Model) confirmMouse(msg tea.MouseMsg) {
 	if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft {
-		m.confirmResult(m.confirm.popup.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+		m.confirmResult(m.confirm.popup.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 	}
 }
 

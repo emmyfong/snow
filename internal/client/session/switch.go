@@ -44,7 +44,7 @@ func (m *Model) switcherMouse(msg tea.MouseMsg) tea.Cmd {
 		m.switcher = nil
 		return nil
 	}
-	return m.switcherResult(m.switcher.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+	return m.switcherResult(m.switcher.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 }
 
 // switcherResult closes the list when the user is done with it, and asks

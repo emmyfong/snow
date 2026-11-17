@@ -92,8 +92,8 @@ func TestCursorIsOffsetByThePaneRect(t *testing.T) {
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: panes}}})
 	m.Update(&api.PaneUpdate{Pane: 2, Cursor: &api.Cursor{X: 3, Y: 1, Visible: true}})
 	c := m.View().Cursor
-	if c == nil || c.X != panes[1].Rect.X+3 || c.Y != 1 {
-		t.Fatalf("cursor %+v, want pane 2's origin plus 3,1", c)
+	if c == nil || c.X != panes[1].Rect.X+3 || c.Y != panes[1].Rect.Y+1+m.areaTop() {
+		t.Fatalf("cursor %+v, want pane 2's origin plus 3,1 and the window bar", c)
 	}
 }
 

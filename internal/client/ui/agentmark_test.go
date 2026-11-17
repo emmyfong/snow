@@ -29,10 +29,10 @@ var agentTabs = []Tab{
 func TestStatusBarAgentStates(t *testing.T) {
 	for _, th := range theme.Builtin() {
 		t.Run(strings.ReplaceAll(th.Name, " ", "_"), func(t *testing.T) {
-			golden.RequireEqual(t, StatusBar(th, StatusOptions{Width: 100, Session: "rename-fix", Tabs: agentTabs, Right: "14:02"}))
+			golden.RequireEqual(t, WindowBar(th, WindowBarOptions{Width: 100, Session: "rename-fix", Tabs: agentTabs}))
 		})
 	}
-	got := ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 100, Session: "s", Tabs: agentTabs}))
+	got := ansi.Strip(WindowBar(theme.Default(), WindowBarOptions{Width: 100, Session: "s", Tabs: agentTabs}))
 	for _, want := range []string{"0 agents ○", "1 planner ◐", "2 builder ●", "3 reviewer* ●", "4 terminal "} {
 		if !strings.Contains(got, want) {
 			t.Errorf("bar %q lacks %q", got, want)
@@ -45,7 +45,7 @@ func TestStatusBarAgentStates(t *testing.T) {
 func TestNeedsYouStandsOut(t *testing.T) {
 	th := theme.Default()
 	tab := func(tb Tab) string {
-		return StatusBar(th, StatusOptions{Width: 40, Session: "s", Tabs: []Tab{tb}})
+		return WindowBar(th, WindowBarOptions{Width: 40, Session: "s", Tabs: []Tab{tb}})
 	}
 	plain := tab(Tab{Index: 1, Name: "dev", Agent: MarkWorking})
 	waiting := tab(Tab{Index: 1, Name: "dev", Agent: MarkNeedsYou})
@@ -67,13 +67,17 @@ func TestTabSpansWithStates(t *testing.T) {
 		want  []string
 	}{
 		{"all fit", 100, []string{" 0 agents ○ ", " 1 planner ◐ ", " 2 builder ● ", " 3 reviewer* ● ", " 4 terminal "}},
-		{"cut short", 40, []string{" 0 agents ○ ", " 1 planner ◐ ", " 2 builder"}},
+		{"cut short", 40, []string{" 0 agents ○ ", " 1 planner ◐ ", " 2 b…"}},
 	}
 	for _, tt := range tests {
-		o := StatusOptions{Width: tt.width, Session: "s", Tabs: agentTabs}
-		bar := ansi.Strip(StatusBar(theme.Default(), o))
+		o := WindowBarOptions{Width: tt.width, Session: "s", Tabs: agentTabs}
+		bar := ansi.Strip(WindowBar(theme.Default(), o))
 		var got []string
-		for _, sp := range TabSpans(theme.Default(), o) {
+		_, spans := WindowBarRow(theme.Default(), o)
+		for _, sp := range spans {
+			if sp.Kind != TopBarTab {
+				continue
+			}
 			got = append(got, ansi.Cut(bar, sp.X, sp.X+sp.W))
 		}
 		if !slices.Equal(got, tt.want) {
@@ -86,9 +90,9 @@ func TestTabSpansWithStates(t *testing.T) {
 // before agent marks existed: no glyph, no extra cell.
 func TestStatusBarNoAgentUnchanged(t *testing.T) {
 	for _, th := range theme.Builtin() {
-		o := StatusOptions{Width: 60, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev"}, {Index: 1, Name: "logs", Active: true}}, Right: "14:02"}
-		got := ansi.Strip(StatusBar(th, o))
-		if want := " [api]  0 dev  1 logs* "; !strings.HasPrefix(got, want) {
+		o := WindowBarOptions{Width: 60, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev"}, {Index: 1, Name: "logs", Active: true}}}
+		got := ansi.Strip(WindowBar(th, o))
+		if want := " api " + th.Glyphs.Dropdown + "  0 dev  1 logs* "; !strings.HasPrefix(got, want) {
 			t.Errorf("%s: bar %q, want it to start %q", th.Name, got, want)
 		}
 	}
@@ -98,7 +102,7 @@ func TestStatusBarNoAgentUnchanged(t *testing.T) {
 func TestAgentMarkPlainFallback(t *testing.T) {
 	th := theme.Default()
 	th.Glyphs.AgentIdle, th.Glyphs.AgentWorking, th.Glyphs.AgentNeedsYou = "-", "~", "!"
-	got := ansi.Strip(StatusBar(th, StatusOptions{Width: 100, Session: "s", Tabs: agentTabs}))
+	got := ansi.Strip(WindowBar(th, WindowBarOptions{Width: 100, Session: "s", Tabs: agentTabs}))
 	for _, want := range []string{"0 agents -", "1 planner ~", "2 builder !"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("bar %q lacks %q", got, want)
@@ -152,7 +156,7 @@ func TestListAlert(t *testing.T) {
 func TestStatusBarDrivenMark(t *testing.T) {
 	for _, th := range theme.Builtin() {
 		t.Run(strings.ReplaceAll(th.Name, " ", "_"), func(t *testing.T) {
-			out := StatusBar(th, StatusOptions{Width: 40, Session: "api", Tabs: []Tab{
+			out := WindowBar(th, WindowBarOptions{Width: 40, Session: "api", Tabs: []Tab{
 				{Index: 1, Name: "dev", Driven: true},
 			}})
 			golden.RequireEqual(t, out)

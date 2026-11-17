@@ -60,7 +60,7 @@ func (m *Model) copyMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	mouse := msg.Mouse()
-	res, cmd := m.copy.Mouse(msg, mouse.X-p.Rect.X, mouse.Y-p.Rect.Y)
+	res, cmd := m.copy.Mouse(msg, mouse.X-p.Rect.X, mouse.Y-p.Rect.Y-m.areaTop())
 	return m.afterCopy(res, cmd)
 }
 

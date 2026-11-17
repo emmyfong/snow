@@ -26,6 +26,8 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 	if p < colorprofile.ANSI {
 		t.Glyphs.AgentIdle, t.Glyphs.AgentWorking, t.Glyphs.AgentNeedsYou = "-", "~", "!"
 		t.Glyphs.Driven = "*"
+		t.Glyphs.Dropdown, t.Glyphs.Menu = "v", "="
+		t.Glyphs.Model, t.Glyphs.Zoom, t.Glyphs.Close = "v", "+", "x"
 		return t // no colors to adapt
 	}
 	fix := func(fg *color.Color, bg color.Color) {
