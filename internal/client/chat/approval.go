@@ -106,9 +106,13 @@ func (m *Model) boxOptions(p *api.ChatApproval, width int) ui.ChoiceOptions {
 			body = append(body, " "+r)
 		}
 	}
+	labels := choices(p, more, m.box.all)
+	if m.snap.Runtime != nil {
+		labels = append(labels[:1:1], labels[2:]...)
+	}
 	return ui.ChoiceOptions{
 		Width: width, Title: "Allow " + p.Tool + "?", Body: body,
-		Choices: choices(p, more, m.box.all), Selected: m.box.choice,
+		Choices: labels, Selected: m.box.choice,
 		Reason: m.box.reason, ReasonValue: m.box.text,
 	}
 }
@@ -146,11 +150,15 @@ func (m *Model) approvalKey(p *api.ChatApproval, k tea.Key) (*api.ChatInput, boo
 	case k.Text == "y":
 		return m.choose(p, choiceYes), true
 	case k.Text == "a":
+		if m.snap.Runtime != nil {
+			m.note = "Claude Code supports one-time Yes or No here. Always allow is unavailable."
+			return nil, true
+		}
 		return m.choose(p, choiceAlways), true
 	case k.Text == "n":
-		return m.choose(p, choiceNo), true
+		return m.choose(p, m.approvalIndex(choiceNo)), true
 	case k.Text == "d":
-		return m.choose(p, choiceDiff), true
+		return m.choose(p, m.approvalIndex(choiceDiff)), true
 	default:
 		return nil, k.Text != "" // typing goes nowhere while the box waits
 	}
@@ -159,8 +167,15 @@ func (m *Model) approvalKey(p *api.ChatApproval, k tea.Key) (*api.ChatInput, boo
 
 // choose acts on choice i of the box for p.
 func (m *Model) choose(p *api.ChatApproval, i int) *api.ChatInput {
+	if i < 0 || i >= len(m.boxOptions(p, m.width).Choices) {
+		return nil
+	}
 	m.box.choice = i
-	switch i {
+	action := i
+	if m.snap.Runtime != nil && i >= choiceAlways {
+		action++
+	}
+	switch action {
 	case choiceYes:
 		return m.answer(p, api.ChatDecisionYes, "")
 	case choiceAlways:
@@ -168,7 +183,7 @@ func (m *Model) choose(p *api.ChatApproval, i int) *api.ChatInput {
 	case choiceNo:
 		m.box.reason = true
 	case choiceDiff:
-		if len(m.boxOptions(p, m.width).Choices) > choiceDiff {
+		if len(m.boxOptions(p, m.width).Choices) > i {
 			m.box.all = !m.box.all
 		}
 	}
@@ -186,4 +201,12 @@ func (m *Model) answer(p *api.ChatApproval, decision, reason string) *api.ChatIn
 	in := m.chatInput(api.ChatInputAnswer, reason)
 	in.ID, in.Decision = p.ID, decision
 	return in
+}
+
+// approvalIndex maps the native action order to the visible runtime buttons.
+func (m *Model) approvalIndex(action int) int {
+	if m.snap.Runtime != nil && action > choiceAlways {
+		return action - 1
+	}
+	return action
 }

@@ -36,7 +36,7 @@ func (s *Server) swapFacts(c *client, pane int, want string) (f paneFacts) {
 			return
 		}
 		f = paneFacts{
-			found: true, running: p.chat.snap.Running, conv: p.chat.conv, profile: p.profile, dir: p.chat.folder,
+			found: true, running: p.chat.closing || p.chat.snap.Running, conv: p.chat.conv, profile: p.profile, dir: p.chat.folder,
 			model: p.chat.snap.Model, effort: p.chat.snap.Effort, oldConversation: p.chat.snap.Conversation,
 		}
 		if want == "" {
@@ -194,7 +194,7 @@ func (s *Server) adoptExpected(c *client, pane int, expected, conv conversation,
 		case snap.Runtime != nil && st.runtimeAuth[snap.Runtime.Connection]:
 			err = errors.New("connection authentication is being updated")
 			return
-		case p.chat.snap.Running:
+		case p.chat.closing || p.chat.snap.Running:
 			err = errStopTurn
 			return
 		}

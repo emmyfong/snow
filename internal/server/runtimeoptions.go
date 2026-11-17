@@ -113,7 +113,7 @@ func (s *Server) startRuntime(ctx context.Context, connection clauderuntime.Conn
 		return nil, err
 	}
 	launch.Hide = append(launch.Hide, s.opts.Chat.HideEnv...)
-	client, err := clauderuntime.Connect(ctx, launch)
+	client, err := profile.Connect(ctx, program, launch)
 	if err == nil {
 		s.send(func(st *state) {
 			if st.runtimeReady == nil {

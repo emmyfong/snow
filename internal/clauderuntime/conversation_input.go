@@ -177,7 +177,7 @@ func (s *conversationState) finishStop(cause error) {
 		event := api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: s.snapshot.Turn, Reason: api.ChatEndInterrupted}
 		if cause != nil {
 			event.Reason = api.ChatEndFailed
-			event.Error = &api.ChatError{Code: api.ChatErrOther, Message: fmt.Sprintf("Claude run ended: %v", cause)}
+			event.Error = &api.ChatError{Code: runtimeErrorCode(cause), Message: fmt.Sprintf("Claude run ended: %v", cause)}
 			if errors.Is(cause, ErrSignIn) {
 				event.Error.Code, event.Error.Choices = api.ChatErrNoKey, []string{api.ChatChoiceLogin}
 			}
@@ -194,5 +194,18 @@ func (s *conversationState) finishStop(cause error) {
 		if err := s.begin(text); err != nil {
 			s.emit(api.ChatEvent{Kind: api.ChatEventError, Error: &api.ChatError{Code: api.ChatErrOther, Message: err.Error()}})
 		}
+	}
+}
+
+func runtimeErrorCode(cause error) string {
+	switch {
+	case errors.Is(cause, ErrDelivery):
+		return api.ChatErrRuntimeDelivery
+	case errors.Is(cause, ErrProtocol):
+		return api.ChatErrRuntimeProtocol
+	case errors.Is(cause, ErrStop):
+		return api.ChatErrRuntimeStop
+	default:
+		return api.ChatErrRuntimeConnection
 	}
 }

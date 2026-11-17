@@ -39,19 +39,25 @@ func (p Profile) Models(ctx context.Context, program shell.Profile, folder strin
 	if err != nil {
 		return nil, err
 	}
-	stream, err := StartStream(launch)
+	stream, err := p.startStream(program, launch)
 	if err != nil {
 		return nil, err
 	}
 	client := NewClient(stream)
 	result, err := client.Initialize(ctx)
-	if stopErr := client.Stop(); stopErr != nil && !errors.Is(stopErr, ErrClosed) {
-		err = errors.Join(err, stopErr)
-	}
+	err = errors.Join(err, modelStopError(client.Stop()))
 	if err != nil {
 		return nil, err
 	}
 	return parseModels(result)
+}
+
+func modelStopError(err error) error {
+	// Natural stdout closure does not establish that owned work stopped.
+	if errors.Is(err, ErrClosed) && !errors.Is(err, ErrStop) {
+		return nil
+	}
+	return err
 }
 
 func parseModels(result json.RawMessage) ([]api.ModelInfo, error) {
