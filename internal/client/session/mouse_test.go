@@ -279,6 +279,43 @@ func TestHorizontalBorderDrag(t *testing.T) {
 	}
 }
 
+func TestHorizontalBorderDragAfterLayout(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		borderY   int
+		wantCells string
+	}{
+		{"accepted", 14, ""},
+		{"clamped", 13, "1"},
+		{"rejected", 11, "3"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, r := threePaneScreen(t)
+			m.Update(click(60, 12))
+			m.Update(motion(60, 15))
+			moved := threePanes(80, 24)
+			moved[1].Rect.H = tt.borderY - moved[1].Rect.Y
+			moved[2].Rect.Y = tt.borderY + 1
+			moved[2].Rect.H = 22 - moved[2].Rect.Y
+			m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: moved}}})
+			r.sent = nil
+			m.Update(motion(60, 15))
+			if tt.wantCells == "" {
+				if len(r.sent) != 0 {
+					t.Fatalf("stationary pointer after accepted layout sent %v", r.sent)
+				}
+			} else if c := lastCommand(t, r); c.Op != api.OpResize || c.Target != 2 || c.Args[api.ArgDir] != api.DirDown || c.Args[api.ArgCells] != tt.wantCells {
+				t.Fatalf("stationary pointer sent %+v, want resize pane 2 down by %s", c, tt.wantCells)
+			}
+			r.sent = nil
+			m.Update(motion(60, 16))
+			if c := lastCommand(t, r); c.Op != api.OpResize || c.Target != 2 || c.Args[api.ArgDir] != api.DirDown || c.Args[api.ArgCells] != "1" {
+				t.Fatalf("new pointer sent %+v, want resize pane 2 down by 1", c)
+			}
+		})
+	}
+}
+
 func mousePane(t *testing.T) (*Model, *recorder) {
 	t.Helper()
 	m, r := threePaneScreen(t)

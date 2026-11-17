@@ -54,4 +54,15 @@ func TestStatusLineHintOnlyAtPrompt(t *testing.T) {
 	if got := m.statusOptions(); got.Prompt == "" || got.Hint == "" {
 		t.Fatalf("rename prompt %+v", got)
 	}
+	if got := lastBarRow(m); !strings.Contains(got, m.renamePrompt()) || !strings.Contains(got, promptHint) {
+		t.Fatalf("rename bar lacks prompt or hint: %q", got)
+	}
+}
+
+func TestCopySearchPromptShowsHint(t *testing.T) {
+	m, _, _ := inCopyMode(t, 80, 24)
+	m.Update(press('?', 0, "?"))
+	if got := lastBarRow(m); !strings.Contains(got, m.copy.Prompt()) || !strings.Contains(got, promptHint) {
+		t.Fatalf("copy search bar lacks prompt or hint: %q", got)
+	}
 }

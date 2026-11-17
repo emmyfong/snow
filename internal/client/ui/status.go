@@ -16,7 +16,7 @@ type StatusOptions struct {
 	Right   string // the needs-you count or copy-mode status
 	Message string // shown in place of Right, in the error color
 	Notice  string // shown in place of Right, in the bar's color; a Message wins
-	Prompt  string // a question for the user; takes the whole bar
+	Prompt  string // a question for the user; replaces steady status content
 	Hint    string // a faint reminder before Right; dropped first when the bar is short
 }
 
@@ -24,7 +24,8 @@ type StatusOptions struct {
 // on the left, and Hint and Right, or Message, or Notice, on the
 // right. When the line is too short, Hint is dropped first, then Right; but a
 // Message or a Notice stays and the left part is cut to make room for it; one
-// wider than the line is cut too. A Prompt replaces the whole bar.
+// wider than the line is cut too. A Prompt replaces steady status content and
+// keeps Hint when both fit.
 func StatusBar(th theme.Theme, o StatusOptions) string {
 	if o.Width <= 0 {
 		return ""
@@ -34,7 +35,19 @@ func StatusBar(th theme.Theme, o StatusOptions) string {
 		// it cannot be missed.
 		prompt := lipgloss.NewStyle().Foreground(th.PromptFG).Background(th.PromptBG).Bold(true)
 		text := ansi.Truncate(" "+PlainLine(o.Prompt), o.Width, "")
-		return prompt.Render(text + strings.Repeat(" ", o.Width-ansi.StringWidth(text)))
+		hint := ""
+		if o.Hint != "" {
+			hint = PlainLine(o.Hint) + " "
+			if ansi.StringWidth(text)+ansi.StringWidth(hint)+1 > o.Width {
+				hint = ""
+			}
+		}
+		gap := o.Width - ansi.StringWidth(text) - ansi.StringWidth(hint)
+		out := prompt.Render(text + strings.Repeat(" ", gap))
+		if hint != "" {
+			out += prompt.Faint(true).Render(hint)
+		}
+		return out
 	}
 	bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
 	l := layoutStatus(th, o)

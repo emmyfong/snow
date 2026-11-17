@@ -112,6 +112,25 @@ func TestStatusBarPromptTakesTheBar(t *testing.T) {
 	}
 }
 
+func TestStatusBarPromptHint(t *testing.T) {
+	const prompt, hint = "rename window: dev_", "Esc: cancel"
+	for _, width := range []int{1, 12, 20, 32, 33, 80} {
+		o := StatusOptions{Width: width, Prompt: prompt, Hint: hint, Message: "hidden"}
+		out := StatusBar(theme.Default(), o)
+		got := ansi.Strip(out)
+		if ansi.StringWidth(out) != width {
+			t.Fatalf("width %d: bar %q has wrong width", width, got)
+		}
+		wantHint := width >= ansi.StringWidth(" "+prompt+" "+hint+" ")
+		if strings.Contains(got, hint) != wantHint {
+			t.Fatalf("width %d: bar %q, want hint %v", width, got, wantHint)
+		}
+		if !strings.HasPrefix(got, ansi.Truncate(" "+prompt, width, "")) || strings.Contains(got, "hidden") {
+			t.Fatalf("width %d: prompt lost priority: %q", width, got)
+		}
+	}
+}
+
 // TestStatusBarCutsLongMessage: a message wider than the bar is cut to
 // fit, never dropped; it is the only feedback the user gets.
 func TestStatusBarCutsLongMessage(t *testing.T) {

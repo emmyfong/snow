@@ -139,7 +139,7 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		}
 	case mouse.Border:
 		if ev.Button == tea.MouseLeft {
-			m.drag = mouse.StartDrag(h, ev.X, ev.Y)
+			m.drag = mouse.StartDrag(h, ev.X, ev.Y-m.areaTop())
 		}
 	case mouse.Pane:
 		p := m.paneByID(h.Pane)
@@ -182,7 +182,7 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 
 func (m *Model) mouseMotion(ev tea.Mouse) {
 	if m.drag != nil {
-		if cmd := m.drag.Move(ev.X, ev.Y); cmd != nil {
+		if cmd := m.drag.Move(ev.X, ev.Y-m.areaTop()); cmd != nil {
 			m.send(cmd)
 		}
 		return
