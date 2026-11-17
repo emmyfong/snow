@@ -6,6 +6,8 @@ import (
 	"fmt"
 )
 
+const permissionRequestSubtype = "can_use_tool"
+
 func (c *Client) read() {
 	defer func() {
 		c.mu.Lock()
@@ -63,7 +65,7 @@ func (c *Client) control(frame Frame) (bool, error) {
 			return false, fmt.Errorf("%w: invalid permission identity", ErrProtocol)
 		}
 		var input map[string]json.RawMessage
-		if message.Request.Subtype != "can_use_tool" || message.Request.Tool == "" ||
+		if message.Request.Subtype != permissionRequestSubtype || message.Request.Tool == "" ||
 			json.Unmarshal(message.Request.Input, &input) != nil || input == nil {
 			return false, fmt.Errorf("%w: unsupported runtime control request", ErrProtocol)
 		}

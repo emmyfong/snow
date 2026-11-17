@@ -158,6 +158,10 @@ func Connect(ctx context.Context, launch shell.Launch) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	return initializeStream(ctx, stream)
+}
+
+func initializeStream(ctx context.Context, stream *Stream) (*Client, error) {
 	client := NewClient(stream)
 	if _, err := client.Initialize(ctx); err != nil {
 		return nil, errors.Join(err, client.Stop())

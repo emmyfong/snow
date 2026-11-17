@@ -123,6 +123,9 @@ func (m *Model) openModePicker(id int) tea.Cmd {
 	if !ok {
 		return m.ShowError("/mode works in chat panes.")
 	}
+	if m.runtimeApprovalMode(id) {
+		return m.ShowError("Claude Code uses its own approval rules. Snow offers one-time Yes or No; persistent grants and direct-API modes are unavailable.")
+	}
 	pick := modepick.New(c.Mode())
 	return m.showOverlay(&overlay{
 		pane:  id,

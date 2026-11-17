@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -174,6 +176,20 @@ func TestConversationStopKeepsQueuePausedAndInvalidatesRequests(t *testing.T) {
 	}
 }
 
+func TestStopPendingRuntimeApproval(t *testing.T) {
+	h := newConversationHarness(t, "conversation-stop")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "original"})
+	pending := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.Pending != nil })
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputInterrupt})
+	stopped := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	if stopped.Pending != nil {
+		t.Fatalf("stopped runtime retained approval: %+v", stopped.Pending)
+	}
+	if err := h.c.Input(api.ChatInput{Kind: api.ChatInputAnswer, ID: pending.Pending.ID, Decision: api.ChatDecisionYes}); !errors.Is(err, ErrRequest) {
+		t.Fatalf("answer after acknowledged stop accepted: %v", err)
+	}
+}
+
 func TestConversationStopsOnlySelectedChildTree(t *testing.T) {
 	h := newConversationHarness(t, "conversation-children")
 	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "original"})
@@ -256,5 +272,71 @@ func TestConversationModelSwitch(t *testing.T) {
 	}
 	if h.starts.Load() != 2 || got.Model != "claude-code/opus" || got.Effort != "high" || got.Session != "backend-session" {
 		t.Fatalf("after switch: %d starts, last %+v; want a restart with opus, high, on the same session", h.starts.Load(), got)
+	}
+}
+
+func TestConversationProtocolErrorPreservesKind(t *testing.T) {
+	h := newConversationHarness(t, "conversation-invalid")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "keep the original"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	for len(h.events) > 0 {
+		event := <-h.events
+		if event.Kind == api.ChatEventTurnEnded && event.Error != nil {
+			if event.Error.Code != api.ChatErrRuntimeProtocol {
+				t.Fatalf("protocol error became %q: %s", event.Error.Code, event.Error.Message)
+			}
+			return
+		}
+	}
+	t.Fatal("missing terminal protocol error")
+}
+
+func TestConversationSubmitNotRetried(t *testing.T) {
+	receipt := filepath.Join(t.TempDir(), "prompt")
+	t.Setenv("SNOW_TEST_PROMPT_RECEIPT", receipt)
+	h := newConversationHarness(t, "conversation-exit-after-prompt")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "keep this exact request"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped && !s.Running })
+	if h.starts.Load() != 1 {
+		t.Fatalf("failed submission started %d runtimes; want one", h.starts.Load())
+	}
+	delivered, err := os.ReadFile(receipt)
+	if err != nil || string(delivered) != "keep this exact request\n" {
+		t.Fatalf("fixture did not receive exactly one submitted prompt: text=%q err=%v", delivered, err)
+	}
+	var preserved bool
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case event := <-h.events:
+			preserved = preserved || event.Kind == api.ChatEventTurnStarted && event.Text == "keep this exact request"
+			if event.Kind == api.ChatEventTurnEnded {
+				if event.Reason != api.ChatEndFailed || event.Error == nil {
+					t.Fatalf("unexpected failed turn event: %+v", event)
+				}
+				if !preserved {
+					t.Fatal("failed submission lost user text")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("missing failed turn event")
+		}
+	}
+}
+
+func TestStopParentStopsDescendants(t *testing.T) {
+	h := newConversationHarness(t, "conversation-children-background")
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputMessage, Text: "work with child tasks"})
+	waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return len(s.Runtime.Tasks) == 4 })
+	sendConversation(t, h.c, api.ChatInput{Kind: api.ChatInputInterrupt})
+	stopped := waitConversation(t, h.c, func(s api.ChatSnapshot) bool { return s.State == api.ChatStateStopped })
+	if stopped.Running {
+		t.Fatal("parent stayed active after acknowledged cleanup")
+	}
+	for _, task := range stopped.Runtime.Tasks {
+		if !terminalTask(task.State) {
+			t.Fatalf("owned task not stopped: %+v", task)
+		}
 	}
 }

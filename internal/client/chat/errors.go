@@ -16,28 +16,33 @@ import (
 // Requests a chat raises for the session, through Asked, for choices it
 // cannot carry out itself.
 const (
-	AskLogin     = "login"      // save a provider key
-	AskLogout    = "logout"     // remove a provider key
-	AskPickModel = "pick-model" // choose another model
-	AskResume    = "resume"     // choose a past conversation
-	AskPickMode  = "pick-mode"  // choose the approval mode
-	AskHelp      = "help"       // show the commands and keys
-	AskAgentNew  = "agent-new"  // start a Claude Code agent in its own worktree
-	AskAgents    = "agents"     // show the agents board
-	AskOpen      = "open"       // open a pane kind, or pick one; see AskedArg
-	AskLayout    = "layout"     // arrange the window, or pick a preset; see AskedArg
+	AskRunControls = "run-controls" // inspect drafts and stop owned runtime work
+	AskLogin       = "login"        // save a provider key
+	AskLogout      = "logout"       // remove a provider key
+	AskPickModel   = "pick-model"   // choose another model
+	AskResume      = "resume"       // choose a past conversation
+	AskPickMode    = "pick-mode"    // choose the approval mode
+	AskHelp        = "help"         // show the commands and keys
+	AskAgentNew    = "agent-new"    // start a Claude Code agent in its own worktree
+	AskAgents      = "agents"       // show the agents board
+	AskOpen        = "open"         // open a pane kind, or pick one; see AskedArg
+	AskLayout      = "layout"       // arrange the window, or pick a preset; see AskedArg
 )
 
 // errorTitles name each failure in its box's top edge.
 var errorTitles = map[string]string{
-	api.ChatErrNoKey:          "Connect a provider",
-	api.ChatErrBadKey:         "Key rejected",
-	api.ChatErrModelNotFound:  "Model not found",
-	api.ChatErrRateLimited:    "Rate limited",
-	api.ChatErrOverloaded:     "Provider overloaded",
-	api.ChatErrContextTooLong: "Conversation too long for the model",
-	api.ChatErrNetwork:        "Connection lost",
-	api.ChatErrSave:           "Conversation not saved",
+	api.ChatErrRuntimeConnection: "Runtime connection failed",
+	api.ChatErrRuntimeProtocol:   "Runtime protocol failed",
+	api.ChatErrRuntimeDelivery:   "Runtime delivery uncertain",
+	api.ChatErrRuntimeStop:       "Runtime stop unconfirmed",
+	api.ChatErrNoKey:             "Connect a provider",
+	api.ChatErrBadKey:            "Key rejected",
+	api.ChatErrModelNotFound:     "Model not found",
+	api.ChatErrRateLimited:       "Rate limited",
+	api.ChatErrOverloaded:        "Provider overloaded",
+	api.ChatErrContextTooLong:    "Conversation too long for the model",
+	api.ChatErrNetwork:           "Connection lost",
+	api.ChatErrSave:              "Conversation not saved",
 }
 
 // errorNotes add what the user cannot tell from the message.

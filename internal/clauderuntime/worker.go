@@ -97,7 +97,7 @@ func (w *runWorker) perform(ctx context.Context, op operation) error {
 		return client.Prompt(ctx, op.session, op.text)
 	case "answer":
 		return client.Answer(ctx, op.id, op.allow, op.input, op.text)
-	case "interrupt":
+	case controlInterrupt:
 		return client.Interrupt(ctx)
 	case "stop-task":
 		if len(op.ids) > 0 {

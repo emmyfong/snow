@@ -102,8 +102,9 @@ func (o *ChatOptions) now() time.Time {
 // chatPane is the conversation a chat pane shows. The model goroutine owns
 // snap; conv is safe from any goroutine.
 type chatPane struct {
-	conv conversation
-	snap api.ChatSnapshot
+	conv    conversation
+	closing bool // close waits off the owner goroutine; reject further submissions
+	snap    api.ChatSnapshot
 	// folder and profile are where the conversation works, as its file
 	// records them: the history list shows the conversations of the same
 	// folder and profile.
