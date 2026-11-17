@@ -43,6 +43,9 @@ func (m *Model) View() []string {
 	if m.height > len(input) {
 		rows = append(rows, m.middleRow())
 	}
+	if v, ok := m.atView(); ok {
+		rows = append(rows, v.lines...)
+	}
 	if v, ok := m.commandView(); ok {
 		rows = append(rows, v.lines...)
 	}
@@ -79,7 +82,7 @@ func (m *Model) inputRows() []string {
 
 // transcriptHeight is how many rows the transcript gets.
 func (m *Model) transcriptHeight() int {
-	return max(m.height-ui.TextAreaRows(m.inputOptions())-1-m.barRows()-m.commandHeight()-len(m.taskRows()), 0)
+	return max(m.height-ui.TextAreaRows(m.inputOptions())-1-m.barRows()-m.commandHeight()-m.atHeight()-len(m.taskRows()), 0)
 }
 
 // barRows is the rows the top bar takes.

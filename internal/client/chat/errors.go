@@ -27,6 +27,7 @@ const (
 	AskAgents      = "agents"       // show the agents board
 	AskOpen        = "open"         // open a pane kind, or pick one; see AskedArg
 	AskLayout      = "layout"       // arrange the window, or pick a preset; see AskedArg
+	AskOpenFile    = "open-file"    // open a path in the viewer; see AskedFile
 )
 
 // errorTitles name each failure in its box's top edge.
@@ -174,6 +175,14 @@ func (m *Model) Asked() string {
 	a := m.asked
 	m.asked = ""
 	return a
+}
+
+// AskedFile returns the path and one-based line that the last key or click
+// asked to open, or "" and 0, and clears them.
+func (m *Model) AskedFile() (path string, line int) {
+	path, line = m.askFile, m.askLine
+	m.askFile, m.askLine = "", 0
+	return path, line
 }
 
 func seconds(s float64) time.Duration { return time.Duration(math.Ceil(s)) * time.Second }

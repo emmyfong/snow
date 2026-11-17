@@ -10,12 +10,15 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// clickLabel clicks the first screen cell of label.
+// clickLabel clicks the first screen cell of label. A click in a pane the
+// client draws takes effect on the release, so the helper lets go too.
 func clickLabel(t *testing.T, m *Model, label string, msg func(x, y int) tea.Msg) {
 	t.Helper()
 	for i, row := range strings.Split(ansi.Strip(content(m)), "\n") {
 		if x := strings.Index(row, label); x >= 0 {
-			m.Update(msg(ansi.StringWidth(row[:x])+1, i))
+			x = ansi.StringWidth(row[:x]) + 1
+			m.Update(msg(x, i))
+			m.Update(tea.MouseReleaseMsg{X: x, Y: i, Button: tea.MouseLeft})
 			return
 		}
 	}

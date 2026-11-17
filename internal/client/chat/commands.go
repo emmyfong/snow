@@ -187,6 +187,7 @@ func (m *Model) setInput(text string) {
 	m.cursor = len(m.input)
 	m.Follow()
 	m.syncCommands()
+	m.syncAt()
 }
 
 // runSelected runs the highlighted match.

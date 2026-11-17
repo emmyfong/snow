@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -66,13 +67,27 @@ func TestLayoutKeepsPanes(t *testing.T) {
 	_, termBefore := paneState(t, s, shell)
 
 	layoutCmd(c, chat, "ide")
-	if e := nextError(t, c); e.Code != api.CodeNotice {
-		t.Fatalf("got %+v, want the notice on the skipped kinds", e)
-	}
 	l := nextLayout(t, c, func(l *api.Layout) bool {
 		ps := shownPanes(l)
-		return len(ps) == 3 && ps[0].ID == chat && ps[1].ID == shell && ps[1].Rect.Y > ps[0].Rect.Y &&
-			ps[2].Kind == api.PaneGit && ps[2].Rect.X > ps[0].Rect.X
+		if len(ps) != 5 {
+			return false
+		}
+		byID := map[int]api.PaneInfo{}
+		var files, git, viewer api.PaneInfo
+		for _, p := range ps {
+			byID[p.ID] = p
+			switch p.Kind {
+			case api.PaneFiles:
+				files = p
+			case api.PaneGit:
+				git = p
+			case api.PaneViewer:
+				viewer = p
+			}
+		}
+		cp, sh := byID[chat], byID[shell]
+		return cp.ID != 0 && sh.ID != 0 && files.ID != 0 && git.ID != 0 && viewer.ID != 0 &&
+			sh.Rect.Y > cp.Rect.Y && files.Rect.X < cp.Rect.X && git.Rect.X > cp.Rect.X
 	})
 	if windowNamed(l, "moved") != nil {
 		t.Fatal("a moved window with nothing to move")
@@ -85,16 +100,20 @@ func TestLayoutKeepsPanes(t *testing.T) {
 	}
 }
 
-// TestLayoutSkipsUnregisteredKind: the kinds the server cannot open yet
-// are left out, and a notice names them.
+// TestLayoutSkipsUnregisteredKind: a layout that names a kind the server
+// cannot open leaves it out, and a notice names it.
 func TestLayoutSkipsUnregisteredKind(t *testing.T) {
+	presets["spreadsheet"] = layout.Template{Axis: layout.Horizontal, Ratios: []float64{0.5, 0.5}, Children: []layout.Template{
+		{Kind: api.PaneTerminal}, {Kind: "spreadsheet"},
+	}}
+	t.Cleanup(func() { delete(presets, "spreadsheet") })
 	s, _, _ := newHeldServer(t)
 	c := connect(t, s, 100, 30)
 	chat, _ := openChatBesideShell(t, c)
-	layoutCmd(c, chat, "ide")
+	layoutCmd(c, chat, "spreadsheet")
 	e := nextError(t, c)
-	if e.Code != api.CodeNotice || !strings.Contains(e.Message, "files, viewer") || strings.Contains(e.Message, "git") {
-		t.Fatalf("got %+v, want a notice naming files and viewer, not git", e)
+	if e.Code != api.CodeNotice || !strings.Contains(e.Message, "spreadsheet") {
+		t.Fatalf("got %+v, want a notice naming spreadsheet", e)
 	}
 }
 

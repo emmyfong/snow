@@ -155,6 +155,21 @@ func Declined(err error) bool {
 	return errors.As(err, &e) && e.Code == 1
 }
 
+// Prefix returns the path of r.Path from the top of its repository, with a
+// trailing slash, or "" at the top. It returns ErrNotRepo outside a
+// repository.
+func (r Repo) Prefix(ctx context.Context) (string, error) {
+	out, err := r.Run(ctx, r.Path, "rev-parse", "--show-prefix")
+	if err != nil {
+		return "", r.Classify(err)
+	}
+	prefix := strings.TrimRight(out, "\r\n")
+	if prefix != "" && !strings.HasSuffix(prefix, "/") {
+		prefix += "/"
+	}
+	return prefix, nil
+}
+
 // Classify gives a failure that says what is wrong with the repository or
 // with git itself a typed error. Any other failure passes through.
 func (r Repo) Classify(err error) error {

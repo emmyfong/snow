@@ -29,6 +29,10 @@ type TranscriptEntry struct {
 	Text string
 	// Cut marks a reply that stopped before the agent finished it.
 	Cut bool
+	// Links are the runs of Text that draw as links. When set, Text must
+	// already be plain, as PlainText returns it: Transcript does not clean
+	// it again, or the runs would move.
+	Links []TextSpan
 }
 
 // TranscriptOptions configures Transcript.
@@ -60,7 +64,10 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 		if i > 0 {
 			rows = append(rows, "")
 		}
-		text := PlainText(e.Text)
+		text := e.Text
+		if len(e.Links) == 0 {
+			text = PlainText(e.Text)
+		}
 		style := lipgloss.NewStyle()
 		label := ""
 		switch e.Kind {
@@ -79,7 +86,7 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 		case EntryQueued:
 			style = lipgloss.NewStyle().Foreground(th.Queued)
 		}
-		lines := wrapText(text, o.Width-indent)
+		lines := wrapText(LinkText(th, text, e.Links), o.Width-indent)
 		if e.Cut {
 			lines = append(lines, muted.Render("(cut off)"))
 		}

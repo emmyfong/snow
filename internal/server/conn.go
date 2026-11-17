@@ -136,6 +136,8 @@ func (s *Server) read(c *client) {
 			s.modelList(c, m)
 		case *api.ConversationListRequest:
 			s.conversations(c, m)
+		case *api.FileListRequest:
+			s.fileList(c, m)
 		case *api.AuthListRequest:
 			s.authList(c)
 		case *api.LoginRequest:

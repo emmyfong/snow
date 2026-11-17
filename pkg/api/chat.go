@@ -24,12 +24,15 @@ type ChatSnapshot struct {
 	Agent        string `json:"agent"`        // the agent the pane shows
 	Conversation string `json:"conversation"` // the conversation's ID
 	Title        string `json:"title,omitempty"`
-	Model        string `json:"model"` // "provider/model" the next turn uses
-	Effort       string `json:"effort,omitempty"`
-	Mode         string `json:"mode"`  // the approval mode, for example "ask"
-	State        string `json:"state"` // one of the ChatState* values
-	Running      bool   `json:"running,omitempty"`
-	Turn         int    `json:"turn,omitempty"` // the running or last turn
+	// Folder is the conversation's folder. Relative paths in the transcript
+	// and the file picker are below it.
+	Folder  string `json:"folder,omitempty"`
+	Model   string `json:"model"` // "provider/model" the next turn uses
+	Effort  string `json:"effort,omitempty"`
+	Mode    string `json:"mode"`  // the approval mode, for example "ask"
+	State   string `json:"state"` // one of the ChatState* values
+	Running bool   `json:"running,omitempty"`
+	Turn    int    `json:"turn,omitempty"` // the running or last turn
 	// Earlier counts the oldest entries left out to keep the snapshot
 	// inside MaxFrameSize.
 	Earlier int         `json:"earlier,omitempty"`

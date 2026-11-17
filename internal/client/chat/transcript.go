@@ -71,6 +71,11 @@ func (m *Model) draw() {
 	text := func(kind ui.EntryKind, s string, cut bool) {
 		add(ui.Transcript(m.th, ui.TranscriptOptions{Width: m.width, Entries: []ui.TranscriptEntry{{Kind: kind, Text: s, Cut: cut}}}), hit{}, false)
 	}
+	linked := func(kind ui.EntryKind, s string, cut bool) {
+		plain := ui.PlainText(s)
+		e := ui.TranscriptEntry{Kind: kind, Text: plain, Cut: cut, Links: m.linkSpans(plain)}
+		add(ui.Transcript(m.th, ui.TranscriptOptions{Width: m.width, Entries: []ui.TranscriptEntry{e}}), hit{}, false)
+	}
 	indented := func(block string) string {
 		if indent == 0 || block == "" {
 			return block
@@ -100,11 +105,11 @@ func (m *Model) draw() {
 	for i, e := range m.snap.Entries {
 		switch e.Kind {
 		case api.ChatEntryUser:
-			text(ui.EntryUser, e.Text, false)
+			linked(ui.EntryUser, e.Text, false)
 		case api.ChatEntryAnswer:
-			text(ui.EntryUser, "Answer saved in Snow:\n"+e.Text, false)
+			linked(ui.EntryUser, "Answer saved in Snow:\n"+e.Text, false)
 		case api.ChatEntryAssistant:
-			text(ui.EntryAgent, e.Text, e.Cut)
+			linked(ui.EntryAgent, e.Text, e.Cut)
 		case api.ChatEntryThinking:
 			text(ui.EntryThinking, e.Text, false)
 		case api.ChatEntryTool:
@@ -182,6 +187,9 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 			return m.commandClick(y)
 		}
 	}
+	if m.atOpen && m.atClick(y) {
+		return nil
+	}
 	y -= m.barRows()
 	if th := m.transcriptHeight(); y >= th && y < th+len(m.taskRows()) {
 		m.toggleTasks()
@@ -196,6 +204,11 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 		return nil
 	}
 	h := m.drawn.hits[start+row]
+	if h.box == 0 && h.ask == 0 && h.failure == 0 && h.recent == 0 {
+		if p, line, ok := m.pathAt(x, m.drawn.rows[start+row]); ok {
+			return m.openPath(p, line)
+		}
+	}
 	switch {
 	case h.recent > 0:
 		m.recent.sel = h.recent - 1
@@ -232,6 +245,18 @@ func (m *Model) Click(x, y int) *api.ChatInput {
 			}
 		}
 	}
+	return nil
+}
+
+// openPath asks the session to open path at line in the viewer. A path the
+// server did not list as a file of the folder gets a note instead, so a
+// stale path never opens a blank viewer.
+func (m *Model) openPath(path string, line int) *api.ChatInput {
+	if !m.known(path) {
+		m.note = "Not in the server's file list: " + path
+		return nil
+	}
+	m.asked, m.askFile, m.askLine = AskOpenFile, path, line
 	return nil
 }
 

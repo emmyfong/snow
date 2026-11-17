@@ -65,6 +65,12 @@ func TestCommandValidate(t *testing.T) {
 		{Command{Op: OpOpen, Target: 1}, false},
 		{Command{Op: OpOpen, Target: 1, Args: map[string]string{ArgKind: PaneTerminal}}, true},
 		{Command{Op: OpOpen, Target: 1, Args: map[string]string{ArgKind: "files", ArgAgent: AgentClaude}}, false},
+		{Command{Op: OpOpenFile, Target: 1, Args: map[string]string{ArgPath: "a/b.go"}}, true},
+		{Command{Op: OpOpenFile, Target: 1, Args: map[string]string{ArgPath: "a/b.go", ArgLine: "12"}}, true},
+		{Command{Op: OpOpenFile, Target: 1, Args: map[string]string{ArgPath: "a/b.go", ArgLine: "0"}}, false},
+		{Command{Op: OpOpenFile, Target: 1, Args: map[string]string{ArgPath: "a/b.go", ArgLine: "x"}}, false},
+		{Command{Op: OpOpenFile, Target: 1}, false},
+		{Command{Op: OpOpenFile, Args: map[string]string{ArgPath: "a/b.go"}}, false},
 	}
 	for _, tt := range tests {
 		err := tt.cmd.Validate()
