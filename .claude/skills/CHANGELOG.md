@@ -5,6 +5,19 @@ Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
 `pending review` entries. Historical entries record the policy at their date;
 they do not override the current approval rules.
 
+## 2026-11-14 tui: describe layout B chrome
+- Evidence: #294 records the user's 2026-11-10 layout B decision and identifies
+  conflicting minimal-chrome guidance.
+- Change: replace the old permanent-buttons rule and beginner guidance with
+  layout B guidance. Update the shared design summary and local ADRs 0016 and
+  0017 to carry the accepted chrome and theme decisions.
+- Test: scenario: a contributor follows the TUI skill while implementing layout
+  B. The rule identifies the window bar, status line, pane labels, focused-pane
+  buttons, menu, and shortcut behavior; the beginner guidance points to visible
+  discovery paths. Skill frontmatter validation, link inspection, `git diff
+  --check`, and `go build ./...` passed.
+- Status: pending review
+
 ## 2026-11-12 compose-skill: approve improvements before separate skill work
 - Evidence: user revised the immediate-edit and same-task-PR policy after #354. Tracked in #359.
 - Change: require a concrete proposal and approval before agent-initiated edits; honor explicit requests; use a dedicated issue, worktree, and PR. Align all current Improve this skill sections and remove the issue-handler exception.
@@ -83,6 +96,11 @@ they do not override the current approval rules.
   planning program of 2026-11-10.
 - Status: pending review
 
+## 2026-11-15: Layout component catalog and header geometry (#294)
+
+- Evidence: #295 and #298 replace bottom tabs and CloseCell. The original geometry had no top border for top-edge panes. The user approved reusing lower dividers and reserving top-edge headers without covering content.
+- Change: document WindowBar spans, quiet StatusBar, focused PaneButtons and runtime control entry points. Remove obsolete bottom-bar hit-target catalog entries. Record the accepted geometry in DESIGN.md and local ADR0017.
+- Validation: skill frontmatter and whitespace pass. Final code/API comparison and independent review passed against the accepted #293 implementation contract. A narrow split-chat scenario confirmed shared hit targets, header/content separation, and runtime-specific controls. Earlier guidance review corrected a false claim that ADR0018 already existed; the final wording keeps it pending under #301.
 ## 2026-11-14: Assign selected issues before implementation (#364)
 
 - Evidence: the user requested explicit ownership while coordinating #260 and #293; both issues had no GitHub assignee.
