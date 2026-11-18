@@ -1,6 +1,7 @@
 package home
 
 import (
+	"image/color"
 	"slices"
 	"strings"
 
@@ -16,8 +17,18 @@ import (
 func (m *Model) setBase(th theme.Theme) {
 	m.base, m.theme = th, th
 	if m.profile != nil {
-		m.theme = th.For(*m.profile)
+		m.theme = th.ForBackground(*m.profile, m.paintedBackground)
 	}
+}
+
+// SetPaintedBackground adapts secondary text to the background Snow applies.
+// A nil color means the terminal supplies its own background.
+func (m *Model) SetPaintedBackground(bg color.Color) {
+	if m.paintedBackground == bg {
+		return
+	}
+	m.paintedBackground = bg
+	m.setBase(m.base)
 }
 
 // SetTheme changes the page's theme, for example when another Snow window

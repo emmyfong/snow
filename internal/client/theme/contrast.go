@@ -26,6 +26,12 @@ var (
 // t unchanged. A terminal that shows no colors may lack the round agent
 // marks too, so it gets ASCII ones.
 func (t Theme) For(p colorprofile.Profile) Theme {
+	return t.ForBackground(p, nil)
+}
+
+// ForBackground adapts a theme when Snow paints the given default background.
+// A nil background leaves secondary text suited to the terminal's own colors.
+func (t Theme) ForBackground(p colorprofile.Profile, painted color.Color) Theme {
 	if p < colorprofile.ANSI {
 		t.Background, t.Text = nil, nil
 		t.Glyphs.AgentIdle, t.Glyphs.AgentWorking, t.Glyphs.AgentNeedsYou = "-", "~", "!"
@@ -42,6 +48,10 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 	t.Background = p.Convert(t.Background)
 	fix(&t.Text, t.Background)
 	t.Text = p.Convert(t.Text)
+	if painted != nil && p < colorprofile.TrueColor {
+		fix(&t.Muted, painted)
+		fix(&t.Queued, painted)
+	}
 	fix(&t.BarFG, t.BarBG)
 	// A reduced palette can make the active tab blend into the bar.
 	if p < colorprofile.TrueColor && contrast(p.Convert(t.TabActiveBG), p.Convert(t.BarBG)) < minSeparation {

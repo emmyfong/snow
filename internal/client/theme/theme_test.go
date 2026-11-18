@@ -209,3 +209,22 @@ func TestBarColorsFollowADR0016(t *testing.T) {
 		}
 	}
 }
+
+func TestMutedOnPaintedBackground(t *testing.T) {
+	for _, th := range Builtin() {
+		for _, p := range []colorprofile.Profile{colorprofile.ANSI, colorprofile.ANSI256} {
+			painted := th.ForBackground(p, th.Background)
+			for _, fg := range []color.Color{painted.Muted, painted.Queued} {
+				if got := contrast(p.Convert(fg), painted.Background); got < minContrast {
+					t.Errorf("%s %s: muted contrast %.2f, want 3:1", th.Name, p, got)
+				}
+			}
+			if plain := th.For(p); plain.Muted != th.Muted || plain.Queued != th.Queued {
+				t.Errorf("%s %s: changed secondary text in terminal mode", th.Name, p)
+			}
+		}
+		if painted := th.ForBackground(colorprofile.TrueColor, th.Background); painted.Muted != th.Muted || painted.Queued != th.Queued {
+			t.Errorf("%s: changed exact true-color palette", th.Name)
+		}
+	}
+}

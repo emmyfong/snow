@@ -53,6 +53,7 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 // applyTheme makes th the app's theme and the open screen's.
 func (a *app) applyTheme(th theme.Theme) {
 	a.theme = th
+	a.setScreenBackground(a.screen)
 	if s, ok := a.screen.(themed); ok {
 		s.SetTheme(th)
 	}
