@@ -38,9 +38,13 @@ type Model struct {
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
 	askArg        string // what AskOpen or AskLayout names; see AskedArg
+	askFile       string // the path AskOpenFile opens; see AskedFile
+	askLine       int    // its one-based line, or 0
 	loaded        bool   // the first snapshot came
 	note          string // a note for the status bar; see Note
 	diffs         diffCache
+	files         fileList // the folder's files, for the @ picker and links
+	atOpen        bool     // the @ picker takes keys and draws rows
 
 	reg      *command.Registry  // the commands that run in a chat
 	runs     map[string]RunFunc // what each chat command does here
@@ -114,6 +118,7 @@ func (m *Model) Snapshot(snap *api.ChatSnapshot) {
 		m.started = time.Time{}
 	}
 	m.syncRecent()
+	m.syncFiles()
 }
 
 // Event applies one change from the server.

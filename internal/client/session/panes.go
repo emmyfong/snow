@@ -1,6 +1,7 @@
 package session
 
 import (
+	"strconv"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -56,9 +57,12 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 		m.feed(api.PaneChat, msg.Pane, msg)
 		pick = m.maybeStartChat(msg.Pane)
 		m.sendListRequest(msg.Pane)
+		m.sendFileRequest(msg.Pane)
 	case *api.ChatEvent:
 		m.feed(api.PaneChat, msg.Pane, msg)
 		m.sendListRequest(msg.Pane)
+	case *api.FileList:
+		m.feed(api.PaneChat, msg.Pane, msg)
 	case *api.SidePaneState:
 		m.feed(msg.Kind, msg.Pane, msg)
 	case ownTickMsg:
@@ -130,6 +134,9 @@ func (m *Model) syncPanes() {
 	for id := range m.own {
 		if !listed[id] {
 			delete(m.own, id)
+			if m.ownPress != nil && m.ownPress.pane == id {
+				m.ownPress = nil
+			}
 			delete(m.firstRun, id)
 			delete(m.authWait, id)
 			delete(m.authAfter, id)
@@ -192,6 +199,44 @@ func (m *Model) sendListRequest(id int) {
 	}
 }
 
+// fileLister is an own pane that asks for the files of its folder, such as
+// a chat's @ picker and its links.
+type fileLister interface {
+	FileRequest() *api.FileListRequest
+}
+
+// sendFileRequest sends the file request pane id has pending, if any.
+func (m *Model) sendFileRequest(id int) {
+	if l, ok := m.own[id].(fileLister); ok {
+		if r := l.FileRequest(); r != nil {
+			m.send(r)
+		}
+	}
+}
+
+// fileOpener is an own pane that asks to open a file in the viewer; see
+// AskedFile.
+type fileOpener interface {
+	AskedFile() (string, int)
+}
+
+// openAskedFile sends the file open pane id asked for, if any.
+func (m *Model) openAskedFile(id int) {
+	f, ok := m.own[id].(fileOpener)
+	if !ok {
+		return
+	}
+	path, line := f.AskedFile()
+	if path == "" {
+		return
+	}
+	args := map[string]string{api.ArgPath: path}
+	if line > 0 {
+		args[api.ArgLine] = strconv.Itoa(line)
+	}
+	m.send(&api.Command{Op: api.OpOpenFile, Target: id, Args: args})
+}
+
 // providerReady is an own pane that says whether any provider has a key,
 // such as a chat's empty state.
 type providerReady interface{ SetProviderReady(bool) }
@@ -203,6 +248,8 @@ func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.C
 		m.send(msg)
 	}
 	m.sendListRequest(id)
+	m.sendFileRequest(id)
+	m.openAskedFile(id)
 	if a, ok := p.(asker); ok {
 		switch a.Asked() {
 		case chat.AskRunControls:

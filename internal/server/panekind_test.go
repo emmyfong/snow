@@ -133,7 +133,7 @@ func TestPaneKindProtocol(t *testing.T) {
 	if _, e := apitest.Reply[*api.PaneKinds](c); e != nil {
 		t.Fatal(e)
 	}
-	want := []api.PaneKindInfo{{Name: api.PaneTerminal, Title: "Terminal"}, {Name: api.PaneGit, Title: "Git"}, {Name: "note", Title: "Note"}}
+	want := []api.PaneKindInfo{{Name: api.PaneTerminal, Title: "Terminal"}, {Name: api.PaneGit, Title: "Git"}, {Name: api.PaneFiles, Title: "Files"}, {Name: api.PaneViewer, Title: "Viewer"}, {Name: "note", Title: "Note"}}
 	if got := c.Kinds(); !slices.Equal(got, want) {
 		t.Fatalf("kinds %+v, want %+v", got, want)
 	}
@@ -194,7 +194,7 @@ func TestUnknownKindRefused(t *testing.T) {
 	c := connect(t, s, 100, 30)
 	c.Send(&api.Attach{Session: "notes", Create: true, Dir: dir})
 	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
-	c.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: "files"}})
+	c.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: "spreadsheet"}})
 	e := nextError(t, c)
 	if e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "unknown pane kind") {
 		t.Fatalf("error %+v, want an unknown kind refusal", e)
@@ -208,7 +208,7 @@ func TestRestoreSidePane(t *testing.T) {
 		kind, wantKind string
 	}{
 		{kind: "note", wantKind: "note"},
-		{kind: "files", wantKind: api.PaneTerminal},
+		{kind: "spreadsheet", wantKind: api.PaneTerminal},
 	}
 	for _, tt := range tests {
 		t.Run(tt.kind, func(t *testing.T) {

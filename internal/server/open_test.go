@@ -69,10 +69,10 @@ func TestOpenUnknownKind(t *testing.T) {
 	c := connect(t, s, 100, 30)
 	c.Send(&api.Attach{Session: "notes", Create: true, Dir: dir})
 	first := shownPanes(nextLayout(t, c, func(*api.Layout) bool { return true }))[0].ID
-	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{api.ArgKind: "files"}})
+	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{api.ArgKind: "nonesuch"}})
 	_, e := apitest.Reply[*api.Layout](c)
-	if e == nil || !strings.Contains(e.Message, "terminal, git, note") {
-		t.Fatalf("open files answered %v, want an error naming terminal, git, note", e)
+	if e == nil || !strings.Contains(e.Message, "terminal, git, files, viewer, note") {
+		t.Fatalf("open nonesuch answered %v, want an error naming terminal, git, files, viewer, note", e)
 	}
 }
 

@@ -21,7 +21,7 @@ func unknownScreen(t *testing.T, cols, rows int) *Model {
 	left := cols / 2
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Panes: []api.PaneInfo{
 		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{Y: 1, W: left, H: rows - 3}, Profile: "sh"},
-		{ID: 2, Kind: "files", Rect: api.Rect{X: left + 1, Y: 1, W: cols - left - 1, H: rows - 3}, Focused: true},
+		{ID: 2, Kind: "spreadsheet", Rect: api.Rect{X: left + 1, Y: 1, W: cols - left - 1, H: rows - 3}, Focused: true},
 	}}}})
 	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ ls"}}})
 	return m
@@ -30,7 +30,7 @@ func unknownScreen(t *testing.T, cols, rows int) *Model {
 func unknownKindGolden(t *testing.T, cols, rows int) {
 	m := unknownScreen(t, cols, rows)
 	// State for the unknown kind must not break the client.
-	m.Update(&api.SidePaneState{Pane: 2, Kind: "files", Rev: 1, State: json.RawMessage(`{"root":"/src"}`)})
+	m.Update(&api.SidePaneState{Pane: 2, Kind: "spreadsheet", Rev: 1, State: json.RawMessage(`{"root":"/src"}`)})
 	golden.RequireEqual(t, m.View().Content)
 }
 
@@ -49,7 +49,8 @@ func TestOwnPaneKinds(t *testing.T) {
 		{"", "<nil>"},
 		{api.PaneChat, "session.chatPane"},
 		{api.PaneGit, "session.gitPane"},
-		{"files", "*session.unknownPane"},
+		{"spreadsheet", "*session.unknownPane"}, {api.PaneFiles, "session.filesPane"},
+		{api.PaneViewer, "session.viewerPane"},
 	}
 	for _, tt := range tests {
 		got := "<nil>"
@@ -65,7 +66,7 @@ func TestOwnPaneKinds(t *testing.T) {
 // TestUnknownPaneTiny: the placeholder draws nothing wider than its pane,
 // down to one cell, and nothing at zero.
 func TestUnknownPaneTiny(t *testing.T) {
-	u := newUnknownPane("files", New((&recorder{}).send).theme)
+	u := newUnknownPane("spreadsheet", New((&recorder{}).send).theme)
 	for _, w := range []int{0, 1, 5, 12} {
 		u.SetSize(w, 3)
 		for _, row := range u.View() {

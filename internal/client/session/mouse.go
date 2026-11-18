@@ -15,6 +15,13 @@ type grab struct {
 	button string
 }
 
+// ownClick is a left press in a pane the client draws, kept until the
+// button is released. A press that moves over text is a selection, so it
+// sends no click.
+type ownClick struct {
+	pane, x, y int // the pane and the cell pressed, in pane coordinates
+}
+
 // mouseMsg handles one mouse event. Clicks pick what they hit: a tab selects
 // its window, a border starts a resize drag, and a pane takes the focus. A
 // pane whose program asked for the mouse also gets the event, so htop sees
@@ -55,7 +62,7 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	case tea.MouseClickMsg:
 		m.endPrefix()
 		// A release can be lost, so every press starts clean.
-		m.drag, m.grab, m.dragFrom = nil, nil, nil
+		m.drag, m.grab, m.dragFrom, m.ownPress = nil, nil, nil, nil
 		return m.mousePress(ev)
 	case tea.MouseMotionMsg:
 		if m.dragFrom != nil && ev.Button == tea.MouseLeft {
@@ -64,7 +71,7 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 		m.mouseMotion(ev)
 	case tea.MouseReleaseMsg:
 		m.dragFrom = nil
-		m.mouseRelease(ev)
+		return m.mouseRelease(ev)
 	case tea.MouseWheelMsg:
 		return m.mouseWheel(ev)
 	}
@@ -152,8 +159,9 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		if o := m.own[p.ID]; o != nil {
 			switch ev.Button {
 			case tea.MouseLeft:
-				msg, note := o.Click(h.X, h.Y)
-				return m.ownResult(p.ID, o, msg, note)
+				// A click waits for the release: a press that moves is a
+				// selection, not a click.
+				m.ownPress = &ownClick{pane: p.ID, x: h.X, y: h.Y}
 			case tea.MouseRight:
 				m.openMenu(ev.X, ev.Y-m.areaTop())
 			}
@@ -181,6 +189,12 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 }
 
 func (m *Model) mouseMotion(ev tea.Mouse) {
+	if m.ownPress != nil {
+		// The pointer moved with the button held: the user is selecting
+		// text, so the press is not a click.
+		m.ownPress = nil
+		return
+	}
 	if m.drag != nil {
 		if cmd := m.drag.Move(ev.X, ev.Y-m.areaTop()); cmd != nil {
 			m.send(cmd)
@@ -192,12 +206,21 @@ func (m *Model) mouseMotion(ev tea.Mouse) {
 	}
 }
 
-func (m *Model) mouseRelease(ev tea.Mouse) {
+func (m *Model) mouseRelease(ev tea.Mouse) tea.Cmd {
 	m.drag = nil
+	var cmd tea.Cmd
+	if c := m.ownPress; c != nil {
+		m.ownPress = nil
+		if o := m.own[c.pane]; o != nil {
+			msg, note := o.Click(c.x, c.y)
+			cmd = m.ownResult(c.pane, o, msg, note)
+		}
+	}
 	if m.grab != nil {
 		m.sendGrabbed(ev, api.ActionRelease)
 		m.grab = nil
 	}
+	return cmd
 }
 
 // sendGrabbed sends a motion or release to the grabbed pane, with the

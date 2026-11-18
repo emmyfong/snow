@@ -269,7 +269,9 @@ func TestTopBarModelClickOpensThePicker(t *testing.T) {
 	if x < 0 {
 		t.Fatalf("the top bar does not show the model:\n%s", row)
 	}
-	m.Update(tea.MouseClickMsg(tea.Mouse{X: ansi.StringWidth(row[:x]) + 1, Y: y, Button: tea.MouseLeft}))
+	x = ansi.StringWidth(row[:x]) + 1
+	m.Update(tea.MouseClickMsg(tea.Mouse{X: x, Y: y, Button: tea.MouseLeft}))
+	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: x, Y: y, Button: tea.MouseLeft}))
 	if m.modelPick == nil || !sentListRequest(r) {
 		t.Fatal("the model click did not open the picker")
 	}

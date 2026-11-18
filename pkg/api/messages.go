@@ -61,6 +61,8 @@ const (
 	TypeSidePaneAction
 	TypeRuntimeRequest
 	TypeRuntimeConnections
+	TypeFileListRequest
+	TypeFileList
 )
 
 // Message is any value that can travel in a frame. Only this package's types
@@ -78,6 +80,10 @@ func newMessage(t MsgType) Message {
 		return &RuntimeRequest{}
 	case TypeRuntimeConnections:
 		return &RuntimeConnections{}
+	case TypeFileListRequest:
+		return &FileListRequest{}
+	case TypeFileList:
+		return &FileList{}
 	case TypeHello:
 		return &Hello{}
 	case TypeWelcome:

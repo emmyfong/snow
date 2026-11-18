@@ -197,7 +197,7 @@ func TestRememberSkipsUnknownKind(t *testing.T) {
 	dir := t.TempDir()
 	s, p := projectServer(t)
 	writeProject(t, p, dir, layout.Template{Axis: layout.Horizontal, Ratios: []float64{0.3, 0.7}, Children: []layout.Template{
-		{Kind: "files"}, {Kind: api.PaneChat},
+		{Kind: "spreadsheet"}, {Kind: api.PaneChat},
 	}})
 	c := connect(t, s, 100, 30)
 	l, _ := openIn(t, c, "one", dir)

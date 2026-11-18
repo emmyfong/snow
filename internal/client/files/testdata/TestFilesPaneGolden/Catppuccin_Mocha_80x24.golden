@@ -1,0 +1,24 @@
+[1m snow[m
+▾ internal                                                                      
+  ▸ client                                                                      
+  ▾ server                                                                      
+      chat.go                                                                   
+[1;38;2;255;255;255;48;2;69;71;90m      files.go                                                                 A[m
+      gone.go                                                                  [38;2;243;139;168mD[m
+  ▸ files                                                                       
+▸ pkg                                                                           
+  README.md                                                                    [38;2;137;180;250mM[m
+  go.mod                                                                        
+
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;137;180;250mEnter[m [38;2;108;112;134mview[m   [38;2;137;180;250me[m [38;2;108;112;134medit[m   [38;2;137;180;250m@[m [38;2;108;112;134madd to chat[m
