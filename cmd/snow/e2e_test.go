@@ -117,9 +117,12 @@ func detach(t *testing.T, path, session string, others int, keys io.Writer, done
 		t.Fatal(err)
 	}
 	waitAttached(t, w, session, others)
-	// The pipe blocks until the client reads; a client that has already
-	// quit never does, so the write must not hold up the test.
-	go func() { _, _ = io.WriteString(keys, "\x1b") }()
+	// Separate Esc from y so the terminal input parser does not read Alt+y.
+	go func() {
+		_, _ = io.WriteString(keys, "\x1b")
+		time.Sleep(100 * time.Millisecond)
+		_, _ = io.WriteString(keys, "y")
+	}()
 	return waitResult(t, done)
 }
 
@@ -184,6 +187,8 @@ func TestDetachPrintsNoDetachedText(t *testing.T) {
 	p := startBinarySession(t, "e2e")
 	detachViaMenu(t, p)
 	p.SendKey(term.Key{Code: term.KeyEscape})
+	waitTermText(t, p, "Leave Snow")
+	p.SendKey(term.Key{Code: 'y', Text: "y"})
 	waitBinaryExit(t, p)
 	if strings.Contains(strings.ToLower(p.Text()), "detached") {
 		t.Fatalf("output after detach contains detached text:\n%s", p.Text())
@@ -194,6 +199,8 @@ func TestDetachPrintsLeaveLine(t *testing.T) {
 	p := startBinarySession(t, "e2e")
 	detachViaMenu(t, p)
 	p.SendKey(term.Key{Code: term.KeyEscape})
+	waitTermText(t, p, "Leave Snow")
+	p.SendKey(term.Key{Code: 'y', Text: "y"})
 	waitTermText(t, p, "Snow is still running 1 session. Run snow to return.")
 	waitBinaryExit(t, p)
 	if status, ok := p.ExitStatus(); !ok || status != 0 {
@@ -334,21 +341,10 @@ func TestShellExitShowsHome(t *testing.T) {
 		t.Fatalf("the client quit when the session ended: %+v", r)
 	case <-time.After(500 * time.Millisecond):
 	}
-	// The server's list does not say the client has drawn the home page,
-	// and an Esc that reaches the session screen first is dropped: press it
-	// until the client quits. A quit proves the home page was up, since Esc
-	// on a session screen goes to the pane.
-	stop := make(chan struct{})
-	defer close(stop)
 	go func() {
-		for {
-			_, _ = io.WriteString(keys, "\x1b")
-			select {
-			case <-stop:
-				return
-			case <-time.After(200 * time.Millisecond):
-			}
-		}
+		_, _ = io.WriteString(keys, "\x1b")
+		time.Sleep(100 * time.Millisecond)
+		_, _ = io.WriteString(keys, "y")
 	}()
 	if res := waitResult(t, done); res.Err != nil || res.Detached {
 		t.Fatalf("result %+v, want a plain quit from the home page", res)

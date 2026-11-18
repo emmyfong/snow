@@ -271,6 +271,7 @@ func run(a *app, cmd tea.Cmd) tea.Cmd {
 func TestDetachShowsHome(t *testing.T) {
 	var sent []api.Message
 	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	openSession(t, a, "api")
 	a.Update(session.DetachMsg{})
 	if _, ok := sent[len(sent)-1].(*api.Detach); !ok {
@@ -280,8 +281,12 @@ func TestDetachShowsHome(t *testing.T) {
 		t.Fatalf("screen is %T after detach, want the home page", a.screen)
 	}
 	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if cmd != nil || !strings.Contains(a.View().Content, "Leave Snow") {
+		t.Fatal("Esc on the home page after detach should ask before leaving")
+	}
+	_, cmd = a.Update(tea.KeyPressMsg{Code: 'y', Text: "y"})
 	if _, ok := cmd().(home.QuitMsg); !ok {
-		t.Fatal("Esc on the home page after detach should quit")
+		t.Fatal("confirming the leave popup should quit")
 	}
 	if !a.result.Detached || a.result.Session != "api" {
 		t.Fatalf("result %+v, want detached from api", a.result)
