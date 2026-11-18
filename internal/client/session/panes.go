@@ -92,18 +92,31 @@ func (m *Model) applyStartupShellLayout() {
 	}
 	switch m.shellStart {
 	case 0:
-		pane := w.Panes[0]
-		if pane.Kind != api.PaneChat {
+		var chatPane *api.PaneInfo
+		for i := range w.Panes {
+			pane := &w.Panes[i]
+			if pane.Kind == api.PaneChat && (chatPane == nil || pane.Focused) {
+				chatPane = pane
+				if pane.Focused {
+					break
+				}
+			}
+		}
+		if chatPane == nil {
 			m.pendingShell = false
 			m.flushEarly()
 			return
 		}
-		m.shellChat = pane.ID
+		m.shellChat = chatPane.ID
+		m.shellBefore = make(map[int]bool, len(w.Panes))
+		for _, pane := range w.Panes {
+			m.shellBefore[pane.ID] = true
+		}
 		m.shellStart = 1
-		m.send(&api.Command{Op: api.OpSplit, Target: pane.ID, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgDir: api.DirRight}})
+		m.send(&api.Command{Op: api.OpSplit, Target: chatPane.ID, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgDir: api.DirRight}})
 	case 1:
 		for _, pane := range w.Panes {
-			if pane.ID != m.shellChat && pane.Kind == api.PaneTerminal {
+			if !m.shellBefore[pane.ID] && pane.Kind == api.PaneTerminal {
 				m.shellTerminal = pane.ID
 				m.shellStart = 2
 				m.send(&api.Command{Op: api.OpClose, Target: m.shellChat})
@@ -116,8 +129,18 @@ func (m *Model) applyStartupShellLayout() {
 			chatPresent = chatPresent || pane.ID == m.shellChat
 			terminalPresent = terminalPresent || pane.ID == m.shellTerminal && pane.Kind == api.PaneTerminal
 		}
-		if !chatPresent && terminalPresent {
-			m.pendingShell, m.shellStart = false, 0
+		if chatPresent {
+			return
+		}
+		for _, pane := range w.Panes {
+			if pane.Kind == api.PaneChat {
+				m.shellChat = pane.ID
+				m.send(&api.Command{Op: api.OpClose, Target: pane.ID})
+				return
+			}
+		}
+		if terminalPresent {
+			m.pendingShell, m.shellStart, m.shellBefore = false, 0, nil
 			if m.preset != "" {
 				m.send(&api.Command{Op: api.OpLayout, Target: m.shellTerminal, Args: map[string]string{api.ArgName: m.preset}})
 				m.preset = ""
@@ -306,6 +329,12 @@ type providerReady interface{ SetProviderReady(bool) }
 // ownResult sends what pane id returned, opens the overlay it asked for, and
 // shows its note.
 func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.Cmd {
+	if m.startupInputBlocked(id) {
+		switch msg.(type) {
+		case *api.ChatInput, *api.Input:
+			return nil
+		}
+	}
 	if msg != nil {
 		m.send(msg)
 	}

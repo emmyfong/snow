@@ -43,7 +43,7 @@ func (s *Server) runtimeFacts(c *client, pane int, agent string) (runtimeFacts, 
 	return facts, nil
 }
 
-func (s *Server) runtimeFactsForFolder(folder, agent string) (runtimeFacts, error) {
+func (s *Server) runtimeFactsForFolder(folder, profile, agent string) (runtimeFacts, error) {
 	if folder == "" || agent == "" {
 		return runtimeFacts{}, errors.New("a folder and runtime are required to list connections")
 	}
@@ -51,7 +51,11 @@ func (s *Server) runtimeFactsForFolder(folder, agent string) (runtimeFacts, erro
 	if s.opts.Chat != nil && s.opts.Chat.Shell != nil {
 		host = *s.opts.Chat.Shell
 	} else if s.launch.shell != nil {
-		host, _ = s.launch.shell("")
+		var found bool
+		host, found = s.launch.shell(profile)
+		if profile != "" && !found {
+			return runtimeFacts{}, fmt.Errorf("%w: shell profile %q no longer exists", clauderuntime.ErrProfile, profile)
+		}
 	}
 	return runtimeFacts{folder: folder, snapshot: api.ChatSnapshot{Agent: agent}, host: host}, nil
 }
@@ -72,7 +76,7 @@ func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
 	var facts runtimeFacts
 	var err error
 	if request.Pane == 0 {
-		facts, err = s.runtimeFactsForFolder(request.Folder, request.Agent)
+		facts, err = s.runtimeFactsForFolder(request.Folder, request.Profile, request.Agent)
 	} else {
 		facts, err = s.runtimeFacts(c, request.Pane, request.Agent)
 	}

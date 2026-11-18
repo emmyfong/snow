@@ -87,7 +87,17 @@ func (m *Model) SetNotice(text string) { m.notice = text }
 func (m *Model) SetFolder(folder string) { m.folder = folder }
 
 // SetSize sets the screen size in cells.
-func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
+func (m *Model) SetSize(cols, rows int) {
+	m.cols, m.rows = cols, rows
+	if m.dialog == nil {
+		return
+	}
+	m.dialog.SetSize(cols, rows)
+	if box, _, _ := m.dialog.View(m.theme, cols, rows); box == "" {
+		m.dialog = nil
+		m.notice = "Window too small for the new-session dialog"
+	}
+}
 
 // Update handles the session list, keys, and clicks.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
@@ -236,6 +246,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 
 func (m *Model) openNewSession() tea.Cmd {
 	dialog := newsession.New(m.folder)
+	dialog.SetSize(m.cols, m.rows)
 	m.runtimes = nil
 	if box, _, _ := dialog.View(m.theme, m.cols, m.rows); box == "" {
 		m.notice = "Window too small for the new-session dialog"

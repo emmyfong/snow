@@ -57,7 +57,7 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.modal() {
 		return nil
 	}
-	if m.pendingShell || m.shellStart != 0 || m.pendingRuntime != "" || m.runtimeBinding != "" || m.runtimeBindFailed {
+	if m.shellStartupPending() {
 		return nil
 	}
 	ev := msg.Mouse()

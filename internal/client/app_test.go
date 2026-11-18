@@ -319,6 +319,26 @@ func TestOldRuntimeListRefusalIsNotTreatedAsAttachFailure(t *testing.T) {
 	}
 }
 
+func TestLateOldRuntimeRefusalDoesNotCancelPlainShellStartup(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(message api.Message) { sent = append(sent, message) }, "v0.1.0", "/work", theme.Default())
+	request := &api.RuntimeRequest{RequestID: "home-check", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: "/work"}
+	a.Update(home.SendMsg{Msg: request})
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartShell})
+	a.Update(&api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()})
+	layout := &api.Layout{Session: "1", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7, Kind: api.PaneChat}}}}}
+	a.Update(layout)
+	var split *api.Command
+	for _, message := range sent {
+		if command, ok := message.(*api.Command); ok && command.Op == api.OpSplit {
+			split = command
+		}
+	}
+	if split == nil || split.Target != 7 || split.Args[api.ArgKind] != api.PaneTerminal {
+		t.Fatalf("late readiness refusal canceled shell conversion: split=%+v sent=%#v", split, sent)
+	}
+}
+
 // openSession takes a home app into session name, as Enter on the home
 // page does.
 func openSession(t *testing.T, a *app, name string) {

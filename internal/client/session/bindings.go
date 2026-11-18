@@ -51,7 +51,13 @@ func (m *Model) dispatch(k tea.Key) tea.Cmd {
 		return nil
 	case m.keys.IsPrefix(k):
 		return m.startPrefix(k)
-	case m.pendingShell || m.shellStart != 0 || m.pendingRuntime != "" || m.runtimeBinding != "" || m.runtimeBindFailed:
+	case m.shellStartupPending():
+		m.queueStartupKey(k)
+		return nil
+	case m.startupInputBlocked(m.focusedPaneID()):
+		if m.runtimeBindFailed && m.focusedPaneID() == m.runtimeBindingPane && m.focusedOwn() != nil {
+			return m.ownKey(k)
+		}
 		return nil
 	case m.focusedOwn() != nil:
 		return m.ownKey(k)
@@ -60,7 +66,40 @@ func (m *Model) dispatch(k tea.Key) tea.Cmd {
 	return nil
 }
 
+func (m *Model) shellStartupPending() bool { return m.pendingShell || m.shellStart != 0 }
+
+func (m *Model) startupInputBlocked(pane int) bool {
+	if m.shellStartupPending() {
+		return true
+	}
+	if m.pendingRuntime != "" {
+		return m.pendingRuntimePane == 0 || m.pendingRuntimePane == pane
+	}
+	return (m.runtimeBinding != "" || m.runtimeBindFailed) && m.runtimeBindingPane == pane
+}
+
+func (m *Model) focusedPaneID() int {
+	if pane := m.focused(); pane != nil {
+		return pane.ID
+	}
+	return 0
+}
+
+func (m *Model) queueStartupKey(k tea.Key) {
+	key, ok := toAPIKey(k)
+	if ok && len(m.early) < maxEarly {
+		m.early = append(m.early, api.Input{Key: &key})
+	}
+}
+
 func (m *Model) sendKey(k tea.Key) {
+	if m.shellStartupPending() {
+		m.queueStartupKey(k)
+		return
+	}
+	if m.startupInputBlocked(m.focusedPaneID()) {
+		return
+	}
 	if key, ok := toAPIKey(k); ok {
 		m.input(api.Input{Key: &key})
 	}

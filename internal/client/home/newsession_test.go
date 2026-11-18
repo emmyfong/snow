@@ -73,6 +73,22 @@ func TestHomeReceivesClaudeReadiness(t *testing.T) {
 	}
 }
 
+func TestReadyReplyKeepsMinimumHeightHomeDialogVisible(t *testing.T) {
+	m := screen(80, 15)
+	m.SetFolder("/work")
+	m.SetSize(80, 15)
+	request := m.openNewSession()().(SendMsg).Msg.(*api.RuntimeRequest)
+	m.Update(&api.RuntimeConnections{Pane: 0, Agent: api.AgentClaude, RequestID: request.RequestID,
+		Connections: []api.RuntimeConnection{{ID: "ready", Status: api.RuntimeStatusSignedIn, Ready: true}}})
+	if m.dialog == nil {
+		t.Fatal("ready Claude reply closed the new-session dialog at minimum height")
+	}
+	box, _, _ := m.dialog.View(m.theme, 80, 15)
+	if box == "" {
+		t.Fatal("ready Claude reply made the dialog invisible at minimum height")
+	}
+}
+
 func TestHomeRechecksClaudeReadinessForEachDialog(t *testing.T) {
 	m := screen(80, 24)
 	m.runtimes = []api.RuntimeConnection{{ID: "previous", Status: api.RuntimeStatusSignedIn, Ready: true}}

@@ -69,6 +69,7 @@ type Model struct {
 	layout   int
 	focus    field
 	runtimes []api.RuntimeConnection
+	rows     int
 }
 
 // New opens the dialog with folder prefilled.
@@ -83,8 +84,19 @@ func (m *Model) SetRuntimes(list []api.RuntimeConnection) {
 	}
 }
 
+// SetSize records the area available to the dialog.
+func (m *Model) SetSize(_ int, rows int) {
+	m.rows = rows
+	if m.start >= len(m.startItems()) {
+		m.start = 0
+	}
+}
+
 func (m *Model) startItems() []ui.ListItem {
 	items := []ui.ListItem{{Cols: []string{"Plain shell"}}}
+	if m.rows > 0 && m.rows < 16 {
+		return items
+	}
 	for _, connection := range m.runtimes {
 		if runtimepick.Ready(connection) {
 			return append(items, ui.ListItem{Cols: []string{"Claude Code"}})

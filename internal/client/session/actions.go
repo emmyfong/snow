@@ -110,16 +110,20 @@ func (m *Model) run(name string, k tea.Key) tea.Cmd {
 }
 
 func (m *Model) openNewWindow() tea.Cmd {
-	folder := ""
+	folder, profile := "", ""
 	if p := m.focused(); p != nil {
-		folder = p.Folder
+		folder, profile = p.Folder, p.Profile
 	}
 	pick := newsession.New(folder)
+	pick.SetSize(m.cols, m.windowRows())
+	if box, _, _ := pick.View(m.theme, m.cols, m.windowRows()); box == "" {
+		return m.ShowError("Window too small for the new-session dialog")
+	}
 	m.windowRuntimeSeq++
 	m.windowRuntimeRequest = "new-window-claude-" + strconv.FormatUint(m.windowRuntimeSeq, 10)
-	m.windowRuntimePending = true
 	m.newWindowRuntimes = nil
-	m.send(&api.RuntimeRequest{RequestID: m.windowRuntimeRequest, Agent: api.AgentClaude, Action: api.RuntimeList, Folder: folder})
+	m.windowRuntimePending = true
+	m.send(&api.RuntimeRequest{RequestID: m.windowRuntimeRequest, Agent: api.AgentClaude, Action: api.RuntimeList, Folder: folder, Profile: profile})
 	o := &overlay{
 		popup: pick,
 		key:   pick.Key,
@@ -131,16 +135,16 @@ func (m *Model) openNewWindow() tea.Cmd {
 			}
 			choice := pick.Choice()
 			kind := api.PaneTerminal
+			m.pendingWindowRuntime = ""
 			if choice.Start == newsession.StartClaudeCode && choice.Connection != "" {
 				kind = api.PaneChat
 				m.pendingWindowRuntime = choice.Connection
 			}
-			if choice.Layout != "" {
-				m.newPreset = choice.Layout
-			}
+			m.newPreset = choice.Layout
 			if m.layout != nil {
 				m.winCount = len(m.layout.Windows)
 			}
+			m.newWindowPending = true
 			args := map[string]string{api.ArgFolder: choice.Folder, api.ArgKind: kind}
 			m.send(&api.Command{Op: api.OpNewWindow, Args: args})
 			return nil
@@ -153,6 +157,7 @@ func (m *Model) applyPendingWindowLayout(layout *api.Layout) {
 	if len(layout.Windows) <= m.winCount {
 		return
 	}
+	m.newWindowPending = false
 	w := m.shown()
 	if w == nil || len(w.Panes) == 0 {
 		return

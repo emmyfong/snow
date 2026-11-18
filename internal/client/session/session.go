@@ -47,10 +47,15 @@ type Model struct {
 	shellStart           int // 0 none, 1 waiting for split, 2 waiting for temporary chat close
 	shellChat            int
 	shellTerminal        int
+	shellBefore          map[int]bool
 	runtimeBinding       string
 	runtimeBindFailed    bool
+	runtimeBindingPane   int
+	startupRuntimePane   int
+	startupRuntimeID     string
 	newWindowRuntimes    []api.RuntimeConnection
 	pendingWindowRuntime string
+	newWindowPending     bool
 	windowRuntimeRequest string
 	windowRuntimeSeq     uint64
 	windowRuntimePending bool
@@ -144,7 +149,18 @@ func New(send func(api.Message), opts ...Option) *Model {
 }
 
 // SetSize sets the screen size in cells.
-func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
+func (m *Model) SetSize(cols, rows int) {
+	m.cols, m.rows = cols, rows
+	if m.over == nil {
+		return
+	}
+	if dialog, ok := m.over.popup.(*newsession.Model); ok {
+		dialog.SetSize(cols, m.windowRows())
+		if box, _, _ := dialog.View(m.theme, cols, m.windowRows()); box == "" {
+			m.over = nil
+		}
+	}
+}
 
 // Update applies server messages and handles keys.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
@@ -212,16 +228,21 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if m.newWindowPending {
+			m.newWindowPending, m.newPreset, m.pendingWindowRuntime = false, "", ""
+		}
 		if m.windowRuntimePending && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
 			m.windowRuntimePending = false
 			return nil
 		}
 		if m.pendingShell || m.shellStart != 0 {
-			m.pendingShell, m.shellStart = false, 0
+			m.pendingShell, m.shellStart, m.shellBefore = false, 0, nil
 			m.early = nil
 			return m.ShowError(msg.Message)
 		}
-		if m.runtimeAfter == runtimeStartupBind && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+		if m.startupRuntimeID != "" && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+			m.runtimeBindingPane = m.startupRuntimePane
+			m.startupRuntimeID, m.startupRuntimePane = "", 0
 			m.runtimeAfter, m.runtimeBinding, m.runtimeBindFailed = "", "", true
 			return m.ShowError(msg.Message)
 		}
@@ -249,7 +270,11 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.MouseMsg:
 		return m.mouseMsg(msg)
 	case tea.PasteMsg:
-		if m.pendingShell || m.shellStart != 0 || m.pendingRuntime != "" || m.runtimeBinding != "" || m.runtimeBindFailed {
+		if m.shellStartupPending() {
+			m.queueEarly(api.Input{Paste: msg.Content})
+			return nil
+		}
+		if m.startupInputBlocked(m.focusedPaneID()) {
 			return nil
 		}
 		switch c := m.focusedOwn(); {
@@ -351,13 +376,17 @@ func (m *Model) focused() *api.PaneInfo {
 func (m *Model) input(in api.Input) {
 	p := m.focused()
 	if p == nil {
-		if len(m.early) < maxEarly {
-			m.early = append(m.early, in)
-		}
+		m.queueEarly(in)
 		return
 	}
 	in.Pane = p.ID
 	m.send(&in)
+}
+
+func (m *Model) queueEarly(in api.Input) {
+	if len(m.early) < maxEarly {
+		m.early = append(m.early, in)
+	}
 }
 
 func (m *Model) applyLayout(l *api.Layout) {
@@ -366,7 +395,9 @@ func (m *Model) applyLayout(l *api.Layout) {
 	defer m.syncDrag()
 	defer m.syncPanes()
 	present := map[int]bool{}
+	zoomed := false
 	for _, w := range l.Windows {
+		zoomed = zoomed || w.Zoomed
 		for _, p := range w.Panes {
 			present[p.ID] = true
 			st, ok := m.panes[p.ID]
@@ -381,6 +412,10 @@ func (m *Model) applyLayout(l *api.Layout) {
 		if !present[id] {
 			delete(m.panes, id)
 		}
+	}
+	if !zoomed && (m.runtimeBinding != "" || m.runtimeBindFailed) && !present[m.runtimeBindingPane] {
+		m.runtimeBinding, m.runtimeBindFailed, m.runtimeBindingPane = "", false, 0
+		m.startupRuntimeID, m.startupRuntimePane = "", 0
 	}
 	if m.pendingRuntime != "" {
 		m.early = nil

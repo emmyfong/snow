@@ -35,26 +35,27 @@ type connClosedMsg struct{}
 // app is the root model. It routes messages to the current screen and ends
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
-	screen      Screen
-	send        func(api.Message)
-	result      Result
-	dir         string           // the folder a session opened from the home page starts in
-	version     string           // Snow's version, for the home page
-	theme       theme.Theme      // the theme from the config, for the home page
-	sessOpts    []session.Option // what a session screen gets besides the theme, such as keys
-	keys        *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
-	saveTheme   func(name string) error
-	configPath  string    // the config file to watch for a new theme; "" watches nothing
-	configMod   time.Time // when the config file last changed, as last seen
-	profile     *tea.ColorProfileMsg
-	sessions    *api.SessionList // the last list, for a screen opened later
-	agents      *api.AgentList   // the last agent list, for a screen opened later
-	opening     bool             // a session is being opened; its Layout has not come
-	openName    string           // the session being opened; "" for a new numbered one
-	leftName    string           // the session shown when the opening began
-	focused     bool             // the terminal has focus
-	focusReport bool             // the terminal reports focus changes; see api.ClientFocus
-	cols, rows  int
+	screen         Screen
+	send           func(api.Message)
+	result         Result
+	dir            string           // the folder a session opened from the home page starts in
+	version        string           // Snow's version, for the home page
+	theme          theme.Theme      // the theme from the config, for the home page
+	sessOpts       []session.Option // what a session screen gets besides the theme, such as keys
+	keys           *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
+	saveTheme      func(name string) error
+	configPath     string    // the config file to watch for a new theme; "" watches nothing
+	configMod      time.Time // when the config file last changed, as last seen
+	profile        *tea.ColorProfileMsg
+	sessions       *api.SessionList // the last list, for a screen opened later
+	agents         *api.AgentList   // the last agent list, for a screen opened later
+	opening        bool             // a session is being opened; its Layout has not come
+	openName       string           // the session being opened; "" for a new numbered one
+	leftName       string           // the session shown when the opening began
+	runtimeProbeID string           // home-page Claude readiness request still in flight
+	focused        bool             // the terminal has focus
+	focusReport    bool             // the terminal reports focus changes; see api.ClientFocus
+	cols, rows     int
 
 	terminalBackground bool
 	originalForeground color.Color
@@ -284,6 +285,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sessions = msg
 	case *api.AgentList:
 		a.agents = msg
+	case *api.RuntimeConnections:
+		if msg.Pane == 0 && msg.RequestID == a.runtimeProbeID {
+			a.runtimeProbeID = ""
+		}
+		return a, a.screen.Update(msg)
 	case *api.Layout:
 		if a.staleLayout(msg) {
 			return a, nil
@@ -291,6 +297,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.result.Session = msg.Session
 		a.opening = false
 	case *api.Error:
+		if a.runtimeProbeID != "" && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+			a.runtimeProbeID = ""
+			return a, nil
+		}
 		if a.refusedOpen(msg) {
 			// The session ended, or the name was refused, between the
 			// list and the click: go back to choosing.
@@ -341,6 +351,9 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case home.SendMsg:
+		if request, ok := msg.Msg.(*api.RuntimeRequest); ok && request.Pane == 0 && request.Action == api.RuntimeList {
+			a.runtimeProbeID = request.RequestID
+		}
 		a.send(msg.Msg)
 		return a, nil
 	case command.ThemeMsg:

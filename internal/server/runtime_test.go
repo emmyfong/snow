@@ -212,22 +212,30 @@ func TestRuntimeConnectionsWithoutPane(t *testing.T) {
 	options.Chat.Runtime = runtimeOptions(t, "conversation")
 	server := New(options)
 	t.Cleanup(server.Close)
-	server.launch.shell = func(string) (shell.Profile, bool) {
-		return shell.Profile{Name: "Ubuntu", Kind: shell.KindWSL, Distro: "Ubuntu"}, true
+	server.launch.shell = func(name string) (shell.Profile, bool) {
+		if name == "Ubuntu" {
+			return shell.Profile{Name: "Ubuntu", Kind: shell.KindWSL, Distro: "Ubuntu"}, true
+		}
+		return shell.Profile{Name: "PowerShell"}, true
 	}
 	client := connect(t, server, 100, 30)
 	connection, err := clauderuntime.CreateConnection(server.opts.Chat.Runtime.Root, "Ubuntu", clauderuntime.Subscription)
 	if err != nil {
 		t.Fatal(err)
 	}
-	seedConnection(t, server.opts.Chat.Runtime.Root, "subscription")
+	native := seedConnection(t, server.opts.Chat.Runtime.Root, "subscription")
 	client.Send(&api.RuntimeRequest{RequestID: "new-session", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: t.TempDir()})
 	response := runtimeReply(t, client)
 	if response.Pane != 0 || response.RequestID != "new-session" || response.Agent != api.AgentClaude {
 		t.Fatalf("runtime list response %+v, want a home request with its request ID and Claude agent", response)
 	}
-	if len(response.Connections) != 1 || response.Connections[0].ID != connection.ID || response.Connections[0].Environment != "WSL Ubuntu" {
-		t.Fatalf("runtime list connections %+v, want the WSL connection %q and no native connection", response.Connections, connection.ID)
+	if len(response.Connections) != 1 || response.Connections[0].ID != native || response.Connections[0].Environment != "This machine" {
+		t.Fatalf("home runtime list %+v, want only native connection %q", response.Connections, native)
+	}
+	client.Send(&api.RuntimeRequest{RequestID: "new-window", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: t.TempDir(), Profile: "Ubuntu"})
+	windowResponse := runtimeReply(t, client)
+	if len(windowResponse.Connections) != 1 || windowResponse.Connections[0].ID != connection.ID || windowResponse.Connections[0].Environment != "WSL Ubuntu" {
+		t.Fatalf("window runtime list %+v, want only WSL connection %q", windowResponse.Connections, connection.ID)
 	}
 	client.Send(&api.Attach{Session: "chat", Create: true})
 	layout := nextLayout(t, client, func(*api.Layout) bool { return true })

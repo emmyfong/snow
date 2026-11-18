@@ -151,6 +151,21 @@ func TestStartWithShowsClaudeWhenReady(t *testing.T) {
 	}
 }
 
+func TestReadyClaudeFitsMinimumDialogHeight(t *testing.T) {
+	m := New("/work")
+	m.SetSize(80, 15)
+	m.SetRuntimes([]api.RuntimeConnection{{ID: "ready", Status: api.RuntimeStatusSignedIn, Ready: true}})
+	box, _, _ := m.View(theme.Default(), 80, 15)
+	if box == "" || strings.Contains(ansi.Strip(box), "Claude Code") {
+		t.Fatalf("minimum-height dialog box empty=%v contains Claude=%v", box == "", strings.Contains(ansi.Strip(box), "Claude Code"))
+	}
+	m.SetSize(80, 16)
+	box, _, _ = m.View(theme.Default(), 80, 16)
+	if box == "" || !strings.Contains(ansi.Strip(box), "Claude Code") {
+		t.Fatalf("one-row-taller dialog box empty=%v contains Claude=%v", box == "", strings.Contains(ansi.Strip(box), "Claude Code"))
+	}
+}
+
 func TestStartWithHidesClaudeWhenNotReady(t *testing.T) {
 	for _, list := range [][]api.RuntimeConnection{
 		nil,

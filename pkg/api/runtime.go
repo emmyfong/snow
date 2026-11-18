@@ -34,9 +34,12 @@ type RuntimeTask struct {
 // Create adds a connection only when it works: a Claude plan connection
 // signs in first, and an API key connection comes with its Key.
 type RuntimeRequest struct {
-	RequestID  string `json:"requestId,omitempty"`
-	Pane       int    `json:"pane"`
-	Folder     string `json:"folder,omitempty"`
+	RequestID string `json:"requestId,omitempty"`
+	Pane      int    `json:"pane"`
+	Folder    string `json:"folder,omitempty"`
+	// Profile selects the host for a pane-less list, such as a new window
+	// that inherits the focused pane's profile. Empty selects the default.
+	Profile    string `json:"profile,omitempty"`
 	Agent      string `json:"agent"`
 	Action     string `json:"action"`
 	Connection string `json:"connection,omitempty"`
