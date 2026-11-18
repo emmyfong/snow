@@ -13,9 +13,11 @@ they do not override the current approval rules.
   shared bar colors and active-tab rules in the TUI catalog.
 - Test: a contributor checks a pane with default and explicit text in each
   mode. The guidance prescribes applying defaults only after both reports and
-  keeping explicit cell colors. Windows Terminal through WSL applies and
-  resets the defaults. Native conhost keeps its defaults and still draws
-  the pane's explicit color. Skill frontmatter and whitespace checks pass.
+  keeping explicit cell colors. In Windows Terminal through WSL, Snow
+  restores the colors the shell set before launch. Native conhost keeps its
+  defaults and draws the pane's explicit color. Reduced-color tests cover
+  secondary text on the painted background. Skill frontmatter and
+  whitespace checks pass.
 - Status: pending review
 
 ## 2026-11-14 tui: describe layout B chrome

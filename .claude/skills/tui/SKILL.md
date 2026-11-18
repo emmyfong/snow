@@ -157,12 +157,14 @@ not be used).
 - With `[theme] background = "theme"` (the default), Snow sets the terminal's
   default colors to the theme's `Background` and `Text` after the terminal
   reports both default colors. Cells with program-set colors keep those colors.
-  Use `"terminal"` to keep the terminal's defaults. A terminal that cannot
-  report both defaults also keeps its own colors.
+  Use `"terminal"` to keep the terminal's defaults. Snow restores the colors
+  it first read when theme mode ends. A terminal that cannot report both
+  defaults keeps its own colors.
 - Both bars use `BarBG` and `BarFG`. The active tab uses the theme accent,
   with the Campbell and Dark+ palette exceptions. At lower color depths,
   `For(profile)` keeps the active tab distinct from the bar. Tabs that need
-  the user keep the prompt colors.
+  the user keep the prompt colors. `ForBackground` also adapts secondary
+  text to a painted background at 16 or 256 colors.
 - `Resolve()` fills tokens a theme leaves empty from Frost. `For(profile)`
   adapts a theme to the terminal's color depth: text that would fall below a
   3:1 contrast after colors are reduced turns black or white.
