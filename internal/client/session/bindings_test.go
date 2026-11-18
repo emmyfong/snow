@@ -111,7 +111,7 @@ func TestCloseAsksFirst(t *testing.T) {
 		op       string
 		target   int
 	}{
-		{press('x', 0, "x"), "Close this pane (1 of 1)?", api.OpClose, 7},
+		{press('x', 0, "x"), "Close this pane?", api.OpClose, 7},
 		{press('&', 0, "&"), "Close window 1 and its 1 pane?", api.OpCloseWindow, 1},
 	} {
 		m, r := newPrefixScreen(t)
@@ -146,14 +146,14 @@ func TestCloseCancelledByAnyOtherKey(t *testing.T) {
 }
 
 // TestCloseQuestionNamesThePane: pane IDs only grow, so the question names
-// the pane by its program, folder, and place in the window.
+// the pane by its program and folder.
 func TestCloseQuestionNamesThePane(t *testing.T) {
 	m, _ := pickerScreen(t, 80, 24)
 	m.layout.Windows[0].Name = "logs"
 	m.Update(ctrlB)
 	m.Update(press('x', 0, "x"))
-	if got := content(m); !strings.Contains(got, "Close this pane (Ubuntu /src, 2 of 3)?") {
-		t.Fatalf("status %q, want the pane named by profile, folder, and place", got)
+	if got := content(m); !strings.Contains(got, "Close this pane (Ubuntu /src)?") {
+		t.Fatalf("status %q, want the pane named by profile and folder", got)
 	}
 	m.Update(press('n', 0, "n"))
 	m.Update(ctrlB)

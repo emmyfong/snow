@@ -37,28 +37,28 @@ type connClosedMsg struct{}
 // app is the root model. It routes messages to the current screen and ends
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
-	screen           Screen
-	send             func(api.Message)
-	result           Result
-	restartAsk       *api.VersionMismatchError
-	restartPopup     *confirm.Model
-	dir              string           // the folder a session opened from the home page starts in
-	version          string           // Snow's version, for the home page
-	theme            theme.Theme      // the theme from the config, for the home page
-	sessOpts         []session.Option // what a session screen gets besides the theme, such as keys
-	keys             *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
-	saveTheme        func(name string) error
-	configPath       string    // the config file to watch for a new theme; "" watches nothing
-	configMod        time.Time // when the config file last changed, as last seen
-	profile          *tea.ColorProfileMsg
-	sessions         *api.SessionList // the last list, for a screen opened later
-	agents           *api.AgentList   // the last agent list, for a screen opened later
-	opening          bool             // a session is being opened; its Layout has not come
-	openName         string           // the session being opened; "" for a new numbered one
-	leftName         string           // the session shown when the opening began
-	focused          bool             // the terminal has focus
-	focusReport      bool             // the terminal reports focus changes; see api.ClientFocus
-	cols, rows       int
+	screen       Screen
+	send         func(api.Message)
+	result       Result
+	restartAsk   *api.VersionMismatchError
+	restartPopup *confirm.Model
+	dir          string           // the folder a session opened from the home page starts in
+	version      string           // Snow's version, for the home page
+	theme        theme.Theme      // the theme from the config, for the home page
+	sessOpts     []session.Option // what a session screen gets besides the theme, such as keys
+	keys         *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
+	saveTheme    func(name string) error
+	configPath   string    // the config file to watch for a new theme; "" watches nothing
+	configMod    time.Time // when the config file last changed, as last seen
+	profile      *tea.ColorProfileMsg
+	sessions     *api.SessionList // the last list, for a screen opened later
+	agents       *api.AgentList   // the last agent list, for a screen opened later
+	opening      bool             // a session is being opened; its Layout has not come
+	openName     string           // the session being opened; "" for a new numbered one
+	leftName     string           // the session shown when the opening began
+	focused      bool             // the terminal has focus
+	focusReport  bool             // the terminal reports focus changes; see api.ClientFocus
+	cols, rows   int
 
 	terminalBackground bool
 	originalForeground color.Color

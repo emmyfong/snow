@@ -79,6 +79,23 @@ func TestConfirmKeysAndMouseShareOnePopup(t *testing.T) {
 	}
 }
 
+func TestConfirmCloseTerminalWording(t *testing.T) {
+	m, _ := pickerScreen(t, 80, 24)
+	p := m.focused()
+	p.Kind = api.PaneTerminal
+	p.Profile, p.Folder = "Ubuntu", "/src"
+	m.confirmClosePane()
+	got := ansi.Strip(content(m))
+	for _, want := range []string{"Close terminal", "Close this terminal", "Ubuntu", "/src", "program stops."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("terminal close popup does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "of 3") {
+		t.Fatalf("terminal close popup uses a pane position:\n%s", got)
+	}
+}
+
 func TestMiddleClickTabClosesWindowAfterConfirming(t *testing.T) {
 	m, r := threePaneScreen(t)
 	m.Update(tea.MouseClickMsg{X: 20, Y: 0, Button: tea.MouseMiddle}) // tab 2, "logs"
@@ -118,6 +135,7 @@ func TestPopupHoldsKeysAndPaste(t *testing.T) {
 func confirmGolden(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
 	panes := threePanes(cols, rows)
+	panes[1].Kind = api.PaneTerminal
 	panes[1].Folder = "/src"
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
 	fill(m, panes)
