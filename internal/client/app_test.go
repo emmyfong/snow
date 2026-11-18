@@ -13,6 +13,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
@@ -154,6 +155,70 @@ func TestHomeOpensASession(t *testing.T) {
 	}
 }
 
+func TestHomeStartsClaudeOnFirstChat(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartClaudeCode, Connection: "ready"})
+	a.Update(&api.ChatSnapshot{Pane: 7, Agent: "generation", State: api.ChatStateIdle})
+	for _, message := range sent {
+		if request, ok := message.(*api.RuntimeRequest); ok {
+			if request.Pane != 7 || request.Agent != "generation" || request.Action != api.RuntimeUse || request.Connection != "ready" {
+				t.Fatalf("runtime request %+v, want the first chat bound to ready", request)
+			}
+			return
+		}
+	}
+	t.Fatal("opening Claude Code did not bind the first chat")
+}
+
+func TestOpenCarriesFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "selected folder", dir: "/work/other", want: "/work/other"},
+		{name: "default folder", want: "/work/default"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent []api.Message
+			a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work/default", theme.Default())
+			a.Update(home.OpenMsg{Session: "api", Create: true, Dir: tc.dir})
+			for _, msg := range sent {
+				if attach, ok := msg.(*api.Attach); ok {
+					if attach.Dir != tc.want {
+						t.Fatalf("Attach.Dir = %q, want %q", attach.Dir, tc.want)
+					}
+					return
+				}
+			}
+			t.Fatal("no Attach sent")
+		})
+	}
+}
+
+func TestOpenAppliesLayoutOnlyForNewSession(t *testing.T) {
+	for _, create := range []bool{true, false} {
+		var sent []api.Message
+		a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+		a.Update(home.OpenMsg{Session: "api", Create: create, Layout: "focus"})
+		a.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7}}}}})
+		count := 0
+		for _, msg := range sent {
+			if cmd, ok := msg.(*api.Command); ok && cmd.Op == api.OpLayout {
+				count++
+			}
+		}
+		want := 0
+		if create {
+			want = 1
+		}
+		if count != want {
+			t.Fatalf("Create=%v sent %d layout commands, want %d", create, count, want)
+		}
+	}
+}
+
 // TestFocusReportsReachTheServer: the terminal's focus events go to the
 // server, so it skips a desktop notification for a pane the user already
 // sees. A client that opens a session says where the terminal stands right
@@ -243,6 +308,34 @@ func TestHomeQuitEndsWithoutASession(t *testing.T) {
 	_, cmd := a.Update(home.QuitMsg{})
 	if cmd == nil || a.result.Session != "" || a.result.Err != nil {
 		t.Fatalf("quit from home: cmd %v, result %+v", cmd, a.result)
+	}
+}
+
+func TestOldRuntimeListRefusalIsNotTreatedAsAttachFailure(t *testing.T) {
+	a := &app{opening: true}
+	refusal := &api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()}
+	if a.refusedOpen(refusal) {
+		t.Fatal("old-server runtime-list refusal was treated as an attach failure")
+	}
+}
+
+func TestLateOldRuntimeRefusalDoesNotCancelPlainShellStartup(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(message api.Message) { sent = append(sent, message) }, "v0.1.0", "/work", theme.Default())
+	request := &api.RuntimeRequest{RequestID: "home-check", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: "/work"}
+	a.Update(home.SendMsg{Msg: request})
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartShell})
+	a.Update(&api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()})
+	layout := &api.Layout{Session: "1", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7, Kind: api.PaneChat}}}}}
+	a.Update(layout)
+	var split *api.Command
+	for _, message := range sent {
+		if command, ok := message.(*api.Command); ok && command.Op == api.OpSplit {
+			split = command
+		}
+	}
+	if split == nil || split.Target != 7 || split.Args[api.ArgKind] != api.PaneTerminal {
+		t.Fatalf("late readiness refusal canceled shell conversion: split=%+v sent=%#v", split, sent)
 	}
 }
 

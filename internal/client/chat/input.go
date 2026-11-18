@@ -75,6 +75,10 @@ func (m *Model) Key(k tea.Key) *api.ChatInput {
 	case k.Code == tea.KeyEnter && k.Mod&(tea.ModShift|tea.ModAlt) != 0, k.Code == 'j' && k.Mod == tea.ModCtrl:
 		m.insert("\n")
 	case k.Code == tea.KeyEnter:
+		if m.submitBlocked && !m.loginCommand() {
+			m.note = "Connect a runtime before sending a task. Type /login to choose a connection."
+			return nil
+		}
 		return m.submit()
 	case k.Code == tea.KeyEscape:
 		if m.snap.Running {

@@ -57,6 +57,9 @@ func (m *Model) mouseMsg(msg tea.MouseMsg) tea.Cmd {
 	if m.modal() {
 		return nil
 	}
+	if m.shellStartupPending() {
+		return nil
+	}
 	ev := msg.Mouse()
 	switch msg.(type) {
 	case tea.MouseClickMsg:

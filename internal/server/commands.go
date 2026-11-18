@@ -94,6 +94,16 @@ func (st *state) apply(sess *session, cmd *api.Command) error {
 	switch cmd.Op {
 	case api.OpNewWindow:
 		profile, dir := st.newPaneArgs(sess, cmd, 0)
+		if cmd.Args[api.ArgHostShell] == "true" {
+			if st.srv.launch.shell == nil {
+				return errors.New("server: host shell selection is unavailable with custom profiles")
+			}
+			host, ok := st.srv.launch.shell(profile)
+			if !ok {
+				return fmt.Errorf("%w: shell for profile %q is unavailable", ErrUnknownProfile, profile)
+			}
+			profile = host.Name
+		}
 		_, err := st.newWindow(sess, cmd.Args[api.ArgKind], profile, dir)
 		return err
 	case api.OpRenameWindow, api.OpSelectWindow, api.OpCloseWindow:

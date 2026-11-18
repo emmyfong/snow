@@ -200,6 +200,42 @@ func TestSessionStartsInClientFolder(t *testing.T) {
 	detach(t, path, "here", 1, keys, done)
 }
 
+func TestNewSessionFolder(t *testing.T) {
+	dirA := t.TempDir()
+	dirB := filepath.Join(dirA, "folderB")
+	if err := os.Mkdir(dirB, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := startServer(t)
+	keys, done := attachClientIn(path, "seed", dirA)
+	watch := observe(t, path, "seed")
+	watch.WaitScreen(shellPrompt())
+	if _, err := io.WriteString(keys, ctrlB+"d"); err != nil {
+		t.Fatal(err)
+	}
+	waitAttached(t, watch, "seed", 1)
+	suffix := string(os.PathSeparator) + filepath.Base(dirB)
+	if _, err := io.WriteString(keys, "/new\r"+suffix+"\r"); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case result := <-done:
+		t.Fatalf("client exited before the new session appeared: %+v", result)
+	default:
+	}
+	watch = observe(t, path, "0")
+	watch.WaitScreen(shellPrompt())
+	show := "pwd\r"
+	if runtime.GOOS == "windows" {
+		show = "cd\r"
+	}
+	if _, err := io.WriteString(keys, show); err != nil {
+		t.Fatal(err)
+	}
+	watch.WaitScreen(filepath.Base(dirB) + "\n")
+	detach(t, path, "0", 1, keys, done)
+}
+
 // TestShellExitShowsHome: when the last shell exits, the client shows the
 // home page instead of quitting; Esc there quits, with no error.
 func TestShellExitShowsHome(t *testing.T) {

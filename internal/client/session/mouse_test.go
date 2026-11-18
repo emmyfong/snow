@@ -132,14 +132,14 @@ func TestClickSessionNameIgnoredWhileAPopupIsOpen(t *testing.T) {
 	}
 }
 
-func TestClickWindowBarNewWindowOpensThePicker(t *testing.T) {
+func TestClickWindowBarNewWindowOpensTheDialog(t *testing.T) {
 	m, _ := threePaneScreen(t)
 	_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
 	for _, span := range spans {
 		if span.Kind == ui.TopBarNewWindow {
 			m.Update(click(span.X, 0))
-			if m.picker == nil || m.pending.Op != api.OpNewWindow {
-				t.Fatalf("new-window click opened picker=%v with pending %+v", m.picker != nil, m.pending)
+			if m.over == nil || m.picker != nil {
+				t.Fatalf("new-window click opened dialog=%v picker=%v", m.over != nil, m.picker != nil)
 			}
 			return
 		}

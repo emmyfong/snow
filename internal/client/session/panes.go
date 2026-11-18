@@ -55,7 +55,13 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
-		pick = m.maybeStartChat(msg.Pane)
+		if m.pendingRuntime != "" && (m.pendingRuntimePane == 0 || m.pendingRuntimePane == msg.Pane) {
+			connection := m.pendingRuntime
+			m.pendingRuntime, m.pendingRuntimePane = "", 0
+			m.startRuntimeBinding(msg.Pane, msg.Agent, connection)
+		} else if !m.pendingShell && m.shellStart == 0 {
+			pick = m.maybeStartChat(msg.Pane)
+		}
 		m.sendListRequest(msg.Pane)
 		m.sendFileRequest(msg.Pane)
 	case *api.ChatEvent:
@@ -74,6 +80,85 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return tea.Batch(pick, m.ownTick())
+}
+
+func (m *Model) applyStartupShellLayout() {
+	if !m.pendingShell && m.shellStart == 0 {
+		return
+	}
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	switch m.shellStart {
+	case 0:
+		var chatPane *api.PaneInfo
+		for i := range w.Panes {
+			pane := &w.Panes[i]
+			if pane.Kind == api.PaneChat && (chatPane == nil || pane.Focused) {
+				chatPane = pane
+				if pane.Focused {
+					break
+				}
+			}
+		}
+		if chatPane == nil {
+			m.pendingShell = false
+			m.flushEarly()
+			return
+		}
+		m.shellChat = chatPane.ID
+		m.shellBefore = make(map[int]bool, len(w.Panes))
+		for _, pane := range w.Panes {
+			m.shellBefore[pane.ID] = true
+		}
+		m.shellStart = 1
+		m.send(&api.Command{Op: api.OpSplit, Target: chatPane.ID, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgDir: api.DirRight}})
+	case 1:
+		for _, pane := range w.Panes {
+			if !m.shellBefore[pane.ID] && pane.Kind == api.PaneTerminal {
+				m.shellTerminal = pane.ID
+				m.shellStart = 2
+				m.send(&api.Command{Op: api.OpClose, Target: m.shellChat})
+				return
+			}
+		}
+	case 2:
+		chatPresent, terminalPresent := false, false
+		for _, pane := range w.Panes {
+			chatPresent = chatPresent || pane.ID == m.shellChat
+			terminalPresent = terminalPresent || pane.ID == m.shellTerminal && pane.Kind == api.PaneTerminal
+		}
+		if chatPresent {
+			return
+		}
+		for _, pane := range w.Panes {
+			if pane.Kind == api.PaneChat {
+				m.shellChat = pane.ID
+				m.send(&api.Command{Op: api.OpClose, Target: pane.ID})
+				return
+			}
+		}
+		if terminalPresent {
+			m.pendingShell, m.shellStart, m.shellBefore = false, 0, nil
+			if m.preset != "" {
+				m.send(&api.Command{Op: api.OpLayout, Target: m.shellTerminal, Args: map[string]string{api.ArgName: m.preset}})
+				m.preset = ""
+			}
+			m.flushEarly()
+		}
+	}
+}
+
+func (m *Model) flushEarly() {
+	if m.focused() == nil {
+		return
+	}
+	early := m.early
+	m.early = nil
+	for _, input := range early {
+		m.input(input)
+	}
 }
 
 func (m *Model) feed(kind string, id int, msg api.Message) {
@@ -176,6 +261,9 @@ func (m *Model) ownKey(k tea.Key) tea.Cmd {
 	if o == nil {
 		return nil
 	}
+	if c, ok := o.(chatPane); ok {
+		c.SetSubmitBlocked(m.runtimeBindFailed && m.runtimeBindingPane == p.ID)
+	}
 	msg, note := o.Key(k)
 	return m.ownResult(p.ID, o, msg, note)
 }
@@ -244,6 +332,12 @@ type providerReady interface{ SetProviderReady(bool) }
 // ownResult sends what pane id returned, opens the overlay it asked for, and
 // shows its note.
 func (m *Model) ownResult(id int, p ownPane, msg api.Message, note string) tea.Cmd {
+	if m.startupInputBlocked(id) {
+		switch msg.(type) {
+		case *api.ChatInput, *api.Input:
+			return nil
+		}
+	}
 	if msg != nil {
 		m.send(msg)
 	}
