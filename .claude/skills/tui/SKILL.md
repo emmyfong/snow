@@ -101,7 +101,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | PaneView | `PaneView(lines []string, width, height int) string` | Draws a pane's styled rows into exactly width by height cells: cuts long rows, pads short ones, blanks missing ones. No chrome, so no theme. |
 | Window | `Window(th theme.Theme, o WindowOptions) string` | Draws panes and borders in exactly `Width` by `Height` cells. `WindowPane` carries its rectangle, lines, name, kind, focus, and driven state. Pane names use the top border; only the focused pane shows buttons. Focused borders use `FocusBorder`; driven borders use `Accent`. |
 | PaneButtons | `PaneButtons(panes []WindowPane, width, height int) []PaneButton` | Returns the focused pane's model, zoom, and close hit targets. Model applies only to chat panes. Narrow panes retain close. Each target carries `Action`, `X`, `Y`, and `W`; drawing and clicks use the same geometry. Replaces CloseCell. |
-| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | Draws the quiet bottom status line with session, focused folder, and right-side needs-you count. Messages and notices remain visible. A prompt replaces the line; hints appear only during a prompt. Window tabs and their hit targets belong to WindowBar. |
+| StatusBar | `StatusBar(th theme.Theme, o StatusOptions) string` | Draws the quiet bottom status line with session, focused folder, and right-side needs-you count. Messages and notices remain visible. A prompt replaces the line; hints appear only during a prompt. Uses the theme bar colors. Window tabs and their hit targets belong to WindowBar. |
 | Popup | `Popup(th theme.Theme, o PopupOptions) string` | A framed list exactly `Width` wide: `Title` in the top edge, one row per `Items` entry, `Selected` marked `>` and highlighted; optional `Hints[i]` sits right-aligned and muted at the end of row i (a shortcut), and is dropped when it would touch its item. Nothing below 4 cells. |
 | CopyView | `CopyView(th theme.Theme, o CopyViewOptions) string` | Draws a pane's history in copy mode into exactly `Width` by `Height` cells: `Lines` cut or padded as `PaneView` does; `Highlights` (`Row`, `Col`, `Len`, `Kind`) painted over them, where a later kind covers an earlier one (`HighlightMatch` in `MatchFG`/`MatchBG`, `HighlightCurrent` in `CurrentFG`/`CurrentBG`, `HighlightSelected` in `SelectedFG`/`SelectedBG`); and `Indicator` (for example `[12/5000]`) in `IndicatorFG`/`IndicatorBG` over the right end of the first row. |
 | Overlay | `Overlay(base, box string, x, y int) string` | Draws `box` over `base` at column `x`, row `y`, cutting what falls outside; `base` keeps its size. Use it to place popups. |
@@ -119,7 +119,7 @@ Each entry: name, exact signature, one line of use, and notable options.
 | ToolCell | `ToolCell(th theme.Theme, o ToolCellOptions) string` | One tool call at most `Width` wide: a header with the `Collapsed` or `Expanded` glyph, `Name`, `Subject`, `+Added -Removed`, and `Summary` (or "running", "waiting for you", "failed ..." by `State`), then the caller's `Details` rows when `Expanded`. A failed header is in `Removed`; a `Selected` header fills the width in the selection colors. |
 | ChoiceBox | `ChoiceBox(th theme.Theme, o ChoiceOptions) string` | A question or a failure in a frame exactly `Width` wide: `Title` in the top edge, `Body` rows, then `Choices` as buttons with `Selected` highlighted (-1 for none; one row when they fit, else one row each; no button row without choices). Prompt colors, or `ErrorFG`/`Error` with `Alert`. `Reason` swaps the buttons for a text field and its keys; `ReasonPrompt`, `ReasonPlaceholder`, and `ReasonHints` change what the field says (default: a reason for a no). `ChoiceButtons(o)` gives each button's `ButtonSpan` for clicks. Used for the approval box, the question box, and chat failures. |
 | TopBar | `TopBar(th theme.Theme, o TopBarOptions) string` | Draws the chat model, mode, cost and context fields, or routes window fields to WindowBar. `OnWindow` selects window mode; its fields are `Session`, `Tabs`, and `NeedsYou`. `TopBarRow` returns the rendered row and clickable spans. Chat callers retain their existing fields. |
-| WindowBar | `WindowBar(th theme.Theme, o WindowBarOptions) string` | Draws the session menu, tabs, new-window button, optional needs-you badge, and menu. `WindowBarRow` returns the same row plus `TopBarSpan` hit targets with tab `Index`. Options are `Width`, `Session`, `Tabs`, and `NeedsYou`. Short widths drop the badge, shorten the session, then truncate tabs; keep new-window and menu controls. |
+| WindowBar | `WindowBar(th theme.Theme, o WindowBarOptions) string` | Draws the session menu, tabs, new-window button, optional needs-you badge, and menu. `WindowBarRow` returns the same row plus `TopBarSpan` hit targets with tab `Index`. Options are `Width`, `Session`, `Tabs`, and `NeedsYou`. Short widths drop the badge, shorten the session, then truncate tabs; keep new-window and menu controls. Uses the same bar colors as StatusBar. |
 
 ## Theme tokens
 
@@ -130,7 +130,7 @@ Dark, Dark+, Solarized Dark, Dracula, Nord, Gruvbox Dark, Tokyo Night,
 Catppuccin Mocha, OpenCode, and Clay (inspired by Claude Code; the name may
 not be used).
 
-- Color tokens: `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
+- Color tokens: default `Background` and `Text`, `Border`, `FocusBorder`, `BarFG`, `BarBG`, `TabActive`,
   `TabActiveBG`, `Accent`, `Muted`, `Success`, `Error` (a strip background),
   `ErrorFG`, `PromptFG`, `PromptBG`, `Selection` with `SelectionFG` (black
   or white for contrast), and copy mode's
@@ -154,8 +154,17 @@ not be used).
 - The terminal may be light or dark. Text on the terminal's own background
   uses the terminal's text color or a mid-tone token; text on a token
   background always sets its own color too.
-- Snow keeps the terminal's own background and text colors; tokens color
-  only Snow's parts.
+- With `[theme] background = "theme"` (the default), Snow sets the terminal's
+  default colors to the theme's `Background` and `Text` after the terminal
+  reports both default colors. Cells with program-set colors keep those colors.
+  Use `"terminal"` to keep the terminal's defaults. Snow restores the colors
+  it first read when theme mode ends. A terminal that cannot report both
+  defaults keeps its own colors.
+- Both bars use `BarBG` and `BarFG`. The active tab uses the theme accent,
+  with the Campbell and Dark+ palette exceptions. At lower color depths,
+  `For(profile)` keeps the active tab distinct from the bar. Tabs that need
+  the user keep the prompt colors. `ForBackground` also adapts secondary
+  text to a painted background at 16 or 256 colors.
 - `Resolve()` fills tokens a theme leaves empty from Frost. `For(profile)`
   adapts a theme to the terminal's color depth: text that would fall below a
   3:1 contrast after colors are reduced turns black or white.
