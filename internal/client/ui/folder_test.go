@@ -18,3 +18,13 @@ func TestFolderName(t *testing.T) {
 		}
 	}
 }
+
+func TestFolderTail(t *testing.T) {
+	for _, tt := range []struct{ in, want string }{
+		{"/home/a/Projects/snow", "Projects/snow"}, {`C:\work\snow`, "work/snow"}, {"/snow", "snow"}, {"", ""}, {"/", ""}, {"/home/雪/山/", "雪/山"},
+	} {
+		if got := FolderTail(tt.in); got != tt.want {
+			t.Errorf("FolderTail(%q)=%q,want %q", tt.in, got, tt.want)
+		}
+	}
+}

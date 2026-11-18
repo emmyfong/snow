@@ -12,39 +12,38 @@ import (
 
 func hintShown(m *Model) bool { return strings.Contains(m.View().Content, "Split right") }
 
-// TestStatusBarShowsThePaneMenuHint: the mouse hint reaches the drawn bar,
-// and a refusal replaces it.
-func TestStatusBarShowsThePaneMenuHint(t *testing.T) {
+// TestStatusBarHasNoIdleHint keeps the idle status line quiet.
+func TestStatusBarHasNoIdleHint(t *testing.T) {
 	m := screen(80, 24)
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{
-		{Index: 1, Name: "dev", Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 23}, Focused: true}}},
+		{Index: 1, Name: "dev", Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 22}, Focused: true}}},
 	}})
 	bar := func() string {
 		rows := strings.Split(m.View().Content, "\n")
 		return ansi.Strip(rows[len(rows)-1])
 	}
-	if got := bar(); !strings.Contains(got, menuHint) {
-		t.Fatalf("status bar %q, want %q", got, menuHint)
+	if got := bar(); strings.Contains(got, promptHint) {
+		t.Fatalf("status bar %q, want no %q", got, promptHint)
 	}
 	m.ShowError("no room to split")
-	if got := bar(); strings.Contains(got, menuHint) || !strings.Contains(got, "no room to split") {
+	if got := bar(); strings.Contains(got, promptHint) || !strings.Contains(got, "no room to split") {
 		t.Fatalf("status bar %q, want the refusal without the hint", got)
 	}
 }
 
-// TestPaneMenuHintHidesUnderAModal: a popup or copy mode takes the mouse
-// first, so the bar stops claiming that right-click opens the menu.
-func TestPaneMenuHintHidesUnderAModal(t *testing.T) {
+// TestPromptHintShowsUnderAModal shows a prompt hint for popups, while
+// ordinary copy mode keeps its status text.
+func TestPromptHintShowsUnderAModal(t *testing.T) {
 	m, _ := pickerScreen(t, 80, 24)
 	m.Update(ctrlB)
 	m.Update(press('%', 0, "%"))
-	if got := lastBarRow(m); strings.Contains(got, menuHint) {
-		t.Fatalf("the picker shows the hint: %q", got)
+	if got := lastBarRow(m); !strings.Contains(got, promptHint) {
+		t.Fatalf("the picker lacks the hint: %q", got)
 	}
 	copyMode, _ := pickerScreen(t, 80, 24)
 	copyMode.Update(ctrlB)
 	copyMode.Update(press('[', 0, "["))
-	if got := lastBarRow(copyMode); strings.Contains(got, menuHint) {
+	if got := lastBarRow(copyMode); strings.Contains(got, promptHint) {
 		t.Fatalf("copy mode shows the hint: %q", got)
 	}
 }

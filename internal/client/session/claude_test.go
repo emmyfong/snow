@@ -14,7 +14,7 @@ func claudeScreen(cols, rows int) (*Model, *recorder) {
 	m := New(r.send)
 	m.now = fixedClock
 	m.SetSize(cols, rows)
-	p := []api.PaneInfo{{ID: 1, Rect: api.Rect{W: cols, H: rows - 1}, Profile: "Ubuntu", Folder: "/home/emmy/api", Focused: true}}
+	p := []api.PaneInfo{{ID: 1, Rect: api.Rect{Y: 1, W: cols, H: rows - 3}, Profile: "Ubuntu", Folder: "/home/emmy/api", Focused: true}}
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "Ubuntu", Panes: p}}})
 	fill(m, p)
 	return m, r

@@ -17,16 +17,18 @@ func TestComponentsWidthSafe(t *testing.T) {
 	hints := []Hint{{Key: "enter", Desc: "open or create"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "quit"}}
 	for w := 1; w <= 200; w++ {
 		renders := map[string]string{
-			"Input":      Input(th, InputOptions{Value: "a-very-long-session-name-that-overflows", Prompt: "> ", Width: w, Focused: true}),
-			"Input zero": Input(th, InputOptions{Width: w}),
-			"List":       List(th, ListOptions{Items: items, Selected: 1, Width: w, Height: 5}),
-			"List zero":  List(th, ListOptions{Width: w}),
-			"KeyHints":   KeyHints(th, hints, w),
-			"Panel":      Panel(th, PanelOptions{Title: "Recent sessions", Body: "line one\nline two is long", Width: w}),
-			"Panel zero": Panel(th, PanelOptions{Width: w}),
-			"Wordmark":   Wordmark(th, w),
-			"Popup":      Popup(th, PopupOptions{Title: "t", Items: []string{"a", "b"}, Width: w}),
-			"StatusBar":  StatusBar(th, StatusOptions{Width: w, Session: "s", Tabs: []Tab{{Index: 0, Name: "dev", Active: true}}, Right: "14:02"}),
+			"Input":          Input(th, InputOptions{Value: "a-very-long-session-name-that-overflows", Prompt: "> ", Width: w, Focused: true}),
+			"Input zero":     Input(th, InputOptions{Width: w}),
+			"List":           List(th, ListOptions{Items: items, Selected: 1, Width: w, Height: 5}),
+			"List zero":      List(th, ListOptions{Width: w}),
+			"KeyHints":       KeyHints(th, hints, w),
+			"Panel":          Panel(th, PanelOptions{Title: "Recent sessions", Body: "line one\nline two is long", Width: w}),
+			"Panel zero":     Panel(th, PanelOptions{Width: w}),
+			"Wordmark":       Wordmark(th, w),
+			"Popup":          Popup(th, PopupOptions{Title: "t", Items: []string{"a", "b"}, Width: w}),
+			"StatusBar":      StatusBar(th, StatusOptions{Width: w, Session: "s", Folder: "Projects/snow", Right: "14:02"}),
+			"WindowBar":      WindowBar(th, WindowBarOptions{Width: w, Session: "s", Tabs: agentTabs, NeedsYou: 2}),
+			"WindowBar zero": WindowBar(th, WindowBarOptions{Width: w}),
 		}
 		for name, out := range renders {
 			for _, row := range strings.Split(out, "\n") {

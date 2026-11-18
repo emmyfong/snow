@@ -81,7 +81,7 @@ func TestConfirmKeysAndMouseShareOnePopup(t *testing.T) {
 
 func TestMiddleClickTabClosesWindowAfterConfirming(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(tea.MouseClickMsg{X: 15, Y: 23, Button: tea.MouseMiddle}) // tab 2, "logs"
+	m.Update(tea.MouseClickMsg{X: 20, Y: 0, Button: tea.MouseMiddle}) // tab 2, "logs"
 	if len(r.sent) != 0 || m.confirm == nil {
 		t.Fatalf("sent %v, popup %v; want the question first", r.sent, m.confirm != nil)
 	}

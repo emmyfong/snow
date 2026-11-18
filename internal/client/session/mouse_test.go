@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -72,28 +73,35 @@ func TestClickFocusedPaneSendsNothing(t *testing.T) {
 }
 
 func TestClickTabSelectsWindow(t *testing.T) {
+	testClickTabSelectsWindow(t)
+}
+
+func TestWindowBarClickSelectsWindow(t *testing.T) {
+	testClickTabSelectsWindow(t)
+}
+
+func testClickTabSelectsWindow(t *testing.T) {
 	m, r := threePaneScreen(t)
-	// The bar reads " [api]  1 dev*  2 logs ": tab 1 ends at column 14 and
-	// tab 2 starts at column 15.
+	// The window bar starts with the session menu, then tabs 1 and 2.
 	for _, tt := range []struct{ x, want int }{{17, 2}, {14, 1}, {15, 2}} {
-		m.Update(click(tt.x, 23))
+		m.Update(click(tt.x, 0))
 		if c := lastCommand(t, r); c.Op != api.OpSelectWindow || c.Target != tt.want {
 			t.Fatalf("click at column %d sent %+v, want select-window %d", tt.x, c, tt.want)
 		}
 	}
 	r.sent = nil
-	m.Update(click(70, 23)) // the bar, not a tab
-	m.Update(click(30, 23)) // the gap between the tabs and Right
+	m.Update(click(70, 0))  // the bar, not a tab
+	m.Update(click(30, 23)) // the status line
 	if len(r.sent) != 0 {
 		t.Fatalf("sent %v for clicks outside the tabs", r.sent)
 	}
 }
 
-// TestClickSessionNameOpensTheList: a left click on [api] opens the same
+// TestClickSessionNameOpensTheList: a left click on the session menu opens the same
 // list as Ctrl+b s.
 func TestClickSessionNameOpensTheList(t *testing.T) {
 	m, _ := switchScreen(t, 80, 24)
-	m.Update(click(2, 23))
+	m.Update(click(2, 0))
 	if m.switcher == nil {
 		t.Fatal("the click did not open the session list")
 	}
@@ -117,11 +125,42 @@ func TestClickSessionNameIgnoredWhileAPopupIsOpen(t *testing.T) {
 	} {
 		m, _ := switchScreen(t, 80, 24)
 		open(m)
-		m.Update(click(2, 23))
+		m.Update(click(2, 0))
 		if m.switcher != nil {
 			t.Errorf("%s: the click opened the session list", name)
 		}
 	}
+}
+
+func TestClickWindowBarNewWindowOpensThePicker(t *testing.T) {
+	m, _ := threePaneScreen(t)
+	_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
+	for _, span := range spans {
+		if span.Kind == ui.TopBarNewWindow {
+			m.Update(click(span.X, 0))
+			if m.picker == nil || m.pending.Op != api.OpNewWindow {
+				t.Fatalf("new-window click opened picker=%v with pending %+v", m.picker != nil, m.pending)
+			}
+			return
+		}
+	}
+	t.Fatal("window bar has no new-window button")
+}
+
+func TestClickNeedsYouBadgeOpensInbox(t *testing.T) {
+	m, _ := threePaneScreen(t)
+	m.agents = []api.AgentInfo{{Session: "api", Pane: 1, State: api.AgentNeedsYou}}
+	_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
+	for _, span := range spans {
+		if span.Kind == ui.TopBarNeedsYou {
+			m.Update(click(span.X, 0))
+			if m.over == nil {
+				t.Fatal("needs-you click did not open the inbox")
+			}
+			return
+		}
+	}
+	t.Fatal("window bar has no needs-you badge")
 }
 
 func TestOnlyTheLeftButtonSelectsAndFocuses(t *testing.T) {
@@ -152,7 +191,7 @@ func clickGlyph(t *testing.T, m *Model, glyph string) {
 // before it closes, like the menu item, and does not start a resize drag.
 func TestClickCloseMarkAsksToClose(t *testing.T) {
 	m, r := threePaneScreen(t)
-	clickGlyph(t, m, "×") // pane 2's top-right corner, on the divider
+	clickGlyph(t, m, m.theme.Glyphs.Close) // pane 2's top-right corner, on the divider
 	if m.confirm == nil || m.drag != nil || len(r.sent) != 0 {
 		t.Fatalf("confirm %v, drag %v, sent %v; want a question and no drag", m.confirm != nil, m.drag != nil, r.sent)
 	}
@@ -165,21 +204,19 @@ func TestClickCloseMarkAsksToClose(t *testing.T) {
 	}
 }
 
-// TestClickCloseMarkOnTopPaneAsksToClose: a focused top pane has no border at
-// its top or sides, so its mark sits on its bottom border. The click asks
-// first, like the other layouts.
+// TestClickCloseMarkOnTopPaneAsksToClose uses the reserved top header.
 func TestClickCloseMarkOnTopPaneAsksToClose(t *testing.T) {
 	r := &recorder{}
 	m := New(r.send)
 	m.now = fixedClock
 	m.SetSize(80, 24)
 	panes := []api.PaneInfo{
-		{ID: 1, Rect: api.Rect{W: 80, H: 11}, Profile: "pwsh", Focused: true},
-		{ID: 2, Rect: api.Rect{Y: 12, W: 80, H: 11}, Profile: "cmd"},
+		{ID: 1, Rect: api.Rect{Y: 1, W: 80, H: 10}, Profile: "pwsh", Focused: true},
+		{ID: 2, Rect: api.Rect{Y: 12, W: 80, H: 10}, Profile: "cmd"},
 	}
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
 	fill(m, panes)
-	clickGlyph(t, m, "×")
+	clickGlyph(t, m, m.theme.Glyphs.Close)
 	if m.confirm == nil || m.drag != nil || len(r.sent) != 0 {
 		t.Fatalf("confirm %v, drag %v, sent %v; want a question and no drag", m.confirm != nil, m.drag != nil, r.sent)
 	}
@@ -193,7 +230,7 @@ func TestClickCloseMarkOnTopPaneAsksToClose(t *testing.T) {
 // border.
 func TestClickBelowCloseMarkStillResizes(t *testing.T) {
 	m, _ := threePaneScreen(t)
-	m.Update(click(40, 1))
+	m.Update(click(40, 2))
 	if m.drag == nil {
 		t.Fatal("the border below the mark no longer starts a drag")
 	}
@@ -201,8 +238,8 @@ func TestClickBelowCloseMarkStillResizes(t *testing.T) {
 
 func TestBorderDragSendsResizes(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(click(40, 5))
-	m.Update(motion(43, 5))
+	m.Update(click(40, 6))
+	m.Update(motion(43, 6))
 	c := lastCommand(t, r)
 	if c.Op != api.OpResize || c.Target != 1 || c.Args[api.ArgDir] != api.DirRight || c.Args[api.ArgCells] != "3" {
 		t.Fatalf("sent %+v, want resize pane 1 right by 3", c)
@@ -217,15 +254,15 @@ func TestBorderDragSendsResizes(t *testing.T) {
 
 func TestBorderDragFollowsTheNewLayout(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(click(40, 5))
-	m.Update(motion(45, 5))
+	m.Update(click(40, 6))
+	m.Update(motion(45, 6))
 	// The server moved the border only to column 43.
 	moved := threePanes(80, 24)
 	moved[0].Rect.W = 43
 	moved[1].Rect.X, moved[1].Rect.W = 44, 36
 	moved[2].Rect.X, moved[2].Rect.W = 44, 36
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: moved}}})
-	m.Update(motion(46, 5))
+	m.Update(motion(46, 6))
 	c := lastCommand(t, r)
 	if c.Target != 1 || c.Args[api.ArgCells] != "3" {
 		t.Fatalf("sent %+v, want 3 more cells: the pointer is 3 right of the border", c)
@@ -234,11 +271,48 @@ func TestBorderDragFollowsTheNewLayout(t *testing.T) {
 
 func TestHorizontalBorderDrag(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(click(60, 11))
-	m.Update(motion(60, 8))
+	m.Update(click(60, 12))
+	m.Update(motion(60, 9))
 	c := lastCommand(t, r)
 	if c.Op != api.OpResize || c.Target != 3 || c.Args[api.ArgDir] != api.DirUp || c.Args[api.ArgCells] != "3" {
 		t.Fatalf("sent %+v, want resize pane 3 up by 3", c)
+	}
+}
+
+func TestHorizontalBorderDragAfterLayout(t *testing.T) {
+	for _, tt := range []struct {
+		name      string
+		borderY   int
+		wantCells string
+	}{
+		{"accepted", 14, ""},
+		{"clamped", 13, "1"},
+		{"rejected", 11, "3"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m, r := threePaneScreen(t)
+			m.Update(click(60, 12))
+			m.Update(motion(60, 15))
+			moved := threePanes(80, 24)
+			moved[1].Rect.H = tt.borderY - moved[1].Rect.Y
+			moved[2].Rect.Y = tt.borderY + 1
+			moved[2].Rect.H = 22 - moved[2].Rect.Y
+			m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: moved}}})
+			r.sent = nil
+			m.Update(motion(60, 15))
+			if tt.wantCells == "" {
+				if len(r.sent) != 0 {
+					t.Fatalf("stationary pointer after accepted layout sent %v", r.sent)
+				}
+			} else if c := lastCommand(t, r); c.Op != api.OpResize || c.Target != 2 || c.Args[api.ArgDir] != api.DirDown || c.Args[api.ArgCells] != tt.wantCells {
+				t.Fatalf("stationary pointer sent %+v, want resize pane 2 down by %s", c, tt.wantCells)
+			}
+			r.sent = nil
+			m.Update(motion(60, 16))
+			if c := lastCommand(t, r); c.Op != api.OpResize || c.Target != 2 || c.Args[api.ArgDir] != api.DirDown || c.Args[api.ArgCells] != "1" {
+				t.Fatalf("new pointer sent %+v, want resize pane 2 down by 1", c)
+			}
+		})
 	}
 }
 
@@ -252,7 +326,7 @@ func mousePane(t *testing.T) (*Model, *recorder) {
 // TestPaneThatWantsTheMouseGetsIt: htop must get the clicks inside its pane.
 func TestPaneThatWantsTheMouseGetsIt(t *testing.T) {
 	m, r := mousePane(t)
-	m.Update(click(5, 6))
+	m.Update(click(5, 7))
 	if len(r.sent) != 2 {
 		t.Fatalf("sent %v, want a focus command and the click", r.sent)
 	}
@@ -260,10 +334,10 @@ func TestPaneThatWantsTheMouseGetsIt(t *testing.T) {
 		t.Fatalf("first message %+v, want focus pane 1", c)
 	}
 	ev := lastMouse(t, r)
-	if ev.Pane != 1 || ev.X != 5 || ev.Y != 6 || ev.Button != api.ButtonLeft || ev.Action != api.ActionPress {
-		t.Fatalf("mouse event %+v, want a left press at 5,6 of pane 1", ev)
+	if ev.Pane != 1 || ev.X != 5 || ev.Y != 5 || ev.Button != api.ButtonLeft || ev.Action != api.ActionPress {
+		t.Fatalf("mouse event %+v, want a left press at 5,5 of pane 1", ev)
 	}
-	m.Update(release(7, 6))
+	m.Update(release(7, 7))
 	if ev := lastMouse(t, r); ev.Action != api.ActionRelease || ev.X != 7 {
 		t.Fatalf("release %+v", ev)
 	}
@@ -272,7 +346,7 @@ func TestPaneThatWantsTheMouseGetsIt(t *testing.T) {
 func TestMousePaneCellsAreRelativeToThePane(t *testing.T) {
 	m, r := threePaneScreen(t)
 	m.Update(&api.PaneUpdate{Pane: 3, Mouse: true})
-	m.Update(click(45, 20)) // pane 3 starts at column 41, row 12
+	m.Update(click(45, 21)) // pane 3 starts at column 41, row 12 in pane-area coordinates
 	if ev := lastMouse(t, r); ev.Pane != 3 || ev.X != 4 || ev.Y != 8 {
 		t.Fatalf("mouse event %+v, want cell 4,8 of pane 3", ev)
 	}
@@ -280,11 +354,11 @@ func TestMousePaneCellsAreRelativeToThePane(t *testing.T) {
 
 func TestGrabbedPaneKeepsTheDragOutsideIt(t *testing.T) {
 	m, r := mousePane(t)
-	m.Update(click(5, 6))
+	m.Update(click(5, 7))
 	m.Update(motion(70, 40)) // far outside pane 1
 	ev := lastMouse(t, r)
-	if ev.Pane != 1 || ev.Action != api.ActionMotion || ev.X != 39 || ev.Y != 22 {
-		t.Fatalf("motion %+v, want the pointer held at pane 1's last cell 39,22", ev)
+	if ev.Pane != 1 || ev.Action != api.ActionMotion || ev.X != 39 || ev.Y != 20 {
+		t.Fatalf("motion %+v, want the pointer held at pane 1's last cell 39,20", ev)
 	}
 	m.Update(motion(-3, -3))
 	if ev := lastMouse(t, r); ev.X != 0 || ev.Y != 0 {
@@ -304,15 +378,15 @@ func TestGrabbedPaneKeepsTheDragOutsideIt(t *testing.T) {
 
 func TestWheelGoesToPaneThatWantsTheMouse(t *testing.T) {
 	m, r := mousePane(t)
-	m.Update(tea.MouseWheelMsg{X: 10, Y: 4, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelDown})
 	ev := lastMouse(t, r)
-	if ev.Pane != 1 || ev.Button != api.ButtonWheelDown || ev.Action != api.ActionPress || ev.X != 10 || ev.Y != 4 {
-		t.Fatalf("wheel %+v, want wheeldown at 10,4 of pane 1 (the pane under the pointer, not the focused one)", ev)
+	if ev.Pane != 1 || ev.Button != api.ButtonWheelDown || ev.Action != api.ActionPress || ev.X != 10 || ev.Y != 3 {
+		t.Fatalf("wheel %+v, want wheeldown at 10,3 of pane 1 (the pane under the pointer, not the focused one)", ev)
 	}
 	r.sent = nil
-	m.Update(tea.MouseWheelMsg{X: 40, Y: 3, Button: tea.MouseWheelUp}) // a border
-	m.Update(tea.MouseWheelMsg{X: 10, Y: 4, Button: tea.MouseWheelLeft})
-	m.Update(tea.MouseWheelMsg{X: 50, Y: 3, Button: tea.MouseWheelUp}) // pane 2 did not ask: copy mode opens
+	m.Update(tea.MouseWheelMsg{X: 40, Y: 4, Button: tea.MouseWheelUp}) // a border
+	m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelLeft})
+	m.Update(tea.MouseWheelMsg{X: 50, Y: 4, Button: tea.MouseWheelUp}) // pane 2 did not ask: copy mode opens
 	if ev := mouseSent(r); ev != nil {
 		t.Fatalf("sent %+v, want no mouse event", ev)
 	}
@@ -321,7 +395,7 @@ func TestWheelGoesToPaneThatWantsTheMouse(t *testing.T) {
 func TestMouseOffUpdateStopsForwarding(t *testing.T) {
 	m, r := mousePane(t)
 	m.Update(&api.PaneUpdate{Pane: 1}) // the program turned the mouse off
-	m.Update(tea.MouseWheelMsg{X: 10, Y: 4, Button: tea.MouseWheelDown})
+	m.Update(tea.MouseWheelMsg{X: 10, Y: 5, Button: tea.MouseWheelDown})
 	if ev := mouseSent(r); ev != nil {
 		t.Fatalf("sent %+v after the program stopped asking", ev)
 	}
@@ -369,9 +443,9 @@ func TestMouseBeforeFirstLayout(t *testing.T) {
 // takes the mouse. The next press must start clean.
 func TestPressClearsADragWhoseReleaseWasLost(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(click(40, 5)) // a border drag starts
-	m.Update(click(50, 3)) // the release never came; a new press
-	m.Update(motion(55, 3))
+	m.Update(click(40, 6)) // a border drag starts
+	m.Update(click(50, 4)) // the release never came; a new press
+	m.Update(motion(55, 4))
 	for _, s := range r.sent {
 		if c, ok := s.(*api.Command); ok && c.Op == api.OpResize {
 			t.Fatalf("a stale drag sent %+v", c)
@@ -384,8 +458,8 @@ func TestPressClearsADragWhoseReleaseWasLost(t *testing.T) {
 
 func TestPressClearsAGrabWhoseReleaseWasLost(t *testing.T) {
 	m, r := mousePane(t)
-	m.Update(click(5, 6)) // pane 1 grabs the pointer
-	m.Update(click(50, 3))
+	m.Update(click(5, 7)) // pane 1 grabs the pointer
+	m.Update(click(50, 4))
 	r.sent = nil
 	m.Update(motion(8, 8))
 	m.Update(release(8, 8))
@@ -396,15 +470,15 @@ func TestPressClearsAGrabWhoseReleaseWasLost(t *testing.T) {
 
 func TestReleaseEndsEveryDragAndGrab(t *testing.T) {
 	m, _ := mousePane(t)
-	m.Update(click(5, 6))
+	m.Update(click(5, 7))
 	m.drag = nil
-	m.Update(release(5, 6))
+	m.Update(release(5, 7))
 	if m.grab != nil {
 		t.Fatal("release left the grab")
 	}
 	m, _ = threePaneScreen(t)
-	m.Update(click(40, 5))
-	m.Update(tea.MouseReleaseMsg{X: 40, Y: 5, Button: tea.MouseRight}) // another button's release
+	m.Update(click(40, 6))
+	m.Update(tea.MouseReleaseMsg{X: 40, Y: 6, Button: tea.MouseRight}) // another button's release
 	if m.drag != nil {
 		t.Fatal("a release left the drag")
 	}

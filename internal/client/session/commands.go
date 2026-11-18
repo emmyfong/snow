@@ -21,6 +21,8 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 	"agents": (*Model).cmdAgents,
 	"open":   (*Model).cmdOpen,
 	"layout": (*Model).cmdLayout,
+	"help":   (*Model).cmdHelp,
+	"menu":   (*Model).cmdMenu,
 }
 
 // cmdLayout arranges the focused pane's window as a preset; with no name
@@ -161,3 +163,14 @@ func (m *Model) cmdTheme(name string) tea.Cmd {
 }
 
 func useTheme(name string) tea.Cmd { return func() tea.Msg { return command.ThemeMsg{Name: name} } }
+
+func (m *Model) cmdHelp(string) tea.Cmd {
+	m.prompt = nil
+	return m.openSessionHelp()
+}
+
+func (m *Model) cmdMenu(string) tea.Cmd {
+	m.prompt = nil
+	m.openWindowMenu()
+	return nil
+}

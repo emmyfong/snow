@@ -213,7 +213,7 @@ func TestYankCopiesAndLeaves(t *testing.T) {
 	serve(m, r, history)
 	selecting(m, r, history)
 	cmd := m.Update(press('y', 0, "y"))
-	if want := "ild step 276: compiling package\nbuild step 277: compiling package\nbuild"; len(log.texts) != 1 || log.texts[0] != want {
+	if want := "ild step 278: compiling package\nbuild step 279: compiling package\nbuild"; len(log.texts) != 1 || log.texts[0] != want {
 		t.Fatalf("copied %q", log.texts)
 	}
 	if m.copy != nil {

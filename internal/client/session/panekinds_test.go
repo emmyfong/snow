@@ -20,8 +20,8 @@ func unknownScreen(t *testing.T, cols, rows int) *Model {
 	m.SetSize(cols, rows)
 	left := cols / 2
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Panes: []api.PaneInfo{
-		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{W: left, H: rows - 1}, Profile: "sh"},
-		{ID: 2, Kind: "spreadsheet", Rect: api.Rect{X: left + 1, W: cols - left - 1, H: rows - 1}, Focused: true},
+		{ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{Y: 1, W: left, H: rows - 3}, Profile: "sh"},
+		{ID: 2, Kind: "spreadsheet", Rect: api.Rect{X: left + 1, Y: 1, W: cols - left - 1, H: rows - 3}, Focused: true},
 	}}}})
 	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ ls"}}})
 	return m

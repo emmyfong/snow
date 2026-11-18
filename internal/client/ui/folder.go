@@ -20,3 +20,13 @@ func FolderName(folder string) string {
 		return "-"
 	}
 }
+
+// FolderTail returns the last two elements of a folder path, accepting both
+// Windows and Unix separators. An empty path or filesystem root has no tail.
+func FolderTail(folder string) string {
+	parts := strings.FieldsFunc(strings.ReplaceAll(PlainLine(folder), `\`, "/"), func(r rune) bool { return r == '/' })
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts[max(len(parts)-2, 0):], "/")
+}

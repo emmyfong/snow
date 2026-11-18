@@ -47,8 +47,8 @@ func TestAttachSendsScreen(t *testing.T) {
 	if !ok || l.Session != "work" || len(l.Windows) != 1 || len(l.Windows[0].Panes) != 1 {
 		t.Fatalf("first message %#v, want a Layout with one window and one pane", m)
 	}
-	if r := l.Windows[0].Panes[0].Rect; r.W != 80 || r.H != 23 {
-		t.Fatalf("pane rect %+v, want 80x23 (one row for the status bar)", r)
+	if r := l.Windows[0].Panes[0].Rect; r.W != 80 || r.H != 21 {
+		t.Fatalf("pane rect %+v, want 80x21 (two chrome rows)", r)
 	}
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
@@ -212,8 +212,8 @@ func TestOversizeResizeIgnored(t *testing.T) {
 			break
 		}
 	}
-	if cols, rows := s.pane(t, "work").Size(); cols != 80 || rows != 23 {
-		t.Fatalf("pane is %dx%d after an oversize Resize, want 80x23 kept", cols, rows)
+	if cols, rows := s.pane(t, "work").Size(); cols != 80 || rows != 21 {
+		t.Fatalf("pane is %dx%d after an oversize Resize, want 80x21 kept", cols, rows)
 	}
 	if len(s.Sessions()) != 1 {
 		t.Fatal("server lost its session")

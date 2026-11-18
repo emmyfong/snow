@@ -22,5 +22,8 @@ func (m *Model) overlayPopup(content string, p popup, rows int) string {
 	return ui.Overlay(content, box, x, y)
 }
 
-// windowRows is the height of the window area: every row but the status bar.
-func (m *Model) windowRows() int { return max(m.rows-1, 0) }
+// windowRows is the height of the pane area between the window bar and status line.
+func (m *Model) windowRows() int { return max(m.rows-2, 0) }
+
+// areaTop is the screen row where the pane area starts.
+func (m *Model) areaTop() int { return 1 }

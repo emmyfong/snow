@@ -1,14 +1,34 @@
 package session
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/menu"
+	"github.com/emmyfong/snow/internal/client/ui"
 )
 
-// openMenu shows the pane menu at screen cell x, y. It does not open when
+// openMenu shows the pane menu at cell x, y in the window area. It does not open when
 // the screen is too small to show every item; the keys still work.
 func (m *Model) openMenu(x, y int) {
-	mm := menu.New(menu.PaneItems(m.keys), x, y)
+	m.showMenu(menu.PaneItems(m.keys), x, y)
+}
+
+func (m *Model) openWindowMenu() {
+	_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
+	x := max(m.cols-1, 0)
+	for _, sp := range spans {
+		if sp.Kind == ui.TopBarMenu {
+			x = sp.X
+			break
+		}
+	}
+	m.showMenu(menu.LayoutItems(m.keys), x, 0)
+}
+
+func (m *Model) showMenu(items []menu.Item, x, y int) {
+	mm := menu.New(items, x, y)
 	if box, _, _ := mm.View(m.theme, m.cols, m.windowRows()); box == "" {
 		return
 	}
@@ -31,7 +51,7 @@ func (m *Model) menuMouse(msg tea.MouseMsg) tea.Cmd {
 		m.menu = nil
 		return nil
 	}
-	return m.menuResult(m.menu.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+	return m.menuResult(m.menu.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 }
 
 func (m *Model) menuResult(r menu.Result) tea.Cmd {
@@ -49,6 +69,16 @@ func (m *Model) menuResult(r menu.Result) tea.Cmd {
 // runFromMenu does an action chosen in the menu, through the same handlers
 // as the keys. Close pane asks first, in the same popup as its key.
 func (m *Model) runFromMenu(action string) tea.Cmd {
+	if strings.HasPrefix(action, "/") {
+		name, rest := command.Split(strings.TrimPrefix(action, "/"))
+		return commandRuns[name](m, rest)
+	}
+	if action == "connect" {
+		if p := m.focused(); p != nil {
+			return m.openLoginPicker(p.ID)
+		}
+		return nil
+	}
 	return m.run(action, tea.Key{})
 }
 

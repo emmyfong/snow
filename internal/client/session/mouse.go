@@ -84,35 +84,58 @@ func (m *Model) hit(x, y int) mouse.Hit {
 	if w := m.shown(); w != nil {
 		panes = w.Panes
 	}
-	opts := m.statusOptions()
-	var session mouse.Span
-	if sx, sw, ok := ui.SessionSpan(m.theme, opts); ok {
-		session = mouse.Span{X: sx, W: sw}
+	if y == 0 {
+		_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
+		for _, span := range spans {
+			if x < span.X || x >= span.X+span.W {
+				continue
+			}
+			switch span.Kind {
+			case ui.TopBarSession:
+				return mouse.Hit{Kind: mouse.Session}
+			case ui.TopBarTab:
+				return mouse.Hit{Kind: mouse.Tab, Window: span.Index}
+			case ui.TopBarNewWindow:
+				return mouse.Hit{Kind: mouse.NewWindowButton}
+			case ui.TopBarNeedsYou:
+				return mouse.Hit{Kind: mouse.NeedsYouButton}
+			case ui.TopBarMenu:
+				return mouse.Hit{Kind: mouse.MenuButton}
+			}
+		}
+		return mouse.Hit{Kind: mouse.Bar}
 	}
-	var tabs []mouse.TabSpan
-	for _, t := range ui.TabSpans(m.theme, opts) {
-		tabs = append(tabs, mouse.TabSpan{Index: t.Index, X: t.X, W: t.W})
+	if y == m.rows-1 {
+		return mouse.Hit{Kind: mouse.Bar}
 	}
-	return mouse.HitTest(panes, session, tabs, x, y, m.cols, m.rows)
-}
-
-// closeMark reports whether screen cell x, y is the focused pane's close
-// mark, which Window draws on a border.
-func (m *Model) closeMark(x, y int) bool {
-	mx, my, ok := ui.CloseCell(m.windowPanes(), m.cols, m.windowRows())
-	return ok && x == mx && y == my
+	return mouse.HitTest(panes, mouse.Span{}, nil, x, y-m.areaTop(), m.cols, m.rows-m.areaTop())
 }
 
 func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
-	if ev.Button == tea.MouseLeft && m.closeMark(ev.X, ev.Y) {
-		m.confirmClosePane()
-		return nil
+	if ev.Button == tea.MouseLeft {
+		for _, b := range ui.PaneButtons(m.windowPanes(), m.cols, m.windowRows()) {
+			if ev.Y-m.areaTop() == b.Y && ev.X >= b.X && ev.X < b.X+b.W {
+				return m.run(b.Action, tea.Key{})
+			}
+		}
 	}
 	h := m.hit(ev.X, ev.Y)
 	switch h.Kind {
 	case mouse.Session:
 		if ev.Button == tea.MouseLeft {
 			return m.run("sessions", tea.Key{})
+		}
+	case mouse.NewWindowButton:
+		if ev.Button == tea.MouseLeft {
+			return m.openNewWindow()
+		}
+	case mouse.MenuButton:
+		if ev.Button == tea.MouseLeft {
+			m.openWindowMenu()
+		}
+	case mouse.NeedsYouButton:
+		if ev.Button == tea.MouseLeft {
+			return m.run("inbox", tea.Key{})
 		}
 	case mouse.Tab:
 		switch ev.Button {
@@ -123,7 +146,7 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		}
 	case mouse.Border:
 		if ev.Button == tea.MouseLeft {
-			m.drag = mouse.StartDrag(h, ev.X, ev.Y)
+			m.drag = mouse.StartDrag(h, ev.X, ev.Y-m.areaTop())
 		}
 	case mouse.Pane:
 		p := m.paneByID(h.Pane)
@@ -140,7 +163,7 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 				// selection, not a click.
 				m.ownPress = &ownClick{pane: p.ID, x: h.X, y: h.Y}
 			case tea.MouseRight:
-				m.openMenu(ev.X, ev.Y)
+				m.openMenu(ev.X, ev.Y-m.areaTop())
 			}
 			return nil
 		}
@@ -149,7 +172,7 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 		// A program that uses the mouse gets the right click too; Ctrl keeps
 		// the menu reachable inside it.
 		if ev.Button == tea.MouseRight && (!wantsMouse || ev.Mod.Contains(tea.ModCtrl)) {
-			m.openMenu(ev.X, ev.Y)
+			m.openMenu(ev.X, ev.Y-m.areaTop())
 			return nil
 		}
 		if ev.Button == tea.MouseLeft && !wantsMouse {
@@ -173,7 +196,7 @@ func (m *Model) mouseMotion(ev tea.Mouse) {
 		return
 	}
 	if m.drag != nil {
-		if cmd := m.drag.Move(ev.X, ev.Y); cmd != nil {
+		if cmd := m.drag.Move(ev.X, ev.Y-m.areaTop()); cmd != nil {
 			m.send(cmd)
 		}
 		return
@@ -209,7 +232,7 @@ func (m *Model) sendGrabbed(ev tea.Mouse, action string) {
 		return
 	}
 	x := min(max(ev.X-p.Rect.X, 0), max(p.Rect.W-1, 0))
-	y := min(max(ev.Y-p.Rect.Y, 0), max(p.Rect.H-1, 0))
+	y := min(max(ev.Y-p.Rect.Y-m.areaTop(), 0), max(p.Rect.H-1, 0))
 	m.send(&api.Mouse{Pane: p.ID, X: x, Y: y, Button: m.grab.button, Action: action})
 }
 

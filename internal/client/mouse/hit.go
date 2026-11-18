@@ -7,12 +7,15 @@ type Kind int
 
 // What a cell can hold.
 const (
-	None    Kind = iota // blank space beyond the panes, or off the screen
-	Pane                // a pane's cell
-	Border              // a line between panes
-	Tab                 // a window's tab in the status bar
-	Session             // the session name in the status bar
-	Bar                 // the status bar outside the session name and tabs
+	None            Kind = iota // blank space beyond the panes, or off the screen
+	Pane                        // a pane's cell
+	Border                      // a line between panes
+	Tab                         // a window's tab in the window bar
+	Session                     // the session name in the window bar
+	Bar                         // a bar outside its click targets
+	NewWindowButton             // the new-window button in the window bar
+	NeedsYouButton              // the needs-you badge in the window bar
+	MenuButton                  // the menu button in the window bar
 )
 
 // Axis is the direction a border runs.

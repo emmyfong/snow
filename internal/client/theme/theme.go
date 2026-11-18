@@ -56,6 +56,7 @@ type Glyphs struct {
 	Zoomed                                     string // marks a zoomed window's tab
 	ActiveTab                                  string // marks the shown window's tab
 	SessionLeft, SessionRight                  string // around the session name
+	Dropdown, Plus, Menu                       string // window bar buttons
 	Pointer                                    string // marks the selected item in a list
 	Caret                                      string // ends text being typed
 	TopLeft, TopRight, BottomLeft, BottomRight string
@@ -78,8 +79,8 @@ type Glyphs struct {
 	// Driven follows a window's name while an agent types into one of its
 	// panes. One cell.
 	Driven string
-	// Close marks a pane the mouse can close. One cell.
-	Close string
+	// Model, Zoom, and Close mark the focused pane actions. One cell each.
+	Model, Zoom, Close string
 }
 
 // Default returns the default theme, Frost.
@@ -93,6 +94,7 @@ func defaultGlyphs() Glyphs {
 		Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
 		Zoomed: "Z", ActiveTab: "*",
 		SessionLeft: "[", SessionRight: "]",
+		Dropdown: "▾", Plus: "+", Menu: "☰",
 		Pointer: "> ", Caret: "_",
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
@@ -101,7 +103,7 @@ func defaultGlyphs() Glyphs {
 		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
 		AgentIdle: "○", AgentWorking: "◐", AgentNeedsYou: "●",
 		Driven: "✎",
-		Close:  "×",
+		Model:  "▾", Zoom: "⤢", Close: "✕",
 	}
 }
 

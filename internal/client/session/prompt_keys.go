@@ -78,11 +78,12 @@ func (m *Model) promptMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	l, ok := m.promptLayout()
-	if click.Button != tea.MouseLeft || !ok || click.X < l.x || click.X >= l.x+l.w || click.Y < l.y || click.Y >= l.y+l.h {
+	y := click.Y - m.areaTop()
+	if click.Button != tea.MouseLeft || !ok || click.X < l.x || click.X >= l.x+l.w || y < l.y || y >= l.y+l.h {
 		m.prompt = nil
 		return nil
 	}
-	i := click.Y - l.listY
+	i := y - l.listY
 	if click.X <= l.x || click.X >= l.x+l.w-1 || i < 0 || i >= l.count {
 		return nil
 	}
