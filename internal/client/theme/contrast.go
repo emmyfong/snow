@@ -12,6 +12,9 @@ import (
 // colored background below it is hard to read.
 const minContrast = 3.0
 
+// minSeparation keeps adjacent background blocks visually distinct.
+const minSeparation = 2.0
+
 var (
 	black = lipgloss.Color("#000000")
 	white = lipgloss.Color("#ffffff")
@@ -24,6 +27,7 @@ var (
 // marks too, so it gets ASCII ones.
 func (t Theme) For(p colorprofile.Profile) Theme {
 	if p < colorprofile.ANSI {
+		t.Background, t.Text = nil, nil
 		t.Glyphs.AgentIdle, t.Glyphs.AgentWorking, t.Glyphs.AgentNeedsYou = "-", "~", "!"
 		t.Glyphs.Driven = "*"
 		t.Glyphs.Dropdown, t.Glyphs.Menu = "v", "="
@@ -35,7 +39,14 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 			*fg = ink(p, bg)
 		}
 	}
+	t.Background = p.Convert(t.Background)
+	fix(&t.Text, t.Background)
+	t.Text = p.Convert(t.Text)
 	fix(&t.BarFG, t.BarBG)
+	// A reduced palette can make the active tab blend into the bar.
+	if p < colorprofile.TrueColor && contrast(p.Convert(t.TabActiveBG), p.Convert(t.BarBG)) < minSeparation {
+		t.TabActiveBG = ink(p, t.BarBG)
+	}
 	fix(&t.TabActive, t.TabActiveBG)
 	fix(&t.PromptFG, t.PromptBG)
 	fix(&t.ErrorFG, t.Error)
