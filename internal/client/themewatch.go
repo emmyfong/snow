@@ -14,10 +14,11 @@ import (
 const themeCheckEvery = 2 * time.Second
 
 // configCheckedMsg is the result of one look at the config file: its time
-// of change, and the theme it names when that changed and is valid.
+// of change, the background preference and the theme when valid.
 type configCheckedMsg struct {
-	th  *theme.Theme
-	mod time.Time
+	th         *theme.Theme
+	mod        time.Time
+	background string
 }
 
 // themed is a screen that can change its theme while it is open.
@@ -42,6 +43,7 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 	if err != nil {
 		return res
 	}
+	res.background = cfg.Theme.Background
 	if th, err := theme.Named(cfg.Theme.Name); err == nil {
 		res.th = &th
 	}
@@ -51,6 +53,7 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 // applyTheme makes th the app's theme and the open screen's.
 func (a *app) applyTheme(th theme.Theme) {
 	a.theme = th
+	a.setScreenBackground(a.screen)
 	if s, ok := a.screen.(themed); ok {
 		s.SetTheme(th)
 	}

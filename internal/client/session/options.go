@@ -1,6 +1,8 @@
 package session
 
 import (
+	"image/color"
+
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/theme"
 )
@@ -25,6 +27,19 @@ func WithChatUsage(show bool) Option { return func(m *Model) { m.hideUsage = !sh
 func (m *Model) SetTheme(th theme.Theme) {
 	m.base, m.theme = th, th
 	if m.profile != nil {
-		m.theme = th.For(*m.profile)
+		m.theme = th.ForBackground(*m.profile, m.paintedBackground)
 	}
+	for _, p := range m.own {
+		p.SetTheme(m.theme)
+	}
+}
+
+// SetPaintedBackground adapts secondary text to the background Snow applies.
+// A nil color means the terminal supplies its own background.
+func (m *Model) SetPaintedBackground(bg color.Color) {
+	if m.paintedBackground == bg {
+		return
+	}
+	m.paintedBackground = bg
+	m.SetTheme(m.base)
 }

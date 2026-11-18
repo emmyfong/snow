@@ -544,6 +544,8 @@ default = ""          # the shell new panes start with; empty means the first fo
 name = "default"      # or Frost, Campbell, One Half Dark, Dark+, Solarized Dark,
                       # Dracula, Nord, Gruvbox Dark, Tokyo Night,
                       # Catppuccin Mocha, OpenCode, Clay
+background = "theme"  # "terminal" keeps the terminal background and text colors
+                      # theme colors require a terminal that reports its defaults
 
 [sessions]
 save = true           # false saves nothing

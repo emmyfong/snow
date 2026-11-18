@@ -12,6 +12,8 @@ func TestSetTheme(t *testing.T) {
 		name, before, after string
 	}{
 		{"no file", "", "[theme]\nname = \"Nord\"\n"},
+		{"keeps background mode", "[theme]\nname = \"default\"\nbackground = \"terminal\" # preserve\n",
+			"[theme]\nname = \"Nord\"\nbackground = \"terminal\" # preserve\n"},
 		{"replaces the name", "[theme]\nname = \"default\"\n", "[theme]\nname = \"Nord\"\n"},
 		{"keeps other lines and comments", "# my settings\n[keys]\nprefix = \"C-a\"\n\n[theme]\n# picked by hand\nname = 'default' # old\n\n[scrollback]\nlines = 5000\n",
 			"# my settings\n[keys]\nprefix = \"C-a\"\n\n[theme]\n# picked by hand\nname = \"Nord\" # old\n\n[scrollback]\nlines = 5000\n"},

@@ -4,6 +4,7 @@ package session
 
 import (
 	"github.com/charmbracelet/colorprofile"
+	"image/color"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -93,6 +94,8 @@ type Model struct {
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
+
+	paintedBackground color.Color
 }
 
 // maxEarly bounds input held before the first Layout. The Layout follows
@@ -143,10 +146,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		// The terminal's color depth is known only now; text that would
 		// vanish when colors are reduced switches to black or white.
 		m.profile = &msg.Profile
-		m.theme = m.base.For(msg.Profile)
-		for _, p := range m.own {
-			p.SetTheme(m.theme)
-		}
+		m.SetTheme(m.base)
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.PaneKinds:

@@ -4,12 +4,13 @@
 package home
 
 import (
-	"github.com/charmbracelet/colorprofile"
+	"image/color"
 	"slices"
 	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/colorprofile"
 	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/internal/client/keys"
@@ -53,6 +54,8 @@ type Model struct {
 	before     theme.Theme
 	profile    *colorprofile.Profile // the terminal's colors, once known
 	cols, rows int
+
+	paintedBackground color.Color
 }
 
 // New returns the home page for Snow version, drawn with th.
@@ -75,7 +78,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case tea.ColorProfileMsg:
 		m.profile = &msg.Profile
-		m.theme = m.base.For(msg.Profile)
+		m.setBase(m.base)
 	case *api.SessionList:
 		m.notes, m.hint = msg.Notes, msg.Hint
 		chosen := ""

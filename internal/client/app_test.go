@@ -168,9 +168,18 @@ func TestFocusReportsReachTheServer(t *testing.T) {
 		t.Fatal("the app must wait for the terminal to report focus support")
 	}
 	msg := a.Init()()
-	raw, ok := msg.(tea.RawMsg)
-	if !ok || raw.Msg != ansi.RequestModeFocusEvent {
-		t.Fatalf("Init sent %#v, want the focus mode query", msg)
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init = %T, want terminal queries", msg)
+	}
+	found := false
+	for _, cmd := range batch {
+		if raw, ok := cmd().(tea.RawMsg); ok && raw.Msg == ansi.RequestModeFocusEvent {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Init did not query focus mode")
 	}
 	a.Update(tea.ModeReportMsg{Mode: ansi.ModeFocusEvent, Value: ansi.ModeSet})
 	if !a.View().ReportFocus {

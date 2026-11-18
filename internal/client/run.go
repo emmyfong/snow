@@ -103,6 +103,7 @@ func Run(opts Options) (Result, error) {
 	}
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
 	a.setKeys(table)
+	a.terminalBackground = cfg.Theme.Background == config.BackgroundTerminal
 	if opts.ConfigPath != "" {
 		a.saveTheme = func(name string) error { return config.SetTheme(opts.ConfigPath, name) }
 		a.configPath = opts.ConfigPath
@@ -127,10 +128,14 @@ func Run(opts Options) (Result, error) {
 	}
 	p := tea.NewProgram(a, popts...)
 	go receive(conn, p)
-	if _, err := p.Run(); err != nil {
-		return a.result, fmt.Errorf("run screen: %w", err)
+	_, runErr := p.Run()
+	if runErr != nil {
+		runErr = fmt.Errorf("run screen: %w", runErr)
 	}
-	return a.result, nil
+	if err := a.restoreDefaultColors(opts.Output); err != nil {
+		runErr = errors.Join(runErr, fmt.Errorf("restore terminal colors: %w", err))
+	}
+	return a.result, runErr
 }
 
 // receive delivers server messages to the program as Bubble Tea messages, so

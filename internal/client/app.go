@@ -2,6 +2,7 @@ package client
 
 import (
 	"errors"
+	"image/color"
 	"time"
 
 	"github.com/emmyfong/snow/internal/client/command"
@@ -12,6 +13,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -52,6 +54,11 @@ type app struct {
 	focused     bool             // the terminal has focus
 	focusReport bool             // the terminal reports focus changes; see api.ClientFocus
 	cols, rows  int
+
+	terminalBackground bool
+	originalForeground color.Color
+	originalBackground color.Color
+	paintedDefaults    bool
 }
 
 // newHomeApp returns an app that starts on the home page. Opening a session
@@ -106,6 +113,7 @@ func (a *app) useTheme(name string) tea.Cmd {
 // passed on.
 func (a *app) show(s Screen) {
 	s.SetSize(a.cols, a.rows)
+	a.setScreenBackground(s)
 	if a.profile != nil {
 		s.Update(*a.profile)
 	}
@@ -203,7 +211,7 @@ func (a *app) Init() tea.Cmd {
 	// Ask whether the terminal reports focus events. Some do not, and some
 	// multiplexers need them turned on. Until an answer says otherwise, the
 	// app keeps View.ReportFocus false.
-	cmds := []tea.Cmd{tea.Raw(ansi.RequestModeFocusEvent)}
+	cmds := []tea.Cmd{tea.Raw(ansi.RequestModeFocusEvent), tea.RequestForegroundColor, tea.RequestBackgroundColor}
 	if a.configPath != "" {
 		cmds = append(cmds, watchTheme(a.configPath, a.configMod))
 	}
@@ -221,6 +229,19 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	case tea.ColorProfileMsg:
 		a.profile = &msg
+		a.trackDefaultColors()
+	case tea.ForegroundColorMsg:
+		if a.originalForeground == nil {
+			a.originalForeground = msg.Color
+		}
+		a.trackDefaultColors()
+		return a, nil
+	case tea.BackgroundColorMsg:
+		if a.originalBackground == nil {
+			a.originalBackground = msg.Color
+		}
+		a.trackDefaultColors()
+		return a, nil
 	case tea.ModeReportMsg:
 		if msg.Mode != ansi.ModeFocusEvent {
 			return a, nil
@@ -304,6 +325,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, a.useTheme(msg.Name)
 	case configCheckedMsg:
 		a.configMod = msg.mod
+		if msg.background != "" {
+			a.terminalBackground = msg.background == config.BackgroundTerminal
+			a.trackDefaultColors()
+		}
 		if msg.th != nil && msg.th.Name != a.theme.Name {
 			a.applyTheme(*msg.th)
 		}
@@ -340,6 +365,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // the tab says which session it is. Bubble Tea clears the title on exit.
 func (a *app) View() tea.View {
 	v := a.screen.View()
+	v.BackgroundColor, v.ForegroundColor = a.defaultColors()
 	v.AltScreen = true
 	// Focus and blur events tell the server whether the user looks at an
 	// agent's pane, so it can skip a notification for it. Ask for them only
