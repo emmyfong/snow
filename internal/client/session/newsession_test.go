@@ -32,7 +32,7 @@ func TestOpenNewWindowDialog(t *testing.T) {
 	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
 	cmd := lastCommand(t, r)
-	if m.over != nil || cmd.Op != api.OpNewWindow || cmd.Args[api.ArgFolder] != "/src" {
+	if m.over != nil || cmd.Op != api.OpNewWindow || cmd.Args[api.ArgFolder] != "/src" || cmd.Args[api.ArgHostShell] != "true" {
 		t.Fatalf("accept: overlay %v, command %+v; want new window in /src", m.over != nil, cmd)
 	}
 }
@@ -61,6 +61,32 @@ func TestNewWindowLayout(t *testing.T) {
 	m.Update(added)
 	if len(r.sent) != count {
 		t.Fatalf("second layout sent more commands: %#v", r.sent[count:])
+	}
+}
+
+func TestLateWindowReadinessRefusalKeepsChosenLayout(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	m.openNewWindow()
+	for range 2 {
+		m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	}
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if m.newPreset == "" || !m.newWindowPending {
+		t.Fatalf("accepted choice did not stage layout: preset=%q pending=%v", m.newPreset, m.newWindowPending)
+	}
+	m.Update(&api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()})
+	if m.newPreset == "" || !m.newWindowPending {
+		t.Fatalf("late readiness refusal cleared layout: preset=%q pending=%v", m.newPreset, m.newWindowPending)
+	}
+	added := &api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
+		{Index: 1, Panes: []api.PaneInfo{{ID: 1}}},
+		{Index: 2, Panes: []api.PaneInfo{{ID: 99}}},
+	}}
+	m.Update(added)
+	command := lastCommand(t, r)
+	if command.Op != api.OpLayout || command.Target != 99 || command.Args[api.ArgName] != "ide" {
+		t.Fatalf("new window layout command %+v, want ide for pane 99", command)
 	}
 }
 
@@ -116,7 +142,7 @@ func TestNewWindowClaudeUsesReadyConnection(t *testing.T) {
 	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
 	command := lastCommand(t, r)
-	if command.Op != api.OpNewWindow || command.Args[api.ArgKind] != api.PaneChat {
+	if command.Op != api.OpNewWindow || command.Args[api.ArgKind] != api.PaneChat || command.Args[api.ArgHostShell] != "" {
 		t.Fatalf("Claude window command %+v", command)
 	}
 	added := &api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
@@ -223,6 +249,42 @@ func TestNewSessionClaudeBindingFailureBlocksChat(t *testing.T) {
 	}
 }
 
+func TestFailedClaudeBindingKeepsUnsentDraft(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	m.SetPendingRuntime("missing-connection")
+	m.Update(&api.Layout{Session: "new", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 99, Kind: api.PaneChat, Focused: true}}}}})
+	m.ownMsg(&api.ChatSnapshot{Pane: 99, Agent: "chat-generation", State: api.ChatStateIdle, Model: "openai/gpt-4.1"})
+	var request *api.RuntimeRequest
+	for _, message := range r.sent {
+		if sent, ok := message.(*api.RuntimeRequest); ok {
+			request = sent
+		}
+	}
+	if request == nil {
+		t.Fatal("startup did not request the selected runtime")
+	}
+	m.Update(&api.RuntimeConnections{Pane: 99, Agent: "chat-generation", RequestID: request.RequestID, State: "error", Message: "connection disappeared"})
+	before := len(r.sent)
+	for _, key := range "draft" {
+		m.Update(tea.KeyPressMsg(tea.Key{Code: key, Text: string(key)}))
+	}
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if len(r.sent) != before {
+		t.Fatalf("failed binding sent a blocked draft: %#v", r.sent[before:])
+	}
+	m.runtimeBindFailed = false
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	for _, message := range r.sent[before:] {
+		if input, ok := message.(*api.ChatInput); ok {
+			if input.Text != "draft" {
+				t.Fatalf("recovered chat submitted %q, want retained draft", input.Text)
+			}
+			return
+		}
+	}
+	t.Fatalf("recovered chat did not submit retained draft: %#v", r.sent[before:])
+}
+
 func TestFailedClaudeBindingCanReachRuntimePickerThroughLogin(t *testing.T) {
 	m, _ := chatScreen(t, 100, 30)
 	m.runtimeBindFailed, m.runtimePane = true, 2
@@ -234,6 +296,17 @@ func TestFailedClaudeBindingCanReachRuntimePickerThroughLogin(t *testing.T) {
 	m.Update(press(tea.KeyEnter, 0, ""))
 	if m.runtimePick == nil {
 		t.Fatal("Claude Code login choice did not open the runtime picker")
+	}
+}
+
+func TestFailedClaudeBindingAllowsPasteIntoRecoveryPopup(t *testing.T) {
+	m, _ := chatScreen(t, 100, 30)
+	m.runtimeBindFailed, m.runtimeBindingPane = true, 2
+	var pasted string
+	m.over = &overlay{paste: func(text string) { pasted = text }}
+	m.Update(tea.PasteMsg{Content: "recovery-key"})
+	if pasted != "recovery-key" {
+		t.Fatalf("recovery popup received %q, want pasted content", pasted)
 	}
 }
 

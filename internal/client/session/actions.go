@@ -146,6 +146,9 @@ func (m *Model) openNewWindow() tea.Cmd {
 			}
 			m.newWindowPending = true
 			args := map[string]string{api.ArgFolder: choice.Folder, api.ArgKind: kind}
+			if choice.Start == newsession.StartShell {
+				args[api.ArgHostShell] = "true"
+			}
 			m.send(&api.Command{Op: api.OpNewWindow, Args: args})
 			return nil
 		},

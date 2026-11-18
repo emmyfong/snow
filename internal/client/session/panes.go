@@ -261,6 +261,9 @@ func (m *Model) ownKey(k tea.Key) tea.Cmd {
 	if o == nil {
 		return nil
 	}
+	if c, ok := o.(chatPane); ok {
+		c.SetSubmitBlocked(m.runtimeBindFailed && m.runtimeBindingPane == p.ID)
+	}
 	msg, note := o.Key(k)
 	return m.ownResult(p.ID, o, msg, note)
 }

@@ -228,12 +228,12 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
-		if m.newWindowPending {
-			m.newWindowPending, m.newPreset, m.pendingWindowRuntime = false, "", ""
-		}
 		if m.windowRuntimePending && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
 			m.windowRuntimePending = false
 			return nil
+		}
+		if m.newWindowPending {
+			m.newWindowPending, m.newPreset, m.pendingWindowRuntime = false, "", ""
 		}
 		if m.pendingShell || m.shellStart != 0 {
 			m.pendingShell, m.shellStart, m.shellBefore = false, 0, nil
@@ -274,15 +274,14 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			m.queueEarly(api.Input{Paste: msg.Content})
 			return nil
 		}
-		if m.startupInputBlocked(m.focusedPaneID()) {
-			return nil
-		}
 		switch c := m.focusedOwn(); {
 		case m.authPick != nil:
 			m.authPick.Paste(msg.Content)
 		case m.over != nil && m.over.paste != nil:
 			m.over.paste(msg.Content)
 		case m.modal():
+		case m.startupInputBlocked(m.focusedPaneID()):
+			return nil
 		case c != nil:
 			c.Paste(msg.Content)
 		default:
