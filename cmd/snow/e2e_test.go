@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"github.com/emmyfong/snow/internal/server"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/internal/transport"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -29,14 +31,23 @@ func testShell(_, dir string) (term.Spec, string, error) {
 func startServer(t *testing.T) string {
 	t.Helper()
 	path := apitest.SocketPath(t)
+	startServerAt(t, path)
+	return path
+}
+
+func startServerAt(t *testing.T, path string) {
+	startServerAtVersion(t, path, "e2e")
+}
+
+func startServerAtVersion(t *testing.T, path, version string) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		_ = server.Run(ctx, server.Options{Version: "e2e", Spec: testShell, IdleExit: time.Minute}, path)
+		_ = server.Run(ctx, server.Options{Version: version, Spec: testShell, IdleExit: time.Minute}, path)
 	}()
 	t.Cleanup(func() { cancel(); <-done })
-	return path
 }
 
 // observe attaches a second client that watches a session's screen. It
@@ -167,6 +178,80 @@ func TestDetachAndReattach(t *testing.T) {
 	if res := detach(t, path, "e2e", 1, keys2, done2); !res.Detached {
 		t.Fatalf("second client result %+v, want detached", res)
 	}
+}
+
+func TestDetachPrintsNoDetachedText(t *testing.T) {
+	exe := filepath.Join(t.TempDir(), "snow")
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	build := exec.Command("go", "build", "-ldflags", "-X main.version=e2e", "-o", exe, ".")
+	if output, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("build snow: %v\n%s", err, output)
+	}
+	env := binaryEnv(t)
+	path, err := transport.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	startServerAt(t, path)
+	p, err := term.Start(term.Spec{Path: exe, Args: []string{"e2e"}, Env: env}, 100, 30, term.Options{})
+	if err != nil {
+		t.Fatalf("start snow: %v", err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+	waitTermText(t, p, shellPrompt())
+
+	p.SendMouse(term.Mouse{X: 40, Y: 12, Button: term.ButtonRight, Action: term.ActionPress})
+	p.SendMouse(term.Mouse{X: 40, Y: 12, Button: term.ButtonRight, Action: term.ActionRelease})
+	waitTermText(t, p, "Detach")
+	clickTermLabel(t, p, "Detach")
+	waitTermText(t, p, "e2e")
+	p.SendKey(term.Key{Code: term.KeyEscape})
+	select {
+	case <-p.Done():
+	case <-time.After(15 * time.Second):
+		t.Fatalf("snow did not exit; screen:\n%s", p.Text())
+	}
+	if status, ok := p.ExitStatus(); !ok || status != 0 {
+		t.Fatalf("exit status %d, known %v; want 0", status, ok)
+	}
+	if strings.Contains(strings.ToLower(p.Text()), "detached") {
+		t.Fatalf("output after detach contains detached text:\n%s", p.Text())
+	}
+}
+
+func binaryEnv(t *testing.T) []string {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", dir)
+	t.Setenv("HOME", dir)
+	t.Setenv("LOCALAPPDATA", dir)
+	return []string{"XDG_RUNTIME_DIR=" + dir, "HOME=" + dir, "LOCALAPPDATA=" + dir}
+}
+
+func waitTermText(t *testing.T, p *term.Pane, text string) {
+	t.Helper()
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if strings.Contains(p.Text(), text) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("%q did not appear; screen:\n%s", text, p.Text())
+}
+
+func clickTermLabel(t *testing.T, p *term.Pane, label string) {
+	t.Helper()
+	for y, line := range strings.Split(p.Text(), "\n") {
+		if x := strings.Index(line, label); x >= 0 {
+			p.SendMouse(term.Mouse{X: x + len(label)/2, Y: y, Button: term.ButtonLeft, Action: term.ActionPress})
+			p.SendMouse(term.Mouse{X: x + len(label)/2, Y: y, Button: term.ButtonLeft, Action: term.ActionRelease})
+			return
+		}
+	}
+	t.Fatalf("%q not found; screen:\n%s", label, p.Text())
 }
 
 func TestPlainSnowCreatesNumberedSessions(t *testing.T) {

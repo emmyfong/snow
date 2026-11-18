@@ -298,8 +298,6 @@ func attach(name string, stdout, stderr io.Writer) int {
 	case res.Err != nil:
 		_, _ = fmt.Fprintln(stderr, "snow:", res.Err)
 		return 1
-	case res.Detached:
-		_, _ = fmt.Fprintf(stdout, "[detached from %s]\n", res.Session)
 	}
 	return 0
 }
