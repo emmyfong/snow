@@ -50,11 +50,16 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 	return res
 }
 
-// applyTheme makes th the app's theme and the open screen's.
+// applyTheme makes th the app's theme and updates each open screen.
 func (a *app) applyTheme(th theme.Theme) {
 	a.theme = th
-	a.setScreenBackground(a.screen)
-	if s, ok := a.screen.(themed); ok {
-		s.SetTheme(th)
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen == nil {
+			continue
+		}
+		a.setScreenBackground(screen)
+		if s, ok := screen.(themed); ok {
+			s.SetTheme(th)
+		}
 	}
 }

@@ -13,17 +13,22 @@ import (
 // commandRuns maps each session command in internal/client/command to what
 // it does on this screen. Rest is what was typed after the command's name.
 var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
-	"new":    (*Model).cmdNew,
-	"switch": (*Model).cmdSwitch,
-	"rename": (*Model).cmdRename,
-	"kill":   (*Model).cmdKill,
-	"theme":  (*Model).cmdTheme,
-	"chat":   (*Model).cmdChat,
-	"agents": (*Model).cmdAgents,
-	"open":   (*Model).cmdOpen,
-	"layout": (*Model).cmdLayout,
-	"help":   (*Model).cmdHelp,
-	"menu":   (*Model).cmdMenu,
+	"new":      (*Model).cmdNew,
+	"switch":   (*Model).cmdSwitch,
+	"rename":   (*Model).cmdRename,
+	"kill":     (*Model).cmdKill,
+	"theme":    (*Model).cmdTheme,
+	"settings": (*Model).cmdSettings,
+	"chat":     (*Model).cmdChat,
+	"agents":   (*Model).cmdAgents,
+	"open":     (*Model).cmdOpen,
+	"layout":   (*Model).cmdLayout,
+	"help":     (*Model).cmdHelp,
+	"menu":     (*Model).cmdMenu,
+}
+
+func (m *Model) cmdSettings(string) tea.Cmd {
+	return func() tea.Msg { return command.SettingsMsg{} }
 }
 
 // cmdLayout arranges the focused pane's window as a preset; with no name

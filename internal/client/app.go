@@ -13,6 +13,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/settings"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
@@ -36,6 +37,7 @@ type connClosedMsg struct{}
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
 	screen         Screen
+	back           Screen // the screen settings temporarily covers
 	send           func(api.Message)
 	result         Result
 	dir            string           // the folder a session opened from the home page starts in
@@ -78,14 +80,35 @@ func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opt
 // setKeys gives the home page, now and when it comes back, the key table.
 func (a *app) setKeys(t *keys.Table) {
 	a.keys = t
-	if h, ok := a.screen.(*home.Model); ok {
-		h.SetKeys(t)
+	for _, screen := range []Screen{a.screen, a.back} {
+		if h, ok := screen.(*home.Model); ok {
+			h.SetKeys(t)
+		}
 	}
 }
 
 // newSession returns a session screen with the app's theme and options.
 func (a *app) newSession() *session.Model {
 	return session.New(a.send, append([]session.Option{session.WithTheme(a.theme)}, a.sessOpts...)...)
+}
+
+func (a *app) screenForEvents() Screen {
+	if a.back != nil {
+		return a.back
+	}
+	return a.screen
+}
+
+func (a *app) updateScreen(msg tea.Msg) tea.Cmd {
+	if a.back != nil {
+		switch msg.(type) {
+		case tea.KeyPressMsg, tea.MouseMsg, tea.WindowSizeMsg:
+			return a.screen.Update(msg)
+		default:
+			return a.back.Update(msg)
+		}
+	}
+	return a.screen.Update(msg)
 }
 
 // themeSaveFailedMsg reports that a theme was applied but not saved.
@@ -137,6 +160,7 @@ func (a *app) leave() {
 // showHome shows a new home page with the last session list and notice, if
 // any.
 func (a *app) showHome(notice string) {
+	a.back = nil
 	h := home.New(a.version, a.theme)
 	h.SetFolder(a.dir)
 	if a.keys != nil {
@@ -165,6 +189,7 @@ func (a *app) attach(session string, create bool, dir string, pane int) {
 // when set, is a pane of that session to focus, as when the user picks an
 // agent in the needs-you inbox.
 func (a *app) open(session string, create bool, dir, layout string, pane int, runtimeConnection string) {
+	a.back = nil
 	s := a.newSession()
 	if create && layout != "" {
 		s.SetPendingLayout(layout)
@@ -190,6 +215,7 @@ func (a *app) open(session string, create bool, dir, layout string, pane int, ru
 // It reports focus too, so a client started in the foreground never gets a
 // notification for the pane it shows.
 func (a *app) attachStart(session string) {
+	a.back = nil
 	a.attach(session, true, "", 0)
 	a.screen = a.newSession()
 }
@@ -249,6 +275,10 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.ColorProfileMsg:
 		a.profile = &msg
 		a.trackDefaultColors()
+		if a.back != nil {
+			a.screen.Update(msg)
+			return a, a.back.Update(msg)
+		}
 	case tea.ForegroundColorMsg:
 		if a.originalForeground == nil {
 			a.originalForeground = msg.Color
@@ -289,7 +319,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Pane == 0 && msg.RequestID == a.runtimeProbeID {
 			a.runtimeProbeID = ""
 		}
-		return a, a.screen.Update(msg)
+		return a, a.updateScreen(msg)
 	case *api.Layout:
 		if a.staleLayout(msg) {
 			return a, nil
@@ -312,7 +342,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case api.CodeSessionEnded:
 			// An end sent before the user left the session arrives after:
 			// the home page or the session being opened stays.
-			if _, on := a.screen.(*session.Model); !on || a.opening {
+			if _, on := a.screenForEvents().(*session.Model); !on || a.opening {
 				return a, nil
 			}
 			// The server keeps the connection, detached; the session and
@@ -331,7 +361,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// bar when no picker waits. A code this client does not know
 			// stays here too: ending on it would turn each new code into
 			// a crash until someone listed it (#238).
-			return a, a.screen.Update(msg)
+			return a, a.updateScreen(msg)
 		}
 	case connClosedMsg:
 		if !a.result.Detached && a.result.Err == nil {
@@ -363,6 +393,21 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.applyTheme(th)
 		}
 		return a, a.useTheme(msg.Name)
+	case command.SettingsMsg:
+		if a.back == nil {
+			s := settings.New(nil)
+			s.SetTheme(a.theme)
+			a.back = a.screen
+			a.show(s)
+		}
+		return a, nil
+	case settings.CloseMsg:
+		if a.back != nil {
+			s := a.back
+			a.back = nil
+			a.show(s)
+		}
+		return a, nil
 	case configCheckedMsg:
 		a.configMod = msg.mod
 		if msg.background != "" {
@@ -378,7 +423,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, watchTheme(a.configPath, a.configMod)
 	case themeSaveFailedMsg:
 		text := "The theme is in use but was not saved: " + msg.err.Error()
-		switch s := a.screen.(type) {
+		switch s := a.screenForEvents().(type) {
 		case *home.Model:
 			s.SetNotice(text)
 		case *session.Model:
@@ -398,7 +443,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.open(msg.Session, msg.Create, "", "", msg.Pane, "")
 		return a, nil
 	}
-	return a, a.screen.Update(msg)
+	return a, a.updateScreen(msg)
 }
 
 // View shows the screen and names the session in the terminal's title, so

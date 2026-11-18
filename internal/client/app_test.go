@@ -2,6 +2,8 @@ package client
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/settings"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
@@ -388,6 +391,61 @@ func TestNewScreensGetTheColorProfile(t *testing.T) {
 	a.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
 	if a.profile == nil || a.profile.Profile != colorprofile.ANSI {
 		t.Fatal("the app did not keep the color profile for later screens")
+	}
+}
+
+func TestSettingsEscReturnsToSession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	a.Update(command.SettingsMsg{})
+	if a.back != back || a.screen == back {
+		t.Fatal("settings did not keep the existing session screen as its back screen")
+	}
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, cmd)
+	if a.screen != back || a.back != nil {
+		t.Fatalf("after Esc screen=%T, back=%T; want the same session model restored", a.screen, a.back)
+	}
+}
+
+func TestSettingsPreviewReachesBackScreen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# preserve this comment\n[theme]\nname = \"Frost\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.configPath = path
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	beforeView := back.View().Content
+	a.Update(command.SettingsMsg{})
+	nord, _ := theme.ByName("Nord")
+	a.applyTheme(nord)
+	if back.View().Content == beforeView {
+		t.Fatal("the session behind settings did not receive the preview theme")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != before {
+		t.Fatalf("theme preview changed config: %q, %v", got, err)
+	}
+}
+
+func TestSettingsServerEventsReachSession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	a.Update(command.SettingsMsg{})
+	a.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "server output arrived"}}})
+	if a.back != back {
+		t.Fatal("a server event replaced the session behind settings")
+	}
+	a.Update(settings.CloseMsg{})
+	if a.screen != back || !strings.Contains(a.View().Content, "server output arrived") {
+		t.Fatal("the pane update did not appear when settings closed")
 	}
 }
 

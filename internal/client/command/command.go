@@ -89,6 +89,9 @@ func Split(text string) (word, rest string) {
 // save it in the config file. The home page and the session screen send it.
 type ThemeMsg struct{ Name string }
 
+// SettingsMsg asks the client to open its settings screen.
+type SettingsMsg struct{}
+
 // Reason returns err's message without the protocol's error prefix, to
 // tell the user why a command's argument was refused.
 func Reason(err error) string {

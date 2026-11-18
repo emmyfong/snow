@@ -194,6 +194,21 @@ func TestCommandPopupThemeApplies(t *testing.T) {
 	}
 }
 
+func TestCommandSettingsOpens(t *testing.T) {
+	m, _ := openPrompt(t, 80, 24)
+	cmd := typeIn(m, "settings\r")
+	if cmd == nil {
+		t.Fatal("settings returned no command")
+	}
+	got := cmd()
+	if _, ok := got.(command.SettingsMsg); !ok {
+		t.Fatalf("settings returned %T, want command.SettingsMsg", got)
+	}
+	if m.prompt == nil || m.prompt.mode != modeCommands {
+		t.Fatal("settings closed the session command popup; it must remain on the back screen")
+	}
+}
+
 func TestCommandPopupUnknownCommand(t *testing.T) {
 	m, r := openPrompt(t, 80, 24)
 	typeIn(m, "zzz\r")

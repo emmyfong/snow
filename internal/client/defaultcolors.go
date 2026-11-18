@@ -20,7 +20,11 @@ func (a *app) paintsDefaultColors() bool {
 
 func (a *app) trackDefaultColors() {
 	a.paintedDefaults = a.paintedDefaults || a.paintsDefaultColors()
-	a.setScreenBackground(a.screen)
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen != nil {
+			a.setScreenBackground(screen)
+		}
+	}
 }
 
 func (a *app) setScreenBackground(s Screen) {
