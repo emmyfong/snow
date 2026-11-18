@@ -6,8 +6,9 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strconv"
+	"slices"
 	"strings"
+	"unicode"
 )
 
 // ErrCannotEdit means a setting is written in a form Snow does not rewrite,
@@ -18,18 +19,17 @@ var ErrCannotEdit = errors.New("config: the setting is in a form snow cannot edi
 // the file when it is missing. Only that one line changes: other settings,
 // comments, and a comment after the value stay as they are.
 func SetTheme(path, name string) error {
-	data, err := os.ReadFile(path)
-	if err != nil && !errors.Is(err, fs.ErrNotExist) {
-		return fmt.Errorf("config: read %s: %w", path, err)
-	}
-	text, err := setKey(string(data), []string{"theme", "name"}, strconv.Quote(name))
-	if err != nil {
+	if err := SetKey(path, []string{"theme", "name"}, Quote(name)); err != nil {
 		return fmt.Errorf("config: %s: theme.name: %w", path, err)
 	}
-	if cfg, perr := parse(text); perr != nil || cfg.Theme.Name != name {
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("config: read %s: %w", path, err)
+	}
+	if cfg, perr := parse(string(text)); perr != nil || cfg.Theme.Name != name {
 		return fmt.Errorf("config: %s: theme.name: %w", path, ErrCannotEdit)
 	}
-	return writeFile(path, text)
+	return nil
 }
 
 // SetChatModel writes model as [chat] model and effort as [chat] effort in
@@ -49,21 +49,86 @@ func SetChatModel(path, model, effort string) error {
 		// header after it would make a file other TOML readers reject.
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	}
-	text, err := setKey(string(data), []string{"chat", "model"}, strconv.Quote(model))
-	if err != nil {
+	if err := SetKey(path, []string{"chat", "model"}, Quote(model)); err != nil {
 		return fmt.Errorf("config: %s: chat.model: %w", path, err)
 	}
-	if text, err = setKey(text, []string{"chat", "effort"}, strconv.Quote(effort)); err != nil {
+	if err := SetKey(path, []string{"chat", "effort"}, Quote(effort)); err != nil {
 		return fmt.Errorf("config: %s: chat.effort: %w", path, err)
 	}
-	if cfg, perr := parse(text); perr != nil {
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return fmt.Errorf("config: read %s: %w", path, err)
+	}
+	if cfg, perr := parse(string(text)); perr != nil {
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	} else if cfg.Chat.Model != model {
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	} else if cfg.Chat.Effort != effort {
 		return fmt.Errorf("config: %s: chat.effort: %w", path, ErrCannotEdit)
 	}
+	return nil
+}
+
+// Quote returns value as a valid TOML basic string, preserving every rune.
+func Quote(value string) string {
+	var b strings.Builder
+	b.Grow(len(value) + 2)
+	b.WriteByte('"')
+	for _, r := range value {
+		switch r {
+		case '"', '\\':
+			b.WriteByte('\\')
+			b.WriteRune(r)
+		case '\b':
+			b.WriteString(`\b`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\f':
+			b.WriteString(`\f`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if unicode.IsControl(r) {
+				if r <= 0xffff {
+					fmt.Fprintf(&b, `\u%04X`, r)
+				} else {
+					fmt.Fprintf(&b, `\U%08X`, r)
+				}
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+// SetKey writes a TOML literal at key in the config file at path. key must
+// contain a table path and a final key. Existing comments and unrelated text
+// are preserved. Inline-table parents cannot be edited.
+func SetKey(path string, key []string, value string) error {
+	if len(key) < 2 {
+		return ErrCannotEdit
+	}
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("config: read %s: %w", path, err)
+	}
+	text, err := setKey(string(data), key, value)
+	if err != nil {
+		return fmt.Errorf("config: %s: %w", path, err)
+	}
+	if _, err := parse(text); err != nil {
+		return fmt.Errorf("config: %s: %w", path, ErrCannotEdit)
+	}
 	return writeFile(path, text)
+}
+
+// SetKeyText applies a TOML literal to a key in TOML text.
+func SetKeyText(data string, key []string, value string) (string, error) {
+	return setKey(data, key, value)
 }
 
 // dottedTable reports whether a top-level dotted key starts the table name,
@@ -82,27 +147,27 @@ func dottedTable(data, name string) bool {
 	return false
 }
 
-// setKey sets a two-part key ([table] key) to value, a TOML literal, in a
+// setKey sets a nested key to value, a TOML literal, in a
 // document. It replaces the value on the key's line, adds the key under the
 // table's header, or appends the table.
 func setKey(data string, key []string, value string) (string, error) {
 	lines := strings.Split(data, "\n")
 	n := keyLine(data, key)
 	if n == 0 {
-		text := strings.TrimRight(data, "\n")
-		if text != "" {
-			text += "\n\n"
-		}
-		return text + "[" + key[0] + "]\n" + key[1] + " = " + value + "\n", nil
+		return appendTable(data, key, value), nil
 	}
 	line := lines[n-1]
 	trimmed := strings.TrimSpace(line)
 	if strings.HasPrefix(trimmed, "[") {
-		lines = append(lines[:n], append([]string{key[1] + " = " + value}, lines[n:]...)...)
+		header, rest := splitKey(strings.TrimLeft(trimmed, "["))
+		if !strings.HasPrefix(rest, "]") || !slices.Equal(header, key[:len(key)-1]) {
+			return appendTable(data, key, value), nil
+		}
+		lines = append(lines[:n], append([]string{quoteKey(key[len(key)-1]) + " = " + value}, lines[n:]...)...)
 		return strings.Join(lines, "\n"), nil
 	}
 	parts, rest := splitKey(trimmed)
-	if len(parts) == 0 || parts[len(parts)-1] != key[1] || !strings.HasPrefix(rest, "=") {
+	if len(parts) == 0 || parts[len(parts)-1] != key[len(key)-1] || !strings.HasPrefix(rest, "=") {
 		return "", ErrCannotEdit // the parent is an inline table
 	}
 	eq := strings.Index(line, "=")
@@ -113,6 +178,22 @@ func setKey(data string, key []string, value string) (string, error) {
 	}
 	lines[n-1] = strings.TrimRight(line[:eq], " \t") + " = " + value + after[end:]
 	return strings.Join(lines, "\n"), nil
+}
+
+func appendTable(data string, key []string, value string) string {
+	text := strings.TrimRight(data, "\n")
+	if text != "" {
+		text += "\n\n"
+	}
+	return text + "[" + strings.Join(quotePath(key[:len(key)-1]), ".") + "]\n" + quoteKey(key[len(key)-1]) + " = " + value + "\n"
+}
+
+func quotePath(path []string) []string {
+	quoted := make([]string, len(path))
+	for i, part := range path {
+		quoted[i] = quoteKey(part)
+	}
+	return quoted
 }
 
 // valueEnd returns the index just past the string value at the start of s,
