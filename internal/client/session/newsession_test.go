@@ -266,6 +266,7 @@ func TestNewSessionPlainShellReplacesInitialChat(t *testing.T) {
 func TestNewSessionPlainShellHandlesRestoredPaneOrder(t *testing.T) {
 	m, r := pickerScreen(t, 80, 24)
 	m.SetPendingShell()
+	m.SetPendingLayout(api.LayoutPresets[0].Name)
 	initial := &api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{
 		{ID: 5, Kind: api.PaneTerminal}, {ID: 7, Kind: api.PaneChat, Focused: true}, {ID: 8, Kind: api.PaneChat},
 	}}}}
