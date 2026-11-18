@@ -25,10 +25,17 @@ func WithChatUsage(show bool) Option { return func(m *Model) { m.hideUsage = !sh
 // Snow window picked a new one. It is adapted to the terminal's colors once
 // they are known.
 func (m *Model) SetTheme(th theme.Theme) {
-	m.base, m.theme = th, th
-	if m.profile != nil {
-		m.theme = th.ForBackground(*m.profile, m.paintedBackground)
+	if m.prompt != nil && m.prompt.mode == modeThemes && m.prompt.themePick != nil {
+		m.base = th
+		m.prompt.themePick.SetBefore(th)
+		return
 	}
+	m.base = th
+	m.previewTheme(th)
+}
+
+func (m *Model) applyTheme(th theme.Theme) {
+	m.theme = th
 	for _, p := range m.own {
 		p.SetTheme(m.theme)
 	}
@@ -41,5 +48,9 @@ func (m *Model) SetPaintedBackground(bg color.Color) {
 		return
 	}
 	m.paintedBackground = bg
+	if m.prompt != nil && m.prompt.mode == modeThemes && m.prompt.themePick != nil {
+		m.previewTheme(m.prompt.themePick.Shown())
+		return
+	}
 	m.SetTheme(m.base)
 }

@@ -19,6 +19,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/themepick"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -61,10 +62,8 @@ type Model struct {
 	runtimeListPending bool
 	runtimeListSeq     uint64
 	runtimeListID      string
-	killing            string // the session the open popup would end
-	picking            bool   // the theme list is open
-	themeSel           int    // index into theme.Builtin
-	before             theme.Theme
+	killing            string                // the session the open popup would end
+	themePick          *themepick.Model      // the theme list is open
 	profile            *colorprofile.Profile // the terminal's colors, once known
 	cols, rows         int
 
@@ -172,8 +171,8 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if m.picking {
-		m.pickTheme(i)
+	if m.themePick != nil {
+		m.pickTheme(m.themePick.Move(i - m.themePick.Selected()))
 		return m.keepTheme()
 	}
 	if m.commanding() {
@@ -194,7 +193,7 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	if m.confirm != nil {
 		return m.confirmResult(m.confirm.Key(k))
 	}
-	if m.picking {
+	if m.themePick != nil {
 		return m.pickerKey(k)
 	}
 	if m.help {

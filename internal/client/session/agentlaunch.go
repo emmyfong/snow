@@ -57,10 +57,10 @@ func (m *Model) paneInfo(id int) *api.PaneInfo {
 func (m *Model) cmdAgents(rest string) tea.Cmd {
 	switch strings.TrimSpace(rest) {
 	case "":
-		m.prompt = nil
+		m.closePrompt(false)
 		return m.openBoard()
 	case "new":
-		m.prompt = nil
+		m.closePrompt(false)
 		return m.openAgentLaunch(0)
 	}
 	m.prompt.notice = "agents takes new, or nothing for the board."

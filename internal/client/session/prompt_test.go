@@ -267,6 +267,7 @@ func TestCommandPopupGolden80x24(t *testing.T)      { goldenPrompt(t, 80, 24, ""
 func TestCommandPopupGolden120x40(t *testing.T)     { goldenPrompt(t, 120, 40, "") }
 func TestCommandPopupTypedGolden80x24(t *testing.T) { goldenPrompt(t, 80, 24, "re") }
 func TestCommandThemesGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "theme\r") }
+func TestCommandThemesGolden120x40(t *testing.T)    { goldenPrompt(t, 120, 40, "theme\r") }
 func TestCommandRenameGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "rename\r") }
 
 // TestCommandPopupTinyScreen: a window too small for the popup does not

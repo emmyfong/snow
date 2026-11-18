@@ -29,6 +29,7 @@ internal/client/
   resumepick/    the past-conversation picker (`/resume`; `Ctrl+a` toggles every folder)
   convrow/       the cells of one past-conversation row (`convrow.Columns`): the resume picker and an empty chat's list of recent conversations share it
   modelpick/     the model and effort picker (`/model`)
+  themepick/     the shared theme list state and preview used by the home page and session command popup
   authpick/      the provider key picker (`/login`)
   runtimepick/   Snow-owned Claude Code connections, opened from /login; explicit subscription or API-key route and environment
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys

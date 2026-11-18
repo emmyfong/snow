@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/themepick"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -28,7 +29,7 @@ var commandRuns = map[string]func(m *Model, rest string) tea.Cmd{
 // cmdLayout arranges the focused pane's window as a preset; with no name
 // it shows the preset picker.
 func (m *Model) cmdLayout(name string) tea.Cmd {
-	m.prompt = nil
+	m.closePrompt(false)
 	p := m.focused()
 	if p == nil {
 		return nil
@@ -43,7 +44,7 @@ func (m *Model) cmdLayout(name string) tea.Cmd {
 // cmdOpen opens a pane of kind beside the focused pane, or focuses the one
 // its window has; with no kind it shows the kind picker.
 func (m *Model) cmdOpen(kind string) tea.Cmd {
-	m.prompt = nil
+	m.closePrompt(false)
 	p := m.focused()
 	if p == nil {
 		return nil
@@ -57,7 +58,7 @@ func (m *Model) cmdOpen(kind string) tea.Cmd {
 
 // cmdChat opens a chat beside the focused pane.
 func (m *Model) cmdChat(string) tea.Cmd {
-	m.prompt = nil
+	m.closePrompt(false)
 	m.newChat()
 	return nil
 }
@@ -84,7 +85,7 @@ func (m *Model) cmdNew(name string) tea.Cmd {
 			return nil
 		}
 	}
-	m.prompt = nil
+	m.closePrompt(false)
 	if name != "" && name == m.current() {
 		return nil
 	}
@@ -95,13 +96,13 @@ func (m *Model) cmdNew(name string) tea.Cmd {
 func (m *Model) cmdSwitch(name string) tea.Cmd {
 	switch {
 	case name == "":
-		m.prompt = nil
+		m.closePrompt(false)
 		return m.openSessions()
 	case !m.exists(name):
 		m.prompt.notice = "No session named " + name + "."
 		return nil
 	}
-	m.prompt = nil
+	m.closePrompt(false)
 	if name == m.current() {
 		return nil
 	}
@@ -111,6 +112,7 @@ func (m *Model) cmdSwitch(name string) tea.Cmd {
 // cmdRename renames this session to name, or asks for the new name.
 func (m *Model) cmdRename(name string) tea.Cmd {
 	if name == "" {
+		m.closePrompt(false)
 		m.prompt = &prompting{mode: modeName, input: m.current()}
 		return nil
 	}
@@ -123,7 +125,7 @@ func (m *Model) renameTo(name string) tea.Cmd {
 		m.prompt.notice = "rename: " + command.Reason(err)
 		return nil
 	}
-	m.prompt = nil
+	m.closePrompt(false)
 	if cur := m.current(); cur != "" && name != cur {
 		m.send(&api.RenameSession{Session: cur, Name: name})
 	}
@@ -139,7 +141,7 @@ func (m *Model) cmdKill(name string) tea.Cmd {
 		m.prompt.notice = "No session named " + name + "."
 		return nil
 	}
-	m.prompt = nil
+	m.closePrompt(false)
 	if name != "" {
 		m.confirmKill(name)
 	}
@@ -149,8 +151,10 @@ func (m *Model) cmdKill(name string) tea.Cmd {
 // cmdTheme uses the named theme, or lists the themes to pick from.
 func (m *Model) cmdTheme(name string) tea.Cmd {
 	if name == "" {
+		m.closePrompt(false)
 		m.prompt = &prompting{mode: modeThemes}
-		m.prompt.sel = max(slices.IndexFunc(theme.Builtin(), func(t theme.Theme) bool { return t.Name == m.base.Name }), 0)
+		m.prompt.themePick = themepick.New(theme.Builtin(), m.base)
+		m.prompt.sel = m.prompt.themePick.Selected()
 		return nil
 	}
 	th, err := theme.Named(name)
@@ -158,19 +162,19 @@ func (m *Model) cmdTheme(name string) tea.Cmd {
 		m.prompt.notice = "No theme named " + name + ". Type theme alone to list them."
 		return nil
 	}
-	m.prompt = nil
+	m.closePrompt(false)
 	return useTheme(th.Name)
 }
 
 func useTheme(name string) tea.Cmd { return func() tea.Msg { return command.ThemeMsg{Name: name} } }
 
 func (m *Model) cmdHelp(string) tea.Cmd {
-	m.prompt = nil
+	m.closePrompt(false)
 	return m.openSessionHelp()
 }
 
 func (m *Model) cmdMenu(string) tea.Cmd {
-	m.prompt = nil
+	m.closePrompt(false)
 	m.openWindowMenu()
 	return nil
 }
