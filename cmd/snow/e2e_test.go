@@ -260,11 +260,29 @@ func waitBinaryExit(t *testing.T, p *term.Pane) {
 
 func binaryEnv(t *testing.T) []string {
 	t.Helper()
-	dir := t.TempDir()
+	dir, err := os.MkdirTemp("", "snow")
+	if err != nil {
+		t.Fatalf("make short runtime directory: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 	t.Setenv("HOME", dir)
 	t.Setenv("LOCALAPPDATA", dir)
 	return []string{"XDG_RUNTIME_DIR=" + dir, "HOME=" + dir, "LOCALAPPDATA=" + dir}
+}
+
+func TestBinaryEnvSocketPathFitsUnixLimit(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Unix domain sockets have a short path limit")
+	}
+	binaryEnv(t)
+	path, err := transport.DefaultPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(path) > 100 {
+		t.Fatalf("socket path has %d bytes, want at most 100: %q", len(path), path)
+	}
 }
 
 func waitTermText(t *testing.T, p *term.Pane, text string) {

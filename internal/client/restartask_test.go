@@ -87,6 +87,32 @@ func TestRestartAskCtrlCActsAsCancel(t *testing.T) {
 	}
 }
 
+func TestRestartAskHoldsPaste(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.2.0", "/src", theme.Default())
+	a.cols, a.rows = 80, 24
+	openSession(t, a, "work")
+	sent = nil
+	a.askRestart(versionMismatch())
+	a.Update(tea.PasteMsg{Content: "echo unexpected\n"})
+	if len(sent) != 0 {
+		t.Fatalf("paste sent %v while the restart question was open", sent)
+	}
+	if a.restartPopup == nil || a.result.Restart {
+		t.Fatalf("paste changed restart state: popup %v, result %+v", a.restartPopup != nil, a.result)
+	}
+}
+
+func TestRestartAskIgnoresRightClick(t *testing.T) {
+	a := newRestartAskApp()
+	a.askRestart(versionMismatch())
+	x, y := restartButtonPosition(t, a)
+	a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseRight})
+	if a.restartPopup == nil || a.result.Restart {
+		t.Fatalf("right-click changed restart state: popup %v, result %+v", a.restartPopup != nil, a.result)
+	}
+}
+
 func TestRestartAskProtocolMismatchNo(t *testing.T) {
 	result, first := runWithProtocolMismatch(t, "n")
 	var mismatch *api.VersionMismatchError
@@ -132,14 +158,20 @@ func versionMismatch() *api.VersionMismatchError {
 
 func clickRestart(t *testing.T, a *app) tea.Cmd {
 	t.Helper()
+	x, y := restartButtonPosition(t, a)
+	_, cmd := a.Update(tea.MouseClickMsg{X: x, Y: y, Button: tea.MouseLeft})
+	return cmd
+}
+
+func restartButtonPosition(t *testing.T, a *app) (int, int) {
+	t.Helper()
 	for y, row := range strings.Split(ansi.Strip(a.View().Content), "\n") {
 		if x := strings.Index(row, "[ Restart ]"); x >= 0 {
-			_, cmd := a.Update(tea.MouseClickMsg{X: x + 2, Y: y, Button: tea.MouseLeft})
-			return cmd
+			return x + 2, y
 		}
 	}
 	t.Fatalf("Restart button not found:\n%s", ansi.Strip(a.View().Content))
-	return nil
+	return 0, 0
 }
 
 func runWithProtocolMismatch(t *testing.T, answer string) (Result, api.Message) {

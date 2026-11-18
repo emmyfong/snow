@@ -231,8 +231,14 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, a.restartResult(confirm.No)
 			}
 			return a, a.restartResult(a.restartPopup.Key(msg.Key()))
-		case tea.MouseClickMsg:
-			return a, a.restartResult(a.restartPopup.Click(a.theme, a.cols, a.rows, msg.X, msg.Y))
+		case tea.PasteMsg:
+			return a, nil
+		case tea.MouseMsg:
+			click, ok := msg.(tea.MouseClickMsg)
+			if !ok || click.Button != tea.MouseLeft {
+				return a, nil
+			}
+			return a, a.restartResult(a.restartPopup.Click(a.theme, a.cols, a.rows, click.X, click.Y))
 		}
 	}
 	switch msg := msg.(type) {

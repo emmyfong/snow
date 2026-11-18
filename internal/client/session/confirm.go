@@ -29,14 +29,6 @@ func (m *Model) confirmClosePane() {
 		m.confirmCloseAgent(p)
 		return
 	}
-	what := strings.TrimSpace(p.Profile + " " + p.Folder)
-	if p.Kind == api.PaneTerminal {
-		m.confirm = &confirmation{
-			popup: confirm.New("Close terminal", terminalCloseText(p.Profile, p.Folder), "Close"),
-			msg:   &api.Command{Op: api.OpClose, Target: p.ID},
-		}
-		return
-	}
 	if p.Purpose == "sign-in" {
 		m.confirm = &confirmation{popup: confirm.New("Cancel sign-in", "Close this sign-in attempt? Snow will check the connection afterward.", "Cancel sign-in"),
 			msg: &api.Command{Op: api.OpClose, Target: p.ID}}
@@ -47,6 +39,14 @@ func (m *Model) confirmClosePane() {
 			msg: &api.Command{Op: api.OpClose, Target: p.ID}}
 		return
 	}
+	if p.Kind == api.PaneTerminal {
+		m.confirm = &confirmation{
+			popup: confirm.New("Close terminal", terminalCloseText(p.Profile, p.Folder), "Close"),
+			msg:   &api.Command{Op: api.OpClose, Target: p.ID},
+		}
+		return
+	}
+	what := strings.TrimSpace(p.Profile + " " + p.Folder)
 	question := "Close this pane?"
 	if what != "" {
 		question = fmt.Sprintf("Close this pane (%s)?", what)

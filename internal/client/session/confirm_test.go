@@ -96,6 +96,23 @@ func TestConfirmCloseTerminalWording(t *testing.T) {
 	}
 }
 
+func TestConfirmSignInTerminalKeepsSignInWording(t *testing.T) {
+	m, _ := pickerScreen(t, 80, 24)
+	p := m.focused()
+	p.Kind = api.PaneTerminal
+	p.Purpose = "sign-in"
+	m.confirmClosePane()
+	got := strings.Join(strings.Fields(ansi.Strip(content(m))), " ")
+	for _, want := range []string{"Cancel sign-in", "Close this sign-in attempt?", "the connection afterward."} {
+		if !strings.Contains(got, want) {
+			t.Errorf("sign-in close popup does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "Close terminal") {
+		t.Fatalf("sign-in close popup used terminal wording:\n%s", got)
+	}
+}
+
 func TestMiddleClickTabClosesWindowAfterConfirming(t *testing.T) {
 	m, r := threePaneScreen(t)
 	m.Update(tea.MouseClickMsg{X: 20, Y: 0, Button: tea.MouseMiddle}) // tab 2, "logs"
