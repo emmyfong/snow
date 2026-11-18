@@ -56,8 +56,9 @@ type Pane struct {
 	Kind    string `json:"kind,omitempty"`
 	Profile string `json:"profile"` // the shell profile's name
 	Folder  string `json:"folder,omitempty"`
-	// Conversation is the ID of a chat pane's conversation file, which holds
-	// its transcript. It is empty for a terminal.
+	// Conversation is the ID of the conversation file a chat pane shows, or
+	// that a side pane follows. It is empty for a terminal and for a side
+	// pane that follows none.
 	Conversation string `json:"conversation,omitempty"`
 	// Worktree and Branch are the git worktree Snow made for a terminal
 	// pane's agent, and its branch. Empty for other panes. A reader that

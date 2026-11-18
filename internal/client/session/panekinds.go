@@ -10,6 +10,7 @@ var ownKinds = map[string]func(m *Model, id int) ownPane{
 	api.PaneGit:    func(m *Model, id int) ownPane { return newGitPane(id, m.theme) },
 	api.PaneFiles:  func(m *Model, id int) ownPane { return newFilesPane(id, m.theme) },
 	api.PaneViewer: func(m *Model, id int) ownPane { return newViewerPane(id, m.theme) },
+	api.PaneUsage:  func(m *Model, id int) ownPane { return newUsagePane(id, m.theme) },
 }
 
 // newOwnPane returns the pane for kind, or nil for a terminal pane.

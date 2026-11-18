@@ -35,8 +35,12 @@ func (st *state) snapshot(sess *session) store.Snapshot {
 				sp.Kind, sp.Conversation = store.KindChat, p.chat.savedID()
 			case p.side != nil:
 				// A side pane opens anew from its kind, folder, and the
-				// profile it opened from.
+				// profile it opened from. One that follows a conversation
+				// keeps it, so a restore shows the same one.
 				sp.Kind, sp.Profile = p.sideKind, p.sideFrom
+				if c, ok := p.side.(conversationSide); ok {
+					sp.Conversation = c.Conversation()
+				}
 			default:
 				sp.Scrollback = lastLines(p, st.srv.savedLines())
 				sp.Worktree, sp.Branch = p.worktree, p.branch

@@ -1,0 +1,40 @@
+[1m Usage[m                                                                                                    [38;2;107;124;140mFix the parser[m
+[1m Total[m
+  [38;2;107;124;140mturns    [m 4 (1 unknown) (1 partial)
+  [38;2;107;124;140mtokens   [m in 12.3k  out 900
+  [38;2;107;124;140mcache    [m read 48k  write 2.1k
+  [38;2;107;124;140mcost     [m $0.42 API est. (session)
+  [38;2;107;124;140mallowance[m unavailable: this runtime reports no allowance
+
+[1m Models[m
+  claude-sonnet-4… in 12.3k  out 900
+
+[1m Turns, newest first[m
+[38;2;107;124;140m  #4   11-17 14:02  claude-sonnet-4… unknown, stopped[m
+  #3   11-17 13:58  claude-sonnet-4… in 4.2k  out 300
+  #2   11-17 13:40  claude-sonnet-4… in 5.1k  out 400  partial
+  #1   11-17 13:12  claude-sonnet-4… in 3k  out 200
+
+[1m Notes[m
+  [38;2;107;124;140mSubagent usage is not reported by this runtime.[m
+  [38;2;107;124;140m1 turn has no reported usage; totals are a lower bound.[m
+  [38;2;107;124;140m1 turn stopped before all usage was reported.[m
+  [38;2;107;124;140mCost is an API-equivalent session estimate, not a subscription bill.[m
+  [38;2;107;124;140mPer-model cost is unavailable: the runtime reports one session estimate.[m
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;127;184;230mr[m [38;2;107;124;140mrefresh[m
