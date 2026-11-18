@@ -115,6 +115,11 @@ func (m *Model) openNewWindow() tea.Cmd {
 		folder = p.Folder
 	}
 	pick := newsession.New(folder)
+	m.windowRuntimeSeq++
+	m.windowRuntimeRequest = "new-window-claude-" + strconv.FormatUint(m.windowRuntimeSeq, 10)
+	m.windowRuntimePending = true
+	m.newWindowRuntimes = nil
+	m.send(&api.RuntimeRequest{RequestID: m.windowRuntimeRequest, Agent: api.AgentClaude, Action: api.RuntimeList, Folder: folder})
 	o := &overlay{
 		popup: pick,
 		key:   pick.Key,
@@ -125,13 +130,18 @@ func (m *Model) openNewWindow() tea.Cmd {
 				return nil
 			}
 			choice := pick.Choice()
+			kind := api.PaneTerminal
+			if choice.Start == newsession.StartClaudeCode && choice.Connection != "" {
+				kind = api.PaneChat
+				m.pendingWindowRuntime = choice.Connection
+			}
 			if choice.Layout != "" {
 				m.newPreset = choice.Layout
-				if m.layout != nil {
-					m.winCount = len(m.layout.Windows)
-				}
 			}
-			args := map[string]string{api.ArgFolder: choice.Folder}
+			if m.layout != nil {
+				m.winCount = len(m.layout.Windows)
+			}
+			args := map[string]string{api.ArgFolder: choice.Folder, api.ArgKind: kind}
 			m.send(&api.Command{Op: api.OpNewWindow, Args: args})
 			return nil
 		},
@@ -140,11 +150,23 @@ func (m *Model) openNewWindow() tea.Cmd {
 }
 
 func (m *Model) applyPendingWindowLayout(layout *api.Layout) {
-	if m.newPreset == "" || len(layout.Windows) <= m.winCount {
+	if len(layout.Windows) <= m.winCount {
 		return
 	}
 	w := m.shown()
 	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	if m.pendingWindowRuntime != "" {
+		for _, pane := range w.Panes {
+			if pane.Kind == api.PaneChat {
+				m.pendingRuntime, m.pendingRuntimePane = m.pendingWindowRuntime, pane.ID
+				m.pendingWindowRuntime = ""
+				break
+			}
+		}
+	}
+	if m.newPreset == "" {
 		return
 	}
 	name := m.newPreset

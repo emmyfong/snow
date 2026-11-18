@@ -47,7 +47,13 @@ func (s *Server) runtimeFactsForFolder(folder, agent string) (runtimeFacts, erro
 	if folder == "" || agent == "" {
 		return runtimeFacts{}, errors.New("a folder and runtime are required to list connections")
 	}
-	return runtimeFacts{folder: folder, snapshot: api.ChatSnapshot{Agent: agent}}, nil
+	var host shell.Profile
+	if s.opts.Chat != nil && s.opts.Chat.Shell != nil {
+		host = *s.opts.Chat.Shell
+	} else if s.launch.shell != nil {
+		host, _ = s.launch.shell("")
+	}
+	return runtimeFacts{folder: folder, snapshot: api.ChatSnapshot{Agent: agent}, host: host}, nil
 }
 
 func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
@@ -56,6 +62,10 @@ func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
 		return
 	}
 	if s.opts.Chat == nil || s.opts.Chat.Runtime == nil {
+		if request.Pane == 0 && request.Action == api.RuntimeList {
+			s.reply(c, &api.RuntimeConnections{Pane: 0, Agent: request.Agent, RequestID: request.RequestID, Connections: []api.RuntimeConnection{}})
+			return
+		}
 		s.refuse(c, api.CodeCommandFailed, errors.New("runtime connections are not configured"))
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -72,6 +73,39 @@ func TestNewSessionTitle(t *testing.T) {
 	box, _, _ := m.View(theme.Default(), 80, 24)
 	if !strings.Contains(ansi.Strip(box), "New session") {
 		t.Fatalf("dialog title missing:\n%s", ansi.Strip(box))
+	}
+}
+
+func TestNewSessionNeverRendersPastBottomEdge(t *testing.T) {
+	for _, runtimes := range [][]api.RuntimeConnection{
+		nil,
+		{{ID: "ready", Status: api.RuntimeStatusSignedIn, Ready: true}},
+	} {
+		m := New("/work")
+		m.SetRuntimes(runtimes)
+		var height int
+		for rows := 14; rows < 24; rows++ {
+			box, _, _ := m.View(theme.Default(), 80, rows)
+			if box != "" {
+				_, height = ui.Size(box)
+				if height > rows {
+					t.Fatalf("dialog height %d exceeds terminal height %d", height, rows)
+				}
+				if rows > 14 {
+					short, _, _ := m.View(theme.Default(), 80, rows-1)
+					if short != "" {
+						_, shortHeight := ui.Size(short)
+						if shortHeight > rows-1 {
+							t.Fatalf("dialog height %d exceeds terminal height %d", shortHeight, rows-1)
+						}
+					}
+				}
+				break
+			}
+		}
+		if height == 0 {
+			t.Fatal("dialog did not fit at any tested height")
+		}
 	}
 }
 

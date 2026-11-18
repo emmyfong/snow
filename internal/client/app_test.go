@@ -311,6 +311,14 @@ func TestHomeQuitEndsWithoutASession(t *testing.T) {
 	}
 }
 
+func TestOldRuntimeListRefusalIsNotTreatedAsAttachFailure(t *testing.T) {
+	a := &app{opening: true}
+	refusal := &api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()}
+	if a.refusedOpen(refusal) {
+		t.Fatal("old-server runtime-list refusal was treated as an attach failure")
+	}
+}
+
 // openSession takes a home app into session name, as Enter on the home
 // page does.
 func openSession(t *testing.T, a *app, name string) {

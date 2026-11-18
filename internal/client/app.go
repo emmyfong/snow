@@ -213,6 +213,11 @@ func (a *app) refusedOpen(e *api.Error) bool {
 	if !a.opening {
 		return false
 	}
+	// A server predating folder-based runtime lists refuses the home-page
+	// readiness probe with this error while Attach may still be succeeding.
+	if e.Code == api.CodeBadCommand && e.Message == api.ErrInvalidRuntime.Error() {
+		return false
+	}
 	switch e.Code {
 	case api.CodeNoSession, api.CodeAttachFailed, api.CodeBadCommand:
 		return true
@@ -329,6 +334,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			connection = msg.Connection
 		}
 		a.open(msg.Session, msg.Create, msg.Dir, msg.Layout, 0, connection)
+		if msg.Create && msg.Runtime == newsession.StartShell {
+			if s, ok := a.screen.(*session.Model); ok {
+				s.SetPendingShell()
+			}
+		}
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)

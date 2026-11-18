@@ -25,9 +25,9 @@ func runtimeOptions(t *testing.T, mode string) *RuntimeOptions {
 		t.Fatal(err)
 	}
 	policy := t.TempDir()
-	return &RuntimeOptions{Root: t.TempDir(), Program: func(shell.Profile) (shell.Profile, error) {
+	return &RuntimeOptions{Root: t.TempDir(), Program: func(host shell.Profile) (shell.Profile, error) {
 		return shell.Profile{Kind: shell.KindClaude, Path: executable,
-			Args: []string{"-test.run=^TestClaudeRuntimeFixture$", "--", "fixture-mode=" + mode}}, nil
+			Distro: host.Distro, Args: []string{"-test.run=^TestClaudeRuntimeFixture$", "--", "fixture-mode=" + mode}}, nil
 	}, PolicyDir: func(string) string { return policy }}
 }
 
@@ -212,18 +212,22 @@ func TestRuntimeConnectionsWithoutPane(t *testing.T) {
 	options.Chat.Runtime = runtimeOptions(t, "conversation")
 	server := New(options)
 	t.Cleanup(server.Close)
+	server.launch.shell = func(string) (shell.Profile, bool) {
+		return shell.Profile{Name: "Ubuntu", Kind: shell.KindWSL, Distro: "Ubuntu"}, true
+	}
 	client := connect(t, server, 100, 30)
-	connection := seedConnection(t, server.opts.Chat.Runtime.Root, "subscription")
-	server.call(func(st *state) {
-		st.runtimeReady = map[string]bool{connection: true}
-	})
+	connection, err := clauderuntime.CreateConnection(server.opts.Chat.Runtime.Root, "Ubuntu", clauderuntime.Subscription)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedConnection(t, server.opts.Chat.Runtime.Root, "subscription")
 	client.Send(&api.RuntimeRequest{RequestID: "new-session", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: t.TempDir()})
 	response := runtimeReply(t, client)
 	if response.Pane != 0 || response.RequestID != "new-session" || response.Agent != api.AgentClaude {
 		t.Fatalf("runtime list response %+v, want a home request with its request ID and Claude agent", response)
 	}
-	if len(response.Connections) != 1 || response.Connections[0].ID != connection || !response.Connections[0].Ready || response.Connections[0].Status != api.RuntimeStatusSignedIn {
-		t.Fatalf("runtime list connections %+v, want the ready connection %q", response.Connections, connection)
+	if len(response.Connections) != 1 || response.Connections[0].ID != connection.ID || response.Connections[0].Environment != "WSL Ubuntu" {
+		t.Fatalf("runtime list connections %+v, want the WSL connection %q and no native connection", response.Connections, connection.ID)
 	}
 	client.Send(&api.Attach{Session: "chat", Create: true})
 	layout := nextLayout(t, client, func(*api.Layout) bool { return true })
@@ -233,6 +237,17 @@ func TestRuntimeConnectionsWithoutPane(t *testing.T) {
 	withPane := runtimeReply(t, client)
 	if len(withPane.Connections) != len(response.Connections) || withPane.Connections[0].ID != response.Connections[0].ID {
 		t.Fatalf("pane list %+v differs from folder list %+v", withPane.Connections, response.Connections)
+	}
+}
+
+func TestRuntimeListWithoutChatReturnsEmptyReadiness(t *testing.T) {
+	server := New(Options{Version: "test"})
+	t.Cleanup(server.Close)
+	client := connect(t, server, 80, 24)
+	client.Send(&api.RuntimeRequest{RequestID: "new-session", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: t.TempDir()})
+	response := runtimeReply(t, client)
+	if response.Pane != 0 || response.Agent != api.AgentClaude || response.RequestID != "new-session" || len(response.Connections) != 0 {
+		t.Fatalf("readiness response %+v, want an empty Claude list for the home request", response)
 	}
 }
 

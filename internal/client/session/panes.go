@@ -55,12 +55,11 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
-		if m.pendingRuntime != "" {
+		if m.pendingRuntime != "" && (m.pendingRuntimePane == 0 || m.pendingRuntimePane == msg.Pane) {
 			connection := m.pendingRuntime
-			m.pendingRuntime = ""
-			m.firstRun[msg.Pane] = true
-			m.send(&api.RuntimeRequest{Pane: msg.Pane, Agent: msg.Agent, Action: api.RuntimeUse, Connection: connection})
-		} else {
+			m.pendingRuntime, m.pendingRuntimePane = "", 0
+			m.startRuntimeBinding(msg.Pane, msg.Agent, connection)
+		} else if !m.pendingShell && m.shellStart == 0 {
 			pick = m.maybeStartChat(msg.Pane)
 		}
 		m.sendListRequest(msg.Pane)
@@ -81,6 +80,62 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return tea.Batch(pick, m.ownTick())
+}
+
+func (m *Model) applyStartupShellLayout() {
+	if !m.pendingShell && m.shellStart == 0 {
+		return
+	}
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	switch m.shellStart {
+	case 0:
+		pane := w.Panes[0]
+		if pane.Kind != api.PaneChat {
+			m.pendingShell = false
+			m.flushEarly()
+			return
+		}
+		m.shellChat = pane.ID
+		m.shellStart = 1
+		m.send(&api.Command{Op: api.OpSplit, Target: pane.ID, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgDir: api.DirRight}})
+	case 1:
+		for _, pane := range w.Panes {
+			if pane.ID != m.shellChat && pane.Kind == api.PaneTerminal {
+				m.shellTerminal = pane.ID
+				m.shellStart = 2
+				m.send(&api.Command{Op: api.OpClose, Target: m.shellChat})
+				return
+			}
+		}
+	case 2:
+		chatPresent, terminalPresent := false, false
+		for _, pane := range w.Panes {
+			chatPresent = chatPresent || pane.ID == m.shellChat
+			terminalPresent = terminalPresent || pane.ID == m.shellTerminal && pane.Kind == api.PaneTerminal
+		}
+		if !chatPresent && terminalPresent {
+			m.pendingShell, m.shellStart = false, 0
+			if m.preset != "" {
+				m.send(&api.Command{Op: api.OpLayout, Target: m.shellTerminal, Args: map[string]string{api.ArgName: m.preset}})
+				m.preset = ""
+			}
+			m.flushEarly()
+		}
+	}
+}
+
+func (m *Model) flushEarly() {
+	if m.focused() == nil {
+		return
+	}
+	early := m.early
+	m.early = nil
+	for _, input := range early {
+		m.input(input)
+	}
 }
 
 func (m *Model) feed(kind string, id int, msg api.Message) {

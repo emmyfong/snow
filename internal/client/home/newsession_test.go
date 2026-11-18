@@ -7,6 +7,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -28,7 +29,7 @@ func TestOpenNewSessionFromEnter(t *testing.T) {
 	typeText(m, "work")
 	if cmd := m.Update(press(tea.KeyEnter)); cmd == nil {
 		t.Fatal("dialog Enter returned no OpenMsg command")
-	} else if got, ok := cmd().(OpenMsg); !ok || got != (OpenMsg{Create: true, Dir: "/work/apiwork"}) {
+	} else if got, ok := cmd().(OpenMsg); !ok || got != (OpenMsg{Create: true, Dir: "/work/apiwork", Runtime: newsession.StartShell}) {
 		t.Fatalf("dialog Enter produced %#v, want numbered session in edited folder", got)
 	}
 }
@@ -45,14 +46,40 @@ func TestNewSessionEscCloses(t *testing.T) {
 	}
 }
 
+func TestRuntimeReadinessRefusalDoesNotChangeHome(t *testing.T) {
+	m := screen(80, 24)
+	m.SetFolder("/work")
+	before := m.View().Content
+	m.openNewSession()
+	m.Update(&api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()})
+	if m.dialog == nil || m.notice != "" {
+		t.Fatalf("readiness refusal changed dialog=%v notice=%q", m.dialog != nil, m.notice)
+	}
+	m.Update(press(tea.KeyEscape))
+	if got := m.View().Content; got != before {
+		t.Fatal("closing the dialog after a readiness refusal changed the home page")
+	}
+}
+
 func TestHomeReceivesClaudeReadiness(t *testing.T) {
 	m := screen(80, 24)
 	m.SetFolder("/work")
-	m.openNewSession()
-	m.Update(&api.RuntimeConnections{Pane: 0, Agent: api.AgentClaude, Connections: []api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusSignedIn, Ready: true}}})
+	request := m.openNewSession()().(SendMsg).Msg.(*api.RuntimeRequest)
+	m.Update(&api.RuntimeConnections{Pane: 0, Agent: api.AgentClaude, RequestID: request.RequestID,
+		Connections: []api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusSignedIn, Ready: true}}})
 	box, _, _ := m.dialog.View(m.theme, 80, 24)
 	if !strings.Contains(ansi.Strip(box), "Claude Code") {
 		t.Fatalf("home did not pass ready connection to the dialog:\n%s", ansi.Strip(box))
+	}
+}
+
+func TestHomeRechecksClaudeReadinessForEachDialog(t *testing.T) {
+	m := screen(80, 24)
+	m.runtimes = []api.RuntimeConnection{{ID: "previous", Status: api.RuntimeStatusSignedIn, Ready: true}}
+	m.openNewSession()
+	box, _, _ := m.dialog.View(m.theme, 80, 24)
+	if strings.Contains(ansi.Strip(box), "Claude Code") {
+		t.Fatal("new dialog showed stale Claude readiness before its current check")
 	}
 }
 
@@ -111,7 +138,7 @@ func TestNewSessionClickAcceptsChoice(t *testing.T) {
 	}
 	if cmd := m.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft}); cmd == nil {
 		t.Fatal("clicking the Enter hint returned no OpenMsg")
-	} else if got, ok := cmd().(OpenMsg); !ok || got != (OpenMsg{Create: true, Dir: "/work"}) {
+	} else if got, ok := cmd().(OpenMsg); !ok || got != (OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartShell}) {
 		t.Fatalf("click produced %#v, want numbered session in /work", got)
 	}
 }

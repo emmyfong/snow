@@ -29,7 +29,8 @@ const (
 )
 
 const (
-	startShell = "shell"
+	// StartShell selects a terminal pane for the new session.
+	StartShell = "shell"
 	// StartClaudeCode selects a ready Claude Code connection for the new session.
 	StartClaudeCode = "claude-code"
 )
@@ -202,12 +203,15 @@ func (m *Model) View(th theme.Theme, cols, rows int) (box string, x, y int) {
 	}
 	box = ui.Panel(th, ui.PanelOptions{Title: "New session", Body: strings.Join(body, "\n"), Width: w})
 	boxW, boxH := ui.Size(box)
+	if boxW > cols || boxH > rows {
+		return "", 0, 0
+	}
 	return box, max((cols-boxW)/2, 0), max((rows-boxH)/2, 0)
 }
 
 // Choice returns the folder and selected layout.
 func (m *Model) Choice() Choice {
-	choice := Choice{Folder: m.folder, Start: startShell}
+	choice := Choice{Folder: m.folder, Start: StartShell}
 	if m.start == 1 && len(m.startItems()) > 1 {
 		choice.Start = StartClaudeCode
 		for _, connection := range m.runtimes {

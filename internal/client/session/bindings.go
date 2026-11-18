@@ -51,6 +51,8 @@ func (m *Model) dispatch(k tea.Key) tea.Cmd {
 		return nil
 	case m.keys.IsPrefix(k):
 		return m.startPrefix(k)
+	case m.pendingShell || m.shellStart != 0 || m.pendingRuntime != "" || m.runtimeBinding != "" || m.runtimeBindFailed:
+		return nil
 	case m.focusedOwn() != nil:
 		return m.ownKey(k)
 	}
