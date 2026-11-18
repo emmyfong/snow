@@ -13,6 +13,7 @@ import (
 
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
@@ -152,6 +153,22 @@ func TestHomeOpensASession(t *testing.T) {
 	if _, ok := a.screen.(*session.Model); !ok {
 		t.Fatalf("screen is %T after opening, want the session screen", a.screen)
 	}
+}
+
+func TestHomeStartsClaudeOnFirstChat(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartClaudeCode, Connection: "ready"})
+	a.Update(&api.ChatSnapshot{Pane: 7, Agent: "generation", State: api.ChatStateIdle})
+	for _, message := range sent {
+		if request, ok := message.(*api.RuntimeRequest); ok {
+			if request.Pane != 7 || request.Agent != "generation" || request.Action != api.RuntimeUse || request.Connection != "ready" {
+				t.Fatalf("runtime request %+v, want the first chat bound to ready", request)
+			}
+			return
+		}
+	}
+	t.Fatal("opening Claude Code did not bind the first chat")
 }
 
 func TestOpenCarriesFolder(t *testing.T) {

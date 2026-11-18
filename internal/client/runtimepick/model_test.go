@@ -22,6 +22,27 @@ var (
 		Reason: "Your organization requires Claude subscription sign-in, and Claude Code refuses API keys."}
 )
 
+func TestReady(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		c    api.RuntimeConnection
+		want bool
+	}{
+		{"signed in and ready", api.RuntimeConnection{Status: api.RuntimeStatusSignedIn, Ready: true}, true},
+		{"key saved and ready", api.RuntimeConnection{Status: api.RuntimeStatusKeySaved, Ready: true}, true},
+		{"unknown", api.RuntimeConnection{Status: api.RuntimeStatusUnknown, Ready: true}, false},
+		{"signed out", api.RuntimeConnection{Status: api.RuntimeStatusSignedOut, Ready: true}, false},
+		{"blocked", api.RuntimeConnection{Status: api.RuntimeStatusBlocked, Ready: true}, false},
+		{"not ready", api.RuntimeConnection{Status: api.RuntimeStatusSignedIn}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := Ready(tc.c); got != tc.want {
+				t.Fatalf("Ready(%+v) = %t, want %t", tc.c, got, tc.want)
+			}
+		})
+	}
+}
+
 func picked(connections ...api.RuntimeConnection) *Model {
 	m := New()
 	m.SetList(&api.RuntimeConnections{Connections: connections})

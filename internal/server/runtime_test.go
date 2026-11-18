@@ -207,6 +207,35 @@ func useTestRuntime(t *testing.T, s *Server, c *apitest.Client, pane int) *api.C
 	return c.WaitChat(pane, func(s *api.ChatSnapshot) bool { return s.Runtime != nil && s.Agent != before.Agent })
 }
 
+func TestRuntimeConnectionsWithoutPane(t *testing.T) {
+	options, _, _ := chatOptions(t)
+	options.Chat.Runtime = runtimeOptions(t, "conversation")
+	server := New(options)
+	t.Cleanup(server.Close)
+	client := connect(t, server, 100, 30)
+	connection := seedConnection(t, server.opts.Chat.Runtime.Root, "subscription")
+	server.call(func(st *state) {
+		st.runtimeReady = map[string]bool{connection: true}
+	})
+	client.Send(&api.RuntimeRequest{RequestID: "new-session", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: t.TempDir()})
+	response := runtimeReply(t, client)
+	if response.Pane != 0 || response.RequestID != "new-session" || response.Agent != api.AgentClaude {
+		t.Fatalf("runtime list response %+v, want a home request with its request ID and Claude agent", response)
+	}
+	if len(response.Connections) != 1 || response.Connections[0].ID != connection || !response.Connections[0].Ready || response.Connections[0].Status != api.RuntimeStatusSignedIn {
+		t.Fatalf("runtime list connections %+v, want the ready connection %q", response.Connections, connection)
+	}
+	client.Send(&api.Attach{Session: "chat", Create: true})
+	layout := nextLayout(t, client, func(*api.Layout) bool { return true })
+	pane := chatIn(layout)
+	snapshot := client.WaitChat(pane, func(snapshot *api.ChatSnapshot) bool { return snapshot.Agent != "" })
+	client.Send(&api.RuntimeRequest{Pane: pane, Agent: snapshot.Agent, Action: api.RuntimeList})
+	withPane := runtimeReply(t, client)
+	if len(withPane.Connections) != len(response.Connections) || withPane.Connections[0].ID != response.Connections[0].ID {
+		t.Fatalf("pane list %+v differs from folder list %+v", withPane.Connections, response.Connections)
+	}
+}
+
 func TestRuntimeChatRoundTrip(t *testing.T) {
 	options, provider, _ := chatOptions(t)
 	options.Chat.Runtime = runtimeOptions(t, "conversation")

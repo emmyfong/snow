@@ -24,10 +24,12 @@ import (
 // OpenMsg asks the client to attach to Session, creating it when Create is
 // set. An empty Session with Create starts a numbered session.
 type OpenMsg struct {
-	Session string
-	Create  bool
-	Dir     string
-	Layout  string
+	Session    string
+	Create     bool
+	Dir        string
+	Layout     string
+	Runtime    string
+	Connection string
 }
 
 // QuitMsg asks the client to leave Snow.
@@ -54,6 +56,7 @@ type Model struct {
 	naming     *naming // the new name /rename asks for, when open
 	confirm    *confirm.Model
 	dialog     *newsession.Model
+	runtimes   []api.RuntimeConnection
 	killing    string // the session the open popup would end
 	picking    bool   // the theme list is open
 	themeSel   int    // index into theme.Builtin
@@ -98,6 +101,13 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		// The new list may be in another order: keep the highlight on the
 		// same session, or drop it when that session is gone.
 		m.selected = slices.IndexFunc(m.shown(), func(s api.SessionInfo) bool { return s.Name == chosen })
+	case *api.RuntimeConnections:
+		if msg.Pane == 0 && msg.Agent == api.AgentClaude {
+			m.runtimes = append([]api.RuntimeConnection(nil), msg.Connections...)
+			if m.dialog != nil {
+				m.dialog.SetRuntimes(m.runtimes)
+			}
+		}
 	case *api.Error:
 		// A refused rename or kill, or a late login or logout refusal; the
 		// server says why.
@@ -217,12 +227,15 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 
 func (m *Model) openNewSession() tea.Cmd {
 	dialog := newsession.New(m.folder)
+	dialog.SetRuntimes(m.runtimes)
 	if box, _, _ := dialog.View(m.theme, m.cols, m.rows); box == "" {
 		m.notice = "Window too small for the new-session dialog"
 		return nil
 	}
 	m.dialog = dialog
-	return nil
+	return func() tea.Msg {
+		return SendMsg{Msg: &api.RuntimeRequest{Agent: api.AgentClaude, Action: api.RuntimeList, Folder: m.folder}}
+	}
 }
 
 func (m *Model) dialogResult(result picker.Result) tea.Cmd {
@@ -230,7 +243,11 @@ func (m *Model) dialogResult(result picker.Result) tea.Cmd {
 	case picker.Accepted:
 		choice := m.dialog.Choice()
 		m.dialog = nil
-		return openCmd(OpenMsg{Create: true, Dir: choice.Folder, Layout: choice.Layout})
+		runtime := ""
+		if choice.Start == newsession.StartClaudeCode {
+			runtime = choice.Start
+		}
+		return openCmd(OpenMsg{Create: true, Dir: choice.Folder, Layout: choice.Layout, Runtime: runtime, Connection: choice.Connection})
 	case picker.Cancelled:
 		m.dialog = nil
 	}

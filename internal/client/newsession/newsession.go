@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
 	"github.com/emmyfong/snow/internal/client/picker"
+	"github.com/emmyfong/snow/internal/client/runtimepick"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
@@ -27,6 +28,12 @@ const (
 	hintsRow       = 12
 )
 
+const (
+	startShell = "shell"
+	// StartClaudeCode selects a ready Claude Code connection for the new session.
+	StartClaudeCode = "claude-code"
+)
+
 type field int
 
 const (
@@ -36,8 +43,6 @@ const (
 )
 
 var hints = []ui.Hint{{Key: "Tab", Desc: "next row"}, {Key: "Enter", Desc: "start"}, {Key: "Esc", Desc: "cancel"}}
-
-var startRows = []ui.ListItem{{Cols: []string{"Plain shell"}}}
 
 var layoutRows = func() []ui.ListItem {
 	rows := []ui.ListItem{{Cols: []string{"No layout"}}}
@@ -50,20 +55,42 @@ var layoutRows = func() []ui.ListItem {
 // Choice is the folder and layout selected for the new session. An empty
 // layout means no preset.
 type Choice struct {
-	Folder string
-	Layout string
+	Folder     string
+	Start      string
+	Connection string
+	Layout     string
 }
 
 // Model is one open new-session dialog.
 type Model struct {
-	folder string
-	start  int
-	layout int
-	focus  field
+	folder   string
+	start    int
+	layout   int
+	focus    field
+	runtimes []api.RuntimeConnection
 }
 
 // New opens the dialog with folder prefilled.
 func New(folder string) *Model { return &Model{folder: folder} }
+
+// SetRuntimes replaces the connections used to decide whether Claude Code
+// can be offered in this dialog.
+func (m *Model) SetRuntimes(list []api.RuntimeConnection) {
+	m.runtimes = append([]api.RuntimeConnection(nil), list...)
+	if m.start >= len(m.startItems()) {
+		m.start = 0
+	}
+}
+
+func (m *Model) startItems() []ui.ListItem {
+	items := []ui.ListItem{{Cols: []string{"Plain shell"}}}
+	for _, connection := range m.runtimes {
+		if runtimepick.Ready(connection) {
+			return append(items, ui.ListItem{Cols: []string{"Claude Code"}})
+		}
+	}
+	return items
+}
 
 // Key handles a key press in the dialog.
 func (m *Model) Key(k tea.Key) picker.Result {
@@ -85,7 +112,7 @@ func (m *Model) Key(k tea.Key) picker.Result {
 		}
 		switch m.focus {
 		case startField:
-			m.start = picker.Move(m.start, delta, len(startRows))
+			m.start = picker.Move(m.start, delta, len(m.startItems()))
 		case layoutField:
 			m.layout = picker.Move(m.layout, delta, len(layoutRows))
 		}
@@ -123,13 +150,13 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) picker.Result {
 		m.focus = folderField
 	case row == startLabelRow:
 		m.focus = startField
-	case row == startChoiceRow:
-		m.focus, m.start = startField, 0
-	case row == layoutLabelRow:
+	case row >= startChoiceRow && row < startChoiceRow+len(m.startItems()):
+		m.focus, m.start = startField, row-startChoiceRow
+	case row == m.layoutLabelRow():
 		m.focus = layoutField
-	case row >= layoutFirstRow && row < layoutFirstRow+len(layoutRows):
-		m.focus, m.layout = layoutField, row-layoutFirstRow
-	case row == hintsRow:
+	case row >= m.layoutFirstRow() && row < m.layoutFirstRow()+len(layoutRows):
+		m.focus, m.layout = layoutField, row-m.layoutFirstRow()
+	case row == m.hintsRow():
 		contentX := x - left - 1
 		for _, span := range ui.HintSpans(hints, w-2) {
 			if contentX < span.X || contentX >= span.X+span.W {
@@ -148,6 +175,12 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) picker.Result {
 	return picker.Open
 }
 
+func (m *Model) layoutFirstRow() int { return layoutFirstRow + len(m.startItems()) - 1 }
+
+func (m *Model) layoutLabelRow() int { return layoutLabelRow + len(m.startItems()) - 1 }
+
+func (m *Model) hintsRow() int { return hintsRow + len(m.startItems()) - 1 }
+
 // View draws the dialog centered on a screen of cols by rows cells.
 func (m *Model) View(th theme.Theme, cols, rows int) (box string, x, y int) {
 	w := min(maxDialogWidth, cols-4)
@@ -160,7 +193,7 @@ func (m *Model) View(th theme.Theme, cols, rows int) (box string, x, y int) {
 		ui.Input(th, ui.InputOptions{Value: m.folder, Width: inner, Focused: m.focus == folderField}),
 		"",
 		section(th, "Start with", m.focus == startField),
-		ui.List(th, ui.ListOptions{Items: startRows, Selected: m.start, Width: inner}),
+		ui.List(th, ui.ListOptions{Items: m.startItems(), Selected: m.start, Width: inner}),
 		"",
 		section(th, "Layout", m.focus == layoutField),
 		ui.List(th, ui.ListOptions{Items: layoutRows, Selected: m.layout, Width: inner}),
@@ -174,7 +207,16 @@ func (m *Model) View(th theme.Theme, cols, rows int) (box string, x, y int) {
 
 // Choice returns the folder and selected layout.
 func (m *Model) Choice() Choice {
-	choice := Choice{Folder: m.folder}
+	choice := Choice{Folder: m.folder, Start: startShell}
+	if m.start == 1 && len(m.startItems()) > 1 {
+		choice.Start = StartClaudeCode
+		for _, connection := range m.runtimes {
+			if runtimepick.Ready(connection) {
+				choice.Connection = connection.ID
+				break
+			}
+		}
+	}
 	if m.layout > 0 && m.layout <= len(api.LayoutPresets) {
 		choice.Layout = api.LayoutPresets[m.layout-1].Name
 	}

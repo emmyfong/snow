@@ -67,8 +67,8 @@ func TestEnterAttachesOrCreates(t *testing.T) {
 		})
 	}
 	m := screen(80, 24, session("api", time.Minute, 1))
-	if cmd := m.Update(press(tea.KeyEnter)); cmd != nil || m.dialog == nil {
-		t.Fatalf("empty Enter: dialog %v, cmd %v; want dialog open and no command", m.dialog != nil, cmd)
+	if cmd := m.Update(press(tea.KeyEnter)); cmd == nil || m.dialog == nil {
+		t.Fatalf("empty Enter: dialog %v, cmd %v; want dialog open and runtime request", m.dialog != nil, cmd)
 	}
 }
 

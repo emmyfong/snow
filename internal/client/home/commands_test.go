@@ -90,8 +90,8 @@ func TestSlashCommands(t *testing.T) {
 			typeText(m, tt.typed)
 			got := enter(m)
 			if tt.dialog {
-				if got != nil || m.dialog == nil {
-					t.Fatalf("Enter on %q: dialog %v, message %#v; want dialog and no message", tt.typed, m.dialog != nil, got)
+				if _, ok := got.(SendMsg); !ok || m.dialog == nil {
+					t.Fatalf("Enter on %q: dialog %v, message %#v; want dialog and runtime request", tt.typed, m.dialog != nil, got)
 				}
 				return
 			}

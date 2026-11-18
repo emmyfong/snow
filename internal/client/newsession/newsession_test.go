@@ -103,6 +103,54 @@ func TestNewSessionLayoutRows(t *testing.T) {
 	}
 }
 
+func TestStartWithShowsClaudeWhenReady(t *testing.T) {
+	m := New("/work")
+	m.SetRuntimes([]api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusSignedIn, Ready: true}})
+	box, _, _ := m.View(theme.Default(), 80, 24)
+	if got := ansi.Strip(box); !strings.Contains(got, "Claude Code") {
+		t.Fatalf("ready Claude Code row missing:\n%s", got)
+	}
+	m.Key(tea.Key{Code: tea.KeyTab})
+	m.Key(tea.Key{Code: tea.KeyDown})
+	if got := m.Choice(); got.Start != StartClaudeCode || got.Connection != "conn" {
+		t.Fatalf("Claude Code choice = %+v", got)
+	}
+}
+
+func TestStartWithHidesClaudeWhenNotReady(t *testing.T) {
+	for _, list := range [][]api.RuntimeConnection{
+		nil,
+		{{ID: "conn", Status: api.RuntimeStatusUnknown, Ready: true}},
+	} {
+		m := New("/work")
+		m.SetRuntimes(list)
+		box, _, _ := m.View(theme.Default(), 80, 24)
+		if got := ansi.Strip(box); strings.Contains(got, "Claude Code") {
+			t.Fatalf("unready Claude Code row shown:\n%s", got)
+		}
+	}
+}
+
+func TestStartWithOnlyClaude(t *testing.T) {
+	m := New("/work")
+	m.SetRuntimes([]api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusKeySaved, Ready: true}})
+	box, _, _ := m.View(theme.Default(), 80, 24)
+	got := ansi.Strip(box)
+	if strings.Contains(got, "Codex") || strings.Contains(got, "OpenCode") {
+		t.Fatalf("unsupported runtime shown:\n%s", got)
+	}
+}
+
+func TestNewSessionClaudeGolden80x24(t *testing.T)  { newSessionClaudeGolden(t, 80, 24) }
+func TestNewSessionClaudeGolden120x40(t *testing.T) { newSessionClaudeGolden(t, 120, 40) }
+
+func newSessionClaudeGolden(t *testing.T, cols, rows int) {
+	m := New("/work/api")
+	m.SetRuntimes([]api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusSignedIn, Ready: true}})
+	box, _, _ := m.View(theme.Default(), cols, rows)
+	golden.RequireEqual(t, box)
+}
+
 func TestNewSessionGolden80x24(t *testing.T)  { newSessionGolden(t, 80, 24) }
 func TestNewSessionGolden120x40(t *testing.T) { newSessionGolden(t, 120, 40) }
 

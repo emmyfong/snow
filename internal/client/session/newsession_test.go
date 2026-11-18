@@ -69,6 +69,24 @@ func TestNewSessionWindowEscape(t *testing.T) {
 	}
 }
 
+func TestNewSessionClaudeOnePane(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	m.SetPendingRuntime("ready-connection")
+	m.Update(&api.ChatSnapshot{Pane: 99, Agent: "chat-generation", State: api.ChatStateIdle})
+	var request *api.RuntimeRequest
+	for _, message := range r.sent {
+		if sent, ok := message.(*api.RuntimeRequest); ok {
+			request = sent
+		}
+		if command, ok := message.(*api.Command); ok && (command.Op == api.OpSplit || command.Op == api.OpClose) {
+			t.Fatalf("runtime startup changed panes with %+v", command)
+		}
+	}
+	if request == nil || request.Pane != 99 || request.Agent != "chat-generation" || request.Action != api.RuntimeUse || request.Connection != "ready-connection" {
+		t.Fatalf("runtime request %+v, want to bind the first chat to the selected connection", request)
+	}
+}
+
 func TestNewSessionFromWindowBarGolden80x24(t *testing.T)  { newSessionFromWindowBarGolden(t, 80, 24) }
 func TestNewSessionFromWindowBarGolden120x40(t *testing.T) { newSessionFromWindowBarGolden(t, 120, 40) }
 

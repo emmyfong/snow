@@ -55,7 +55,14 @@ func (m *Model) ownMsg(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.ChatSnapshot:
 		m.feed(api.PaneChat, msg.Pane, msg)
-		pick = m.maybeStartChat(msg.Pane)
+		if m.pendingRuntime != "" {
+			connection := m.pendingRuntime
+			m.pendingRuntime = ""
+			m.firstRun[msg.Pane] = true
+			m.send(&api.RuntimeRequest{Pane: msg.Pane, Agent: msg.Agent, Action: api.RuntimeUse, Connection: connection})
+		} else {
+			pick = m.maybeStartChat(msg.Pane)
+		}
 		m.sendListRequest(msg.Pane)
 		m.sendFileRequest(msg.Pane)
 	case *api.ChatEvent:

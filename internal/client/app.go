@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
@@ -162,10 +163,13 @@ func (a *app) attach(session string, create bool, dir string, pane int) {
 // open attaches to session and shows a new session screen for it. Pane,
 // when set, is a pane of that session to focus, as when the user picks an
 // agent in the needs-you inbox.
-func (a *app) open(session string, create bool, dir, layout string, pane int) {
+func (a *app) open(session string, create bool, dir, layout string, pane int, runtimeConnection string) {
 	s := a.newSession()
 	if create && layout != "" {
 		s.SetPendingLayout(layout)
+	}
+	if create && runtimeConnection != "" {
+		s.SetPendingRuntime(runtimeConnection)
 	}
 	a.attach(session, create, dir, pane)
 	a.opening, a.openName, a.leftName = true, session, a.result.Session
@@ -320,7 +324,11 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Quit
 	case home.OpenMsg:
-		a.open(msg.Session, msg.Create, msg.Dir, msg.Layout, 0)
+		connection := ""
+		if msg.Runtime == newsession.StartClaudeCode {
+			connection = msg.Connection
+		}
+		a.open(msg.Session, msg.Create, msg.Dir, msg.Layout, 0, connection)
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)
@@ -364,7 +372,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Detach first: if the attach is refused, the client is left
 		// attached to nothing, which matches the home page it then shows.
 		a.send(&api.Detach{})
-		a.open(msg.Session, msg.Create, "", "", msg.Pane)
+		a.open(msg.Session, msg.Create, "", "", msg.Pane, "")
 		return a, nil
 	}
 	return a, a.screen.Update(msg)

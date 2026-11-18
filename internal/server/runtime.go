@@ -43,6 +43,13 @@ func (s *Server) runtimeFacts(c *client, pane int, agent string) (runtimeFacts, 
 	return facts, nil
 }
 
+func (s *Server) runtimeFactsForFolder(folder, agent string) (runtimeFacts, error) {
+	if folder == "" || agent == "" {
+		return runtimeFacts{}, errors.New("a folder and runtime are required to list connections")
+	}
+	return runtimeFacts{folder: folder, snapshot: api.ChatSnapshot{Agent: agent}}, nil
+}
+
 func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
 	if err := request.Validate(); err != nil {
 		s.refuse(c, api.CodeBadCommand, err)
@@ -52,7 +59,13 @@ func (s *Server) runtimeRequest(c *client, request *api.RuntimeRequest) {
 		s.refuse(c, api.CodeCommandFailed, errors.New("runtime connections are not configured"))
 		return
 	}
-	facts, err := s.runtimeFacts(c, request.Pane, request.Agent)
+	var facts runtimeFacts
+	var err error
+	if request.Pane == 0 {
+		facts, err = s.runtimeFactsForFolder(request.Folder, request.Agent)
+	} else {
+		facts, err = s.runtimeFacts(c, request.Pane, request.Agent)
+	}
 	if err != nil {
 		s.refuse(c, api.CodeCommandFailed, err)
 		return
@@ -158,6 +171,9 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 		err = fmt.Errorf("%w: this connection operation is not available", clauderuntime.ErrControl)
 	}
 	response := s.runtimeConnectionList(facts, request.Pane, selected)
+	if request.Action == api.RuntimeList && request.Pane == 0 {
+		s.checkRuntimeList(ctx, facts, response)
+	}
 	response.RequestID = request.RequestID
 	if responseAgent != "" {
 		response.Agent = responseAgent
@@ -175,6 +191,30 @@ func (s *Server) runtimeOperation(c *client, request *api.RuntimeRequest, facts 
 		response.State, response.Message = "updated", message
 	}
 	s.reply(c, response)
+}
+
+func (s *Server) checkRuntimeList(ctx context.Context, facts runtimeFacts, response *api.RuntimeConnections) {
+	for i := range response.Connections {
+		var ready bool
+		s.call(func(st *state) { ready = st.runtimeReady[response.Connections[i].ID] })
+		if !ready {
+			continue
+		}
+		connection, err := clauderuntime.LoadConnection(s.opts.Chat.Runtime.Root, response.Connections[i].ID)
+		if err != nil {
+			response.Connections[i].Reason = err.Error()
+			continue
+		}
+		info, err := s.connectionStatus(ctx, facts, connection)
+		if err != nil {
+			response.Connections[i].Reason = err.Error()
+			continue
+		}
+		response.Connections[i] = info
+		if info.Ready {
+			return
+		}
+	}
 }
 
 func (s *Server) runtimeConnection(facts runtimeFacts, id string) (clauderuntime.Connection, error) {

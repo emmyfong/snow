@@ -36,6 +36,26 @@ func TestRuntimeRequestHidesKey(t *testing.T) {
 	}
 }
 
+func TestRuntimeRequestWithoutPane(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		request RuntimeRequest
+		valid   bool
+	}{
+		{"list with folder", RuntimeRequest{Agent: "claude", Action: RuntimeList, Folder: "/work"}, true},
+		{"list without folder", RuntimeRequest{Agent: "claude", Action: RuntimeList}, false},
+		{"other action", RuntimeRequest{Agent: "claude", Action: RuntimeStatus, Folder: "/work", Connection: "id"}, false},
+		{"pane request with folder", RuntimeRequest{Pane: 1, Agent: "claude", Action: RuntimeList, Folder: "/work"}, true},
+		{"negative pane", RuntimeRequest{Pane: -1, Agent: "claude", Action: RuntimeList, Folder: "/work"}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.request.Validate(); (err == nil) != tc.valid {
+				t.Fatalf("Validate() = %v, want valid %t", err, tc.valid)
+			}
+		})
+	}
+}
+
 func TestRuntimeSnapshotResync(t *testing.T) {
 	snapshot := ChatSnapshot{Pane: 1, Agent: "agent"}
 	info := &RuntimeInfo{Kind: "claude-code", Connection: "selected", Session: "backend", Tasks: []RuntimeTask{{ID: "child", Run: "run-1", State: "running"}}}

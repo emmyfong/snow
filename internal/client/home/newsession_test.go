@@ -7,13 +7,20 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/emmyfong/snow/pkg/api"
 )
 
 func TestOpenNewSessionFromEnter(t *testing.T) {
 	m := screen(80, 24)
 	m.SetFolder("/work/api")
-	if cmd := m.Update(press(tea.KeyEnter)); cmd != nil || m.dialog == nil {
-		t.Fatalf("empty Enter: dialog open %v, command %v; want dialog and no command", m.dialog != nil, cmd)
+	cmd := m.Update(press(tea.KeyEnter))
+	if cmd == nil || m.dialog == nil {
+		t.Fatalf("empty Enter: dialog open %v, command %v; want dialog and runtime request", m.dialog != nil, cmd)
+	}
+	sent, ok := cmd().(SendMsg)
+	request, requestOK := sent.Msg.(*api.RuntimeRequest)
+	if !ok || !requestOK || request.Pane != 0 || request.Agent != api.AgentClaude || request.Action != api.RuntimeList || request.Folder != "/work/api" {
+		t.Fatalf("new-session request = %#v, want a Claude list request for /work/api", sent)
 	}
 	if got := m.dialog.Choice().Folder; got != "/work/api" {
 		t.Fatalf("dialog folder = %q, want /work/api", got)
@@ -38,6 +45,17 @@ func TestNewSessionEscCloses(t *testing.T) {
 	}
 }
 
+func TestHomeReceivesClaudeReadiness(t *testing.T) {
+	m := screen(80, 24)
+	m.SetFolder("/work")
+	m.openNewSession()
+	m.Update(&api.RuntimeConnections{Pane: 0, Agent: api.AgentClaude, Connections: []api.RuntimeConnection{{ID: "conn", Status: api.RuntimeStatusSignedIn, Ready: true}}})
+	box, _, _ := m.dialog.View(m.theme, 80, 24)
+	if !strings.Contains(ansi.Strip(box), "Claude Code") {
+		t.Fatalf("home did not pass ready connection to the dialog:\n%s", ansi.Strip(box))
+	}
+}
+
 func TestNewSessionTooSmallShowsNotice(t *testing.T) {
 	m := screen(20, 10)
 	m.openNewSession()
@@ -59,8 +77,8 @@ func newSessionOverHomeGolden(t *testing.T, cols, rows int) {
 func TestNewSessionCommand(t *testing.T) {
 	m := screen(80, 24, session("work", 0, 0))
 	typeText(m, "/new")
-	if cmd := m.Update(press(tea.KeyEnter)); cmd != nil || m.dialog == nil {
-		t.Fatalf("/new: dialog open %v, command %v; want dialog and no command", m.dialog != nil, cmd)
+	if cmd := m.Update(press(tea.KeyEnter)); cmd == nil || m.dialog == nil {
+		t.Fatalf("/new: dialog open %v, command %v; want dialog and runtime request", m.dialog != nil, cmd)
 	}
 
 	m = screen(80, 24)
