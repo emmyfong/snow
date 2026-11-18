@@ -20,7 +20,6 @@ import (
 	"github.com/emmyfong/snow/internal/signin"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/transport"
-	"github.com/emmyfong/snow/pkg/api"
 )
 
 // version is set at release time with -ldflags "-X main.version=...".
@@ -250,15 +249,16 @@ func attach(name string, stdout, stderr io.Writer) int {
 	}
 	// loadConfig has already found the path; an error here cannot happen.
 	cfgPath, _ := config.DefaultPath()
-	run := func(anyBuild bool) (client.Result, error) {
+	run := func() (client.Result, error) {
 		return client.Run(client.Options{
-			AnyServerBuild: anyBuild,
-			Version:        version,
-			Config:         &cfg,
-			ConfigPath:     cfgPath,
-			Socket:         path,
-			Session:        name,
-			Home:           name == "", // plain snow opens the home page
+			Version:    version,
+			Config:     &cfg,
+			ConfigPath: cfgPath,
+			Socket:     path,
+			Session:    name,
+			Home:       name == "", // plain snow opens the home page
+			Input:      stdin,
+			Output:     stdout,
 			Start: func() error {
 				exe, err := os.Executable()
 				if err != nil {
@@ -268,28 +268,17 @@ func attach(name string, stdout, stderr io.Writer) int {
 			},
 		})
 	}
-	res, err := run(false)
-	var mismatch *api.VersionMismatchError
-	if errors.As(err, &mismatch) {
-		if !client.AskRestart(stdin, stdout, mismatch) {
-			_, _ = fmt.Fprintln(stdout, "Keeping the running server.")
-			// Another build on the same protocol still works with this
-			// client; another protocol does not.
-			if mismatch.ClientProtocol != mismatch.ServerProtocol {
-				return 1
-			}
-			res, err = run(true)
-		} else {
-			switch rerr := client.RestartServer(path, version); {
-			case errors.Is(rerr, client.ErrServerKeptRunning):
-				_, _ = fmt.Fprintf(stderr, "snow: the server is older than restarts and kept running. Stop it with:\n  %s\n", stopHint)
-				return 1
-			case rerr != nil:
-				_, _ = fmt.Fprintln(stderr, "snow:", rerr)
-				return 1
-			}
-			res, err = run(false)
+	res, err := run()
+	if res.Restart {
+		switch rerr := client.RestartServer(path, version); {
+		case errors.Is(rerr, client.ErrServerKeptRunning):
+			_, _ = fmt.Fprintf(stderr, "snow: the server is older than restarts and kept running. Stop it with:\n  %s\n", stopHint)
+			return 1
+		case rerr != nil:
+			_, _ = fmt.Fprintln(stderr, "snow:", rerr)
+			return 1
 		}
+		res, err = run()
 	}
 	switch {
 	case err != nil:

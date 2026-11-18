@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/client/command"
+	"github.com/emmyfong/snow/internal/client/confirm"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -22,6 +23,7 @@ type Result struct {
 	Session  string // the attached session's name
 	Detached bool   // the user detached; the session keeps running
 	Running  int    // sessions that run when the client quits
+	Restart  bool   // the user asked cmd/snow to restart the server
 	Err      error  // a refused request (*api.Error) or ErrConnectionLost
 }
 
@@ -35,26 +37,28 @@ type connClosedMsg struct{}
 // app is the root model. It routes messages to the current screen and ends
 // the program on detach, on a server error, or when the connection closes.
 type app struct {
-	screen      Screen
-	send        func(api.Message)
-	result      Result
-	dir         string           // the folder a session opened from the home page starts in
-	version     string           // Snow's version, for the home page
-	theme       theme.Theme      // the theme from the config, for the home page
-	sessOpts    []session.Option // what a session screen gets besides the theme, such as keys
-	keys        *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
-	saveTheme   func(name string) error
-	configPath  string    // the config file to watch for a new theme; "" watches nothing
-	configMod   time.Time // when the config file last changed, as last seen
-	profile     *tea.ColorProfileMsg
-	sessions    *api.SessionList // the last list, for a screen opened later
-	agents      *api.AgentList   // the last agent list, for a screen opened later
-	opening     bool             // a session is being opened; its Layout has not come
-	openName    string           // the session being opened; "" for a new numbered one
-	leftName    string           // the session shown when the opening began
-	focused     bool             // the terminal has focus
-	focusReport bool             // the terminal reports focus changes; see api.ClientFocus
-	cols, rows  int
+	screen           Screen
+	send             func(api.Message)
+	result           Result
+	restartAsk       *api.VersionMismatchError
+	restartPopup     *confirm.Model
+	dir              string           // the folder a session opened from the home page starts in
+	version          string           // Snow's version, for the home page
+	theme            theme.Theme      // the theme from the config, for the home page
+	sessOpts         []session.Option // what a session screen gets besides the theme, such as keys
+	keys             *keys.Table      // the key table, so the home page names the prefix; nil means the defaults
+	saveTheme        func(name string) error
+	configPath       string    // the config file to watch for a new theme; "" watches nothing
+	configMod        time.Time // when the config file last changed, as last seen
+	profile          *tea.ColorProfileMsg
+	sessions         *api.SessionList // the last list, for a screen opened later
+	agents           *api.AgentList   // the last agent list, for a screen opened later
+	opening          bool             // a session is being opened; its Layout has not come
+	openName         string           // the session being opened; "" for a new numbered one
+	leftName         string           // the session shown when the opening began
+	focused          bool             // the terminal has focus
+	focusReport      bool             // the terminal reports focus changes; see api.ClientFocus
+	cols, rows       int
 
 	terminalBackground bool
 	originalForeground color.Color
@@ -220,6 +224,17 @@ func (a *app) Init() tea.Cmd {
 }
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.restartPopup != nil {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			if msg.Code == 'c' && msg.Mod == tea.ModCtrl {
+				return a, a.restartResult(confirm.No)
+			}
+			return a, a.restartResult(a.restartPopup.Key(msg.Key()))
+		case tea.MouseClickMsg:
+			return a, a.restartResult(a.restartPopup.Click(a.theme, a.cols, a.rows, msg.X, msg.Y))
+		}
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.cols, a.rows = msg.Width, msg.Height
@@ -380,6 +395,7 @@ func (a *app) countRunning() int {
 // the tab says which session it is. Bubble Tea clears the title on exit.
 func (a *app) View() tea.View {
 	v := a.screen.View()
+	v.Content = a.restartView(v.Content)
 	v.BackgroundColor, v.ForegroundColor = a.defaultColors()
 	v.AltScreen = true
 	// Focus and blur events tell the server whether the user looks at an
