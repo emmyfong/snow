@@ -125,6 +125,9 @@ func (m *Model) exists(name string) bool {
 }
 
 func (m *Model) cmdNew(name string) tea.Cmd {
+	if name == "" {
+		return m.openNewSession()
+	}
 	o := OpenMsg{Session: name, Create: !m.exists(name)}
 	if cmd := m.open(o); cmd != nil {
 		m.done()

@@ -56,7 +56,6 @@ func TestEnterAttachesOrCreates(t *testing.T) {
 	}{
 		{"existing session attaches", "api", OpenMsg{Session: "api"}},
 		{"new name creates", "logs", OpenMsg{Session: "logs", Create: true}},
-		{"empty starts a numbered session", "", OpenMsg{Create: true}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -66,6 +65,10 @@ func TestEnterAttachesOrCreates(t *testing.T) {
 				t.Fatalf("Enter after %q opened %+v, want %+v", tt.typed, got, tt.want)
 			}
 		})
+	}
+	m := screen(80, 24, session("api", time.Minute, 1))
+	if cmd := m.Update(press(tea.KeyEnter)); cmd != nil || m.dialog == nil {
+		t.Fatalf("empty Enter: dialog %v, cmd %v; want dialog open and no command", m.dialog != nil, cmd)
 	}
 }
 

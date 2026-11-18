@@ -1,0 +1,68 @@
+package session
+
+import (
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/emmyfong/snow/internal/client/newsession"
+	"github.com/emmyfong/snow/pkg/api"
+)
+
+func TestOpenNewWindowDialog(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	if cmd := m.openNewWindow(); cmd != nil || m.over == nil {
+		t.Fatalf("openNewWindow: overlay %v, command %v; want dialog", m.over != nil, cmd)
+	}
+	pick, ok := m.over.popup.(*newsession.Model)
+	if !ok {
+		t.Fatalf("overlay popup is %T, want new-session dialog", m.over.popup)
+	}
+	if got := pick.Choice().Folder; got != "/src" {
+		t.Fatalf("dialog folder = %q, want focused pane folder /src", got)
+	}
+	for range 2 {
+		m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	}
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	cmd := lastCommand(t, r)
+	if m.over != nil || cmd.Op != api.OpNewWindow || cmd.Args[api.ArgFolder] != "/src" {
+		t.Fatalf("accept: overlay %v, command %+v; want new window in /src", m.over != nil, cmd)
+	}
+}
+
+func TestNewWindowLayout(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	m.openNewWindow()
+	for range 2 {
+		m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
+	}
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	if got := lastCommand(t, r); got.Op != api.OpNewWindow {
+		t.Fatalf("accepted dialog sent %+v, want new window", got)
+	}
+	added := &api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
+		{Index: 1, Panes: []api.PaneInfo{{ID: 1}}},
+		{Index: 2, Panes: []api.PaneInfo{{ID: 99}, {ID: 100}}},
+	}}
+	m.Update(added)
+	got := lastCommand(t, r)
+	if got.Op != api.OpLayout || got.Target != 99 || got.Args[api.ArgName] != "ide" {
+		t.Fatalf("new layout command %+v, want layout ide for first pane 99", got)
+	}
+	count := len(r.sent)
+	m.Update(added)
+	if len(r.sent) != count {
+		t.Fatalf("second layout sent more commands: %#v", r.sent[count:])
+	}
+}
+
+func TestNewSessionWindowEscape(t *testing.T) {
+	m, r := pickerScreen(t, 80, 24)
+	m.openNewWindow()
+	m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEscape}))
+	if m.over != nil || len(r.sent) != 0 {
+		t.Fatalf("Esc left overlay %v and sent %v; want closed without a command", m.over != nil, r.sent)
+	}
+}

@@ -100,6 +100,13 @@ func (m *Model) Key(k tea.Key) picker.Result {
 	}
 }
 
+// Paste adds pasted text to the folder while that row is focused.
+func (m *Model) Paste(text string) {
+	if m.focus == folderField {
+		m.folder += text
+	}
+}
+
 // Click handles a mouse click on a screen of cols by rows cells.
 func (m *Model) Click(th theme.Theme, cols, rows, x, y int) picker.Result {
 	box, left, top := m.View(th, cols, rows)

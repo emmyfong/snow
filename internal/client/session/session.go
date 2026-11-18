@@ -38,6 +38,8 @@ type Model struct {
 	now        func() time.Time
 	layout     *api.Layout
 	preset     string // layout to apply to the first window, when set
+	newPreset  string // layout to apply to a window being created
+	winCount   int    // window count before that window is created
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	kinds      []api.PaneKindInfo // what the server can open, for a picker
@@ -136,6 +138,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case *api.Layout:
 		m.applyLayout(msg)
 		m.applyPendingLayout()
+		m.applyPendingWindowLayout(msg)
 		if !m.ticking {
 			m.ticking = true
 			return tick()

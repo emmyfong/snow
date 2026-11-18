@@ -68,7 +68,9 @@ type app struct {
 // before it sets View.ReportFocus; an unsupported terminal reports that it is
 // not focused, so the server never mistakes it for a watching user.
 func newHomeApp(send func(api.Message), version, dir string, th theme.Theme, opts ...session.Option) *app {
-	return &app{screen: home.New(version, th), send: send, dir: dir, version: version, theme: th, sessOpts: opts, focused: true}
+	h := home.New(version, th)
+	h.SetFolder(dir)
+	return &app{screen: h, send: send, dir: dir, version: version, theme: th, sessOpts: opts, focused: true}
 }
 
 // setKeys gives the home page, now and when it comes back, the key table.
@@ -134,6 +136,7 @@ func (a *app) leave() {
 // any.
 func (a *app) showHome(notice string) {
 	h := home.New(a.version, a.theme)
+	h.SetFolder(a.dir)
 	if a.keys != nil {
 		h.SetKeys(a.keys)
 	}

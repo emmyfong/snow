@@ -5,6 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
+	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -107,4 +109,45 @@ func (m *Model) run(name string, k tea.Key) tea.Cmd {
 	return nil
 }
 
-func (m *Model) openNewWindow() tea.Cmd { return m.run("new-window", tea.Key{}) }
+func (m *Model) openNewWindow() tea.Cmd {
+	folder := ""
+	if p := m.focused(); p != nil {
+		folder = p.Folder
+	}
+	pick := newsession.New(folder)
+	o := &overlay{
+		popup: pick,
+		key:   pick.Key,
+		click: pick.Click,
+		paste: pick.Paste,
+		done: func(result picker.Result) tea.Cmd {
+			if result != picker.Accepted {
+				return nil
+			}
+			choice := pick.Choice()
+			if choice.Layout != "" {
+				m.newPreset = choice.Layout
+				if m.layout != nil {
+					m.winCount = len(m.layout.Windows)
+				}
+			}
+			args := map[string]string{api.ArgFolder: choice.Folder}
+			m.send(&api.Command{Op: api.OpNewWindow, Args: args})
+			return nil
+		},
+	}
+	return m.showOverlay(o, "new window")
+}
+
+func (m *Model) applyPendingWindowLayout(layout *api.Layout) {
+	if m.newPreset == "" || len(layout.Windows) <= m.winCount {
+		return
+	}
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	name := m.newPreset
+	m.newPreset = ""
+	m.send(&api.Command{Op: api.OpLayout, Target: w.Panes[0].ID, Args: map[string]string{api.ArgName: name}})
+}

@@ -72,6 +72,10 @@ func (m *Model) View() tea.View {
 		box, x, y := m.helpPanel()
 		content = ui.Overlay(content, box, x, y)
 	}
+	if m.dialog != nil {
+		box, x, y := m.dialog.View(th, m.cols, m.rows)
+		content = ui.Overlay(content, box, x, y)
+	}
 	v := tea.NewView(content)
 	v.MouseMode = tea.MouseModeCellMotion
 	return v

@@ -65,20 +65,21 @@ func TestSlashCommands(t *testing.T) {
 		pick   bool // highlight api before typing
 		typed  string
 		want   tea.Msg
+		dialog bool
 		notice string // part of the notice, when the command is refused
 	}{
-		{"new with a name", false, "/new logs", OpenMsg{Session: "logs", Create: true}, ""},
-		{"new without a name", false, "/new", OpenMsg{Create: true}, ""},
-		{"new with an existing name attaches", false, "/new web", OpenMsg{Session: "web"}, ""},
-		{"partial command runs the best match", false, "/ne", OpenMsg{Create: true}, ""},
-		{"quit", false, "/quit", QuitMsg{}, ""},
-		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, ""},
-		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, ""},
-		{"rename with nothing highlighted", false, "/rename backend", nil, "Select a session"},
-		{"rename with no name asks for one", true, "/rename  ", nil, ""},
-		{"rename with no session and no name", false, "/rename", nil, "Pick a session"},
-		{"kill an unknown session", false, "/kill nope", nil, "No session named nope"},
-		{"unknown command", false, "/xyz", nil, "Unknown command"},
+		{"new with a name", false, "/new logs", OpenMsg{Session: "logs", Create: true}, false, ""},
+		{"new without a name", false, "/new", nil, true, ""},
+		{"new with an existing name attaches", false, "/new web", OpenMsg{Session: "web"}, false, ""},
+		{"partial command runs the best match", false, "/ne", nil, true, ""},
+		{"quit", false, "/quit", QuitMsg{}, false, ""},
+		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, false, ""},
+		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, false, ""},
+		{"rename with nothing highlighted", false, "/rename backend", nil, false, "Select a session"},
+		{"rename with no name asks for one", true, "/rename  ", nil, false, ""},
+		{"rename with no session and no name", false, "/rename", nil, false, "Pick a session"},
+		{"kill an unknown session", false, "/kill nope", nil, false, "No session named nope"},
+		{"unknown command", false, "/xyz", nil, false, "Unknown command"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,6 +89,12 @@ func TestSlashCommands(t *testing.T) {
 			}
 			typeText(m, tt.typed)
 			got := enter(m)
+			if tt.dialog {
+				if got != nil || m.dialog == nil {
+					t.Fatalf("Enter on %q: dialog %v, message %#v; want dialog and no message", tt.typed, m.dialog != nil, got)
+				}
+				return
+			}
 			if s, ok := got.(SendMsg); ok {
 				w, _ := tt.want.(SendMsg)
 				if r, ok := s.Msg.(*api.RenameSession); !ok || w.Msg == nil || *r != *w.Msg.(*api.RenameSession) {
