@@ -4,18 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"reflect"
-	"time"
 
 	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/internal/usage"
 	"github.com/emmyfong/snow/pkg/api"
 )
-
-// conversationPoll is how often a conversation-bound pane reads its
-// conversation's file again, so a live turn's usage shows without a key.
-const conversationPoll = 2 * time.Second
 
 // usageKind is the usage pane: what a conversation's observable usage adds
 // up to, by turn and model.
@@ -45,12 +38,26 @@ func openUsage(ctx sideContext) (sidePane, error) {
 		done:  make(chan struct{}),
 		stop:  cancel,
 	}
-	w := &usageWorker{
+	w := &convWorker[api.UsageState]{
 		store:   ctx.Conversations,
 		conv:    ctx.Conversation,
 		folder:  ctx.Folder,
 		profile: ctx.Profile,
 		apply:   func(st api.UsageState) { ctx.Apply(func() { p.take(st) }) },
+		build: func(loaded *convstore.Conversation) api.UsageState {
+			st := usage.Account(loaded)
+			st.Folder = ctx.Folder
+			return st
+		},
+		noConv: func(st api.UsageState) api.UsageState {
+			st.Folder, st.Conversation, st.Loading, st.Error = ctx.Folder, "", false, ""
+			st.Notes = []string{"No conversation yet. Send a message in a chat pane."}
+			return st
+		},
+		fail: func(st api.UsageState, err error) api.UsageState {
+			st.Loading, st.Error = false, err.Error()
+			return st
+		},
 	}
 	go func() {
 		defer close(p.done)
@@ -93,107 +100,3 @@ func (p *usagePane) Close() error {
 // Conversation implements conversationSide: the conversation the pane
 // follows, for a saved session.
 func (p *usagePane) Conversation() string { return p.conv }
-
-// usageWorker reads a usage pane's conversation on its own goroutine.
-type usageWorker struct {
-	store   *convstore.Store
-	conv    string
-	folder  string
-	profile string
-	cur     api.UsageState
-	have    bool
-	size    int64
-	mod     time.Time
-	apply   func(api.UsageState)
-}
-
-// run reads the conversation, then again on each tick when the file moved
-// on, until ctx ends.
-func (w *usageWorker) run(ctx context.Context, jobs <-chan struct{}) {
-	w.publish(w.read(true), true)
-	tick := time.NewTicker(conversationPoll)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-jobs:
-			w.publish(w.read(true), true)
-		case <-tick.C:
-			w.publish(w.read(false), false)
-		}
-	}
-}
-
-// read builds the pane's state from the conversation file. It stats the
-// file first, so an unchanged conversation costs one call, not a parse.
-func (w *usageWorker) read(force bool) api.UsageState {
-	if w.conv == "" {
-		ok, err := w.resolve()
-		switch {
-		case err != nil:
-			return w.fail(err)
-		case !ok:
-			st := w.cur
-			st.Folder, st.Conversation = w.folder, ""
-			st.Loading = false
-			st.Notes = []string{"No conversation yet. Send a message in a chat pane."}
-			return st
-		}
-	}
-	path, err := w.store.Path(w.conv)
-	if err != nil {
-		return w.fail(err)
-	}
-	fi, err := os.Stat(path)
-	if err != nil {
-		return w.fail(err)
-	}
-	if !force && w.have && fi.Size() == w.size && fi.ModTime().Equal(w.mod) {
-		return w.cur
-	}
-	loaded, err := w.store.Load(w.conv)
-	if err != nil {
-		return w.fail(err)
-	}
-	st := usage.Account(loaded)
-	st.Folder = w.folder
-	w.have, w.size, w.mod = true, fi.Size(), fi.ModTime()
-	return st
-}
-
-// resolve names the newest conversation in the pane's folder and profile,
-// for a pane that no chat named.
-func (w *usageWorker) resolve() (bool, error) {
-	entries, err := w.store.List(w.folder, w.profile)
-	if err != nil {
-		return false, err
-	}
-	for _, e := range entries {
-		if e.Err == nil && e.Turns > 0 {
-			w.conv = e.ID
-			return true, nil
-		}
-	}
-	return false, nil
-}
-
-// fail returns the last state with the error that stopped the read.
-func (w *usageWorker) fail(err error) api.UsageState {
-	st := w.cur
-	st.Folder, st.Conversation = w.folder, w.conv
-	st.Loading = false
-	st.Error = err.Error()
-	return st
-}
-
-// publish hands next over when it differs from the last state, or always
-// when force is set.
-func (w *usageWorker) publish(next api.UsageState, force bool) {
-	next.Loading = false
-	if !force && reflect.DeepEqual(next, w.cur) {
-		return
-	}
-	w.cur = next
-	w.apply(next)
-}

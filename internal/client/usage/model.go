@@ -6,6 +6,7 @@ package usage
 import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -95,13 +96,12 @@ func (m *Model) Cursor() (x, y int, ok bool) { return 0, 0, false }
 
 // scrollBy moves the first visible row by rows.
 func (m *Model) scrollBy(rows int) {
-	m.top += rows
-	m.clampTop()
+	m.top = ui.Scroll(m.top, rows, len(m.lines()), m.bodyHeight())
 }
 
 // clampTop keeps the first visible row inside the pane.
 func (m *Model) clampTop() {
-	m.top = min(max(m.top, 0), max(len(m.lines())-m.bodyHeight(), 0))
+	m.top = ui.Scroll(m.top, 0, len(m.lines()), m.bodyHeight())
 }
 
 // bodyHeight is the rows the body shows, below the header and above the

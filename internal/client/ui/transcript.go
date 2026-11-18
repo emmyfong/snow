@@ -86,7 +86,7 @@ func Transcript(th theme.Theme, o TranscriptOptions) string {
 		case EntryQueued:
 			style = lipgloss.NewStyle().Foreground(th.Queued)
 		}
-		lines := wrapText(LinkText(th, text, e.Links), o.Width-indent)
+		lines := WrapText(LinkText(th, text, e.Links), o.Width-indent)
 		if e.Cut {
 			lines = append(lines, muted.Render("(cut off)"))
 		}
@@ -128,9 +128,9 @@ func badge(text string, fg, bg color.Color) string {
 	return lipgloss.NewStyle().Foreground(fg).Background(bg).Render(text + strings.Repeat(" ", max(labelWidth-ansi.StringWidth(text), 0)))
 }
 
-// wrapText wraps text to width cells, at spaces where it can and inside
+// WrapText wraps text to width cells, at spaces where it can and inside
 // long words where it must.
-func wrapText(text string, width int) []string {
+func WrapText(text string, width int) []string {
 	if text == "" {
 		return nil
 	}

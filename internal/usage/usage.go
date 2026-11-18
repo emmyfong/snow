@@ -325,10 +325,12 @@ type reply struct {
 
 // call is a tool call the agent made, with its result when one was saved.
 type call struct {
-	name   string
-	input  json.RawMessage
-	result string
-	done   bool
+	name    string
+	input   json.RawMessage
+	result  string
+	done    bool
+	isError bool
+	at      time.Time
 }
 
 // parse reads the records of a conversation into turns.
@@ -348,17 +350,17 @@ func parse(loaded *convstore.Conversation) *parsed {
 		p.turns = append(p.turns, t)
 		return t
 	}
-	takeCall := func(t *turn, tool *api.ChatTool) {
+	takeCall := func(t *turn, tool *api.ChatTool, at time.Time) {
 		if t == nil || tool == nil {
 			return
 		}
-		c := &call{name: tool.Name, input: tool.Input}
+		c := &call{name: tool.Name, input: tool.Input, at: at}
 		t.calls = append(t.calls, c)
 		pending[tool.ID] = c
 	}
-	doneCall := func(id, result string) {
+	doneCall := func(id, result string, isError bool) {
 		if c := pending[id]; c != nil {
-			c.result, c.done = result, true
+			c.result, c.done, c.isError = result, true, isError
 			delete(pending, id)
 		}
 	}
@@ -382,11 +384,11 @@ func parse(loaded *convstore.Conversation) *parsed {
 			cur.replies = append(cur.replies, rep)
 			for _, b := range r.Blocks {
 				if b.Kind == convstore.BlockToolUse {
-					takeCall(cur, &api.ChatTool{ID: b.ID, Name: b.Name, Input: b.Input})
+					takeCall(cur, &api.ChatTool{ID: b.ID, Name: b.Name, Input: b.Input}, r.At)
 				}
 			}
 		case *convstore.ToolResult:
-			doneCall(r.ToolUseID, r.Content)
+			doneCall(r.ToolUseID, r.Content, r.IsError)
 		case *convstore.Interruption:
 			if cur != nil {
 				cur.interrupted = true
@@ -421,10 +423,10 @@ func parse(loaded *convstore.Conversation) *parsed {
 					}
 				}
 			case api.ChatEventToolCall:
-				takeCall(cur, e.Tool)
+				takeCall(cur, e.Tool, r.At)
 			case api.ChatEventToolResult:
 				if e.Tool != nil {
-					doneCall(e.Tool.ID, e.Tool.Result)
+					doneCall(e.Tool.ID, e.Tool.Result, e.Tool.IsError)
 				}
 			case api.ChatEventTurnEnded:
 				if cur != nil {

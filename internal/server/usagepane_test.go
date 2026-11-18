@@ -8,23 +8,30 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// openUsagePane splits a usage pane off chat pane id and returns the new
-// pane's ID once its first state arrives.
-func openUsagePane(t *testing.T, c *apitest.Client, id int) int {
+// openSidePane splits a pane of kind off pane id and returns the new
+// pane's ID once ready accepts its state.
+func openSidePane(t *testing.T, c *apitest.Client, id int, kind string, ready func(*api.SidePaneState) bool) int {
 	t.Helper()
-	c.Send(&api.Command{Op: api.OpOpen, Target: id, Args: map[string]string{api.ArgKind: api.PaneUsage}})
+	c.Send(&api.Command{Op: api.OpOpen, Target: id, Args: map[string]string{api.ArgKind: kind}})
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
 	for _, p := range shownPanes(l) {
-		if p.Kind == api.PaneUsage {
-			c.WaitSide(p.ID, func(s *api.SidePaneState) bool {
-				var st api.UsageState
-				return api.DecodeSideState(s, &st) == nil && !st.Loading
-			})
+		if p.Kind == kind {
+			c.WaitSide(p.ID, ready)
 			return p.ID
 		}
 	}
-	t.Fatal("no usage pane")
+	t.Fatalf("no %s pane", kind)
 	return 0
+}
+
+// openUsagePane splits a usage pane off chat pane id and returns the new
+// pane's ID once its usage has arrived.
+func openUsagePane(t *testing.T, c *apitest.Client, id int) int {
+	t.Helper()
+	return openSidePane(t, c, id, api.PaneUsage, func(s *api.SidePaneState) bool {
+		var st api.UsageState
+		return api.DecodeSideState(s, &st) == nil && st.Totals.Input > 0
+	})
 }
 
 // usageState decodes a usage pane's state.

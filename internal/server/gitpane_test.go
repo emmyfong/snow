@@ -232,8 +232,9 @@ func TestFitGitState(t *testing.T) {
 func TestSideKindsOverride(t *testing.T) {
 	open := func(sideContext) (sidePane, error) { return nil, nil }
 	got := sideKinds([]sideKind{{Name: api.PaneGit, Title: "Fake", Open: open}, {Name: "note", Open: open}})
-	if len(got) != 5 || got[0].Title != "Fake" || got[1].Name != api.PaneFiles ||
-		got[2].Name != api.PaneViewer || got[3].Name != api.PaneUsage || got[4].Name != "note" {
+	if len(got) != 6 || got[0].Title != "Fake" || got[1].Name != api.PaneFiles ||
+		got[2].Name != api.PaneViewer || got[3].Name != api.PaneUsage ||
+		got[4].Name != api.PaneContext || got[5].Name != "note" {
 		t.Errorf("kinds %+v", got)
 	}
 }
