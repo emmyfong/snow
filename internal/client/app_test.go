@@ -154,6 +154,54 @@ func TestHomeOpensASession(t *testing.T) {
 	}
 }
 
+func TestOpenCarriesFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "selected folder", dir: "/work/other", want: "/work/other"},
+		{name: "default folder", want: "/work/default"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent []api.Message
+			a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work/default", theme.Default())
+			a.Update(home.OpenMsg{Session: "api", Create: true, Dir: tc.dir})
+			for _, msg := range sent {
+				if attach, ok := msg.(*api.Attach); ok {
+					if attach.Dir != tc.want {
+						t.Fatalf("Attach.Dir = %q, want %q", attach.Dir, tc.want)
+					}
+					return
+				}
+			}
+			t.Fatal("no Attach sent")
+		})
+	}
+}
+
+func TestOpenAppliesLayoutOnlyForNewSession(t *testing.T) {
+	for _, create := range []bool{true, false} {
+		var sent []api.Message
+		a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+		a.Update(home.OpenMsg{Session: "api", Create: create, Layout: "focus"})
+		a.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7}}}}})
+		count := 0
+		for _, msg := range sent {
+			if cmd, ok := msg.(*api.Command); ok && cmd.Op == api.OpLayout {
+				count++
+			}
+		}
+		want := 0
+		if create {
+			want = 1
+		}
+		if count != want {
+			t.Fatalf("Create=%v sent %d layout commands, want %d", create, count, want)
+		}
+	}
+}
+
 // TestFocusReportsReachTheServer: the terminal's focus events go to the
 // server, so it skips a desktop notification for a pane the user already
 // sees. A client that opens a session says where the terminal stands right

@@ -148,19 +148,25 @@ func (a *app) showHome(notice string) {
 // then reports where the terminal stands. The server skips a notification
 // for a pane a focused client shows, so it must not wait for a later focus
 // event: many terminals send none until the focus changes.
-func (a *app) attach(session string, create bool, pane int) {
-	a.send(&api.Attach{Session: session, Create: create, Dir: a.dir, Pane: pane})
+func (a *app) attach(session string, create bool, dir string, pane int) {
+	if dir == "" {
+		dir = a.dir
+	}
+	a.send(&api.Attach{Session: session, Create: create, Dir: dir, Pane: pane})
 	a.send(&api.ClientFocus{Focused: a.focused})
 }
 
 // open attaches to session and shows a new session screen for it. Pane,
 // when set, is a pane of that session to focus, as when the user picks an
 // agent in the needs-you inbox.
-func (a *app) open(session string, create bool, pane int) {
-	a.attach(session, create, pane)
+func (a *app) open(session string, create bool, dir, layout string, pane int) {
+	s := a.newSession()
+	if create && layout != "" {
+		s.SetPendingLayout(layout)
+	}
+	a.attach(session, create, dir, pane)
 	a.opening, a.openName, a.leftName = true, session, a.result.Session
 	a.result.Detached = false
-	s := a.newSession()
 	a.show(s)
 	if a.sessions != nil {
 		s.Update(a.sessions)
@@ -176,7 +182,7 @@ func (a *app) open(session string, create bool, pane int) {
 // It reports focus too, so a client started in the foreground never gets a
 // notification for the pane it shows.
 func (a *app) attachStart(session string) {
-	a.attach(session, true, 0)
+	a.attach(session, true, "", 0)
 	a.screen = a.newSession()
 }
 
@@ -311,7 +317,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, tea.Quit
 	case home.OpenMsg:
-		a.open(msg.Session, msg.Create, 0)
+		a.open(msg.Session, msg.Create, msg.Dir, msg.Layout, 0)
 		return a, nil
 	case home.SendMsg:
 		a.send(msg.Msg)
@@ -355,7 +361,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Detach first: if the attach is refused, the client is left
 		// attached to nothing, which matches the home page it then shows.
 		a.send(&api.Detach{})
-		a.open(msg.Session, msg.Create, msg.Pane)
+		a.open(msg.Session, msg.Create, "", "", msg.Pane)
 		return a, nil
 	}
 	return a, a.screen.Update(msg)

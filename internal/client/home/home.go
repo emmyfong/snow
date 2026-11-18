@@ -24,6 +24,8 @@ import (
 type OpenMsg struct {
 	Session string
 	Create  bool
+	Dir     string
+	Layout  string
 }
 
 // QuitMsg asks the client to leave Snow.

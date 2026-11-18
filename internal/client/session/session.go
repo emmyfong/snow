@@ -37,6 +37,7 @@ type Model struct {
 	keys       *keys.Table
 	now        func() time.Time
 	layout     *api.Layout
+	preset     string // layout to apply to the first window, when set
 	panes      map[int]*paneState
 	profiles   api.ProfileList
 	kinds      []api.PaneKindInfo // what the server can open, for a picker
@@ -134,6 +135,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.Layout:
 		m.applyLayout(msg)
+		m.applyPendingLayout()
 		if !m.ticking {
 			m.ticking = true
 			return tick()
@@ -219,6 +221,23 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// SetPendingLayout arranges the first window after a newly created session
+// reports its first pane.
+func (m *Model) SetPendingLayout(name string) { m.preset = name }
+
+func (m *Model) applyPendingLayout() {
+	if m.preset == "" {
+		return
+	}
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	name := m.preset
+	m.preset = ""
+	m.send(&api.Command{Op: api.OpLayout, Target: w.Panes[0].ID, Args: map[string]string{api.ArgName: name}})
 }
 
 // ShowError shows text in the status bar for a moment: why a request was
