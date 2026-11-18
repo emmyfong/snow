@@ -181,6 +181,28 @@ func TestDetachAndReattach(t *testing.T) {
 }
 
 func TestDetachPrintsNoDetachedText(t *testing.T) {
+	p := startBinarySession(t, "e2e")
+	detachViaMenu(t, p)
+	p.SendKey(term.Key{Code: term.KeyEscape})
+	waitBinaryExit(t, p)
+	if strings.Contains(strings.ToLower(p.Text()), "detached") {
+		t.Fatalf("output after detach contains detached text:\n%s", p.Text())
+	}
+}
+
+func TestDetachPrintsLeaveLine(t *testing.T) {
+	p := startBinarySession(t, "e2e")
+	detachViaMenu(t, p)
+	p.SendKey(term.Key{Code: term.KeyEscape})
+	waitTermText(t, p, "Snow is still running 1 session. Run snow to return.")
+	waitBinaryExit(t, p)
+	if status, ok := p.ExitStatus(); !ok || status != 0 {
+		t.Fatalf("exit status %d, known %v; want 0", status, ok)
+	}
+}
+
+func startBinarySession(t *testing.T, session string) *term.Pane {
+	t.Helper()
 	exe := filepath.Join(t.TempDir(), "snow")
 	if runtime.GOOS == "windows" {
 		exe += ".exe"
@@ -195,19 +217,30 @@ func TestDetachPrintsNoDetachedText(t *testing.T) {
 		t.Fatal(err)
 	}
 	startServerAt(t, path)
-	p, err := term.Start(term.Spec{Path: exe, Args: []string{"e2e"}, Env: env}, 100, 30, term.Options{})
+	p, err := term.Start(term.Spec{Path: exe, Args: []string{session}, Env: env}, 100, 30, term.Options{})
 	if err != nil {
 		t.Fatalf("start snow: %v", err)
 	}
 	t.Cleanup(func() { _ = p.Close() })
 	waitTermText(t, p, shellPrompt())
+	return p
+}
 
+func detachViaMenu(t *testing.T, p *term.Pane) {
+	t.Helper()
 	p.SendMouse(term.Mouse{X: 40, Y: 12, Button: term.ButtonRight, Action: term.ActionPress})
 	p.SendMouse(term.Mouse{X: 40, Y: 12, Button: term.ButtonRight, Action: term.ActionRelease})
 	waitTermText(t, p, "Detach")
 	clickTermLabel(t, p, "Detach")
 	waitTermText(t, p, "e2e")
-	p.SendKey(term.Key{Code: term.KeyEscape})
+	if strings.Contains(p.Text(), "e2e") {
+		return
+	}
+	t.Fatalf("home page does not list e2e:\n%s", p.Text())
+}
+
+func waitBinaryExit(t *testing.T, p *term.Pane) {
+	t.Helper()
 	select {
 	case <-p.Done():
 	case <-time.After(15 * time.Second):
@@ -215,9 +248,6 @@ func TestDetachPrintsNoDetachedText(t *testing.T) {
 	}
 	if status, ok := p.ExitStatus(); !ok || status != 0 {
 		t.Fatalf("exit status %d, known %v; want 0", status, ok)
-	}
-	if strings.Contains(strings.ToLower(p.Text()), "detached") {
-		t.Fatalf("output after detach contains detached text:\n%s", p.Text())
 	}
 }
 

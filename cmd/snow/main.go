@@ -299,5 +299,8 @@ func attach(name string, stdout, stderr io.Writer) int {
 		_, _ = fmt.Fprintln(stderr, "snow:", res.Err)
 		return 1
 	}
+	if line := leaveLine(res); line != "" {
+		_, _ = fmt.Fprintln(stdout, line)
+	}
 	return 0
 }

@@ -288,6 +288,30 @@ func TestDetachShowsHome(t *testing.T) {
 	}
 }
 
+func TestQuitCountsRunningSessions(t *testing.T) {
+	for _, tt := range []struct {
+		name string
+		list *api.SessionList
+		want int
+	}{
+		{name: "running and saved", list: &api.SessionList{Sessions: []api.SessionInfo{
+			{Name: "api", State: api.StateRunning},
+			{Name: "web", State: api.StateRunning},
+			{Name: "docs", State: api.StateSaved},
+		}}, want: 2},
+		{name: "no list"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+			a.sessions = tt.list
+			a.Update(home.QuitMsg{})
+			if a.result.Running != tt.want {
+				t.Fatalf("running count = %d, want %d", a.result.Running, tt.want)
+			}
+		})
+	}
+}
+
 // TestNewScreensGetTheColorProfile: the terminal reports its colors once;
 // a screen opened later must still adapt to them.
 func TestNewScreensGetTheColorProfile(t *testing.T) {

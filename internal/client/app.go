@@ -21,6 +21,7 @@ import (
 type Result struct {
 	Session  string // the attached session's name
 	Detached bool   // the user detached; the session keeps running
+	Running  int    // sessions that run when the client quits
 	Err      error  // a refused request (*api.Error) or ErrConnectionLost
 }
 
@@ -346,6 +347,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case home.QuitMsg:
+		a.result.Running = a.countRunning()
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
@@ -359,6 +361,19 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 	}
 	return a, a.screen.Update(msg)
+}
+
+func (a *app) countRunning() int {
+	if a.sessions == nil {
+		return 0
+	}
+	count := 0
+	for _, s := range a.sessions.Sessions {
+		if s.State == api.StateRunning {
+			count++
+		}
+	}
+	return count
 }
 
 // View shows the screen and names the session in the terminal's title, so
