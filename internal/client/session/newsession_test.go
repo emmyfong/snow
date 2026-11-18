@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/newsession"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -65,4 +67,23 @@ func TestNewSessionWindowEscape(t *testing.T) {
 	if m.over != nil || len(r.sent) != 0 {
 		t.Fatalf("Esc left overlay %v and sent %v; want closed without a command", m.over != nil, r.sent)
 	}
+}
+
+func TestNewSessionFromWindowBarGolden80x24(t *testing.T)  { newSessionFromWindowBarGolden(t, 80, 24) }
+func TestNewSessionFromWindowBarGolden120x40(t *testing.T) { newSessionFromWindowBarGolden(t, 120, 40) }
+
+func newSessionFromWindowBarGolden(t *testing.T, cols, rows int) {
+	m, _ := pickerScreen(t, cols, rows)
+	_, spans := ui.WindowBarRow(m.theme, m.windowBarOptions())
+	for _, span := range spans {
+		if span.Kind == ui.TopBarNewWindow {
+			m.Update(click(span.X, 0))
+			if m.over == nil {
+				t.Fatal("the + control did not open the dialog")
+			}
+			golden.RequireEqual(t, m.View().Content)
+			return
+		}
+	}
+	t.Fatal("window bar has no + control")
 }

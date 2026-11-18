@@ -119,7 +119,7 @@ func Run(opts Options) (Result, error) {
 	a.cols, a.rows = cols, rows
 	a.screen.SetSize(cols, rows)
 
-	var popts []tea.ProgramOption
+	popts := []tea.ProgramOption{tea.WithWindowSize(cols, rows)}
 	if opts.Input != nil {
 		popts = append(popts, tea.WithInput(opts.Input))
 	}

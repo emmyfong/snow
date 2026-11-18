@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/charmbracelet/x/exp/golden"
 )
 
 func TestOpenNewSessionFromEnter(t *testing.T) {
@@ -43,6 +44,16 @@ func TestNewSessionTooSmallShowsNotice(t *testing.T) {
 	if m.dialog != nil || m.notice == "" {
 		t.Fatalf("too-small window: dialog %v, notice %q", m.dialog != nil, m.notice)
 	}
+}
+
+func TestNewSessionOverHomeGolden80x24(t *testing.T)  { newSessionOverHomeGolden(t, 80, 24) }
+func TestNewSessionOverHomeGolden120x40(t *testing.T) { newSessionOverHomeGolden(t, 120, 40) }
+
+func newSessionOverHomeGolden(t *testing.T, cols, rows int) {
+	m := screen(cols, rows)
+	m.SetFolder("/work/api")
+	m.Update(press(tea.KeyEnter))
+	golden.RequireEqual(t, m.View().Content)
 }
 
 func TestNewSessionCommand(t *testing.T) {
