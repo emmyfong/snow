@@ -4,6 +4,7 @@
 package helppanel
 
 import (
+	"fmt"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -24,8 +25,8 @@ const keyWidth = 26
 const closeLine = "Press any key to close."
 
 // Panel draws the commands cmds, then keys, in a frame centered on a screen
-// of cols by rows cells. A screen too short for every row loses the last
-// rows before the close line.
+// of cols by rows cells. A screen too short for every row shows a marker for
+// the rows it hides before the close line.
 func Panel(th theme.Theme, cols, rows int, cmds []command.Command, keys []Key) (box string, x, y int) {
 	accent := lipgloss.NewStyle().Foreground(th.Accent)
 	muted := lipgloss.NewStyle().Foreground(th.Muted)
@@ -45,7 +46,17 @@ func Panel(th theme.Theme, cols, rows int, cmds []command.Command, keys []Key) (
 	}
 	// Two rows are the frame, two more the blank row and the close line.
 	if room := max(rows-4, 0); len(body) > room {
-		body = body[:room]
+		if room == 0 {
+			body = nil
+		} else {
+			kept := body[:room-1]
+			if len(kept) > 0 && kept[len(kept)-1] == "" {
+				kept = kept[:len(kept)-1]
+			}
+			hidden := len(body) - len(kept)
+			marker := fmt.Sprintf("... %d more rows; make the window taller to see them", hidden)
+			body = append(kept, muted.Render(" "+ansi.Truncate(marker, max(inner-1, 0), "…")))
+		}
 	}
 	body = append(body, "", " "+muted.Render(closeLine))
 	box = ui.Panel(th, ui.PanelOptions{Title: "Help", Body: strings.Join(body, "\n"), Width: width})

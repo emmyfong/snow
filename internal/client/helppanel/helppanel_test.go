@@ -1,6 +1,7 @@
 package helppanel
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -47,5 +48,40 @@ func TestPanelKeepsTheCloseLineOnAShortScreen(t *testing.T) {
 	}
 	if !strings.Contains(ansi.Strip(box), closeLine) {
 		t.Fatalf("the close line was cut:\n%s", ansi.Strip(box))
+	}
+}
+
+func TestPanelMarksCutRows(t *testing.T) {
+	cmds := []command.Command{
+		{Name: "one", Desc: "first"},
+		{Name: "two", Desc: "second"},
+		{Name: "three", Desc: "third"},
+		{Name: "four", Desc: "fourth"},
+		{Name: "five", Desc: "fifth"},
+		{Name: "six", Desc: "sixth"},
+	}
+	keys := []Key{{Keys: "Enter", Desc: "go"}, {Keys: "Esc", Desc: "stop"}, {Keys: "Tab", Desc: "complete"}}
+	for _, tt := range []struct {
+		name string
+		rows int
+		more int
+	}{
+		{name: "short", rows: 10, more: 5},
+		{name: "cut at separator", rows: 12, more: 4},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			box, _, _ := Panel(theme.Default(), 80, tt.rows, cmds, keys)
+			plain := ansi.Strip(box)
+			marker := "... " + strconv.Itoa(tt.more) + " more rows; make the window taller to see them"
+			if !strings.Contains(plain, marker) {
+				t.Fatalf("help lacks %q:\n%s", marker, plain)
+			}
+			if !strings.Contains(plain, closeLine) {
+				t.Fatalf("the close line was cut:\n%s", plain)
+			}
+			if strings.Contains(plain, "\n\n "+marker) {
+				t.Fatalf("blank separator was left before the marker:\n%s", plain)
+			}
+		})
 	}
 }
