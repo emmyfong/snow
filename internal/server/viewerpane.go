@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"reflect"
 	"time"
@@ -171,7 +172,12 @@ func (w *viewerWorker) read() api.ViewerState {
 	osPath := filepath.Join(w.osFolder, filepath.FromSlash(w.path))
 	d, err := viewer.Read(osPath)
 	if err != nil {
-		next.Error = err.Error()
+		var pathErr *fs.PathError
+		if errors.As(err, &pathErr) {
+			next.Error = w.path + ": " + pathErr.Err.Error()
+		} else {
+			next.Error = err.Error()
+		}
 		return next
 	}
 	next.Binary, next.Truncated, next.Limit = d.Binary, d.Truncated, d.Limit

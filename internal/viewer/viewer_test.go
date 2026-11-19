@@ -31,8 +31,8 @@ func TestViewerLargeFileCapped(t *testing.T) {
 // TestViewerBinary: bytes with a NUL are a binary file and are not shown.
 func TestViewerBinary(t *testing.T) {
 	d := Parse([]byte("ELF\x00\x01\x02"), 6)
-	if !d.Binary || len(d.Lines) != 0 || d.Limit == "" {
-		t.Fatalf("binary %v, %d lines, limit %q; want a notice", d.Binary, len(d.Lines), d.Limit)
+	if !d.Binary || len(d.Lines) != 0 || d.Limit != "" {
+		t.Fatalf("binary %v, %d lines, limit %q; want a binary marker without a limit notice", d.Binary, len(d.Lines), d.Limit)
 	}
 }
 
