@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/client/command"
+	"github.com/emmyfong/snow/internal/client/confirm"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -25,6 +26,8 @@ import (
 type Result struct {
 	Session  string // the attached session's name
 	Detached bool   // the user detached; the session keeps running
+	Running  int    // sessions that run when the client quits
+	Restart  bool   // the user asked cmd/snow to restart the server
 	Err      error  // a refused request (*api.Error) or ErrConnectionLost
 }
 
@@ -42,6 +45,8 @@ type app struct {
 	back           Screen // the screen settings temporarily covers
 	send           func(api.Message)
 	result         Result
+	restartAsk     *api.VersionMismatchError
+	restartPopup   *confirm.Model
 	dir            string           // the folder a session opened from the home page starts in
 	version        string           // Snow's version, for the home page
 	theme          theme.Theme      // the theme currently shown by the client
@@ -54,7 +59,7 @@ type app struct {
 	settingsLoadID uint64    // rejects config snapshots from an earlier settings screen
 	profile        *tea.ColorProfileMsg
 	sessions       *api.SessionList // the last list, for a screen opened later
-	agents         *api.AgentList   // the last agent list, for a screen opened later
+	agents         *api.AgentList   // the last list, for a screen opened later
 	opening        bool             // a session is being opened; its Layout has not come
 	openName       string           // the session being opened; "" for a new numbered one
 	leftName       string           // the session shown when the opening began
@@ -296,6 +301,23 @@ func (a *app) Init() tea.Cmd {
 }
 
 func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if a.restartPopup != nil {
+		switch msg := msg.(type) {
+		case tea.KeyPressMsg:
+			if msg.Code == 'c' && msg.Mod == tea.ModCtrl {
+				return a, a.restartResult(confirm.No)
+			}
+			return a, a.restartResult(a.restartPopup.Key(msg.Key()))
+		case tea.PasteMsg:
+			return a, nil
+		case tea.MouseMsg:
+			click, ok := msg.(tea.MouseClickMsg)
+			if !ok || click.Button != tea.MouseLeft {
+				return a, nil
+			}
+			return a, a.restartResult(a.restartPopup.Click(a.theme, a.cols, a.rows, click.X, click.Y))
+		}
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		a.cols, a.rows = msg.Width, msg.Height
@@ -491,6 +513,7 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return a, nil
 	case home.QuitMsg:
+		a.result.Running = a.countRunning()
 		return a, tea.Quit
 	case session.DetachMsg:
 		a.result.Detached = true
@@ -506,10 +529,24 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return a, a.updateScreen(msg)
 }
 
+func (a *app) countRunning() int {
+	if a.sessions == nil {
+		return 0
+	}
+	count := 0
+	for _, s := range a.sessions.Sessions {
+		if s.State == api.StateRunning {
+			count++
+		}
+	}
+	return count
+}
+
 // View shows the screen and names the session in the terminal's title, so
 // the tab says which session it is. Bubble Tea clears the title on exit.
 func (a *app) View() tea.View {
 	v := a.screen.View()
+	v.Content = a.restartView(v.Content)
 	v.BackgroundColor, v.ForegroundColor = a.defaultColors()
 	v.AltScreen = true
 	// Focus and blur events tell the server whether the user looks at an

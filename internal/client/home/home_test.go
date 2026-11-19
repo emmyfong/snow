@@ -101,18 +101,18 @@ func TestTypingFiltersTheList(t *testing.T) {
 	}
 }
 
-func TestEscapeClearsThenQuits(t *testing.T) {
+func TestEscapeAsksBeforeLeaving(t *testing.T) {
 	m := screen(80, 24)
 	typeText(m, "x")
 	if cmd := m.Update(press(tea.KeyEscape)); cmd != nil {
 		t.Fatal("Esc with text should only clear it")
 	}
 	cmd := m.Update(press(tea.KeyEscape))
-	if cmd == nil {
-		t.Fatal("Esc on an empty input should quit")
+	if cmd != nil || m.confirm == nil {
+		t.Fatalf("Esc on an empty input: cmd %v, popup %v; want a leave popup", cmd, m.confirm != nil)
 	}
-	if _, ok := cmd().(QuitMsg); !ok {
-		t.Fatalf("Esc produced %T, want QuitMsg", cmd())
+	if got := msgOf(m.Update(tea.KeyPressMsg(tea.Key{Code: 'y', Text: "y"}))); got != (QuitMsg{}) {
+		t.Fatalf("y produced %#v, want QuitMsg", got)
 	}
 }
 

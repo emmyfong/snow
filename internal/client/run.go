@@ -29,9 +29,7 @@ type Options struct {
 	Input      io.Reader // nil means standard input
 	Output     io.Writer // nil means standard output
 	// AnyServerBuild attaches to a server of another version on the same
-	// protocol. Without it Run returns a *api.VersionMismatchError, so the
-	// user hears that the server runs an older build, such as after an
-	// update, and can restart it.
+	// protocol. Without it Run asks the user to restart that server.
 	AnyServerBuild bool
 }
 
@@ -68,11 +66,15 @@ func Run(opts Options) (Result, error) {
 	cols, rows, _ := acceptedSize(terminalSize(opts.Output))
 	hello := api.Hello{ClientVersion: opts.Version, Protocol: api.ProtocolVersion, Cols: cols, Rows: rows}
 	w, err := api.ClientHandshake(conn, hello)
+	var mismatch *api.VersionMismatchError
+	protocolMismatch := false
 	if err != nil {
-		return Result{}, fmt.Errorf("connect to server: %w", err)
-	}
-	if !opts.AnyServerBuild && w.ServerVersion != opts.Version {
-		return Result{}, &api.VersionMismatchError{
+		if !errors.As(err, &mismatch) {
+			return Result{}, fmt.Errorf("connect to server: %w", err)
+		}
+		protocolMismatch = true
+	} else if w.ServerVersion != opts.Version && !opts.AnyServerBuild {
+		mismatch = &api.VersionMismatchError{
 			ClientVersion: opts.Version, ServerVersion: w.ServerVersion,
 			ClientProtocol: hello.Protocol, ServerProtocol: w.Protocol,
 		}
@@ -80,20 +82,26 @@ func Run(opts Options) (Result, error) {
 
 	// One goroutine writes every message in order. Sending from tea.Cmds
 	// would run them concurrently and could reorder fast typing.
-	out := make(chan api.Message, outboxSize)
-	go func() {
-		for m := range out {
-			if conn.Send(m) != nil {
-				break
+	var send func(api.Message)
+	var out chan api.Message
+	if protocolMismatch {
+		send = func(api.Message) {}
+	} else {
+		out = make(chan api.Message, outboxSize)
+		go func() {
+			for m := range out {
+				if conn.Send(m) != nil {
+					break
+				}
 			}
-		}
-		// Keep draining after a failed send: a full queue would block
-		// send, and with it the screen, until the receiver sees the close.
-		for range out {
-		}
-	}()
-	send := func(m api.Message) { out <- m }
-	defer close(out)
+			// Keep draining after a failed send: a full queue would block
+			// send, and with it the screen, until the receiver sees the close.
+			for range out {
+			}
+		}()
+		send = func(m api.Message) { out <- m }
+		defer close(out)
+	}
 
 	dir := opts.Dir
 	if dir == "" {
@@ -102,6 +110,9 @@ func Run(opts Options) (Result, error) {
 		dir, _ = os.Getwd()
 	}
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
+	if mismatch != nil {
+		a.askRestart(mismatch)
+	}
 	a.configTheme = th
 	a.setKeys(table)
 	a.terminalBackground = cfg.Theme.Background == config.BackgroundTerminal
@@ -114,7 +125,7 @@ func Run(opts Options) (Result, error) {
 			a.configMod = fi.ModTime()
 		}
 	}
-	if !opts.Home {
+	if !opts.Home && !protocolMismatch {
 		a.attachStart(opts.Session)
 	}
 	a.cols, a.rows = cols, rows
@@ -128,7 +139,9 @@ func Run(opts Options) (Result, error) {
 		popts = append(popts, tea.WithOutput(opts.Output))
 	}
 	p := tea.NewProgram(a, popts...)
-	go receive(conn, p)
+	if !protocolMismatch {
+		go receive(conn, p)
+	}
 	_, runErr := p.Run()
 	if runErr != nil {
 		runErr = fmt.Errorf("run screen: %w", runErr)

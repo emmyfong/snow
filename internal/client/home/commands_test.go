@@ -80,7 +80,7 @@ func TestSlashCommands(t *testing.T) {
 		{"new without a name", false, "/new", nil, true, ""},
 		{"new with an existing name attaches", false, "/new web", OpenMsg{Session: "web"}, false, ""},
 		{"partial command runs the best match", false, "/ne", nil, true, ""},
-		{"quit", false, "/quit", QuitMsg{}, false, ""},
+		{"quit", false, "/quit", nil, false, ""},
 		{"rename the highlighted session", true, "/rename backend", SendMsg{Msg: &api.RenameSession{Session: "api", Name: "backend"}}, false, ""},
 		{"rename a named session", false, "/rename web front end", SendMsg{Msg: &api.RenameSession{Session: "web", Name: "front end"}}, false, ""},
 		{"rename with nothing highlighted", false, "/rename backend", nil, false, "Select a session"},
@@ -117,6 +117,17 @@ func TestSlashCommands(t *testing.T) {
 				t.Fatalf("notice %q, want it to say %q", m.notice, tt.notice)
 			}
 		})
+	}
+}
+
+func TestSlashQuitAsksBeforeLeaving(t *testing.T) {
+	m := screen(80, 24, session("api", time.Minute, 0))
+	typeText(m, "/quit")
+	if got := enter(m); got != nil || m.confirm == nil {
+		t.Fatalf("/quit gave %#v, popup open %v; want a leave popup", got, m.confirm != nil)
+	}
+	if got := msgOf(m.Update(tea.KeyPressMsg(tea.Key{Code: 'y', Text: "y"}))); got != (QuitMsg{}) {
+		t.Fatalf("y produced %#v, want QuitMsg", got)
 	}
 }
 

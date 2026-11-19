@@ -102,14 +102,13 @@ func TestRenameLongNamePrompt(t *testing.T) {
 	}
 }
 
-// TestCtrlCQuitsFromNameStep: Ctrl+C leaves Snow from the name step, as from
-// the rest of the page.
+// TestCtrlCQuitsFromNameStep: Ctrl+C asks before leaving from the name step.
 func TestCtrlCQuitsFromNameStep(t *testing.T) {
 	m := screen(80, 24, session("api", time.Minute, 0))
 	typeText(m, "/rename")
 	m.Update(press(tea.KeyDown))
 	enter(m)
-	if got := msgOf(m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))); got != (QuitMsg{}) {
-		t.Fatalf("Ctrl+C gave %#v, want QuitMsg", got)
+	if got := msgOf(m.Update(tea.KeyPressMsg(tea.Key{Code: 'c', Mod: tea.ModCtrl}))); got != nil || m.confirm == nil {
+		t.Fatalf("Ctrl+C gave %#v, popup open %v; want a leave popup", got, m.confirm != nil)
 	}
 }

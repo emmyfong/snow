@@ -1,11 +1,8 @@
 package client
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
-	"strings"
 	"time"
 
 	"github.com/emmyfong/snow/internal/transport"
@@ -19,20 +16,12 @@ var ErrServerKeptRunning = errors.New("the server kept running")
 // stopTimeout bounds the wait for an old server to save and exit.
 const stopTimeout = 10 * time.Second
 
-// AskRestart asks on out whether to restart a server of another version,
-// and reads the answer from in. Only y or yes restarts.
-func AskRestart(in io.Reader, out io.Writer, m *api.VersionMismatchError) bool {
-	_, _ = fmt.Fprintf(out, "The running server is version %s; this is %s.\n"+
-		"Restart it now? Programs running in its panes stop; a server that saves\n"+
-		"sessions keeps them, and they come back as saved sessions. [y/N] ",
-		m.ServerVersion, m.ClientVersion)
-	// A read error, such as end of input, leaves line empty: the answer no.
-	line, _ := bufio.NewReader(in).ReadString('\n')
-	switch strings.ToLower(strings.TrimSpace(line)) {
-	case "y", "yes":
-		return true
-	}
-	return false
+// restartQuestion returns the title and text for the version mismatch popup.
+func restartQuestion(m *api.VersionMismatchError) (string, string) {
+	return "Restart server?", fmt.Sprintf(
+		"The running server is version %s; this is %s. Restart it now? Programs running in its panes stop; a server that saves sessions keeps them, and they come back as saved sessions.",
+		m.ServerVersion, m.ClientVersion,
+	)
 }
 
 // RestartServer asks the server at path to save every session and exit,

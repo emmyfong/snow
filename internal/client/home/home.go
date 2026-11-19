@@ -57,6 +57,7 @@ type Model struct {
 	help               bool    // the help panel is open
 	naming             *naming // the new name /rename asks for, when open
 	confirm            *confirm.Model
+	leaving            bool
 	dialog             *newsession.Model
 	runtimes           []api.RuntimeConnection
 	runtimeListPending bool
@@ -212,14 +213,14 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 	}
 	switch {
 	case k.Code == 'c' && k.Mod == tea.ModCtrl:
-		return func() tea.Msg { return QuitMsg{} }
+		return m.askLeave()
 	case m.keys.IsPrefix(k) && k.Text == "":
 		// The help lists the prefix keys; without this the prefix did
 		// nothing here.
 		m.tip = m.keys.PrefixLabel() + " keys work inside a session. Press Enter to open one."
 	case k.Code == tea.KeyEscape:
 		if m.input == "" {
-			return func() tea.Msg { return QuitMsg{} }
+			return m.askLeave()
 		}
 		m.input, m.selected, m.target, m.cmdSel = "", -1, "", 0
 	case k.Code == tea.KeyEnter:

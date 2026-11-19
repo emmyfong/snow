@@ -208,12 +208,19 @@ func (m *Model) cmdHelp(string) tea.Cmd {
 
 func (m *Model) cmdQuit(string) tea.Cmd {
 	m.done()
-	return func() tea.Msg { return QuitMsg{} }
+	return m.askLeave()
 }
 
 // confirmResult acts on the kill popup's answer.
 func (m *Model) confirmResult(r confirm.Result) tea.Cmd {
 	if r == confirm.Open {
+		return nil
+	}
+	if m.leaving {
+		m.confirm, m.leaving = nil, false
+		if r == confirm.Yes {
+			return func() tea.Msg { return QuitMsg{} }
+		}
 		return nil
 	}
 	name := m.killing

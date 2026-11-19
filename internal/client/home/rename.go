@@ -27,7 +27,7 @@ func (m *Model) startNaming(session string) {
 func (m *Model) namingKey(k tea.Key) tea.Cmd {
 	n := m.naming
 	if k.Code == 'c' && k.Mod == tea.ModCtrl {
-		return func() tea.Msg { return QuitMsg{} }
+		return m.askLeave()
 	}
 	switch k.Code {
 	case tea.KeyEscape:

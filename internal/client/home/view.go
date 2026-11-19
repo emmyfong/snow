@@ -125,7 +125,7 @@ func (m *Model) hints() []ui.Hint {
 	if m.commanding() {
 		return []ui.Hint{{Key: "enter", Desc: "run"}, {Key: "tab", Desc: "complete"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "clear"}}
 	}
-	return []ui.Hint{{Key: "enter", Desc: "open or create"}, {Key: "/", Desc: "commands"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "quit"}}
+	return []ui.Hint{{Key: "enter", Desc: "open or create"}, {Key: "/", Desc: "commands"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "leave"}}
 }
 
 func indent(rows []string, x int) []string {

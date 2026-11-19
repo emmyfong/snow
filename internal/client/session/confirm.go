@@ -20,26 +20,14 @@ type confirmation struct {
 
 // confirmClosePane asks before closing the focused pane, as tmux does:
 // closing ends the program in it.
-// Pane IDs only grow, so the question names the pane by its program,
-// folder, and place in the window instead.
 func (m *Model) confirmClosePane() {
 	p, w := m.focused(), m.shown()
 	if p == nil || w == nil {
 		return
 	}
-	place := 1
-	for i := range w.Panes {
-		if w.Panes[i].ID == p.ID {
-			place = i + 1
-		}
-	}
 	if p.Worktree != "" {
 		m.confirmCloseAgent(p)
 		return
-	}
-	what := strings.TrimSpace(p.Profile + " " + p.Folder)
-	if what != "" {
-		what += ", "
 	}
 	if p.Purpose == "sign-in" {
 		m.confirm = &confirmation{popup: confirm.New("Cancel sign-in", "Close this sign-in attempt? Snow will check the connection afterward.", "Cancel sign-in"),
@@ -51,8 +39,20 @@ func (m *Model) confirmClosePane() {
 			msg: &api.Command{Op: api.OpClose, Target: p.ID}}
 		return
 	}
+	if p.Kind == api.PaneTerminal {
+		m.confirm = &confirmation{
+			popup: confirm.New("Close terminal", terminalCloseText(p.Profile, p.Folder), "Close"),
+			msg:   &api.Command{Op: api.OpClose, Target: p.ID},
+		}
+		return
+	}
+	what := strings.TrimSpace(p.Profile + " " + p.Folder)
+	question := "Close this pane?"
+	if what != "" {
+		question = fmt.Sprintf("Close this pane (%s)?", what)
+	}
 	m.confirm = &confirmation{
-		popup: confirm.New("Close pane", fmt.Sprintf("Close this pane (%s%d of %d)?", what, place, len(w.Panes)), "Close"),
+		popup: confirm.New("Close pane", question, "Close"),
 		msg:   &api.Command{Op: api.OpClose, Target: p.ID},
 	}
 }

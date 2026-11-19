@@ -1,22 +1,24 @@
 package client
 
 import (
-	"bytes"
 	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-func TestAskRestart(t *testing.T) {
-	m := &api.VersionMismatchError{ClientVersion: "v0.2.0", ServerVersion: "v0.1.0", ClientProtocol: 5, ServerProtocol: 4}
-	for answer, want := range map[string]bool{"y\n": true, "yes\n": true, "Y\n": true, "\n": false, "n\n": false, "": false} {
-		var out bytes.Buffer
-		if got := AskRestart(strings.NewReader(answer), &out, m); got != want {
-			t.Errorf("answer %q: restart %v, want %v", answer, got, want)
-		}
-		if !strings.Contains(out.String(), "v0.1.0") || !strings.Contains(out.String(), "saved") {
-			t.Errorf("question %q should name the old version and say sessions are saved", out.String())
-		}
+func TestRestartQuestionText(t *testing.T) {
+	for _, tt := range []struct{ client, server string }{{"v0.2.0", "v0.1.0"}, {"dev", "old"}} {
+		t.Run(tt.client+"/"+tt.server, func(t *testing.T) {
+			title, text := restartQuestion(&api.VersionMismatchError{ClientVersion: tt.client, ServerVersion: tt.server})
+			if title != "Restart server?" {
+				t.Errorf("title %q, want Restart server?", title)
+			}
+			for _, want := range []string{tt.client, tt.server, "Programs running in its panes stop", "sessions keeps them", "saved sessions"} {
+				if !strings.Contains(text, want) {
+					t.Errorf("question %q does not contain %q", text, want)
+				}
+			}
+		})
 	}
 }

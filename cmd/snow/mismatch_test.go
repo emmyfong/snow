@@ -11,9 +11,8 @@ import (
 	"github.com/emmyfong/snow/pkg/api"
 )
 
-// TestOldServerIsNamed: a new snow that meets a server on an older protocol
-// says so and asks before restarting it, instead of attaching and
-// misreading its messages. Declining keeps the old server.
+// TestOldServerIsNamed: a protocol mismatch shows the restart popup before
+// Snow exits with the mismatch error.
 func TestOldServerIsNamed(t *testing.T) {
 	dir, err := os.MkdirTemp("", "snow")
 	if err != nil {
@@ -47,8 +46,8 @@ func TestOldServerIsNamed(t *testing.T) {
 	if code := run([]string{"work"}, &out, &errOut); code != 1 {
 		t.Fatalf("exit code %d, want 1; stderr %q", code, errOut.String())
 	}
-	if !strings.Contains(out.String(), "server is version old") || !strings.Contains(out.String(), "Keeping the running server") {
-		t.Fatalf("stdout %q, want the old version named and the server kept", out.String())
+	if !strings.Contains(errOut.String(), "api: client") || !strings.Contains(errOut.String(), "cannot talk to server") {
+		t.Fatalf("stderr %q, want the protocol mismatch error", errOut.String())
 	}
 }
 
@@ -75,16 +74,19 @@ func TestOtherServerBuildIsNamed(t *testing.T) {
 	t.Cleanup(func() { _ = l.Close() })
 	attached := make(chan struct{})
 	go func() {
-		for i := 0; ; i++ {
-			raw, err := l.Accept()
-			if err != nil {
-				return
-			}
-			older := api.Welcome{ServerVersion: "dev-0ld", Protocol: api.ProtocolVersion}
-			if _, err := api.ServerHandshake(api.NewConn(raw), older); err == nil && i == 1 {
-				close(attached)
-			}
-			_ = raw.Close()
+		raw, err := l.Accept()
+		if err != nil {
+			return
+		}
+		defer func() { _ = raw.Close() }()
+		conn := api.NewConn(raw)
+		older := api.Welcome{ServerVersion: "dev-0ld", Protocol: api.ProtocolVersion}
+		if _, err := api.ServerHandshake(conn, older); err != nil {
+			return
+		}
+		msg, _ := conn.Receive()
+		if attach, ok := msg.(*api.Attach); ok && attach.Session == "work" {
+			close(attached)
 		}
 	}()
 
@@ -92,9 +94,6 @@ func TestOtherServerBuildIsNamed(t *testing.T) {
 	t.Cleanup(func() { stdin = os.Stdin })
 	var out, errOut bytes.Buffer
 	run([]string{"work"}, &out, &errOut)
-	if !strings.Contains(out.String(), "server is version dev-0ld") || !strings.Contains(out.String(), "Keeping the running server") {
-		t.Fatalf("stdout %q, want the other build named and the server kept", out.String())
-	}
 	select {
 	case <-attached:
 	case <-time.After(5 * time.Second):
