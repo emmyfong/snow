@@ -44,11 +44,11 @@ func TestWindowsCloseEndsLongRunningProgram(t *testing.T) {
 	p := startReal(t, Spec{Path: "cmd.exe", Args: []string{"/c", "ping -n 600 127.0.0.1"}})
 	start := time.Now()
 	if err := p.Close(); err != nil {
-		t.Logf("close: %v", err)
+		t.Fatalf("close: %v", err)
 	}
 	waitDone(t, p, "close")
-	if d := time.Since(start); d > 5*time.Second {
-		t.Fatalf("close took %v", d)
+	if d := time.Since(start); d > closeWait {
+		t.Fatalf("close took %v, want at most %v", d, closeWait)
 	}
 }
 

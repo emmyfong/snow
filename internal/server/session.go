@@ -223,12 +223,10 @@ func (st *state) closeAll() {
 	}
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
-			// The model goroutine is stopping, so a chat's last events,
-			// which go through it, are dropped and Close does not wait.
 			for _, p := range w.panes {
-				if err := p.close(); err != nil {
-					st.srv.log.Warn("pane close", "pane", p.id, "err", err)
-				}
+				// Close panes off the model goroutine. Server.Close waits for
+				// them after this loop, so all closes start before it waits.
+				st.closePane(p)
 			}
 		}
 	}
