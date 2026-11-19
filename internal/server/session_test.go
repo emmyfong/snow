@@ -3,8 +3,76 @@ package server
 import (
 	"errors"
 	"slices"
+	"sync"
 	"testing"
+	"time"
+
+	"github.com/emmyfong/snow/pkg/api"
 )
+
+type shutdownTestPane struct {
+	started chan<- struct{}
+	release <-chan struct{}
+}
+
+func (*shutdownTestPane) State() api.SideState                { return noteState{} }
+func (*shutdownTestPane) Act(string, map[string]string) error { return nil }
+func (p *shutdownTestPane) Close() error {
+	p.started <- struct{}{}
+	<-p.release
+	return nil
+}
+
+func TestCloseAllClosesPanesConcurrently(t *testing.T) {
+	started := make(chan struct{}, 3)
+	release := make(chan struct{})
+	var releaseOnce sync.Once
+	releaseAll := func() { releaseOnce.Do(func() { close(release) }) }
+
+	opts := testOptions()
+	opts.sideKinds = []sideKind{{Name: "shutdown", Open: func(sideContext) (sidePane, error) {
+		return &shutdownTestPane{started: started, release: release}, nil
+	}}}
+	s := New(opts)
+	t.Cleanup(func() {
+		releaseAll()
+		s.Close()
+	})
+	if !s.call(func(st *state) {
+		sess, err := st.createSession("shutdown", 80, 24, "")
+		if err != nil {
+			t.Errorf("create session: %v", err)
+			return
+		}
+		for range 3 {
+			if _, err := st.newWindow(sess, "shutdown", "", ""); err != nil {
+				t.Errorf("create shutdown pane: %v", err)
+				return
+			}
+		}
+	}) {
+		t.Fatal("server stopped before creating panes")
+	}
+
+	done := make(chan struct{})
+	go func() {
+		s.Close()
+		close(done)
+	}()
+	for range 3 {
+		select {
+		case <-started:
+		case <-time.After(time.Second):
+			t.Fatal("server did not start every pane close concurrently")
+		}
+	}
+	releaseAll()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("server did not finish shutdown after pane closes returned")
+	}
+}
 
 func names(s *Server) []string {
 	var out []string

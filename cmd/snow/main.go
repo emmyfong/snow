@@ -29,7 +29,7 @@ const usage = `usage:
   snow           open the home page: your sessions, running and saved
   snow <name>    attach to session <name>, or create it
   snow auth      save or remove provider API keys (snow auth help)
-  snow claude    add Snow's hooks to Claude Code's settings (snow claude help)
+  snow claude    configure Snow's hooks and MCP server in Claude Code (snow claude help)
   snow hook      tell Snow what Claude Code does; Claude Code's hooks run it
   snow mcp       offer Snow's panes to Claude Code; Claude Code starts it
   snow version   print the version (also -v, --version)

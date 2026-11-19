@@ -34,6 +34,7 @@ type Model struct {
 	drawn         rendered
 	usage         bool   // the top bar shows the context gauge and the cost
 	providerReady bool   // at least one provider has a key
+	submitBlocked bool   // a session startup action still blocks new tasks
 	errAt         int    // the entry of the failure whose choices take keys
 	errChoice     int    // its highlighted choice
 	asked         string // a request for the session; see Asked
@@ -94,6 +95,10 @@ func (m *Model) SetProviderReady(ready bool) {
 	m.providerReady = ready
 	m.invalidate()
 }
+
+// SetSubmitBlocked prevents task submission while a runtime binding is
+// pending or failed. Slash commands remain available for recovery actions.
+func (m *Model) SetSubmitBlocked(blocked bool) { m.submitBlocked = blocked }
 
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = max(width, 0), max(height, 0) }

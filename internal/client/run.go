@@ -28,6 +28,9 @@ type Options struct {
 	ConfigPath string
 	Input      io.Reader // nil means standard input
 	Output     io.Writer // nil means standard output
+	// AnyServerBuild attaches to a server of another version on the same
+	// protocol. Without it Run asks the user to restart that server.
+	AnyServerBuild bool
 }
 
 // outboxSize bounds queued messages to the server. Keys from fast typing fit
@@ -70,7 +73,7 @@ func Run(opts Options) (Result, error) {
 			return Result{}, fmt.Errorf("connect to server: %w", err)
 		}
 		protocolMismatch = true
-	} else if w.ServerVersion != opts.Version {
+	} else if w.ServerVersion != opts.Version && !opts.AnyServerBuild {
 		mismatch = &api.VersionMismatchError{
 			ClientVersion: opts.Version, ServerVersion: w.ServerVersion,
 			ClientProtocol: hello.Protocol, ServerProtocol: w.Protocol,
@@ -110,6 +113,7 @@ func Run(opts Options) (Result, error) {
 	if mismatch != nil {
 		a.askRestart(mismatch)
 	}
+	a.configTheme = th
 	a.setKeys(table)
 	a.terminalBackground = cfg.Theme.Background == config.BackgroundTerminal
 	if opts.ConfigPath != "" {
@@ -127,7 +131,7 @@ func Run(opts Options) (Result, error) {
 	a.cols, a.rows = cols, rows
 	a.screen.SetSize(cols, rows)
 
-	var popts []tea.ProgramOption
+	popts := []tea.ProgramOption{tea.WithWindowSize(cols, rows)}
 	if opts.Input != nil {
 		popts = append(popts, tea.WithInput(opts.Input))
 	}

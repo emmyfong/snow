@@ -17,7 +17,7 @@ const (
 	OpSwap         = "swap"          // dir: swap Target with its neighbor
 	OpFocus        = "focus"         // optional dir: focus Target, or its neighbor
 	OpEven         = "even"          // even out the row or column holding Target
-	OpNewWindow    = "new-window"    // optional profile, folder, kind
+	OpNewWindow    = "new-window"    // optional profile, folder, kind, host-shell
 	OpRenameWindow = "rename-window" // name
 	OpSelectWindow = "select-window" // show window Target
 	OpNextWindow   = "next-window"
@@ -78,6 +78,9 @@ const (
 	ArgWorktree = "worktree"
 	// ArgRole names a role from ProfileList.Roles for a new agent.
 	ArgRole = "role"
+	// ArgHostShell asks a new window to use the shell under its inherited
+	// profile, such as Claude Code or a configured command.
+	ArgHostShell = "host-shell"
 )
 
 // WorktreeRemove is the ArgWorktree value that removes the worktree.
@@ -124,6 +127,9 @@ func (c *Command) Validate() error {
 			return nil
 		}
 		return fmt.Errorf("%w: %s needs a dir of left, right, up, or down", ErrInvalidCommand, c.Op)
+	}
+	if v, ok := c.Args[ArgHostShell]; ok && (c.Op != OpNewWindow || v != "true" || c.Args[ArgKind] != "" && c.Args[ArgKind] != PaneTerminal) {
+		return fmt.Errorf("%w: %s cannot take host-shell %q", ErrInvalidCommand, c.Op, v)
 	}
 	if k, ok := c.Args[ArgKind]; ok {
 		if err := CheckKind(k); err != nil {

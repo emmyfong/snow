@@ -6,6 +6,7 @@ package home
 import (
 	"image/color"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,16 +15,23 @@ import (
 	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/confirm"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
+	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/sessionlist"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/themepick"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
 // OpenMsg asks the client to attach to Session, creating it when Create is
 // set. An empty Session with Create starts a numbered session.
 type OpenMsg struct {
-	Session string
-	Create  bool
+	Session    string
+	Create     bool
+	Dir        string
+	Layout     string
+	Runtime    string
+	Connection string
 }
 
 // QuitMsg asks the client to leave Snow.
@@ -31,30 +39,34 @@ type QuitMsg struct{}
 
 // Model is the home page.
 type Model struct {
-	version    string
-	theme      theme.Theme // base adapted to the terminal's colors
-	base       theme.Theme // the theme from the config
-	now        func() time.Time
-	sessions   []api.SessionInfo // most recently used first
-	input      string
-	selected   int      // index into the shown sessions; -1 means none
-	target     string   // the session highlighted when a slash command began
-	notes      []string // problems with saved sessions, from the server
-	hint       string   // a one-line tip from the server, such as running snow claude setup
-	cmdSel     int      // index into the matching commands
-	notice     string   // why the last command or request was refused
-	tip        string   // a hint in the notice's place, such as where the prefix keys work
-	keys       *keys.Table
-	help       bool    // the help panel is open
-	naming     *naming // the new name /rename asks for, when open
-	confirm    *confirm.Model
-	leaving    bool
-	killing    string // the session the open popup would end
-	picking    bool   // the theme list is open
-	themeSel   int    // index into theme.Builtin
-	before     theme.Theme
-	profile    *colorprofile.Profile // the terminal's colors, once known
-	cols, rows int
+	version            string
+	folder             string
+	theme              theme.Theme // base adapted to the terminal's colors
+	base               theme.Theme // the theme from the config
+	now                func() time.Time
+	sessions           []api.SessionInfo // most recently used first
+	input              string
+	selected           int      // index into the shown sessions; -1 means none
+	target             string   // the session highlighted when a slash command began
+	notes              []string // problems with saved sessions, from the server
+	hint               string   // a one-line tip from the server, such as running snow claude setup
+	cmdSel             int      // index into the matching commands
+	notice             string   // why the last command or request was refused
+	tip                string   // a hint in the notice's place, such as where the prefix keys work
+	keys               *keys.Table
+	help               bool    // the help panel is open
+	naming             *naming // the new name /rename asks for, when open
+	confirm            *confirm.Model
+	leaving            bool
+	dialog             *newsession.Model
+	runtimes           []api.RuntimeConnection
+	runtimeListPending bool
+	runtimeListSeq     uint64
+	runtimeListID      string
+	killing            string                // the session the open popup would end
+	themePick          *themepick.Model      // the theme list is open
+	profile            *colorprofile.Profile // the terminal's colors, once known
+	cols, rows         int
 
 	paintedBackground color.Color
 }
@@ -71,8 +83,21 @@ func (m *Model) SetKeys(t *keys.Table) { m.keys = t }
 // opened.
 func (m *Model) SetNotice(text string) { m.notice = text }
 
+// SetFolder sets the folder prefilled in the new-session dialog.
+func (m *Model) SetFolder(folder string) { m.folder = folder }
+
 // SetSize sets the screen size in cells.
-func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
+func (m *Model) SetSize(cols, rows int) {
+	m.cols, m.rows = cols, rows
+	if m.dialog == nil {
+		return
+	}
+	m.dialog.SetSize(cols, rows)
+	if box, _, _ := m.dialog.View(m.theme, cols, rows); box == "" {
+		m.dialog = nil
+		m.notice = "Window too small for the new-session dialog"
+	}
+}
 
 // Update handles the session list, keys, and clicks.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
@@ -90,12 +115,28 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		// The new list may be in another order: keep the highlight on the
 		// same session, or drop it when that session is gone.
 		m.selected = slices.IndexFunc(m.shown(), func(s api.SessionInfo) bool { return s.Name == chosen })
+	case *api.RuntimeConnections:
+		if msg.Pane == 0 && msg.Agent == api.AgentClaude && msg.RequestID == m.runtimeListID {
+			m.runtimeListPending = false
+			m.runtimes = append([]api.RuntimeConnection(nil), msg.Connections...)
+			if m.dialog != nil {
+				m.dialog.SetRuntimes(m.runtimes)
+			}
+		}
 	case *api.Error:
+		if m.runtimeListPending && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+			m.runtimeListPending = false
+			return nil
+		}
 		// A refused rename or kill, or a late login or logout refusal; the
 		// server says why.
 		m.notice = msg.Message
 	case tea.KeyPressMsg:
 		return m.key(msg.Key())
+	case tea.PasteMsg:
+		if m.dialog != nil {
+			m.dialog.Paste(msg.Content)
+		}
 	case tea.MouseClickMsg:
 		return m.click(msg)
 	}
@@ -108,6 +149,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if msg.Button != tea.MouseLeft {
 		return nil
+	}
+	if m.dialog != nil {
+		return m.dialogResult(m.dialog.Click(m.theme, m.cols, m.rows, msg.X, msg.Y))
 	}
 	if m.confirm != nil {
 		return m.confirmResult(m.confirm.Click(m.theme, m.cols, m.rows, msg.X, msg.Y))
@@ -128,8 +172,8 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 	if !ok {
 		return nil
 	}
-	if m.picking {
-		m.pickTheme(i)
+	if m.themePick != nil {
+		m.pickTheme(m.themePick.Move(i - m.themePick.Selected()))
 		return m.keepTheme()
 	}
 	if m.commanding() {
@@ -144,10 +188,13 @@ func (m *Model) click(msg tea.MouseClickMsg) tea.Cmd {
 }
 
 func (m *Model) key(k tea.Key) tea.Cmd {
+	if m.dialog != nil {
+		return m.dialogResult(m.dialog.Key(k))
+	}
 	if m.confirm != nil {
 		return m.confirmResult(m.confirm.Key(k))
 	}
-	if m.picking {
+	if m.themePick != nil {
 		return m.pickerKey(k)
 	}
 	if m.help {
@@ -177,6 +224,9 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		}
 		m.input, m.selected, m.target, m.cmdSel = "", -1, "", 0
 	case k.Code == tea.KeyEnter:
+		if m.input == "" && m.selected < 0 {
+			return m.openNewSession()
+		}
 		return m.open(m.choice())
 	case k.Code == tea.KeyUp:
 		if m.selected > 0 {
@@ -190,6 +240,37 @@ func (m *Model) key(k tea.Key) tea.Cmd {
 		if s, ok := keys.Edit(m.input, k); ok {
 			m.setInput(s)
 		}
+	}
+	return nil
+}
+
+func (m *Model) openNewSession() tea.Cmd {
+	dialog := newsession.New(m.folder)
+	dialog.SetSize(m.cols, m.rows)
+	m.runtimes = nil
+	if box, _, _ := dialog.View(m.theme, m.cols, m.rows); box == "" {
+		m.notice = "Window too small for the new-session dialog"
+		return nil
+	}
+	m.dialog = dialog
+	m.runtimeListPending = true
+	m.runtimeListSeq++
+	m.runtimeListID = "home-new-session-" + strconv.FormatUint(m.runtimeListSeq, 10)
+	requestID := m.runtimeListID
+	return func() tea.Msg {
+		return SendMsg{Msg: &api.RuntimeRequest{RequestID: requestID, Agent: api.AgentClaude, Action: api.RuntimeList, Folder: m.folder}}
+	}
+}
+
+func (m *Model) dialogResult(result picker.Result) tea.Cmd {
+	switch result {
+	case picker.Accepted:
+		choice := m.dialog.Choice()
+		m.dialog = nil
+		runtime := choice.Start
+		return openCmd(OpenMsg{Create: true, Dir: choice.Folder, Layout: choice.Layout, Runtime: runtime, Connection: choice.Connection})
+	case picker.Cancelled:
+		m.dialog = nil
 	}
 	return nil
 }
@@ -215,7 +296,7 @@ func (m *Model) choice() OpenMsg {
 	}
 	name := strings.TrimSpace(m.input)
 	if name == "" {
-		return OpenMsg{Create: true}
+		return OpenMsg{}
 	}
 	for _, s := range m.sessions {
 		if s.Name == name {

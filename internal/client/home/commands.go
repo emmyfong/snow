@@ -23,8 +23,14 @@ var runs = map[string]func(m *Model, rest string) tea.Cmd{
 	"rename":   (*Model).cmdRename,
 	"kill":     (*Model).cmdKill,
 	"theme":    (*Model).cmdTheme,
+	"settings": (*Model).cmdSettings,
 	"help":     (*Model).cmdHelp,
 	"quit":     (*Model).cmdQuit,
+}
+
+func (m *Model) cmdSettings(string) tea.Cmd {
+	m.done()
+	return func() tea.Msg { return command.SettingsMsg{} }
 }
 
 // commanding reports whether the input is a slash command.
@@ -125,6 +131,9 @@ func (m *Model) exists(name string) bool {
 }
 
 func (m *Model) cmdNew(name string) tea.Cmd {
+	if name == "" {
+		return m.openNewSession()
+	}
 	o := OpenMsg{Session: name, Create: !m.exists(name)}
 	if cmd := m.open(o); cmd != nil {
 		m.done()

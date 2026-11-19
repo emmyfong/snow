@@ -99,6 +99,23 @@ func helperSplit(id int) *api.Command {
 	return &api.Command{Op: api.OpSplit, Target: id, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgProfile: "Helper (free)"}}
 }
 
+func TestHostShellWindowDoesNotLoadAgentSecrets(t *testing.T) {
+	secretCalls := 0
+	srv := &Server{launch: launcher{secrets: func(string) []string {
+		secretCalls++
+		return []string{"omniroute"}
+	}}}
+	st := &state{srv: srv}
+	sess := &session{active: 0, windows: []*window{{
+		index: 0, focused: 1,
+		panes: map[int]*pane{1: {id: 1, profile: "Helper (free)", dir: "/repo"}},
+	}}}
+	cmd := &api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgHostShell: "true", api.ArgKind: api.PaneTerminal}}
+	if names := st.paneSecrets(sess, cmd); len(names) != 0 || secretCalls != 0 {
+		t.Fatalf("host-shell secrets %v loaded %d agent secret lists, want none", names, secretCalls)
+	}
+}
+
 // TestAgentProfileEnv: a pane from an agent profile gets its variables and
 // the secret from the store, does not inherit key variables, and the
 // secret never reaches the log, the protocol, or the saved session.

@@ -217,7 +217,7 @@ func (st *state) runWithSecrets(c *client, sess *session, cmd *api.Command) {
 // paneSecrets returns the secrets the terminal pane cmd opens needs; none
 // for a command that opens no terminal pane.
 func (st *state) paneSecrets(sess *session, cmd *api.Command) []string {
-	if cmd.Args[api.ArgKind] == api.PaneChat {
+	if cmd.Args[api.ArgKind] == api.PaneChat || cmd.Args[api.ArgHostShell] == "true" {
 		return nil
 	}
 	var from int

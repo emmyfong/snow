@@ -5,6 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
+	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -107,4 +109,75 @@ func (m *Model) run(name string, k tea.Key) tea.Cmd {
 	return nil
 }
 
-func (m *Model) openNewWindow() tea.Cmd { return m.run("new-window", tea.Key{}) }
+func (m *Model) openNewWindow() tea.Cmd {
+	folder, profile := "", ""
+	if p := m.focused(); p != nil {
+		folder, profile = p.Folder, p.Profile
+	}
+	pick := newsession.New(folder)
+	pick.SetSize(m.cols, m.windowRows())
+	if box, _, _ := pick.View(m.theme, m.cols, m.windowRows()); box == "" {
+		return m.ShowError("Window too small for the new-session dialog")
+	}
+	m.windowRuntimeSeq++
+	m.windowRuntimeRequest = "new-window-claude-" + strconv.FormatUint(m.windowRuntimeSeq, 10)
+	m.newWindowRuntimes = nil
+	m.windowRuntimePending = true
+	m.send(&api.RuntimeRequest{RequestID: m.windowRuntimeRequest, Agent: api.AgentClaude, Action: api.RuntimeList, Folder: folder, Profile: profile})
+	o := &overlay{
+		popup: pick,
+		key:   pick.Key,
+		click: pick.Click,
+		paste: pick.Paste,
+		done: func(result picker.Result) tea.Cmd {
+			if result != picker.Accepted {
+				return nil
+			}
+			choice := pick.Choice()
+			kind := api.PaneTerminal
+			m.pendingWindowRuntime = ""
+			if choice.Start == newsession.StartClaudeCode && choice.Connection != "" {
+				kind = api.PaneChat
+				m.pendingWindowRuntime = choice.Connection
+			}
+			m.newPreset = choice.Layout
+			if m.layout != nil {
+				m.winCount = len(m.layout.Windows)
+			}
+			m.newWindowPending = true
+			args := map[string]string{api.ArgFolder: choice.Folder, api.ArgKind: kind}
+			if choice.Start == newsession.StartShell {
+				args[api.ArgHostShell] = "true"
+			}
+			m.send(&api.Command{Op: api.OpNewWindow, Args: args})
+			return nil
+		},
+	}
+	return m.showOverlay(o, "new window")
+}
+
+func (m *Model) applyPendingWindowLayout(layout *api.Layout) {
+	if len(layout.Windows) <= m.winCount {
+		return
+	}
+	m.newWindowPending = false
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	if m.pendingWindowRuntime != "" {
+		for _, pane := range w.Panes {
+			if pane.Kind == api.PaneChat {
+				m.pendingRuntime, m.pendingRuntimePane = m.pendingWindowRuntime, pane.ID
+				m.pendingWindowRuntime = ""
+				break
+			}
+		}
+	}
+	if m.newPreset == "" {
+		return
+	}
+	name := m.newPreset
+	m.newPreset = ""
+	m.send(&api.Command{Op: api.OpLayout, Target: w.Panes[0].ID, Args: map[string]string{api.ArgName: name}})
+}

@@ -109,6 +109,14 @@ func (m *Model) commandQuery() (string, bool) {
 	return string(m.input[1:m.cursor]), true
 }
 
+func (m *Model) loginCommand() bool {
+	if !m.commanding() {
+		return false
+	}
+	word, _ := command.Split(strings.TrimPrefix(string(m.input), "/"))
+	return word == "login"
+}
+
 // commanding reports whether the input is a slash command of any kind.
 func (m *Model) commanding() bool { return len(m.input) > 0 && m.input[0] == '/' }
 
@@ -157,6 +165,10 @@ func (m *Model) commandKey(k tea.Key) (*api.ChatInput, bool) {
 			m.complete(ms[min(m.cmdSel, len(ms)-1)])
 		}
 	case tea.KeyEnter:
+		if m.submitBlocked && !m.loginCommand() {
+			m.note = "Connect a runtime before sending a task. Type /login to choose a connection."
+			return nil, true
+		}
 		if len(ms) == 0 {
 			m.note = "No command matches. Type /help to see them all."
 			return nil, true

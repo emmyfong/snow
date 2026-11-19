@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -124,6 +125,29 @@ func TestCloseLastPaneClosesWindow(t *testing.T) {
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 1 })
 	if l.Windows[0].Index != 1 || l.Active != 1 {
 		t.Fatalf("after closing window 0's last pane: %+v, want only window 1, shown", l)
+	}
+}
+
+func TestNewWindowHostShellUsesInheritedAgentEnvironment(t *testing.T) {
+	host := hostShell()
+	opts := Options{
+		Version: "test",
+		detect: func() []shell.Profile {
+			return []shell.Profile{host, {Name: "Claude Code", Kind: shell.KindClaude, Path: host.Path}}
+		},
+	}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c, _ := attached(t, s, 80, 24)
+	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgProfile: "Claude Code"}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 })
+	if panes := shownPanes(l); len(panes) != 1 || panes[0].Profile != "Claude Code" {
+		t.Fatalf("agent-profile window panes %+v, want Claude Code", panes)
+	}
+	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgHostShell: "true"}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 })
+	if panes := shownPanes(l); len(panes) != 1 || panes[0].Profile != host.Name {
+		t.Fatalf("host-shell window panes %+v, want profile %q", panes, host.Name)
 	}
 }
 

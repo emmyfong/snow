@@ -18,6 +18,12 @@ import (
 // Action is a deliberate connection operation. Key is hidden in all formatting.
 type Action struct{ Kind, Connection, Auth, Key string }
 
+// Ready reports whether Snow has verified that a signed-in connection can
+// start its runtime.
+func Ready(c api.RuntimeConnection) bool {
+	return c.Ready && (c.Status == api.RuntimeStatusSignedIn || c.Status == api.RuntimeStatusKeySaved)
+}
+
 // Format prevents a pasted API key from entering debug output.
 func (a Action) Format(f fmt.State, _ rune) {
 	_, _ = fmt.Fprintf(f, "runtimepick.Action{Kind:%q, Connection:%q, Key:[hidden]}", a.Kind, a.Connection)
@@ -194,12 +200,12 @@ func billing(auth string) string {
 func statusText(c api.RuntimeConnection) string {
 	switch c.Status {
 	case api.RuntimeStatusSignedIn:
-		if c.Ready {
+		if Ready(c) {
 			return "Signed in, ready"
 		}
 		return "Signed in"
 	case api.RuntimeStatusKeySaved:
-		if c.Ready {
+		if Ready(c) {
 			return "Key saved, ready"
 		}
 		return "Key saved"

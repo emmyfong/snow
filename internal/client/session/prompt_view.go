@@ -46,13 +46,7 @@ func (m *Model) promptLayout() (promptLayout, bool) {
 		empty = "No command matches."
 	case modeThemes:
 		title, prompt = "Themes", "theme: "
-		for _, t := range p.themeMatches() {
-			note := ""
-			if t.Name == m.base.Name {
-				note = "in use"
-			}
-			items = append(items, ui.ListItem{Cols: []string{t.Name, note}})
-		}
+		items = p.themePick.Items()
 		hints = []ui.Hint{{Key: "enter", Desc: "use"}, {Key: "↑↓", Desc: "select"}, {Key: "esc", Desc: "close"}}
 		empty = "No theme matches."
 	case modeName:
