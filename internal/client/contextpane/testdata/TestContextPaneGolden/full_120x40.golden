@@ -1,23 +1,23 @@
-[1m Context[m                                                                                                  [38;2;107;124;140mFix the parser[m
+[1m Context[m                                                                                                  [38;2;138;155;171mFix the parser[m
 [1m Occupancy[m
-  [38;2;107;124;140mcontext  [m 34.2k of 200k (17%)
-  [38;2;107;124;140msource   [m the last prompt of the direct-API reply
+  [38;2;138;155;171mcontext  [m 34.2k of 200k (17%)
+  [38;2;138;155;171msource   [m the last prompt of the direct-API reply
 
 [1m Sources[m
-  [38;2;107;124;140mper-source token counts are unavailable[m
+  [38;2;138;155;171mper-source token counts are unavailable[m
   internal/usage/context.go          read 3x
   internal/server/usagepane.go       read 2x, changed
   pkg/api/contextpane.go             read 1x
 
 [1m Reads, repeated[m
   internal/usage/context.go:1-40     3 reads  unchanged #1-#4
-    [38;2;107;124;140m#1 13:12, #4 14:02; 2 same, 0 changed; evidence: tool result text[m
+    [38;2;138;155;171m#1 13:12, #4 14:02; 2 same, 0 changed; evidence: tool result text[m
   internal/server/usagepane.go       2 reads  changed   #2-#5
-    [38;2;107;124;140m#2 13:40, #5 14:10; 0 same, 1 changed; evidence: tool result text[m
+    [38;2;138;155;171m#2 13:40, #5 14:10; 0 same, 1 changed; evidence: tool result text[m
 
 [1m Notes[m
-  [38;2;107;124;140mPer-source token counts are unavailable: tool calls do not report the tokens their content added.[m
-  [38;2;107;124;140mRepeated reads compare tool result text, not a saved file version. A file change can justify a second read.[m
+  [38;2;138;155;171mPer-source token counts are unavailable: tool calls do not report the tokens their content added.[m
+  [38;2;138;155;171mRepeated reads compare tool result text, not a saved file version. A file change can justify a second read.[m
 
 
 
@@ -37,4 +37,4 @@
 
 
 
- [38;2;127;184;230mr[m [38;2;107;124;140mrefresh[m
+ [38;2;127;184;230mr[m [38;2;138;155;171mrefresh[m
