@@ -11,6 +11,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -88,6 +89,12 @@ func Split(text string) (word, rest string) {
 // ThemeMsg asks the client to use the theme called Name everywhere and to
 // save it in the config file. The home page and the session screen send it.
 type ThemeMsg struct{ Name string }
+
+// PreviewThemeMsg asks the client to show Theme without saving it.
+type PreviewThemeMsg struct{ Theme theme.Theme }
+
+// SettingsMsg asks the client to open its settings screen.
+type SettingsMsg struct{}
 
 // Reason returns err's message without the protocol's error prefix, to
 // tell the user why a command's argument was refused.

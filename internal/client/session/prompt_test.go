@@ -194,6 +194,21 @@ func TestCommandPopupThemeApplies(t *testing.T) {
 	}
 }
 
+func TestCommandSettingsOpens(t *testing.T) {
+	m, _ := openPrompt(t, 80, 24)
+	cmd := typeIn(m, "settings\r")
+	if cmd == nil {
+		t.Fatal("settings returned no command")
+	}
+	got := cmd()
+	if _, ok := got.(command.SettingsMsg); !ok {
+		t.Fatalf("settings returned %T, want command.SettingsMsg", got)
+	}
+	if m.prompt == nil || m.prompt.mode != modeCommands {
+		t.Fatal("settings closed the session command popup; it must remain on the back screen")
+	}
+}
+
 func TestCommandPopupUnknownCommand(t *testing.T) {
 	m, r := openPrompt(t, 80, 24)
 	typeIn(m, "zzz\r")
@@ -267,6 +282,7 @@ func TestCommandPopupGolden80x24(t *testing.T)      { goldenPrompt(t, 80, 24, ""
 func TestCommandPopupGolden120x40(t *testing.T)     { goldenPrompt(t, 120, 40, "") }
 func TestCommandPopupTypedGolden80x24(t *testing.T) { goldenPrompt(t, 80, 24, "re") }
 func TestCommandThemesGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "theme\r") }
+func TestCommandThemesGolden120x40(t *testing.T)    { goldenPrompt(t, 120, 40, "theme\r") }
 func TestCommandRenameGolden80x24(t *testing.T)     { goldenPrompt(t, 80, 24, "rename\r") }
 
 // TestCommandPopupTinyScreen: a window too small for the popup does not

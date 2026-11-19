@@ -22,6 +22,14 @@ func TestEveryHomeCommandHasHandler(t *testing.T) {
 	}
 }
 
+func TestSettingsCommandOpens(t *testing.T) {
+	m := screen(80, 24)
+	typeText(m, "/settings")
+	if got := enter(m); got != (command.SettingsMsg{}) {
+		t.Fatalf("/settings gave %#v, want command.SettingsMsg", got)
+	}
+}
+
 // msgOf runs cmd and returns its message, or nil.
 func msgOf(cmd tea.Cmd) tea.Msg {
 	if cmd == nil {

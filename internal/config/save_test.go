@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -63,5 +64,70 @@ func TestSetThemeLeavesAnInlineTable(t *testing.T) {
 	}
 	if got, _ := os.ReadFile(path); string(got) != before {
 		t.Fatalf("the file changed:\n%s", got)
+	}
+}
+
+func TestSetThemeIgnoresMultilineStringContents(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "[profile]\ndefault = '''\n[theme]\nname = \"inside the string\"\n'''\n[theme]\nname = \"Frost\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetTheme(path, "Nord"); err != nil {
+		t.Fatalf("SetTheme: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := strings.Replace(before, "name = \"Frost\"", "name = \"Nord\"", 1)
+	if string(got) != want {
+		t.Fatalf("file:\n%s\nwant:\n%s", got, want)
+	}
+}
+
+func TestSetThemeIgnoresMultilineStringsInArrayValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "[agent.test]\ncommand = [\n  \"sh\",\n  '''\n[theme]\nname = \"old\"\n'''\n]\n[theme]\nname = \"Nord\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetTheme(path, "Nord"); err != nil {
+		t.Fatalf("SetTheme: %v", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != before {
+		t.Fatalf("file changed:\n%s\nwant unchanged:\n%s", got, before)
+	}
+}
+
+func TestSetThemeIgnoresMultilineStringsWithExtraClosingQuotes(t *testing.T) {
+	for _, quote := range []string{"'''", `"""`} {
+		for extra := 1; extra <= 2; extra++ {
+			t.Run(string(rune('0'+extra))+quote, func(t *testing.T) {
+				path := filepath.Join(t.TempDir(), "config.toml")
+				closing := quote + strings.Repeat(quote[:1], extra)
+				before := "[agent.test]\ncommand = [\n  \"sh\",\n  " + quote + "hello" + closing + ", " + quote + "\n[theme]\nname = \"old\"\n" + quote + "\n]\n[theme]\nname = \"Nord\"\n"
+				if _, err := parse(before); err != nil {
+					t.Fatalf("test config is invalid: %v", err)
+				}
+				if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+					t.Fatal(err)
+				}
+				if err := SetTheme(path, "Nord"); err != nil {
+					t.Fatalf("SetTheme: %v", err)
+				}
+				got, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(got) != before {
+					t.Fatalf("file changed:\n%s\nwant unchanged:\n%s", got, before)
+				}
+			})
+		}
 	}
 }

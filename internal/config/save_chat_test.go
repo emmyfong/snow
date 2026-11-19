@@ -104,3 +104,18 @@ func TestSetChatModelLeavesADottedKey(t *testing.T) {
 		t.Fatalf("the file changed:\n%s", got)
 	}
 }
+
+func TestSetChatModelLeavesFileUnchangedWhenEffortCannotBeEdited(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "[chat]\nmodel = \"openai/old\"\neffort = '''low'''\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetChatModel(path, "openai/gpt-6.1-sol", "high"); !errors.Is(err, ErrCannotEdit) {
+		t.Fatalf("SetChatModel error = %v, want ErrCannotEdit", err)
+	}
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != before {
+		t.Fatalf("failed save changed config: %q, %v", got, err)
+	}
+}

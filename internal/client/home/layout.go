@@ -44,7 +44,7 @@ func (m *Model) layout() placement {
 	// While a command is typed, a few session rows are set aside first, so
 	// the wordmark and a long command list never hide what a pick picks.
 	reserve := 0
-	if m.commanding() && !m.picking {
+	if m.commanding() && m.themePick == nil {
 		reserve = bandRows + min(max(len(m.sessions), 1), 3)
 	}
 	p.header = m.cols >= ui.WordmarkWidth && room-headerRows >= min(max(shown, 1), 3)+reserve
@@ -90,7 +90,7 @@ func (m *Model) targetIndex() int {
 // listLen and listSel are the list's length and selected row: the matching
 // commands while a slash command is typed, else the sessions.
 func (m *Model) listLen() int {
-	if m.picking {
+	if m.themePick != nil {
 		return len(theme.Builtin())
 	}
 	if m.commanding() {
@@ -100,8 +100,8 @@ func (m *Model) listLen() int {
 }
 
 func (m *Model) listSel() int {
-	if m.picking {
-		return m.themeSel
+	if m.themePick != nil {
+		return m.themePick.Selected()
 	}
 	if m.commanding() {
 		return m.cmdSel

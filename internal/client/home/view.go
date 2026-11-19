@@ -44,7 +44,7 @@ func (m *Model) View() tea.View {
 	}
 	lines = append(lines, notice)
 	switch {
-	case m.picking:
+	case m.themePick != nil:
 		lines = append(lines, m.themeList(p)...)
 	case m.commanding():
 		lines = append(lines, m.commandList(p)...)
@@ -113,7 +113,7 @@ func (m *Model) commandList(p placement) []string {
 
 // hints are the keys the page answers to now.
 func (m *Model) hints() []ui.Hint {
-	if m.picking {
+	if m.themePick != nil {
 		return []ui.Hint{{Key: "enter", Desc: "keep"}, {Key: "↑↓", Desc: "preview"}, {Key: "esc", Desc: "cancel"}}
 	}
 	if m.naming != nil {
@@ -148,7 +148,7 @@ const maxNotes = 3
 // under the sessions: files it could not read, or saving that fails. A long path keeps its end, where the file name
 // is.
 func (m *Model) noteLines() []string {
-	if m.picking || m.commanding() || (len(m.notes) == 0 && m.hint == "") {
+	if m.themePick != nil || m.commanding() || (len(m.notes) == 0 && m.hint == "") {
 		return nil
 	}
 	style := lipgloss.NewStyle().Foreground(m.theme.Error)
