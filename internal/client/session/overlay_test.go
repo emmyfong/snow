@@ -87,7 +87,7 @@ func TestResumePickerClick(t *testing.T) {
 	if box == "" {
 		t.Fatal("no picker")
 	}
-	m.Update(tea.MouseClickMsg{X: x + 4, Y: y + 2, Button: tea.MouseLeft})
+	m.Update(tea.MouseClickMsg{X: x + 4, Y: y + 2 + m.areaTop(), Button: tea.MouseLeft})
 	if in := lastChatInput(r); in == nil || in.Conversation != "c8" {
 		t.Fatalf("click sent %+v", in)
 	}

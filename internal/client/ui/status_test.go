@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -13,11 +12,10 @@ import (
 func TestStatusBar(t *testing.T) {
 	out := StatusBar(theme.Default(), StatusOptions{
 		Width: 50, Session: "api",
-		Tabs:  []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs", Zoomed: true}},
 		Right: "sh  14:02",
 	})
 	got := ansi.Strip(out)
-	for _, want := range []string{"[api]", " 1 dev* ", " 2 logsZ ", "sh  14:02"} {
+	for _, want := range []string{"api", "sh  14:02"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("status %q lacks %q", got, want)
 		}
@@ -27,26 +25,13 @@ func TestStatusBar(t *testing.T) {
 	}
 }
 
-// TestStatusBarMarksCurrentWindow: in every theme, the shown window is a
-// block in the tab colors and the other windows are plain bar text.
-func TestStatusBarMarksCurrentWindow(t *testing.T) {
-	for _, th := range theme.Builtin() {
-		out := StatusBar(th, StatusOptions{Width: 50, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}})
-		active := lipgloss.NewStyle().Foreground(th.TabActive).Background(th.TabActiveBG).Bold(true)
-		bar := lipgloss.NewStyle().Foreground(th.BarFG).Background(th.BarBG)
-		if !strings.Contains(out, active.Render(" 1 dev* ")) || !strings.Contains(out, bar.Render(" 2 logs ")) {
-			t.Errorf("%s: want the current window in the tab colors and the other plain: %q", th.Name, out)
-		}
-	}
-}
-
 // TestStatusBarDividesMessage: a dark cell sits before the error strip in
 // every theme, because the strip can share the bar's color (Clay).
 func TestStatusBarDividesMessage(t *testing.T) {
 	for _, th := range theme.Builtin() {
 		divider := lipgloss.NewStyle().Background(th.BarFG).Render(" ")
 		for _, w := range []int{30, 60} {
-			out := StatusBar(th, StatusOptions{Width: w, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}, Message: "no room"})
+			out := StatusBar(th, StatusOptions{Width: w, Session: "api", Message: "no room"})
 			if !strings.Contains(out, divider) || ansi.StringWidth(out) != w {
 				t.Errorf("%s at %d: want a divider and width %d: %q", th.Name, w, w, out)
 			}
@@ -63,7 +48,7 @@ func TestStatusBarMessageReplacesRight(t *testing.T) {
 
 func TestStatusBarIsWidthSafe(t *testing.T) {
 	for _, w := range []int{0, 1, 5, 12} {
-		out := StatusBar(theme.Default(), StatusOptions{Width: w, Session: "a-long-session-name", Tabs: []Tab{{Index: 1, Name: "PowerShell", Active: true}}, Right: "PowerShell 14:02"})
+		out := StatusBar(theme.Default(), StatusOptions{Width: w, Session: "a-long-session-name", Right: "PowerShell 14:02"})
 		if got := ansi.StringWidth(out); got != w {
 			t.Errorf("width %d: got %d", w, got)
 		}
@@ -71,8 +56,7 @@ func TestStatusBarIsWidthSafe(t *testing.T) {
 }
 
 func TestStatusBarKeepsMessageWhenNarrow(t *testing.T) {
-	tabs := []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}, {Index: 3, Name: "build"}}
-	out := StatusBar(theme.Default(), StatusOptions{Width: 30, Session: "api", Tabs: tabs, Right: "sh 14:02", Message: "no room"})
+	out := StatusBar(theme.Default(), StatusOptions{Width: 30, Session: "api", Right: "sh 14:02", Message: "no room"})
 	got := ansi.Strip(out)
 	if !strings.Contains(got, "no room") {
 		t.Fatalf("narrow status %q dropped the message", got)
@@ -87,10 +71,9 @@ func TestStatusBarKeepsMessageWhenNarrow(t *testing.T) {
 // the error color (#238).
 func TestStatusBarKeepsNotice(t *testing.T) {
 	th := theme.Default()
-	tabs := []Tab{{Index: 1, Name: "dev", Active: true}, {Index: 2, Name: "logs"}}
 	const notice = "Resumed with the approval mode ask. Type /mode auto to stop the questions."
 	for _, width := range []int{20, 40, 80, 100} {
-		o := StatusOptions{Width: width, Session: "api", Tabs: tabs, Right: "sh 14:02", Notice: notice}
+		o := StatusOptions{Width: width, Session: "api", Right: "sh 14:02", Notice: notice}
 		out := StatusBar(th, o)
 		if w := ansi.StringWidth(out); w != width {
 			t.Fatalf("width %d: bar is %d cells", width, w)
@@ -109,20 +92,11 @@ func TestStatusBarKeepsNotice(t *testing.T) {
 	}
 }
 
-func TestStatusBarUsesThemeGlyphs(t *testing.T) {
-	th := theme.Default()
-	th.Glyphs.ActiveTab, th.Glyphs.SessionLeft, th.Glyphs.SessionRight = "!", "<", ">"
-	got := ansi.Strip(StatusBar(th, StatusOptions{Width: 30, Session: "api", Tabs: []Tab{{Index: 1, Name: "dev", Active: true}}}))
-	if !strings.Contains(got, "<api>") || !strings.Contains(got, "1 dev!") {
-		t.Fatalf("status %q ignores the theme's glyphs", got)
-	}
-}
-
 // TestStatusBarPromptTakesTheBar: a question replaces the whole bar, in its
 // own colors, as tmux does, so it cannot be missed.
 func TestStatusBarPromptTakesTheBar(t *testing.T) {
 	th := theme.Default()
-	opts := StatusOptions{Width: 50, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev", Active: true}}, Right: "14:02", Message: "no room", Prompt: "close this pane? y/n"}
+	opts := StatusOptions{Width: 50, Session: "api", Right: "14:02", Message: "no room", Prompt: "close this pane? y/n"}
 	out := StatusBar(th, opts)
 	got := ansi.Strip(out)
 	if strings.TrimSpace(got) != "close this pane? y/n" {
@@ -138,123 +112,22 @@ func TestStatusBarPromptTakesTheBar(t *testing.T) {
 	}
 }
 
-func TestTabSpansMatchTheDrawnBar(t *testing.T) {
-	tabs := []Tab{{Index: 0, Name: "dev"}, {Index: 1, Name: "logs", Active: true}, {Index: 2, Name: "漢字", Zoomed: true}}
-	tests := []struct {
-		name string
-		o    StatusOptions
-		want []string // the text under each returned span
-	}{
-		{"all fit", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02"}, []string{" 0 dev ", " 1 logs* ", " 2 漢字Z "}},
-		{"cut by the width", StatusOptions{Width: 25, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1 logs* ", " 2"}},
-		{"tab cut", StatusOptions{Width: 16, Session: "api", Tabs: tabs}, []string{" 0 dev ", " 1"}},
-		{"tab hidden", StatusOptions{Width: 7, Session: "api", Tabs: tabs}, nil},
-		{"cut by a message", StatusOptions{Width: 33, Session: "api", Tabs: tabs, Message: "no room to split"}, []string{" 0 dev "}},
-		{"no tabs", StatusOptions{Width: 30, Session: "api"}, nil},
-	}
-	for _, tt := range tests {
-		bar := ansi.Strip(StatusBar(theme.Default(), tt.o))
-		spans := TabSpans(theme.Default(), tt.o)
-		var got []string
-		for _, sp := range spans {
-			got = append(got, ansi.Cut(bar, sp.X, sp.X+sp.W))
-		}
-		if !slices.Equal(got, tt.want) {
-			t.Errorf("%s: text under spans = %q, want %q (bar %q)", tt.name, got, tt.want, bar)
-		}
-	}
-}
-
-// TestSessionSpanMatchesTheDrawnBar: the span covers exactly the session
-// name, clipped the same way the bar clips it.
-func TestSessionSpanMatchesTheDrawnBar(t *testing.T) {
-	tabs := []Tab{{Index: 1, Name: "dev", Active: true}}
-	tests := []struct {
-		name string
-		o    StatusOptions
-		want string // the text under the span; "" when there is no span
-	}{
-		{"room", StatusOptions{Width: 80, Session: "api", Tabs: tabs}, " [api] "},
-		{"long name", StatusOptions{Width: 80, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-long-session-name] "},
-		{"cut short", StatusOptions{Width: 10, Session: "a-very-long-session-name", Tabs: tabs}, " [a-very-l"},
-		{"a message clips it", StatusOptions{Width: 24, Session: "a-very-long-session-name", Tabs: tabs, Message: "no room to split"}, " [a-v"},
-		{"a wide name cut", StatusOptions{Width: 3, Session: "漢字", Tabs: tabs}, " ["},
-		{"a wide name cut in the middle", StatusOptions{Width: 5, Session: "漢字", Tabs: tabs}, " [漢"},
-		{"a prompt hides it", StatusOptions{Width: 80, Session: "api", Prompt: "close? y/n"}, ""},
-		{"no width", StatusOptions{Session: "api"}, ""},
-	}
-	for _, tt := range tests {
-		bar := StatusBar(theme.Default(), tt.o)
-		x, w, ok := SessionSpan(theme.Default(), tt.o)
-		got := ""
-		if ok {
-			if x != 0 {
-				t.Errorf("%s: span starts at %d, want 0", tt.name, x)
-			}
-			got = ansi.Strip(ansi.Cut(bar, x, x+w))
-		}
-		if got != tt.want {
-			t.Errorf("%s: span text %q, want %q (bar %q)", tt.name, got, tt.want, ansi.Strip(bar))
-		}
-	}
-}
-
-func TestTabSpansForPromptAndNoWidth(t *testing.T) {
-	if got := TabSpans(theme.Default(), StatusOptions{Width: 40, Tabs: []Tab{{Name: "a"}}, Prompt: "close? y/n"}); got != nil {
-		t.Errorf("a prompt leaves spans %v", got)
-	}
-	if got := TabSpans(theme.Default(), StatusOptions{Tabs: []Tab{{Name: "a"}}}); got != nil {
-		t.Errorf("width 0 leaves spans %v", got)
-	}
-}
-
-// TestStatusBarHint: the reminder sits before Right, and the bar drops it
-// before Right or a window tab, so it never costs a tab or a message.
-func TestStatusBarHint(t *testing.T) {
-	hint := "right-click: menu"
-	tabs := []Tab{{Index: 0, Name: "dev", Active: true}}
-	tests := []struct {
-		name      string
-		o         StatusOptions
-		wantHint  bool
-		wantRight bool
-		wantTabs  []string
-	}{
-		{"room for all", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, true, true, []string{" 0 dev* "}},
-		{"drops before right", StatusOptions{Width: 30, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Hint: hint}, false, true, []string{" 0 dev* "}},
-		{"drops before a tab", StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}, false, false, []string{" 0 dev* "}},
-		{"a message wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Message: "no room", Hint: hint}, false, false, []string{" 0 dev* "}},
-		{"a notice wins", StatusOptions{Width: 80, Session: "api", Tabs: tabs, Right: "pwsh  14:02", Notice: "copied", Hint: hint}, false, false, []string{" 0 dev* "}},
-	}
-	for _, tt := range tests {
-		out := StatusBar(theme.Default(), tt.o)
+func TestStatusBarPromptHint(t *testing.T) {
+	const prompt, hint = "rename window: dev_", "Esc: cancel"
+	for _, width := range []int{1, 12, 20, 32, 33, 80} {
+		o := StatusOptions{Width: width, Prompt: prompt, Hint: hint, Message: "hidden"}
+		out := StatusBar(theme.Default(), o)
 		got := ansi.Strip(out)
-		if w := ansi.StringWidth(out); w != tt.o.Width {
-			t.Errorf("%s: width %d, want %d", tt.name, w, tt.o.Width)
+		if ansi.StringWidth(out) != width {
+			t.Fatalf("width %d: bar %q has wrong width", width, got)
 		}
-		if has := strings.Contains(got, hint); has != tt.wantHint {
-			t.Errorf("%s: hint shown %v, want %v (bar %q)", tt.name, has, tt.wantHint, got)
+		wantHint := width >= ansi.StringWidth(" "+prompt+" "+hint+" ")
+		if strings.Contains(got, hint) != wantHint {
+			t.Fatalf("width %d: bar %q, want hint %v", width, got, wantHint)
 		}
-		if has := strings.Contains(got, "pwsh  14:02"); has != tt.wantRight {
-			t.Errorf("%s: right shown %v, want %v (bar %q)", tt.name, has, tt.wantRight, got)
+		if !strings.HasPrefix(got, ansi.Truncate(" "+prompt, width, "")) || strings.Contains(got, "hidden") {
+			t.Fatalf("width %d: prompt lost priority: %q", width, got)
 		}
-		if tt.wantHint && strings.Index(got, hint) > strings.Index(got, "pwsh") {
-			t.Errorf("%s: the hint follows Right: %q", tt.name, got)
-		}
-		var spans []string
-		for _, sp := range TabSpans(theme.Default(), tt.o) {
-			spans = append(spans, ansi.Cut(got, sp.X, sp.X+sp.W))
-		}
-		if !slices.Equal(spans, tt.wantTabs) {
-			t.Errorf("%s: spans %q, want %q", tt.name, spans, tt.wantTabs)
-		}
-	}
-	// The hint never costs a tab: the spans are the same with and without it.
-	withHint := StatusOptions{Width: 20, Session: "api", Tabs: tabs, Hint: hint}
-	without := withHint
-	without.Hint = ""
-	if a, b := TabSpans(theme.Default(), withHint), TabSpans(theme.Default(), without); !slices.Equal(a, b) {
-		t.Errorf("the hint changed the tab spans: %v, want %v", a, b)
 	}
 }
 
@@ -263,7 +136,7 @@ func TestStatusBarHint(t *testing.T) {
 func TestStatusBarCutsLongMessage(t *testing.T) {
 	msg := "Claude Code is not installed in Ubuntu. Install it there: https://claude.com/claude-code"
 	for _, width := range []int{80, 40, 12, 4} {
-		o := StatusOptions{Width: width, Session: "api", Tabs: []Tab{{Index: 0, Name: "dev", Active: true}}, Right: "14:02", Message: msg}
+		o := StatusOptions{Width: width, Session: "api", Right: "14:02", Message: msg}
 		out := StatusBar(theme.Default(), o)
 		if w := ansi.StringWidth(out); w != width {
 			t.Fatalf("width %d: bar is %d wide", width, w)
@@ -272,5 +145,64 @@ func TestStatusBarCutsLongMessage(t *testing.T) {
 		if width >= 12 && (!strings.Contains(got, "Claude") || !strings.Contains(got, "…")) {
 			t.Fatalf("width %d: bar %q, want the start of the message, cut", width, got)
 		}
+	}
+}
+
+func TestStatusBarFolderSeparator(t *testing.T) {
+	for _, folder := range []string{"Projects/snow", ""} {
+		got := strings.TrimSpace(ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 80, Session: "work", Folder: folder})))
+		want := "work"
+		if folder != "" {
+			want += " · " + folder
+		}
+		if got != want {
+			t.Fatalf("bar %q, want %q", got, want)
+		}
+	}
+}
+
+func TestStatusBarHint(t *testing.T) {
+	for _, tt := range []struct {
+		width           int
+		message, notice string
+		want            bool
+	}{
+		{80, "", "", true}, {16, "", "", false}, {80, "no room", "", false}, {80, "", "copied", false},
+	} {
+		o := StatusOptions{Width: tt.width, Session: "work", Folder: "Projects/snow", Right: "2 need you", Hint: "Esc: cancel", Message: tt.message, Notice: tt.notice}
+		out := StatusBar(theme.Default(), o)
+		if ansi.StringWidth(out) != tt.width || strings.Contains(ansi.Strip(out), o.Hint) != tt.want {
+			t.Fatalf("options %+v: %q", o, out)
+		}
+	}
+}
+
+func TestStatusLineKeepsErrors(t *testing.T) {
+	th := theme.Default()
+	for _, width := range []int{1, 2, 4, 12, 80} {
+		o := StatusOptions{Width: width, Session: "work", Folder: "Projects/snow", Right: "2 need you", Message: "no room to split"}
+		got := StatusBar(th, o)
+		if ansi.StringWidth(got) != width {
+			t.Fatalf("width %d: %q", width, got)
+		}
+		if strings.Contains(ansi.Strip(got), "need you") {
+			t.Fatalf("message lost: %q", got)
+		}
+		if width >= 12 && !strings.Contains(ansi.Strip(got), "no room") {
+			t.Fatalf("error lost: %q", got)
+		}
+		errorStyle := lipgloss.NewStyle().Foreground(th.ErrorFG).Background(th.Error).Bold(true)
+		message := layoutStatus(th, o).right
+		if message != "" && !strings.Contains(got, errorStyle.Render(message)) {
+			t.Fatalf("error lacks error colors: %q", got)
+		}
+	}
+}
+
+func TestStatusBarSanitizesLabels(t *testing.T) {
+	o := StatusOptions{Width: 80, Session: "work\n\x1b[2J", Folder: "Projects/\x1b[31msnow", Right: "1 need you\r"}
+	got := ansi.Strip(StatusBar(theme.Default(), o))
+	if strings.ContainsAny(got, "\n\r\x1b") || !strings.Contains(got, "Projects/snow") {
+		t.Fatalf("unsafe status row: %q", got)
 	}
 }

@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/colorprofile"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestDefaultIsFrost(t *testing.T) {
@@ -61,10 +63,6 @@ func TestResolveFillsMissingTokens(t *testing.T) {
 	}
 }
 
-// minSeparation is the contrast two touching backgrounds need to read as
-// separate blocks. It is lower than text needs.
-const minSeparation = 2.0
-
 // TestTokensDownsample: every text-on-background pair stays readable when a
 // terminal can show only 256 or 16 colors. Readable means a contrast ratio of
 // at least 3:1, the WCAG minimum for bold interface text. For adjusts a
@@ -75,18 +73,19 @@ func TestTokensDownsample(t *testing.T) {
 		for _, p := range profiles {
 			th := base.For(p)
 			pairs := map[string][2]color.Color{
-				"status bar": {th.BarFG, th.BarBG},
-				"active tab": {th.TabActive, th.TabActiveBG},
-				"question":   {th.PromptFG, th.PromptBG},
-				"error":      {th.ErrorFG, th.Error},
-				"position":   {th.IndicatorFG, th.IndicatorBG},
-				"match":      {th.MatchFG, th.MatchBG},
-				"current":    {th.CurrentFG, th.CurrentBG},
-				"selected":   {th.SelectedFG, th.SelectedBG},
-				"list row":   {th.SelectionFG, th.Selection},
-				"you label":  {th.UserFG, th.UserBG},
-				"snow label": {th.AgentFG, th.AgentBG},
-				"activity":   {th.ActivityFG, th.ActivityBG},
+				"default text": {th.Text, th.Background},
+				"status bar":   {th.BarFG, th.BarBG},
+				"active tab":   {th.TabActive, th.TabActiveBG},
+				"question":     {th.PromptFG, th.PromptBG},
+				"error":        {th.ErrorFG, th.Error},
+				"position":     {th.IndicatorFG, th.IndicatorBG},
+				"match":        {th.MatchFG, th.MatchBG},
+				"current":      {th.CurrentFG, th.CurrentBG},
+				"selected":     {th.SelectedFG, th.SelectedBG},
+				"list row":     {th.SelectionFG, th.Selection},
+				"you label":    {th.UserFG, th.UserBG},
+				"snow label":   {th.AgentFG, th.AgentBG},
+				"activity":     {th.ActivityFG, th.ActivityBG},
 			}
 			for what, pair := range pairs {
 				if r := contrast(p.Convert(pair[0]), p.Convert(pair[1])); r < minContrast {
@@ -105,7 +104,7 @@ func TestTokensDownsample(t *testing.T) {
 // exactly as designed.
 func TestTrueColorKeepsThePalette(t *testing.T) {
 	for _, th := range Builtin() {
-		if got := th.For(colorprofile.TrueColor); got.BarFG != th.BarFG || got.PromptFG != th.PromptFG || got.TabActive != th.TabActive {
+		if got := th.For(colorprofile.TrueColor); got.Background != th.Background || got.Text != th.Text || got.BarFG != th.BarFG || got.PromptFG != th.PromptFG || got.TabActive != th.TabActive || got.TabActiveBG != th.TabActiveBG {
 			t.Errorf("%s: For(TrueColor) changed the palette", th.Name)
 		}
 	}
@@ -155,5 +154,77 @@ func TestAgentGlyphsFallBackWithoutColor(t *testing.T) {
 	}
 	if g := d.For(colorprofile.ANSI).Glyphs; g.AgentNeedsYou != "●" || g.Driven != "✎" {
 		t.Errorf("For(ANSI) changed the glyphs to %q and %q", g.AgentNeedsYou, g.Driven)
+	}
+}
+
+func TestPaneButtonGlyphsOneCell(t *testing.T) {
+	for _, th := range Builtin() {
+		for name, glyph := range map[string]string{"Model": th.Glyphs.Model, "Zoom": th.Glyphs.Zoom, "Close": th.Glyphs.Close} {
+			if width := ansi.StringWidth(glyph); width != 1 {
+				t.Errorf("%s %s width = %d, want 1", th.Name, name, width)
+			}
+		}
+	}
+}
+
+func TestChromeGlyphsFallBackWithoutColor(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.NoTTY, colorprofile.ASCII} {
+		g := Default().For(p).Glyphs
+		for name, tt := range map[string]struct{ got, want string }{
+			"Dropdown": {g.Dropdown, "v"}, "Menu": {g.Menu, "="}, "Model": {g.Model, "v"}, "Zoom": {g.Zoom, "+"}, "Close": {g.Close, "x"},
+		} {
+			if tt.got != tt.want {
+				t.Errorf("For(%s) %s=%q,want %q", p, name, tt.got, tt.want)
+			}
+		}
+	}
+}
+
+func TestNoColorDropsBackground(t *testing.T) {
+	for _, p := range []colorprofile.Profile{colorprofile.NoTTY, colorprofile.ASCII} {
+		if got := Default().For(p); got.Background != nil || got.Text != nil {
+			t.Errorf("For(%s) kept default colors", p)
+		}
+	}
+}
+
+func TestBarColorsFollowADR0016(t *testing.T) {
+	barBG := map[string]string{
+		"Frost": "#1e2a36", "Campbell": "#13a10e", "One Half Dark": "#3e4451",
+		"Dark+": "#007acc", "Solarized Dark": "#073642", "Dracula": "#44475a",
+		"Nord": "#3b4252", "Gruvbox Dark": "#3c3836", "Tokyo Night": "#24283b",
+		"Catppuccin Mocha": "#313244", "OpenCode": "#141414", "Clay": "#2b2a27",
+	}
+	for _, th := range Builtin() {
+		tabBG, tabFG := th.Accent, ink(colorprofile.TrueColor, th.Accent)
+		switch th.Name {
+		case "Campbell":
+			tabBG, tabFG = lipgloss.Color("#0c0c0c"), lipgloss.Color("#f2f2f2")
+		case "Dark+":
+			tabBG, tabFG = lipgloss.Color("#ffffff"), lipgloss.Color("#007acc")
+		}
+		if th.BarBG != lipgloss.Color(barBG[th.Name]) || th.BarFG != th.IndicatorFG ||
+			th.TabActiveBG != tabBG || th.TabActive != tabFG {
+			t.Errorf("%s: wrong bar or tab colors", th.Name)
+		}
+	}
+}
+
+func TestMutedOnPaintedBackground(t *testing.T) {
+	for _, th := range Builtin() {
+		for _, p := range []colorprofile.Profile{colorprofile.ANSI, colorprofile.ANSI256} {
+			painted := th.ForBackground(p, th.Background)
+			for _, fg := range []color.Color{painted.Muted, painted.Queued} {
+				if got := contrast(p.Convert(fg), painted.Background); got < minContrast {
+					t.Errorf("%s %s: muted contrast %.2f, want 3:1", th.Name, p, got)
+				}
+			}
+			if plain := th.For(p); plain.Muted != th.Muted || plain.Queued != th.Queued {
+				t.Errorf("%s %s: changed secondary text in terminal mode", th.Name, p)
+			}
+		}
+		if painted := th.ForBackground(colorprofile.TrueColor, th.Background); painted.Muted != th.Muted || painted.Queued != th.Queued {
+			t.Errorf("%s: changed exact true-color palette", th.Name)
+		}
 	}
 }

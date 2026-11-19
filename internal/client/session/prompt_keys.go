@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/command"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/themepick"
 )
 
 // promptKey edits the typed text, moves in the list, and runs the command
@@ -14,13 +15,23 @@ func (m *Model) promptKey(k tea.Key) tea.Cmd {
 	p := m.prompt
 	switch k.Code {
 	case tea.KeyEscape:
-		m.prompt = nil
+		m.closePrompt(false)
 	case tea.KeyEnter:
 		return m.promptEnter()
 	case tea.KeyUp:
-		p.sel = max(p.sel-1, 0)
+		if p.mode == modeThemes && p.themePick != nil {
+			m.previewTheme(p.themePick.Move(-1))
+			p.sel = p.themePick.Selected()
+		} else {
+			p.sel = max(p.sel-1, 0)
+		}
 	case tea.KeyDown:
-		p.sel = min(p.sel+1, max(p.rows()-1, 0))
+		if p.mode == modeThemes && p.themePick != nil {
+			m.previewTheme(p.themePick.Move(1))
+			p.sel = p.themePick.Selected()
+		} else {
+			p.sel = min(p.sel+1, max(p.rows()-1, 0))
+		}
 	case tea.KeyTab:
 		if ms := p.commandMatches(); p.mode == modeCommands && p.sel < len(ms) {
 			p.complete(ms[p.sel])
@@ -28,6 +39,12 @@ func (m *Model) promptKey(k tea.Key) tea.Cmd {
 	default:
 		if s, ok := keys.Edit(p.input, k); ok {
 			p.input, p.sel, p.notice = s, 0, ""
+			if p.mode == modeThemes && p.themePick != nil {
+				before := p.themePick.Restore()
+				p.themePick = themepick.New(p.themeMatches(), before)
+				p.sel = p.themePick.Selected()
+				m.previewTheme(p.themePick.Shown())
+			}
 		}
 	}
 	return nil
@@ -49,13 +66,13 @@ func (m *Model) promptEnter() tea.Cmd {
 	case modeName:
 		return m.renameTo(p.input)
 	case modeThemes:
-		ts := p.themeMatches()
-		if p.sel >= len(ts) {
+		if p.themePick == nil || len(p.themePick.Items()) == 0 {
 			p.notice = "No theme matches."
 			return nil
 		}
-		m.prompt = nil
-		return useTheme(ts[p.sel].Name)
+		th := p.themePick.Keep()
+		m.closePrompt(true)
+		return useTheme(th.Name)
 	}
 	word, rest := command.Split(p.input)
 	c, ok := command.Find(word, command.InSession)
@@ -78,16 +95,20 @@ func (m *Model) promptMouse(msg tea.MouseMsg) tea.Cmd {
 		return nil
 	}
 	l, ok := m.promptLayout()
-	if click.Button != tea.MouseLeft || !ok || click.X < l.x || click.X >= l.x+l.w || click.Y < l.y || click.Y >= l.y+l.h {
-		m.prompt = nil
+	y := click.Y - m.areaTop()
+	if click.Button != tea.MouseLeft || !ok || click.X < l.x || click.X >= l.x+l.w || y < l.y || y >= l.y+l.h {
+		m.closePrompt(false)
 		return nil
 	}
-	i := click.Y - l.listY
+	i := y - l.listY
 	if click.X <= l.x || click.X >= l.x+l.w-1 || i < 0 || i >= l.count {
 		return nil
 	}
 	p := m.prompt
 	p.sel = l.first + i
+	if p.mode == modeThemes && p.themePick != nil {
+		m.previewTheme(p.themePick.Move(p.sel - p.themePick.Selected()))
+	}
 	if p.mode == modeCommands {
 		c := p.commandMatches()[p.sel]
 		if c.Args == "" || strings.HasPrefix(c.Args, "[") {

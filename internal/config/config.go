@@ -99,10 +99,19 @@ type Profile struct {
 	Default string `toml:"default"`
 }
 
+const (
+	// BackgroundTheme applies the theme's terminal default colors.
+	BackgroundTheme = "theme"
+	// BackgroundTerminal keeps the terminal's own default colors.
+	BackgroundTerminal = "terminal"
+)
+
 // Theme selects the colors.
 type Theme struct {
 	// Name is the theme to use, for example "default".
 	Name string `toml:"name"`
+	// Background selects the theme or terminal default colors.
+	Background string `toml:"background"`
 }
 
 // Defaults returns the settings Snow uses when the config file does not set
@@ -112,7 +121,7 @@ func Defaults() Config {
 		Keys: Keys{Prefix: "C-b"},
 		// Matches internal/term's default; see ADR 0006.
 		Scrollback: Scrollback{Lines: 2000},
-		Theme:      Theme{Name: "default"},
+		Theme:      Theme{Name: "default", Background: BackgroundTheme},
 		Sessions:   Sessions{Save: true, Lines: MaxSessionLines},
 		Chat:       Chat{Usage: true},
 		Notify:     Notify{NeedsYou: true, TurnEnd: true},
@@ -204,6 +213,8 @@ func (c Config) validate() *Error {
 		return &Error{Key: "scrollback.lines", Msg: fmt.Sprintf("must be at least 1, got %d", c.Scrollback.Lines)}
 	case c.Theme.Name == "":
 		return &Error{Key: "theme.name", Msg: "must not be empty"}
+	case c.Theme.Background != BackgroundTheme && c.Theme.Background != BackgroundTerminal:
+		return &Error{Key: "theme.background", Msg: fmt.Sprintf("must be %q or %q, got %q", BackgroundTheme, BackgroundTerminal, c.Theme.Background)}
 	case c.Sessions.Lines < 0 || c.Sessions.Lines > MaxSessionLines:
 		return &Error{Key: "sessions.lines", Msg: fmt.Sprintf("must be from 0 to %d, got %d", MaxSessionLines, c.Sessions.Lines)}
 	case c.Chat.Model != "" && !modelName(c.Chat.Model):

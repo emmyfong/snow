@@ -69,14 +69,18 @@ func (st *state) layout(sess *session) *api.Layout {
 			}
 			p := w.panes[int(id)]
 			folder := p.dir // a chat's folder
+			profile := p.profile
+			if profile == "" {
+				profile = p.sideFrom
+			}
 			if p.term != nil {
 				folder = p.term.Folder()
 			}
 			info.Panes = append(info.Panes, api.PaneInfo{
 				ID:         int(id),
 				Kind:       p.kind(),
-				Rect:       api.Rect{X: r.X, Y: r.Y, W: r.W, H: r.H},
-				Profile:    p.profile,
+				Rect:       api.Rect{X: r.X, Y: r.Y + paneHeaderRows, W: r.W, H: r.H},
+				Profile:    profile,
 				Folder:     folder,
 				Focused:    int(id) == w.focused,
 				Purpose:    p.purpose,

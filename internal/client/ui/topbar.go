@@ -11,8 +11,14 @@ import (
 // TopBarOptions configures TopBar. Empty parts are left out.
 type TopBarOptions struct {
 	Width int
-	Title string
-	Gauge string // how full the context is, for example "ctx 31%"
+	// Window-bar fields. When any of these are set, TopBar draws the window
+	// bar instead of the chat-specific parts below.
+	Session  string
+	Tabs     []Tab
+	NeedsYou int
+	OnWindow bool
+	Title    string
+	Gauge    string // how full the context is, for example "ctx 31%"
 	// GaugeHot draws the gauge in Removed, when the context is nearly
 	// full.
 	GaugeHot bool
@@ -23,17 +29,23 @@ type TopBarOptions struct {
 
 // Kinds of top bar parts, for TopBarSpan.
 const (
-	TopBarTitle = "title"
-	TopBarGauge = "gauge"
-	TopBarCost  = "cost"
-	TopBarModel = "model"
-	TopBarMode  = "mode"
+	TopBarTitle     = "title"
+	TopBarGauge     = "gauge"
+	TopBarCost      = "cost"
+	TopBarModel     = "model"
+	TopBarMode      = "mode"
+	TopBarSession   = "session"
+	TopBarTab       = "tab"
+	TopBarNewWindow = "new-window"
+	TopBarNeedsYou  = "needs-you"
+	TopBarMenu      = "menu"
 )
 
 // TopBarSpan is one part of a top bar and the cells it covers.
 type TopBarSpan struct {
-	Kind string
-	X, W int
+	Kind  string
+	X, W  int
+	Index int // the window index for a tab span
 }
 
 // TopBar draws a chat's top bar in exactly Width cells: the title in bold
@@ -49,6 +61,9 @@ func TopBar(th theme.Theme, o TopBarOptions) string {
 // TopBarRow draws what TopBar draws and reports the cells of the parts it
 // kept, so a click can tell which one it landed on.
 func TopBarRow(th theme.Theme, o TopBarOptions) (string, []TopBarSpan) {
+	if o.OnWindow || o.Session != "" || len(o.Tabs) > 0 {
+		return WindowBarRow(th, WindowBarOptions{Width: o.Width, Session: o.Session, Tabs: o.Tabs, NeedsYou: o.NeedsYou})
+	}
 	if o.Width <= 0 {
 		return "", nil
 	}

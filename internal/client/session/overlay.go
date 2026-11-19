@@ -59,7 +59,7 @@ func (m *Model) overMouse(msg tea.MouseMsg) tea.Cmd {
 	if click.Button != tea.MouseLeft {
 		return m.overResult(picker.Cancelled)
 	}
-	return m.overResult(m.over.click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+	return m.overResult(m.over.click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 }
 
 // overResult closes the overlay on any result but Open, then lets it act.

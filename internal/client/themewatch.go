@@ -14,10 +14,11 @@ import (
 const themeCheckEvery = 2 * time.Second
 
 // configCheckedMsg is the result of one look at the config file: its time
-// of change, and the theme it names when that changed and is valid.
+// of change, the background preference and the theme when valid.
 type configCheckedMsg struct {
-	th  *theme.Theme
-	mod time.Time
+	th         *theme.Theme
+	mod        time.Time
+	background string
 }
 
 // themed is a screen that can change its theme while it is open.
@@ -42,16 +43,48 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 	if err != nil {
 		return res
 	}
+	res.background = cfg.Theme.Background
 	if th, err := theme.Named(cfg.Theme.Name); err == nil {
 		res.th = &th
 	}
 	return res
 }
 
-// applyTheme makes th the app's theme and the open screen's.
+// applyTheme makes th the app's theme and updates each open screen.
 func (a *app) applyTheme(th theme.Theme) {
 	a.theme = th
-	if s, ok := a.screen.(themed); ok {
-		s.SetTheme(th)
+	a.configTheme = th
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen == nil {
+			continue
+		}
+		a.setScreenBackground(screen)
+		if s, ok := screen.(themed); ok {
+			s.SetTheme(th)
+		}
+	}
+	if current, ok := a.screen.(interface{ CurrentTheme() theme.Theme }); ok {
+		a.theme = current.CurrentTheme()
+	}
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen != nil {
+			a.setScreenBackground(screen)
+		}
+	}
+}
+
+// previewTheme applies a temporary theme without changing screen restore points.
+func (a *app) previewTheme(th theme.Theme) {
+	a.theme = th
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen == nil {
+			continue
+		}
+		a.setScreenBackground(screen)
+		if s, ok := screen.(interface{ SetPreviewTheme(theme.Theme) }); ok {
+			s.SetPreviewTheme(th)
+		} else if s, ok := screen.(themed); ok {
+			s.SetTheme(th)
+		}
 	}
 }

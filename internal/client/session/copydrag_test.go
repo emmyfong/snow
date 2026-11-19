@@ -11,11 +11,11 @@ import (
 // ask for the mouse starts a copy-mode selection there, as in tmux.
 func TestDragInPaneEntersCopyMode(t *testing.T) {
 	m, _ := threePaneScreen(t)
-	m.Update(click(5, 5)) // pane 1, which is not focused
+	m.Update(click(5, 6)) // pane 1, which is not focused
 	if m.copy != nil {
 		t.Fatal("a press alone entered copy mode")
 	}
-	m.Update(motion(9, 6))
+	m.Update(motion(9, 7))
 	if m.copy == nil || m.copy.Pane() != 1 {
 		t.Fatalf("drag in pane 1: copy mode %v, want open over pane 1", m.copy)
 	}
@@ -23,9 +23,9 @@ func TestDragInPaneEntersCopyMode(t *testing.T) {
 
 func TestClickInPaneDoesNotEnterCopyMode(t *testing.T) {
 	m, _ := threePaneScreen(t)
-	m.Update(click(5, 5))
-	m.Update(release(5, 5))
-	m.Update(motion(9, 6)) // a later hover with no button held
+	m.Update(click(5, 6))
+	m.Update(release(5, 6))
+	m.Update(motion(9, 7)) // a later hover with no button held
 	if m.copy != nil {
 		t.Fatal("a click entered copy mode")
 	}
@@ -41,8 +41,8 @@ func TestCopyModeGetsTheMouseFirst(t *testing.T) {
 		t.Fatal("prefix [ did not enter copy mode")
 	}
 	r.sent = nil
-	m.Update(click(40, 5))
-	m.Update(motion(45, 5))
+	m.Update(click(40, 6))
+	m.Update(motion(45, 6))
 	for _, s := range r.sent {
 		if c, ok := s.(*api.Command); ok && c.Op == api.OpResize {
 			t.Fatalf("a border drag resized while copy mode was open: %+v", c)
@@ -54,7 +54,7 @@ func TestCopyModeGetsTheMouseFirst(t *testing.T) {
 // program did not ask for the mouse enters copy mode there.
 func TestWheelOnAPlainPaneScrollsItsHistory(t *testing.T) {
 	m, _ := threePaneScreen(t)
-	m.Update(tea.MouseWheelMsg{X: 5, Y: 5, Button: tea.MouseWheelUp})
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelUp})
 	if m.copy == nil || m.copy.Pane() != 1 {
 		t.Fatalf("wheel over pane 1: copy mode %v, want open over pane 1", m.copy)
 	}
@@ -64,7 +64,7 @@ func TestWheelOnAPlainPaneScrollsItsHistory(t *testing.T) {
 // pane it opens on must be the focused one.
 func TestWheelFocusesThePaneItOpensCopyModeOn(t *testing.T) {
 	m, r := threePaneScreen(t)
-	m.Update(tea.MouseWheelMsg{X: 5, Y: 5, Button: tea.MouseWheelUp})
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelUp})
 	c := lastCommandOf(r, api.OpFocus)
 	if c == nil || c.Target != 1 {
 		t.Fatalf("sent %v, want a focus command for pane 1", r.sent)
@@ -83,7 +83,7 @@ func TestCopyModeClosesWhenItsWindowIsHidden(t *testing.T) {
 	}
 	m.Update(&api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
 		{Index: 1, Name: "dev", Panes: threePanes(80, 24)},
-		{Index: 2, Name: "logs", Panes: []api.PaneInfo{{ID: 9, Focused: true, Rect: api.Rect{W: 80, H: 23}}}},
+		{Index: 2, Name: "logs", Panes: []api.PaneInfo{{ID: 9, Focused: true, Rect: api.Rect{W: 80, H: 22}}}},
 	}})
 	if m.copy != nil {
 		t.Fatal("copy mode stayed open over a pane in a hidden window")

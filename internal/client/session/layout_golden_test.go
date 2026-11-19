@@ -2,6 +2,7 @@ package session
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/exp/golden"
@@ -21,13 +22,13 @@ func fill(m *Model, panes []api.PaneInfo) {
 
 // threePanes is h(1, v(2, 3)) laid out as the server does at cols by rows.
 func threePanes(cols, rows int) []api.PaneInfo {
-	area := rows - 1
+	area := rows - 3
 	left := (cols - 1 + 1) / 2 // tmux rounding: the first child gets the extra cell
 	top := (area - 1 + 1) / 2
 	return []api.PaneInfo{
-		{ID: 1, Rect: api.Rect{W: left, H: area}, Profile: "pwsh"},
-		{ID: 2, Rect: api.Rect{X: left + 1, W: cols - left - 1, H: top}, Profile: "Ubuntu", Focused: true},
-		{ID: 3, Rect: api.Rect{X: left + 1, Y: top + 1, W: cols - left - 1, H: area - top - 1}, Profile: "cmd"},
+		{ID: 1, Rect: api.Rect{Y: 1, W: left, H: area}, Profile: "pwsh"},
+		{ID: 2, Rect: api.Rect{X: left + 1, Y: 1, W: cols - left - 1, H: top}, Profile: "Ubuntu", Focused: true},
+		{ID: 3, Rect: api.Rect{X: left + 1, Y: top + 2, W: cols - left - 1, H: area - top - 1}, Profile: "cmd"},
 	}
 }
 
@@ -41,7 +42,7 @@ func goldenThreePanes(t *testing.T, cols, rows int) {
 
 func goldenZoomed(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
-	p := []api.PaneInfo{{ID: 2, Rect: api.Rect{W: cols, H: rows - 1}, Profile: "Ubuntu", Focused: true}}
+	p := []api.PaneInfo{{ID: 2, Rect: api.Rect{Y: 1, W: cols, H: rows - 3}, Profile: "Ubuntu", Focused: true}}
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Zoomed: true, Panes: p}}})
 	fill(m, p)
 	golden.RequireEqual(t, m.View().Content)
@@ -49,7 +50,7 @@ func goldenZoomed(t *testing.T, cols, rows int) {
 
 func goldenThreeWindows(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
-	p := []api.PaneInfo{{ID: 4, Rect: api.Rect{W: cols, H: rows - 1}, Profile: "cmd", Focused: true}}
+	p := []api.PaneInfo{{ID: 4, Rect: api.Rect{Y: 1, W: cols, H: rows - 3}, Profile: "cmd", Focused: true}}
 	m.Update(&api.Layout{Session: "api", Active: 2, Windows: []api.WindowInfo{
 		{Index: 1, Name: "dev"},
 		{Index: 2, Name: "logs", Panes: p},
@@ -66,8 +67,20 @@ func TestZoomedGolden120x40(t *testing.T)       { goldenZoomed(t, 120, 40) }
 func TestThreeWindowsGolden80x24(t *testing.T)  { goldenThreeWindows(t, 80, 24) }
 func TestThreeWindowsGolden120x40(t *testing.T) { goldenThreeWindows(t, 120, 40) }
 
-// goldenCloseMark shows the × on the bottom-right pane's top border, the
-// clearest place it lands.
+func TestWindowTabsAbovePanes(t *testing.T) {
+	m := screen(80, 24)
+	p := []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 22}, Focused: true}}
+	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: p}}})
+	rows := strings.Split(m.View().Content, "\n")
+	if !strings.Contains(rows[0], "1 dev*") {
+		t.Fatalf("window bar does not show the tab on row 0: %q", rows[0])
+	}
+	if strings.Contains(rows[len(rows)-1], "1 dev*") {
+		t.Fatalf("status line still shows the tab: %q", rows[len(rows)-1])
+	}
+}
+
+// goldenCloseMark shows the focused bottom-right pane's top controls.
 func goldenCloseMark(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
 	panes := threePanes(cols, rows)
@@ -82,15 +95,14 @@ func goldenCloseMark(t *testing.T, cols, rows int) {
 func TestCloseMarkGolden80x24(t *testing.T)  { goldenCloseMark(t, 80, 24) }
 func TestCloseMarkGolden120x40(t *testing.T) { goldenCloseMark(t, 120, 40) }
 
-// goldenCloseMarkTop shows the mark on the bottom border of a focused top
-// pane, which has no border at its top or sides.
+// goldenCloseMarkTop shows the focused top pane's header and controls.
 func goldenCloseMarkTop(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
-	area := rows - 1
+	area := rows - 3
 	top := (area - 1 + 1) / 2
 	panes := []api.PaneInfo{
-		{ID: 1, Rect: api.Rect{W: cols, H: top}, Profile: "pwsh", Focused: true},
-		{ID: 2, Rect: api.Rect{Y: top + 1, W: cols, H: area - top - 1}, Profile: "cmd"},
+		{ID: 1, Rect: api.Rect{Y: 1, W: cols, H: top}, Profile: "pwsh", Focused: true},
+		{ID: 2, Rect: api.Rect{Y: top + 2, W: cols, H: area - top - 1}, Profile: "cmd"},
 	}
 	m.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
 	fill(m, panes)

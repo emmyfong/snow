@@ -5,6 +5,21 @@ Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
 `pending review` entries. Historical entries record the policy at their date;
 they do not override the current approval rules.
 
+## 2026-11-17 tui: describe the theme background and bar colors
+- Evidence: #318 and #319 change the theme defaults and bar colors. In the
+  #316 terminal check, conhost applied the requested colors but ignored the
+  reset when Snow exited.
+- Change: describe the default color reports, the terminal option, and the
+  shared bar colors and active-tab rules in the TUI catalog.
+- Test: a contributor checks a pane with default and explicit text in each
+  mode. The guidance prescribes applying defaults only after both reports and
+  keeping explicit cell colors. In Windows Terminal through WSL, Snow
+  restores the colors the shell set before launch. Native conhost keeps its
+  defaults and draws the pane's explicit color. Reduced-color tests cover
+  secondary text on the painted background. Skill frontmatter and
+  whitespace checks pass.
+- Status: pending review
+
 ## 2026-11-14 tui: describe layout B chrome
 - Evidence: #294 records the user's 2026-11-10 layout B decision and identifies
   conflicting minimal-chrome guidance.

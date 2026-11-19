@@ -1,7 +1,4 @@
-// Package menu is the right-click pane menu: a popup at the click position
-// that lists the common pane actions and, beside each, the keys that run it.
-// Mouse users get every action without a toolbar, and learn the shortcuts as
-// they go.
+// Package menu builds popup menus with shortcuts from the active key table.
 package menu
 
 import (
@@ -25,18 +22,32 @@ type Item struct {
 // paneActions are the actions the pane menu offers, in order.
 var paneActions = []string{"split-right", "split-down", "new-claude", "new-agent", "open-pane", "zoom", "even-out", "layout-picker", "new-window", "rename-window", "close-pane", "close-window", "sessions", "choose-agent", "inbox", "command-prompt", "detach"}
 
+type rowSpec struct{ label, action string }
+
+func buildItems(t *keys.Table, rows []rowSpec) []Item {
+	items := make([]Item, 0, len(rows))
+	for _, row := range rows {
+		shortcut := ""
+		if !strings.HasPrefix(row.action, "/") {
+			shortcut = t.Shortcut(row.action)
+		}
+		items = append(items, Item{Label: row.label, Shortcut: shortcut, Action: row.action})
+	}
+	return items
+}
+
 // PaneItems returns the pane menu's items. Labels and shortcuts come from
 // the key table, so a rebound key shows its new name.
 func PaneItems(t *keys.Table) []Item {
-	items := make([]Item, 0, len(paneActions))
+	rows := make([]rowSpec, 0, len(paneActions))
 	for _, name := range paneActions {
 		a, ok := keys.ActionByName(name)
 		if !ok {
 			continue
 		}
-		items = append(items, Item{Label: a.Desc, Shortcut: t.Shortcut(name), Action: name})
+		rows = append(rows, rowSpec{label: a.Desc, action: name})
 	}
-	return items
+	return buildItems(t, rows)
 }
 
 // Result is what a key press or a click did to the menu.

@@ -10,17 +10,19 @@ import (
 	"strings"
 )
 
-// Theme holds the visual tokens. Snow keeps the terminal's own background
-// and text colors; tokens color only Snow's parts.
+// Theme holds the visual tokens. Snow uses Background and Text as terminal
+// defaults in theme background mode. Program-set cell colors take precedence.
 type Theme struct {
 	Name        string
+	Background  color.Color // default terminal background when Snow paints it
+	Text        color.Color // default terminal text on Background
 	Border      color.Color // lines between panes
 	FocusBorder color.Color // lines around the focused pane
-	BarFG       color.Color // status bar text
-	BarBG       color.Color // status bar background
+	BarFG       color.Color // window bar and status line text
+	BarBG       color.Color // window bar and status line background
 	TabActive   color.Color // the shown window's tab text
 	TabActiveBG color.Color // the shown window's tab background
-	Accent      color.Color // highlights: the status bar in built-in themes, the prompt mark, commands, links
+	Accent      color.Color // highlights: the prompt mark, commands, links
 	Muted       color.Color // secondary text
 	Success     color.Color // something that worked or runs
 	Error       color.Color // a refused request's message: its background
@@ -56,6 +58,7 @@ type Glyphs struct {
 	Zoomed                                     string // marks a zoomed window's tab
 	ActiveTab                                  string // marks the shown window's tab
 	SessionLeft, SessionRight                  string // around the session name
+	Dropdown, Plus, Menu                       string // window bar buttons
 	Pointer                                    string // marks the selected item in a list
 	Caret                                      string // ends text being typed
 	TopLeft, TopRight, BottomLeft, BottomRight string
@@ -78,8 +81,8 @@ type Glyphs struct {
 	// Driven follows a window's name while an agent types into one of its
 	// panes. One cell.
 	Driven string
-	// Close marks a pane the mouse can close. One cell.
-	Close string
+	// Model, Zoom, and Close mark the focused pane actions. One cell each.
+	Model, Zoom, Close string
 }
 
 // Default returns the default theme, Frost.
@@ -93,6 +96,7 @@ func defaultGlyphs() Glyphs {
 		Cross: "┼", TeeLeft: "┤", TeeRight: "├", TeeUp: "┴", TeeDown: "┬",
 		Zoomed: "Z", ActiveTab: "*",
 		SessionLeft: "[", SessionRight: "]",
+		Dropdown: "▾", Plus: "+", Menu: "☰",
 		Pointer: "> ", Caret: "_",
 		TopLeft: "┌", TopRight: "┐", BottomLeft: "└", BottomRight: "┘",
 		Spinner:   "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏",
@@ -101,7 +105,7 @@ func defaultGlyphs() Glyphs {
 		Checked: "[x]", Unchecked: "[ ]", Working: "[>]",
 		AgentIdle: "○", AgentWorking: "◐", AgentNeedsYou: "●",
 		Driven: "✎",
-		Close:  "×",
+		Model:  "▾", Zoom: "⤢", Close: "✕",
 	}
 }
 
@@ -114,6 +118,8 @@ func (t Theme) Resolve() Theme {
 			*c = def
 		}
 	}
+	fill(&t.Background, d.Background)
+	fill(&t.Text, d.Text)
 	fill(&t.Border, d.Border)
 	fill(&t.FocusBorder, d.FocusBorder)
 	fill(&t.BarFG, d.BarFG)
@@ -155,6 +161,7 @@ func (t Theme) Resolve() Theme {
 // colors returns every color token by name, for checks over all of them.
 func (t Theme) colors() map[string]color.Color {
 	return map[string]color.Color{
+		"Background": t.Background, "Text": t.Text,
 		"Border": t.Border, "FocusBorder": t.FocusBorder, "BarFG": t.BarFG, "BarBG": t.BarBG,
 		"TabActive": t.TabActive, "TabActiveBG": t.TabActiveBG, "Accent": t.Accent, "Muted": t.Muted,
 		"Success": t.Success, "Error": t.Error, "ErrorFG": t.ErrorFG, "PromptFG": t.PromptFG, "PromptBG": t.PromptBG,

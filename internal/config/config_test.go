@@ -30,6 +30,9 @@ func TestDefaultsWhenMissing(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Load(%q) error = %v, want nil", path, err)
 		}
+		if got.Theme.Background != BackgroundTheme {
+			t.Errorf("missing file background = %q, want %q", got.Theme.Background, BackgroundTheme)
+		}
 		if !reflect.DeepEqual(got, Defaults()) {
 			t.Errorf("Load(%q) = %+v, want Defaults() %+v", path, got, Defaults())
 		}
@@ -46,6 +49,9 @@ func TestDefaults(t *testing.T) {
 	}
 	if d.Theme.Name != "default" {
 		t.Errorf("Theme.Name = %q, want %q", d.Theme.Name, "default")
+	}
+	if d.Theme.Background != BackgroundTheme {
+		t.Errorf("Theme.Background = %q, want %q", d.Theme.Background, BackgroundTheme)
 	}
 	if !d.Sessions.Save || d.Sessions.Lines != 2000 {
 		t.Errorf("Sessions = %+v, want saving on with 2000 lines", d.Sessions)
@@ -100,6 +106,7 @@ default = "Ubuntu"
 
 [theme]
 name = "light"
+background = "terminal"
 `,
 			want: func(c *Config) {
 				c.Keys.Prefix = "C-a"
@@ -107,6 +114,7 @@ name = "light"
 				c.Scrollback.Lines = 10000
 				c.Profile.Default = "Ubuntu"
 				c.Theme.Name = "light"
+				c.Theme.Background = BackgroundTerminal
 			},
 		},
 		{
@@ -391,5 +399,32 @@ func TestConfigHidesGaugeAndCost(t *testing.T) {
 		if err != nil || cfg.Chat.Usage != want {
 			t.Errorf("%q: usage %v, err %v; want %v", body, cfg.Chat.Usage, err, want)
 		}
+	}
+}
+
+func TestThemeBackgroundValues(t *testing.T) {
+	for _, tt := range []struct {
+		value string
+		valid bool
+	}{
+		{BackgroundTheme, true},
+		{BackgroundTerminal, true},
+		{"paint", false},
+		{"", false},
+		{"Theme", false},
+	} {
+		t.Run(tt.value, func(t *testing.T) {
+			cfg, err := Load(writeConfig(t, "[theme]\nbackground = \""+tt.value+"\"\n"))
+			if tt.valid {
+				if err != nil || cfg.Theme.Background != tt.value {
+					t.Fatalf("Load background = %q, %v; want %q", cfg.Theme.Background, err, tt.value)
+				}
+				return
+			}
+			var cfgErr *Error
+			if !errors.As(err, &cfgErr) || cfgErr.Key != "theme.background" {
+				t.Fatalf("Load error = %v, want theme.background error", err)
+			}
+		})
 	}
 }

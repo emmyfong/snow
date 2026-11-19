@@ -21,7 +21,7 @@ func modelScreen(t *testing.T, cols, rows int, model string) (*Model, *recorder)
 	m.now = fixedClock
 	m.SetSize(cols, rows)
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "sh", Panes: []api.PaneInfo{
-		{ID: 2, Kind: api.PaneChat, Rect: api.Rect{W: cols, H: rows - 1}, Focused: true},
+		{ID: 2, Kind: api.PaneChat, Rect: api.Rect{Y: 1, W: cols, H: rows - 3}, Focused: true},
 	}}}})
 	m.Update(&api.ChatSnapshot{Pane: 2, Agent: "c1", Conversation: "c1", Model: model, Mode: "ask", State: api.ChatStateIdle})
 	return m, r
@@ -263,14 +263,15 @@ func TestModelPickClickOutsideCancels(t *testing.T) {
 // asks the session for the picker.
 func TestTopBarModelClickOpensThePicker(t *testing.T) {
 	m, r := modelScreen(t, 100, 30, "anthropic/claude-sonnet-5-5")
-	row := strings.Split(ansi.Strip(content(m)), "\n")[0]
+	y := m.focused().Rect.Y + m.areaTop()
+	row := strings.Split(ansi.Strip(content(m)), "\n")[y]
 	x := strings.Index(row, "anthropic/claude-sonnet-5-5")
 	if x < 0 {
 		t.Fatalf("the top bar does not show the model:\n%s", row)
 	}
 	x = ansi.StringWidth(row[:x]) + 1
-	m.Update(tea.MouseClickMsg(tea.Mouse{X: x, Y: 0, Button: tea.MouseLeft}))
-	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: x, Y: 0, Button: tea.MouseLeft}))
+	m.Update(tea.MouseClickMsg(tea.Mouse{X: x, Y: y, Button: tea.MouseLeft}))
+	m.Update(tea.MouseReleaseMsg(tea.Mouse{X: x, Y: y, Button: tea.MouseLeft}))
 	if m.modelPick == nil || !sentListRequest(r) {
 		t.Fatal("the model click did not open the picker")
 	}

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/emmyfong/snow/internal/apitest"
+	"github.com/emmyfong/snow/internal/shell"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -60,8 +61,8 @@ func TestSplitStartsPane(t *testing.T) {
 	c.Send(split(first, api.DirRight))
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
 	panes := shownPanes(l)
-	if panes[0].Rect != (api.Rect{X: 0, Y: 0, W: 40, H: 24}) || panes[1].Rect != (api.Rect{X: 41, Y: 0, W: 40, H: 24}) {
-		t.Fatalf("rects %+v, %+v; want two 40x24 panes beside a border", panes[0].Rect, panes[1].Rect)
+	if panes[0].Rect != (api.Rect{X: 0, Y: 1, W: 40, H: 22}) || panes[1].Rect != (api.Rect{X: 41, Y: 1, W: 40, H: 22}) {
+		t.Fatalf("rects %+v, %+v; want two 40x22 panes beside a border", panes[0].Rect, panes[1].Rect)
 	}
 	if !panes[1].Focused || panes[0].Focused {
 		t.Fatal("the new pane should have the focus")
@@ -73,8 +74,8 @@ func TestSplitStartsPane(t *testing.T) {
 	})
 	c.Send(&api.Input{Pane: panes[1].ID, Paste: "echo second\r"})
 	c.WaitScreen("second")
-	if cols, rows := s.pane(t, "work").Size(); cols != 40 || rows != 24 {
-		t.Fatalf("new pane's terminal is %dx%d, want 40x24", cols, rows)
+	if cols, rows := s.pane(t, "work").Size(); cols != 40 || rows != 22 {
+		t.Fatalf("new pane's terminal is %dx%d, want 40x22", cols, rows)
 	}
 }
 
@@ -107,8 +108,8 @@ func TestZoomBroadcastsLayout(t *testing.T) {
 	a.Send(&api.Command{Op: api.OpZoom, Target: first})
 	for _, c := range []*apitest.Client{a, b} {
 		l := nextLayout(t, c, func(l *api.Layout) bool { return l.Windows[0].Zoomed })
-		if p := shownPanes(l); len(p) != 1 || p[0].ID != first || p[0].Rect.H != 23 {
-			t.Fatalf("zoomed layout panes %+v, want pane %d filling 80x23", p, first)
+		if p := shownPanes(l); len(p) != 1 || p[0].ID != first || p[0].Rect != (api.Rect{Y: 1, W: 80, H: 21}) {
+			t.Fatalf("zoomed layout panes %+v, want pane %d filling 80x21 below its header", p, first)
 		}
 	}
 }
@@ -124,6 +125,29 @@ func TestCloseLastPaneClosesWindow(t *testing.T) {
 	l := nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 1 })
 	if l.Windows[0].Index != 1 || l.Active != 1 {
 		t.Fatalf("after closing window 0's last pane: %+v, want only window 1, shown", l)
+	}
+}
+
+func TestNewWindowHostShellUsesInheritedAgentEnvironment(t *testing.T) {
+	host := hostShell()
+	opts := Options{
+		Version: "test",
+		detect: func() []shell.Profile {
+			return []shell.Profile{host, {Name: "Claude Code", Kind: shell.KindClaude, Path: host.Path}}
+		},
+	}
+	s := New(opts)
+	t.Cleanup(s.Close)
+	c, _ := attached(t, s, 80, 24)
+	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgProfile: "Claude Code"}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 1 })
+	if panes := shownPanes(l); len(panes) != 1 || panes[0].Profile != "Claude Code" {
+		t.Fatalf("agent-profile window panes %+v, want Claude Code", panes)
+	}
+	c.Send(&api.Command{Op: api.OpNewWindow, Args: map[string]string{api.ArgKind: api.PaneTerminal, api.ArgHostShell: "true"}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return l.Active == 2 })
+	if panes := shownPanes(l); len(panes) != 1 || panes[0].Profile != host.Name {
+		t.Fatalf("host-shell window panes %+v, want profile %q", panes, host.Name)
 	}
 }
 

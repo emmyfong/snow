@@ -103,7 +103,7 @@ func (m *Model) modelMouse(msg tea.MouseMsg) tea.Cmd {
 		m.modelPick = nil
 		return nil
 	}
-	return m.modelResult(m.modelPick.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y))
+	return m.modelResult(m.modelPick.Click(m.theme, m.cols, m.windowRows(), click.X, click.Y-m.areaTop()))
 }
 
 // modelResult applies what the picker chose to its chat and closes it. A

@@ -21,7 +21,7 @@ func withConfig(t *testing.T, cfg config.Keys) (*Model, *recorder) {
 	r := &recorder{}
 	m := New(r.send, WithKeys(tab))
 	m.SetSize(80, 24)
-	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: []api.PaneInfo{{ID: 7, Rect: api.Rect{W: 80, H: 23}, Profile: "sh"}}}}})
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: []api.PaneInfo{{ID: 7, Rect: api.Rect{W: 80, H: 22}, Profile: "sh"}}}}})
 	m.Update(&api.ProfileList{Profiles: []string{"sh"}, Default: "sh"})
 	return m, r
 }

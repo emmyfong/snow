@@ -2,6 +2,9 @@ package client
 
 import (
 	"errors"
+	"image/color"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -13,7 +16,9 @@ import (
 
 	"github.com/emmyfong/snow/internal/client/home"
 	"github.com/emmyfong/snow/internal/client/keys"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
+	"github.com/emmyfong/snow/internal/client/settings"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
@@ -154,6 +159,70 @@ func TestHomeOpensASession(t *testing.T) {
 	}
 }
 
+func TestHomeStartsClaudeOnFirstChat(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartClaudeCode, Connection: "ready"})
+	a.Update(&api.ChatSnapshot{Pane: 7, Agent: "generation", State: api.ChatStateIdle})
+	for _, message := range sent {
+		if request, ok := message.(*api.RuntimeRequest); ok {
+			if request.Pane != 7 || request.Agent != "generation" || request.Action != api.RuntimeUse || request.Connection != "ready" {
+				t.Fatalf("runtime request %+v, want the first chat bound to ready", request)
+			}
+			return
+		}
+	}
+	t.Fatal("opening Claude Code did not bind the first chat")
+}
+
+func TestOpenCarriesFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		dir  string
+		want string
+	}{
+		{name: "selected folder", dir: "/work/other", want: "/work/other"},
+		{name: "default folder", want: "/work/default"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var sent []api.Message
+			a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work/default", theme.Default())
+			a.Update(home.OpenMsg{Session: "api", Create: true, Dir: tc.dir})
+			for _, msg := range sent {
+				if attach, ok := msg.(*api.Attach); ok {
+					if attach.Dir != tc.want {
+						t.Fatalf("Attach.Dir = %q, want %q", attach.Dir, tc.want)
+					}
+					return
+				}
+			}
+			t.Fatal("no Attach sent")
+		})
+	}
+}
+
+func TestOpenAppliesLayoutOnlyForNewSession(t *testing.T) {
+	for _, create := range []bool{true, false} {
+		var sent []api.Message
+		a := newHomeApp(func(m api.Message) { sent = append(sent, m) }, "v0.1.0", "/work", theme.Default())
+		a.Update(home.OpenMsg{Session: "api", Create: create, Layout: "focus"})
+		a.Update(&api.Layout{Session: "api", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7}}}}})
+		count := 0
+		for _, msg := range sent {
+			if cmd, ok := msg.(*api.Command); ok && cmd.Op == api.OpLayout {
+				count++
+			}
+		}
+		want := 0
+		if create {
+			want = 1
+		}
+		if count != want {
+			t.Fatalf("Create=%v sent %d layout commands, want %d", create, count, want)
+		}
+	}
+}
+
 // TestFocusReportsReachTheServer: the terminal's focus events go to the
 // server, so it skips a desktop notification for a pane the user already
 // sees. A client that opens a session says where the terminal stands right
@@ -168,9 +237,18 @@ func TestFocusReportsReachTheServer(t *testing.T) {
 		t.Fatal("the app must wait for the terminal to report focus support")
 	}
 	msg := a.Init()()
-	raw, ok := msg.(tea.RawMsg)
-	if !ok || raw.Msg != ansi.RequestModeFocusEvent {
-		t.Fatalf("Init sent %#v, want the focus mode query", msg)
+	batch, ok := msg.(tea.BatchMsg)
+	if !ok {
+		t.Fatalf("Init = %T, want terminal queries", msg)
+	}
+	found := false
+	for _, cmd := range batch {
+		if raw, ok := cmd().(tea.RawMsg); ok && raw.Msg == ansi.RequestModeFocusEvent {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatal("Init did not query focus mode")
 	}
 	a.Update(tea.ModeReportMsg{Mode: ansi.ModeFocusEvent, Value: ansi.ModeSet})
 	if !a.View().ReportFocus {
@@ -237,6 +315,34 @@ func TestHomeQuitEndsWithoutASession(t *testing.T) {
 	}
 }
 
+func TestOldRuntimeListRefusalIsNotTreatedAsAttachFailure(t *testing.T) {
+	a := &app{opening: true}
+	refusal := &api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()}
+	if a.refusedOpen(refusal) {
+		t.Fatal("old-server runtime-list refusal was treated as an attach failure")
+	}
+}
+
+func TestLateOldRuntimeRefusalDoesNotCancelPlainShellStartup(t *testing.T) {
+	var sent []api.Message
+	a := newHomeApp(func(message api.Message) { sent = append(sent, message) }, "v0.1.0", "/work", theme.Default())
+	request := &api.RuntimeRequest{RequestID: "home-check", Agent: api.AgentClaude, Action: api.RuntimeList, Folder: "/work"}
+	a.Update(home.SendMsg{Msg: request})
+	a.Update(home.OpenMsg{Create: true, Dir: "/work", Runtime: newsession.StartShell})
+	a.Update(&api.Error{Code: api.CodeBadCommand, Message: api.ErrInvalidRuntime.Error()})
+	layout := &api.Layout{Session: "1", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{ID: 7, Kind: api.PaneChat}}}}}
+	a.Update(layout)
+	var split *api.Command
+	for _, message := range sent {
+		if command, ok := message.(*api.Command); ok && command.Op == api.OpSplit {
+			split = command
+		}
+	}
+	if split == nil || split.Target != 7 || split.Args[api.ArgKind] != api.PaneTerminal {
+		t.Fatalf("late readiness refusal canceled shell conversion: split=%+v sent=%#v", split, sent)
+	}
+}
+
 // openSession takes a home app into session name, as Enter on the home
 // page does.
 func openSession(t *testing.T, a *app, name string) {
@@ -286,6 +392,325 @@ func TestNewScreensGetTheColorProfile(t *testing.T) {
 	a.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI})
 	if a.profile == nil || a.profile.Profile != colorprofile.ANSI {
 		t.Fatal("the app did not keep the color profile for later screens")
+	}
+}
+
+func TestSettingsEscReturnsToSession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	a.Update(command.SettingsMsg{})
+	if a.back != back || a.screen == back {
+		t.Fatal("settings did not keep the existing session screen as its back screen")
+	}
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, cmd)
+	if a.screen != back || a.back != nil {
+		t.Fatalf("after Esc screen=%T, back=%T; want the same session model restored", a.screen, a.back)
+	}
+}
+
+func TestSettingsLoadsConfigSnapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	data := "[profile]\ndefault = \"Ubuntu\"\n[scrollback]\nlines = 5000\n"
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.configPath = path
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd := a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	view := a.View().Content
+	for _, want := range []string{"Ubuntu", "new panes, after the server restarts"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("settings view does not show %q:\n%s", want, view)
+		}
+	}
+	if err := os.WriteFile(path, []byte("[profile\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.Update(settings.CloseMsg{})
+	_, cmd = a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "Using defaults. Config could not be read:") {
+		t.Fatalf("settings did not show a config read notice:\n%s", a.View().Content)
+	}
+}
+
+func TestSettingsIgnoresAnEarlierConfigSnapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	if err := os.WriteFile(path, []byte("[profile]\ndefault = \"Ubuntu\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.configPath = path
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, oldCmd := a.Update(command.SettingsMsg{})
+	oldResult := oldCmd()
+	a.Update(settings.CloseMsg{})
+	if err := os.WriteFile(path, []byte("[profile]\ndefault = \"Debian\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, currentCmd := a.Update(command.SettingsMsg{})
+	a.Update(oldResult)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if strings.Contains(a.View().Content, "Ubuntu") || strings.Contains(a.View().Content, "Debian") {
+		t.Fatalf("an earlier config snapshot added groups to the new screen:\n%s", a.View().Content)
+	}
+	run(a, currentCmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if !strings.Contains(a.View().Content, "Debian") {
+		t.Fatalf("the latest config snapshot was not loaded:\n%s", a.View().Content)
+	}
+}
+
+func TestThemeSaveFailureAppearsInSettings(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.saveTheme = func(string) error { return errors.New("read-only config") }
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd := a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	cmd = run(a, cmd)
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "The theme is in use but was not saved: read-only config") {
+		t.Fatalf("settings does not show the save failure:\n%s", a.View().Content)
+	}
+}
+
+func TestSettingsEscapeKeepsExternalThemeChange(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd := a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	run(a, cmd)
+	dracula, _ := theme.ByName("Dracula")
+	a.Update(configCheckedMsg{th: &dracula})
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, cmd)
+	if a.theme.Name != "Dracula" {
+		t.Fatalf("settings Esc restored %q, want the externally saved Dracula theme", a.theme.Name)
+	}
+}
+
+func TestSettingsWatcherRecognizesThemeMatchingPreview(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd := a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	run(a, cmd)
+	campbell, _ := theme.ByName("Campbell")
+	a.Update(configCheckedMsg{th: &campbell})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if a.theme.Name != "Campbell" {
+		t.Fatalf("settings Esc restored %q, want the externally saved Campbell theme", a.theme.Name)
+	}
+}
+
+func TestSessionEndDiscardsSettingsThemePreview(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "work")
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, preview := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	run(a, preview)
+	if a.theme.Name == a.configTheme.Name {
+		t.Fatal("test did not start with a temporary theme preview")
+	}
+	a.Update(&api.Error{Code: api.CodeSessionEnded, Message: "session work ended"})
+	if a.theme.Name != a.configTheme.Name {
+		t.Fatalf("home theme = %q, committed theme = %q", a.theme.Name, a.configTheme.Name)
+	}
+}
+
+func TestStaleSettingsThemePreviewDoesNotOverrideEscape(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, stalePreview := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	_, restore := a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	run(a, restore)
+	run(a, stalePreview)
+	if a.theme.Name != theme.Default().Name {
+		t.Fatalf("stale preview set theme to %q after Escape", a.theme.Name)
+	}
+}
+
+func TestPreviewThemeUpdatesPaintedTerminalColors(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	s := session.New(func(api.Message) {}, session.WithTheme(theme.Default()))
+	a.screen = s
+	a.screen.SetSize(80, 24)
+	a.cols, a.rows = 80, 24
+	a.profile = &tea.ColorProfileMsg{Profile: colorprofile.TrueColor}
+	a.originalForeground, a.originalBackground = color.White, color.Black
+	a.Update(&api.Layout{Session: "work", Active: 0, Windows: []api.WindowInfo{{Index: 0, Panes: []api.PaneInfo{{ID: 1, Focused: true, Rect: api.Rect{W: 80, H: 24}}}}}})
+	a.Update(tea.KeyPressMsg{Code: 'b', Mod: tea.ModCtrl})
+	a.Update(tea.KeyPressMsg{Code: ':', Text: ":"})
+	for _, r := range "theme" {
+		a.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	campbell, _ := theme.ByName("Campbell")
+	if a.theme.Name != "Campbell" || a.View().BackgroundColor != campbell.Background || a.View().ForegroundColor != campbell.Text {
+		t.Fatalf("preview colors = (%v, %v), theme=%q; want Campbell defaults", a.View().BackgroundColor, a.View().ForegroundColor, a.theme.Name)
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if a.theme.Name != "Frost" || a.View().BackgroundColor != theme.Default().Background {
+		t.Fatalf("cancel restored theme=%q, background=%v; want Frost", a.theme.Name, a.View().BackgroundColor)
+	}
+}
+
+func TestThemePickerUpdatesPaintedBackgroundForContrast(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.originalForeground, a.originalBackground = color.White, color.Black
+	a.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI256})
+	for _, r := range "/theme" {
+		a.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for i := 0; i < 6; i++ {
+		a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	h := a.screen.(*home.Model)
+	want, _ := theme.ByName("Nord")
+	want = want.ForBackground(colorprofile.ANSI256, want.Background)
+	if h.Theme().Muted != want.Muted {
+		t.Fatalf("preview theme=%q muted color = %v, want %v adapted to the preview background (paint=%t)", a.theme.Name, h.Theme().Muted, want.Muted, a.paintsDefaultColors())
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if got := h.Theme().Muted; got != theme.Default().ForBackground(colorprofile.ANSI256, theme.Default().Background).Muted {
+		t.Fatalf("Escape muted color = %v, want restored theme's adapted color", got)
+	}
+}
+
+func TestExternalThemeKeepsPreviewContrastAdapted(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.originalForeground, a.originalBackground = color.White, color.Black
+	a.Update(tea.ColorProfileMsg{Profile: colorprofile.ANSI256})
+	for _, r := range "/theme" {
+		a.Update(tea.KeyPressMsg{Code: r, Text: string(r)})
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for i := 0; i < 6; i++ {
+		a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	h := a.screen.(*home.Model)
+	nord, _ := theme.ByName("Nord")
+	campbell, _ := theme.ByName("Campbell")
+	a.Update(configCheckedMsg{th: &campbell})
+	want := nord.ForBackground(colorprofile.ANSI256, nord.Background)
+	if h.Theme().Muted != want.Muted {
+		t.Fatalf("preview theme=%q muted color = %v, want %v adapted to its background", a.theme.Name, h.Theme().Muted, want.Muted)
+	}
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	if h.CurrentTheme().Name != campbell.Name {
+		t.Fatalf("Escape restored %q, want externally committed %q", h.CurrentTheme().Name, campbell.Name)
+	}
+}
+
+func TestSettingsPreviewReachesBackScreen(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# preserve this comment\n[theme]\nname = \"Frost\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.configPath = path
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	beforeView := back.View().Content
+	a.Update(command.SettingsMsg{})
+	nord, _ := theme.ByName("Nord")
+	a.applyTheme(nord)
+	if back.View().Content == beforeView {
+		t.Fatal("the session behind settings did not receive the preview theme")
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != before {
+		t.Fatalf("theme preview changed config: %q, %v", got, err)
+	}
+}
+
+func TestSettingsServerEventsReachSession(t *testing.T) {
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	openSession(t, a, "api")
+	back := a.screen
+	a.Update(command.SettingsMsg{})
+	a.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "server output arrived"}}})
+	if a.back != back {
+		t.Fatal("a server event replaced the session behind settings")
+	}
+	a.Update(settings.CloseMsg{})
+	if a.screen != back || !strings.Contains(a.View().Content, "server output arrived") {
+		t.Fatal("the pane update did not appear when settings closed")
+	}
+}
+
+func TestSettingsThemeSavesName(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# keep this comment\n[theme]\nname = \"Frost\"\nbackground = \"terminal\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.saveTheme = func(name string) error { return config.SetTheme(path, name) }
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	run(a, cmd)
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	cmd = run(a, cmd)
+	run(a, cmd)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "# keep this comment") || !strings.Contains(string(data), "[keys]") {
+		t.Fatalf("theme save removed unrelated config:\n%s", data)
+	}
+	cfg, err := config.Load(path)
+	if err != nil || cfg.Theme.Name != "Campbell" {
+		t.Fatalf("config theme after save = %q, err %v; want Campbell", cfg.Theme.Name, err)
+	}
+}
+
+func TestSettingsThemePreviewDoesNotSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# keep\n[theme]\nname = \"Frost\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.saveTheme = func(name string) error { return config.SetTheme(path, name) }
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for range 3 {
+		_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		run(a, cmd)
+	}
+	if a.theme.Name != "Dark+" {
+		t.Fatalf("theme preview = %q, want Dark+", a.theme.Name)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != before {
+		t.Fatalf("preview changed config: %q, %v", got, err)
 	}
 }
 

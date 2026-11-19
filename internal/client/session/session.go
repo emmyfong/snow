@@ -4,6 +4,7 @@ package session
 
 import (
 	"github.com/charmbracelet/colorprofile"
+	"image/color"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -14,6 +15,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/menu"
 	"github.com/emmyfong/snow/internal/client/modelpick"
 	"github.com/emmyfong/snow/internal/client/mouse"
+	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/picker"
 	"github.com/emmyfong/snow/internal/client/resumepick"
 	"github.com/emmyfong/snow/internal/client/runtimepick"
@@ -29,46 +31,67 @@ type DetachMsg struct{}
 // Model is the session screen. Send queues a message for the server; it must
 // keep order.
 type Model struct {
-	send       func(api.Message)
-	theme      theme.Theme           // base adapted to the terminal's colors
-	base       theme.Theme           // the theme from the config
-	profile    *colorprofile.Profile // the terminal's colors, once known
-	keys       *keys.Table
-	now        func() time.Time
-	layout     *api.Layout
-	panes      map[int]*paneState
-	profiles   api.ProfileList
-	kinds      []api.PaneKindInfo // what the server can open, for a picker
-	sessions   []api.SessionInfo  // the server's last session list
-	agents     []api.AgentInfo    // the server's last agent list
-	cols, rows int
-	prefixed   bool    // the prefix key was pressed; the next key is a command
-	prefixKey  tea.Key // the key that started the prefix, for send-prefix
-	prefixSeq  int     // counts prefix presses, to match a hint timer to its press
-	hint       bool    // the which-key popup is showing
-	hintDelay  time.Duration
-	early      []api.Input // input typed before the first Layout named a pane
-	message    string      // why the last request was refused
-	messageAt  time.Time
-	notice     string // a note on what the user did, such as a copy; not a refusal
-	noticeAt   time.Time
-	ticking    bool // the clock tick is running
-	picker     *picker.Model
-	switcher   *sessionlist.Model        // the session list, when open
-	prompt     *prompting                // the command popup, when open
-	confirm    *confirmation             // a question waiting for y or n
-	rename     *renaming                 // the window name being typed
-	menu       *menu.Model               // the right-click menu
-	drag       *mouse.Drag               // a border held by the pointer
-	grab       *grab                     // the pane a held button belongs to
-	pending    api.Command               // the command the open picker completes
-	copy       *copymode.Model           // copy mode over a pane, when open
-	setClip    func(text string) tea.Cmd // puts text on the system clipboard
-	dragFrom   *paneDrag                 // a left press in a pane, until it moves or lets go
-	ownPress   *ownClick                 // a left press in a pane the client draws, until it moves or lets go
-	own        map[int]ownPane           // pane ID → pane the client draws, such as a chat
-	modelPick  *modelpick.Model          // the model picker, when open
-	modelList  api.ModelList             // the server's last model list
+	send                 func(api.Message)
+	theme                theme.Theme           // base adapted to the terminal's colors
+	base                 theme.Theme           // the theme from the config
+	profile              *colorprofile.Profile // the terminal's colors, once known
+	keys                 *keys.Table
+	now                  func() time.Time
+	layout               *api.Layout
+	preset               string // layout to apply to the first window, when set
+	newPreset            string // layout to apply to a window being created
+	winCount             int    // window count before that window is created
+	pendingRuntime       string // the connection to bind to the first chat of a new session
+	pendingRuntimePane   int
+	pendingShell         bool
+	shellStart           int // 0 none, 1 waiting for split, 2 waiting for temporary chat close
+	shellChat            int
+	shellTerminal        int
+	shellBefore          map[int]bool
+	runtimeBinding       string
+	runtimeBindFailed    bool
+	runtimeBindingPane   int
+	startupRuntimePane   int
+	startupRuntimeID     string
+	newWindowRuntimes    []api.RuntimeConnection
+	pendingWindowRuntime string
+	newWindowPending     bool
+	windowRuntimeRequest string
+	windowRuntimeSeq     uint64
+	windowRuntimePending bool
+	panes                map[int]*paneState
+	profiles             api.ProfileList
+	kinds                []api.PaneKindInfo // what the server can open, for a picker
+	sessions             []api.SessionInfo  // the server's last session list
+	agents               []api.AgentInfo    // the server's last agent list
+	cols, rows           int
+	prefixed             bool    // the prefix key was pressed; the next key is a command
+	prefixKey            tea.Key // the key that started the prefix, for send-prefix
+	prefixSeq            int     // counts prefix presses, to match a hint timer to its press
+	hint                 bool    // the which-key popup is showing
+	hintDelay            time.Duration
+	early                []api.Input // input typed before the first Layout named a pane
+	message              string      // why the last request was refused
+	messageAt            time.Time
+	notice               string // a note on what the user did, such as a copy; not a refusal
+	noticeAt             time.Time
+	ticking              bool // the clock tick is running
+	picker               *picker.Model
+	switcher             *sessionlist.Model        // the session list, when open
+	prompt               *prompting                // the command popup, when open
+	confirm              *confirmation             // a question waiting for y or n
+	rename               *renaming                 // the window name being typed
+	menu                 *menu.Model               // the right-click menu
+	drag                 *mouse.Drag               // a border held by the pointer
+	grab                 *grab                     // the pane a held button belongs to
+	pending              api.Command               // the command the open picker completes
+	copy                 *copymode.Model           // copy mode over a pane, when open
+	setClip              func(text string) tea.Cmd // puts text on the system clipboard
+	dragFrom             *paneDrag                 // a left press in a pane, until it moves or lets go
+	ownPress             *ownClick                 // a left press in a pane the client draws, until it moves or lets go
+	own                  map[int]ownPane           // pane ID → pane the client draws, such as a chat
+	modelPick            *modelpick.Model          // the model picker, when open
+	modelList            api.ModelList             // the server's last model list
 	// runtimeModels is the last model list of each Claude Code chat pane.
 	runtimeModels map[int]api.ModelList
 	modelPane     int // the pane modelPick chooses a model for
@@ -93,6 +116,8 @@ type Model struct {
 	// ownTicking is set while a tick for animating panes is pending.
 	ownTicking bool
 	hideUsage  bool // chats leave out the context gauge and the cost
+
+	paintedBackground color.Color
 }
 
 // maxEarly bounds input held before the first Layout. The Layout follows
@@ -124,13 +149,27 @@ func New(send func(api.Message), opts ...Option) *Model {
 }
 
 // SetSize sets the screen size in cells.
-func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
+func (m *Model) SetSize(cols, rows int) {
+	m.cols, m.rows = cols, rows
+	if m.over == nil {
+		return
+	}
+	if dialog, ok := m.over.popup.(*newsession.Model); ok {
+		dialog.SetSize(cols, m.windowRows())
+		if box, _, _ := dialog.View(m.theme, cols, m.windowRows()); box == "" {
+			m.over = nil
+		}
+	}
+}
 
 // Update applies server messages and handles keys.
 func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case *api.Layout:
 		m.applyLayout(msg)
+		m.applyStartupShellLayout()
+		m.applyPendingLayout()
+		m.applyPendingWindowLayout(msg)
 		if !m.ticking {
 			m.ticking = true
 			return tick()
@@ -143,10 +182,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		// The terminal's color depth is known only now; text that would
 		// vanish when colors are reduced switches to black or white.
 		m.profile = &msg.Profile
-		m.theme = m.base.For(msg.Profile)
-		for _, p := range m.own {
-			p.SetTheme(m.theme)
-		}
+		m.SetTheme(m.base)
 	case *api.ProfileList:
 		m.profiles = *msg
 	case *api.PaneKinds:
@@ -163,6 +199,16 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case *api.AuthList:
 		return m.setAuthList(msg)
 	case *api.RuntimeConnections:
+		if msg.Pane == 0 && msg.Agent == api.AgentClaude && msg.RequestID == m.windowRuntimeRequest {
+			m.windowRuntimePending = false
+			m.newWindowRuntimes = append([]api.RuntimeConnection(nil), msg.Connections...)
+			if m.over != nil {
+				if pick, ok := m.over.popup.(*newsession.Model); ok {
+					pick.SetRuntimes(m.newWindowRuntimes)
+				}
+			}
+			return nil
+		}
 		return m.runtimeConnections(msg)
 	case *api.Login:
 		return m.loginDone(msg)
@@ -182,6 +228,24 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if m.windowRuntimePending && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+			m.windowRuntimePending = false
+			return nil
+		}
+		if m.newWindowPending {
+			m.newWindowPending, m.newPreset, m.pendingWindowRuntime = false, "", ""
+		}
+		if m.pendingShell || m.shellStart != 0 {
+			m.pendingShell, m.shellStart, m.shellBefore = false, 0, nil
+			m.early = nil
+			return m.ShowError(msg.Message)
+		}
+		if m.startupRuntimeID != "" && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
+			m.runtimeBindingPane = m.startupRuntimePane
+			m.startupRuntimeID, m.startupRuntimePane = "", 0
+			m.runtimeAfter, m.runtimeBinding, m.runtimeBindFailed = "", "", true
+			return m.ShowError(msg.Message)
+		}
 		if msg.Code == api.CodeNotice {
 			return m.showNotice(msg.Message)
 		}
@@ -206,12 +270,18 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case tea.MouseMsg:
 		return m.mouseMsg(msg)
 	case tea.PasteMsg:
+		if m.shellStartupPending() {
+			m.queueEarly(api.Input{Paste: msg.Content})
+			return nil
+		}
 		switch c := m.focusedOwn(); {
 		case m.authPick != nil:
 			m.authPick.Paste(msg.Content)
 		case m.over != nil && m.over.paste != nil:
 			m.over.paste(msg.Content)
 		case m.modal():
+		case m.startupInputBlocked(m.focusedPaneID()):
+			return nil
 		case c != nil:
 			c.Paste(msg.Content)
 		default:
@@ -219,6 +289,35 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	}
 	return nil
+}
+
+// SetPendingLayout arranges the first window after a newly created session
+// reports its first pane.
+func (m *Model) SetPendingLayout(name string) { m.preset = name }
+
+// SetPendingRuntime binds connection to the first chat after a new session
+// attaches.
+func (m *Model) SetPendingRuntime(connection string) {
+	m.pendingRuntime = connection
+	m.early = nil
+}
+
+// SetPendingShell converts the server's default first chat pane to a shell.
+func (m *Model) SetPendingShell() {
+	m.pendingShell = true
+}
+
+func (m *Model) applyPendingLayout() {
+	if m.preset == "" || m.pendingShell || m.shellStart != 0 {
+		return
+	}
+	w := m.shown()
+	if w == nil || len(w.Panes) == 0 {
+		return
+	}
+	name := m.preset
+	m.preset = ""
+	m.send(&api.Command{Op: api.OpLayout, Target: w.Panes[0].ID, Args: map[string]string{api.ArgName: name}})
 }
 
 // ShowError shows text in the status bar for a moment: why a request was
@@ -276,13 +375,17 @@ func (m *Model) focused() *api.PaneInfo {
 func (m *Model) input(in api.Input) {
 	p := m.focused()
 	if p == nil {
-		if len(m.early) < maxEarly {
-			m.early = append(m.early, in)
-		}
+		m.queueEarly(in)
 		return
 	}
 	in.Pane = p.ID
 	m.send(&in)
+}
+
+func (m *Model) queueEarly(in api.Input) {
+	if len(m.early) < maxEarly {
+		m.early = append(m.early, in)
+	}
 }
 
 func (m *Model) applyLayout(l *api.Layout) {
@@ -291,7 +394,9 @@ func (m *Model) applyLayout(l *api.Layout) {
 	defer m.syncDrag()
 	defer m.syncPanes()
 	present := map[int]bool{}
+	zoomed := false
 	for _, w := range l.Windows {
+		zoomed = zoomed || w.Zoomed
 		for _, p := range w.Panes {
 			present[p.ID] = true
 			st, ok := m.panes[p.ID]
@@ -307,12 +412,14 @@ func (m *Model) applyLayout(l *api.Layout) {
 			delete(m.panes, id)
 		}
 	}
-	if m.focused() != nil {
-		early := m.early
+	if !zoomed && (m.runtimeBinding != "" || m.runtimeBindFailed) && !present[m.runtimeBindingPane] {
+		m.runtimeBinding, m.runtimeBindFailed, m.runtimeBindingPane = "", false, 0
+		m.startupRuntimeID, m.startupRuntimePane = "", 0
+	}
+	if m.pendingRuntime != "" {
 		m.early = nil
-		for _, in := range early {
-			m.input(in)
-		}
+	} else if !m.pendingShell && m.shellStart == 0 {
+		m.flushEarly()
 	}
 }
 

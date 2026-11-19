@@ -89,6 +89,26 @@ func TestLayoutKeepsPanes(t *testing.T) {
 		return cp.ID != 0 && sh.ID != 0 && files.ID != 0 && git.ID != 0 && viewer.ID != 0 &&
 			sh.Rect.Y > cp.Rect.Y && files.Rect.X < cp.Rect.X && git.Rect.X > cp.Rect.X
 	})
+	for _, p := range shownPanes(l) {
+		if p.Rect.Y < 1 || p.Rect.H < 1 || p.Rect.Y+p.Rect.H > 28 {
+			t.Fatalf("preset content ignores chrome: %+v", p.Rect)
+		}
+	}
+	var cp, sh, viewer api.PaneInfo
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneViewer {
+			viewer = p
+		}
+		switch p.ID {
+		case chat:
+			cp = p
+		case shell:
+			sh = p
+		}
+	}
+	if viewer.Rect.Y != 1 || cp.Rect.Y != viewer.Rect.Y+viewer.Rect.H+1 || sh.Rect.Y != cp.Rect.Y+cp.Rect.H+1 {
+		t.Fatalf("preset headers do not reuse divider: viewer %+v, chat %+v, shell %+v", viewer, cp, sh)
+	}
 	if windowNamed(l, "moved") != nil {
 		t.Fatal("a moved window with nothing to move")
 	}

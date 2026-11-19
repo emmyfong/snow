@@ -1,7 +1,7 @@
-[1m Git[m[38;2;107;124;140m  in snow[m
- [38;2;107;124;140mGit did not answer:[m
- [38;2;107;124;140mgit status: fatal: unsafe[m
- [38;2;107;124;140mrepository[m
+[1m Git[m[38;2;138;155;171m  in snow[m
+ [38;2;138;155;171mGit did not answer:[m
+ [38;2;138;155;171mgit status: fatal: unsafe[m
+ [38;2;138;155;171mrepository[m
 
 
 
@@ -17,4 +17,4 @@
 
 
 
- [38;2;127;184;230mr[m [38;2;107;124;140mrefresh[m
+ [38;2;127;184;230mr[m [38;2;138;155;171mrefresh[m

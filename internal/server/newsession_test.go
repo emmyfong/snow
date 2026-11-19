@@ -80,6 +80,27 @@ func TestNewSessionWithoutChat(t *testing.T) {
 	}
 }
 
+func TestCloseFirstPaneAfterSplit(t *testing.T) {
+	s, _, _ := newChatServer(t)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "new", Create: true})
+	l := nextLayout(t, c, func(*api.Layout) bool { return true })
+	first := shownPanes(l)[0].ID
+	c.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgDir: api.DirRight, api.ArgKind: api.PaneChat}})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	var second int
+	for _, pane := range shownPanes(l) {
+		if pane.ID != first {
+			second = pane.ID
+		}
+	}
+	c.Send(&api.Command{Op: api.OpClose, Target: first})
+	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 && shownPanes(l)[0].ID == second })
+	if panes := shownPanes(l); len(panes) != 1 || panes[0].Kind != api.PaneChat {
+		t.Fatalf("panes after closing the first one: %+v, want the new chat alone", panes)
+	}
+}
+
 // TestSplitStartsTerminal: after the first chat, a split opens a terminal
 // pane, as before.
 func TestSplitStartsTerminal(t *testing.T) {

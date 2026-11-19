@@ -12,6 +12,9 @@ import (
 // colored background below it is hard to read.
 const minContrast = 3.0
 
+// minSeparation keeps adjacent background blocks visually distinct.
+const minSeparation = 2.0
+
 var (
 	black = lipgloss.Color("#000000")
 	white = lipgloss.Color("#ffffff")
@@ -23,9 +26,18 @@ var (
 // t unchanged. A terminal that shows no colors may lack the round agent
 // marks too, so it gets ASCII ones.
 func (t Theme) For(p colorprofile.Profile) Theme {
+	return t.ForBackground(p, nil)
+}
+
+// ForBackground adapts a theme when Snow paints the given default background.
+// A nil background leaves secondary text suited to the terminal's own colors.
+func (t Theme) ForBackground(p colorprofile.Profile, painted color.Color) Theme {
 	if p < colorprofile.ANSI {
+		t.Background, t.Text = nil, nil
 		t.Glyphs.AgentIdle, t.Glyphs.AgentWorking, t.Glyphs.AgentNeedsYou = "-", "~", "!"
 		t.Glyphs.Driven = "*"
+		t.Glyphs.Dropdown, t.Glyphs.Menu = "v", "="
+		t.Glyphs.Model, t.Glyphs.Zoom, t.Glyphs.Close = "v", "+", "x"
 		return t // no colors to adapt
 	}
 	fix := func(fg *color.Color, bg color.Color) {
@@ -33,7 +45,18 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 			*fg = ink(p, bg)
 		}
 	}
+	t.Background = p.Convert(t.Background)
+	fix(&t.Text, t.Background)
+	t.Text = p.Convert(t.Text)
+	if painted != nil && p < colorprofile.TrueColor {
+		fix(&t.Muted, painted)
+		fix(&t.Queued, painted)
+	}
 	fix(&t.BarFG, t.BarBG)
+	// A reduced palette can make the active tab blend into the bar.
+	if p < colorprofile.TrueColor && contrast(p.Convert(t.TabActiveBG), p.Convert(t.BarBG)) < minSeparation {
+		t.TabActiveBG = ink(p, t.BarBG)
+	}
 	fix(&t.TabActive, t.TabActiveBG)
 	fix(&t.PromptFG, t.PromptBG)
 	fix(&t.ErrorFG, t.Error)

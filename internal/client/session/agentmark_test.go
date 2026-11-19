@@ -28,13 +28,13 @@ func TestStatusBarMostUrgentState(t *testing.T) {
 	for _, tt := range tests {
 		m := screen(80, 24)
 		m.Update(&api.Layout{Session: "s", Active: 0, Windows: []api.WindowInfo{
-			{Index: 0, Name: "sh", Panes: []api.PaneInfo{{ID: 9, Rect: api.Rect{W: 80, H: 23}, Focused: true}}},
+			{Index: 0, Name: "sh", Panes: []api.PaneInfo{{ID: 9, Rect: api.Rect{W: 80, H: 22}, Focused: true}}},
 			{Index: 1, Name: "agents", AgentState: tt.window, Panes: []api.PaneInfo{
-				{ID: 1, Rect: api.Rect{W: 40, H: 23}, AgentState: tt.panes[0]},
-				{ID: 2, Rect: api.Rect{X: 41, W: 39, H: 23}, AgentState: tt.panes[1]},
+				{ID: 1, Rect: api.Rect{W: 40, H: 22}, AgentState: tt.panes[0]},
+				{ID: 2, Rect: api.Rect{X: 41, W: 39, H: 22}, AgentState: tt.panes[1]},
 			}},
 		}})
-		tabs := m.statusOptions().Tabs
+		tabs := m.windowBarOptions().Tabs
 		if got := tabs[1].Agent; got != tt.want {
 			t.Errorf("%s: mark %v, want %v", tt.name, got, tt.want)
 		}
@@ -48,11 +48,11 @@ func TestStatusBarMostUrgentState(t *testing.T) {
 func TestStatusBarShowsAgentMark(t *testing.T) {
 	m := screen(80, 24)
 	m.Update(&api.Layout{Session: "s", Active: 0, Windows: []api.WindowInfo{
-		{Index: 0, Name: "claude", AgentState: api.AgentNeedsYou, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 23}, Focused: true, AgentState: api.AgentNeedsYou}}},
+		{Index: 0, Name: "claude", AgentState: api.AgentNeedsYou, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 22}, Focused: true, AgentState: api.AgentNeedsYou}}},
 	}})
 	rows := strings.Split(m.View().Content, "\n")
-	if bar := ansi.Strip(rows[len(rows)-1]); !strings.Contains(bar, "0 claude* ●") {
-		t.Fatalf("status bar %q, want the needs-you mark", bar)
+	if bar := ansi.Strip(rows[0]); !strings.Contains(bar, "0 claude* ●") {
+		t.Fatalf("window bar %q, want the needs-you mark", bar)
 	}
 }
 
@@ -61,17 +61,17 @@ func TestStatusBarShowsAgentMark(t *testing.T) {
 func TestStatusBarShowsDrivenMark(t *testing.T) {
 	m := screen(80, 24)
 	m.Update(&api.Layout{Session: "s", Active: 0, Windows: []api.WindowInfo{
-		{Index: 0, Name: "sh", Driven: true, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 23}, Focused: true, Driven: true}}},
+		{Index: 0, Name: "sh", Driven: true, Panes: []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 22}, Focused: true, Driven: true}}},
 	}})
 	rows := strings.Split(m.View().Content, "\n")
-	if bar := ansi.Strip(rows[len(rows)-1]); !strings.Contains(bar, "0 sh* "+m.theme.Glyphs.Driven) {
-		t.Fatalf("status bar %q, want the driven mark", bar)
+	if bar := ansi.Strip(rows[0]); !strings.Contains(bar, "0 sh* "+m.theme.Glyphs.Driven) {
+		t.Fatalf("window bar %q, want the driven mark", bar)
 	}
 }
 
 func goldenAgentMarks(t *testing.T, cols, rows int) {
 	m := screen(cols, rows)
-	p := []api.PaneInfo{{ID: 4, Rect: api.Rect{W: cols, H: rows - 1}, Profile: "Claude Code", Focused: true, AgentState: api.AgentWorking}}
+	p := []api.PaneInfo{{ID: 4, Rect: api.Rect{Y: 1, W: cols, H: rows - 3}, Profile: "Claude Code", Focused: true, AgentState: api.AgentWorking}}
 	m.Update(&api.Layout{Session: "rename-fix", Active: 1, Windows: []api.WindowInfo{
 		{Index: 0, Name: "agents", AgentState: api.AgentIdle},
 		{Index: 1, Name: "planner", AgentState: api.AgentWorking, Panes: p},

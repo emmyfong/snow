@@ -11,6 +11,7 @@ import (
 
 // runtimeClose is the step after a new connection's use: close the picker.
 const runtimeClose = "close"
+const runtimeRecoveryUse = "recovery-use"
 
 type runtimeChooser interface {
 	RuntimeInfo() *api.RuntimeInfo
@@ -41,6 +42,9 @@ func (m *Model) showRuntimePicker() tea.Cmd {
 				return nil
 			}
 			action := pick.Action()
+			if action.Kind == api.RuntimeUse && m.runtimeBindFailed && m.runtimePane == m.runtimeBindingPane {
+				m.runtimeAfter = runtimeRecoveryUse
+			}
 			if action.Kind == api.RuntimeCreate {
 				// A connection exists only once it works, so the chat
 				// switches to it as soon as it is added.
@@ -71,6 +75,23 @@ func (m *Model) sendRuntimeAction(action runtimepick.Action) {
 }
 
 func (m *Model) runtimeConnections(response *api.RuntimeConnections) tea.Cmd {
+	if m.startupRuntimeID != "" && response.Pane == m.startupRuntimePane && response.RequestID == m.startupRuntimeID {
+		if _, ok := m.own[response.Pane].(runtimeChooser); !ok {
+			return nil
+		}
+		m.startupRuntimeID, m.startupRuntimePane = "", 0
+		if response.State == "error" || response.Selected != m.runtimeBinding {
+			m.runtimeBinding = ""
+			m.runtimeBindFailed = true
+			message := response.Message
+			if message == "" {
+				message = "Snow could not start Claude Code in this chat. Use /login to choose a Claude Code connection, or detach."
+			}
+			return m.ShowError(message)
+		}
+		m.runtimeBinding, m.runtimeBindFailed, m.runtimeBindingPane = "", false, 0
+		return nil
+	}
 	if response.Pane != m.runtimePane || response.RequestID != m.runtimeRequestID {
 		return nil
 	}
@@ -101,9 +122,18 @@ func (m *Model) runtimeConnections(response *api.RuntimeConnections) tea.Cmd {
 		m.runtimeAfter = ""
 		// A failed sign-in added nothing, and its notice says so.
 		if response.Selected != "" {
+			m.runtimeBindFailed = false
 			m.runtimeAfter = runtimeClose
 			m.sendRuntimeAction(runtimepick.Action{Kind: api.RuntimeUse, Connection: response.Selected})
 		}
+		if response.Message != "" {
+			return m.showNotice(response.Message)
+		}
+		return nil
+	case runtimeRecoveryUse:
+		m.runtimeAfter, m.runtimeBinding, m.runtimeBindFailed = "", "", false
+		m.runtimeBindingPane = 0
+		m.runtimePick, m.over = nil, nil
 		if response.Message != "" {
 			return m.showNotice(response.Message)
 		}
@@ -121,4 +151,15 @@ func (m *Model) runtimeConnections(response *api.RuntimeConnections) tea.Cmd {
 		return m.showNotice(response.Message)
 	}
 	return nil
+}
+
+func (m *Model) startRuntimeBinding(pane int, agent, connection string) {
+	m.firstRun[pane] = true
+	m.runtimeSeq++
+	m.runtimeRequestID = strconv.FormatUint(m.runtimeSeq, 10)
+	m.runtimePane, m.runtimeBinding, m.runtimeBindingPane = pane, connection, pane
+	m.runtimeBindFailed = false
+	m.startupRuntimePane, m.startupRuntimeID = pane, m.runtimeRequestID
+	m.runtimeAfter = ""
+	m.send(&api.RuntimeRequest{Pane: pane, Agent: agent, Action: api.RuntimeUse, Connection: connection, RequestID: m.runtimeRequestID})
 }
