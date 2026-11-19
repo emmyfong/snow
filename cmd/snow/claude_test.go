@@ -21,6 +21,7 @@ func TestParseClaude(t *testing.T) {
 		{[]string{"claude", "status"}, command{kind: kindClaude, claude: claudeStatus}, ""},
 		{[]string{"claude", "help"}, command{kind: kindClaudeHelp}, ""},
 		{[]string{"claude"}, command{kind: kindClaudeHelp}, "claude needs"},
+		{[]string{"claude", "setup", "extra"}, command{kind: kindClaudeHelp}, "too many arguments for snow claude: extra"},
 		{[]string{"claude", "login"}, command{kind: kindClaudeHelp}, "unknown claude command"},
 	}
 	for _, tt := range tests {

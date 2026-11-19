@@ -72,6 +72,10 @@ func TestRunVersionAndUsage(t *testing.T) {
 		t.Fatalf("version: code %d, output %q", code, out.String())
 	}
 	out.Reset()
+	if code := run([]string{"help"}, &out, &errOut); code != 0 || !strings.Contains(out.String(), "hooks and MCP server") {
+		t.Fatalf("help: code %d, output %q; want hooks and MCP server", code, out.String())
+	}
+	out.Reset()
 	if code := run([]string{"a", "b"}, &out, &errOut); code != 2 || !strings.Contains(errOut.String(), "usage:") ||
 		!strings.Contains(errOut.String(), "too many arguments") {
 		t.Fatalf("bad args: code %d, stderr %q", code, errOut.String())
