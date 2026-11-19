@@ -80,6 +80,9 @@ func TestContextPaneSavedAndRestored(t *testing.T) {
 	var name string
 	s.call(func(st *state) {
 		snap := st.snapshot(st.sessions["work"])
+		// Restore under another name, so the running session keeps its
+		// conversation file open until the server closes it.
+		snap.Name = "restored"
 		for _, w := range snap.Windows {
 			for _, sp := range w.Panes {
 				if sp.ID == cp {
