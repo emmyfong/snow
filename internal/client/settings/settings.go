@@ -32,6 +32,7 @@ type CloseMsg struct{}
 // Model is the settings screen.
 type Model struct {
 	groups            []Group
+	notice            string
 	selected          int
 	active            bool
 	cols, rows        int
@@ -46,6 +47,14 @@ func New(groups []Group) *Model {
 	th := theme.Default()
 	return &Model{groups: append([]Group(nil), groups...), theme: th, base: th}
 }
+
+// AddGroups appends groups after the existing screen state has been created.
+func (m *Model) AddGroups(groups []Group) {
+	m.groups = append(m.groups, groups...)
+}
+
+// SetNotice shows a config read failure while the screen uses defaults.
+func (m *Model) SetNotice(notice string) { m.notice = notice }
 
 // SetSize sets the screen size in cells.
 func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
@@ -145,8 +154,12 @@ func (m *Model) box() string {
 	if len(m.groups) == 0 {
 		body = []string{muted.Render("No settings groups yet."), " " + ui.KeyHints(m.theme, []ui.Hint{{Key: "Esc", Desc: "close"}}, inner-1)}
 	} else {
-		bodyRows := max(m.rows-4, 2)
-		listRows := bodyRows - 1
+		extraRows := 1
+		if m.notice != "" {
+			extraRows++
+		}
+		bodyRows := max(m.rows-4, extraRows+1)
+		listRows := bodyRows - extraRows
 		listWidth := min(22, max(inner/3, 12))
 		rightWidth := max(inner-listWidth-3, 1)
 		items := make([]ui.ListItem, len(m.groups))
@@ -179,7 +192,11 @@ func (m *Model) box() string {
 		if m.active {
 			footer[0].Desc = "back to groups"
 		}
-		body = append(rows, " "+ui.KeyHints(m.theme, footer, inner-1))
+		body = append(body, rows...)
+		if m.notice != "" {
+			body = append(body, ansi.Truncate(muted.Render(m.notice), inner, ""))
+		}
+		body = append(body, " "+ui.KeyHints(m.theme, footer, inner-1))
 	}
 	return ui.Panel(m.theme, ui.PanelOptions{Title: "Settings", Body: strings.Join(body, "\n"), Width: w})
 }
@@ -191,6 +208,9 @@ func (m *Model) groupAt(x, y int) (int, bool) {
 	left, top := max((m.cols-w)/2, 0), max((m.rows-h)/2, 0)
 	inner := w - 2
 	listRows := max(m.rows-5, 1)
+	if m.notice != "" {
+		listRows = max(listRows-1, 1)
+	}
 	listWidth := min(22, max(inner/3, 12))
 	if x < left+1 || x >= left+1+listWidth || y < top+1 || y >= top+1+listRows {
 		return 0, false

@@ -14,6 +14,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/settings"
+	"github.com/emmyfong/snow/internal/client/settings/panegroup"
 	"github.com/emmyfong/snow/internal/client/settings/themegroup"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
@@ -114,6 +115,24 @@ func (a *app) updateScreen(msg tea.Msg) tea.Cmd {
 
 // themeSaveFailedMsg reports that a theme was applied but not saved.
 type themeSaveFailedMsg struct{ err error }
+
+type settingsConfigMsg struct {
+	cfg config.Config
+	err error
+}
+
+func loadSettingsConfig(path string) tea.Cmd {
+	return func() tea.Msg {
+		if path == "" {
+			return settingsConfigMsg{cfg: config.Defaults()}
+		}
+		cfg, err := config.Load(path)
+		if err != nil {
+			cfg = config.Defaults()
+		}
+		return settingsConfigMsg{cfg: cfg, err: err}
+	}
+}
 
 // useTheme makes the theme called name the app's, for screens opened from
 // now on, and saves it in the background: writing a file must not hold up
@@ -403,6 +422,18 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			s.SetTheme(a.theme)
 			a.back = a.screen
 			a.show(s)
+			return a, loadSettingsConfig(a.configPath)
+		}
+		return a, nil
+	case settingsConfigMsg:
+		if s, ok := a.screen.(*settings.Model); ok {
+			s.AddGroups([]settings.Group{
+				panegroup.NewProfiles(msg.cfg),
+				panegroup.NewScrollback(msg.cfg),
+			})
+			if msg.err != nil {
+				s.SetNotice("Using defaults. Config could not be read: " + msg.err.Error())
+			}
 		}
 		return a, nil
 	case settings.CloseMsg:

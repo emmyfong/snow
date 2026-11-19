@@ -32,6 +32,7 @@ internal/client/
   themepick/     the shared theme list state and preview used by the home page and session command popup
   settings/      the settings screen shell: group list, active group, and Escape routing
   settings/themegroup/ the theme settings group, with live preview and save on Enter
+  settings/panegroup/ the read-only profiles and scrollback settings groups
   authpick/      the provider key picker (`/login`)
   runtimepick/   Snow-owned Claude Code connections, opened from /login; explicit subscription or API-key route and environment
   helppanel/     the help panel that home and chat share; each screen passes its commands and keys

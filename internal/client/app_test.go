@@ -410,6 +410,36 @@ func TestSettingsEscReturnsToSession(t *testing.T) {
 	}
 }
 
+func TestSettingsLoadsConfigSnapshot(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	data := "[profile]\ndefault = \"Ubuntu\"\n[scrollback]\nlines = 5000\n"
+	if err := os.WriteFile(path, []byte(data), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.configPath = path
+	a.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	_, cmd := a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	view := a.View().Content
+	for _, want := range []string{"Ubuntu", "new panes, after the server restarts"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("settings view does not show %q:\n%s", want, view)
+		}
+	}
+	if err := os.WriteFile(path, []byte("[profile\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a.Update(settings.CloseMsg{})
+	_, cmd = a.Update(command.SettingsMsg{})
+	run(a, cmd)
+	if !strings.Contains(a.View().Content, "Using defaults. Config could not be read:") {
+		t.Fatalf("settings did not show a config read notice:\n%s", a.View().Content)
+	}
+}
+
 func TestSettingsPreviewReachesBackScreen(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.toml")
 	before := "# preserve this comment\n[theme]\nname = \"Frost\"\n\n[keys]\nprefix = \"C-a\"\n"
