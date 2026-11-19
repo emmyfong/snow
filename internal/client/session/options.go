@@ -34,6 +34,17 @@ func (m *Model) SetTheme(th theme.Theme) {
 	m.previewTheme(th)
 }
 
+// SetPreviewTheme changes the visible theme without changing the restore point.
+func (m *Model) SetPreviewTheme(th theme.Theme) { m.previewTheme(th) }
+
+// CurrentTheme returns the raw theme shown by the session or its theme picker.
+func (m *Model) CurrentTheme() theme.Theme {
+	if m.prompt != nil && m.prompt.mode == modeThemes && m.prompt.themePick != nil {
+		return m.prompt.themePick.Shown()
+	}
+	return m.base
+}
+
 func (m *Model) applyTheme(th theme.Theme) {
 	m.theme = th
 	for _, p := range m.own {
@@ -52,5 +63,5 @@ func (m *Model) SetPaintedBackground(bg color.Color) {
 		m.previewTheme(m.prompt.themePick.Shown())
 		return
 	}
-	m.SetTheme(m.base)
+	m.previewTheme(m.base)
 }

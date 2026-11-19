@@ -53,12 +53,37 @@ func checkTheme(path string, last time.Time) configCheckedMsg {
 // applyTheme makes th the app's theme and updates each open screen.
 func (a *app) applyTheme(th theme.Theme) {
 	a.theme = th
+	a.configTheme = th
 	for _, screen := range []Screen{a.screen, a.back} {
 		if screen == nil {
 			continue
 		}
 		a.setScreenBackground(screen)
 		if s, ok := screen.(themed); ok {
+			s.SetTheme(th)
+		}
+	}
+	if current, ok := a.screen.(interface{ CurrentTheme() theme.Theme }); ok {
+		a.theme = current.CurrentTheme()
+	}
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen != nil {
+			a.setScreenBackground(screen)
+		}
+	}
+}
+
+// previewTheme applies a temporary theme without changing screen restore points.
+func (a *app) previewTheme(th theme.Theme) {
+	a.theme = th
+	for _, screen := range []Screen{a.screen, a.back} {
+		if screen == nil {
+			continue
+		}
+		a.setScreenBackground(screen)
+		if s, ok := screen.(interface{ SetPreviewTheme(theme.Theme) }); ok {
+			s.SetPreviewTheme(th)
+		} else if s, ok := screen.(themed); ok {
 			s.SetTheme(th)
 		}
 	}

@@ -14,8 +14,8 @@
           /rename [session] <name>   Rename a session                           
           /kill [session]            End a session and its programs             
           /theme [name]              Pick the colors                            
+          /settings                  Open settings                              
           /help                      Show commands and keys                     
-          /quit                      Leave Snow; sessions keep running          
                                                                                 
         [38;2;138;155;171mSessions[m                                                                
           api   running, 1 client   1m ago                                      

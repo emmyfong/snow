@@ -47,6 +47,7 @@ func TestThemeGroupEnterThenEscKeepsSaved(t *testing.T) {
 
 func TestThemeGroupClickPreviewsThenKeeps(t *testing.T) {
 	g := New(theme.Default())
+	g.SetSize(20, 13)
 	click := tea.MouseClickMsg{X: 0, Y: 1, Button: tea.MouseLeft}
 	if got, ok := g.Update(click)().(command.PreviewThemeMsg); !ok || got.Theme.Name != "Campbell" {
 		t.Fatalf("click on another row returned %#v, want Campbell preview", got)
@@ -61,6 +62,15 @@ func TestThemeGroupClickThroughSettings(t *testing.T) {
 	m := settings.New([]settings.Group{g})
 	m.SetSize(80, 24)
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for _, click := range []tea.MouseClickMsg{
+		{X: 6, Y: 3, Button: tea.MouseLeft},  // group list
+		{X: 29, Y: 3, Button: tea.MouseLeft}, // divider
+		{X: 75, Y: 3, Button: tea.MouseLeft}, // panel border
+	} {
+		if cmd := m.Update(click); cmd != nil {
+			t.Fatalf("click outside the detail area returned %T", cmd())
+		}
+	}
 	click := tea.MouseClickMsg{X: 31, Y: 3, Button: tea.MouseLeft}
 	cmd := m.Update(click)
 	if got, ok := cmd().(command.PreviewThemeMsg); !ok || got.Theme.Name != "Campbell" {
@@ -69,6 +79,50 @@ func TestThemeGroupClickThroughSettings(t *testing.T) {
 	cmd = m.Update(click)
 	if got, ok := cmd().(command.ThemeMsg); !ok || got.Name != "Campbell" {
 		t.Fatalf("second click through settings returned %#v, want Campbell ThemeMsg", got)
+	}
+}
+
+func TestThemeGroupClickMapsVisibleRows(t *testing.T) {
+	g := New(theme.Default())
+	g.SetSize(20, 5)
+	for range 11 {
+		g.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	if got, ok := g.Update(tea.MouseClickMsg{X: 1, Y: 0, Button: tea.MouseLeft})().(command.PreviewThemeMsg); !ok || got.Theme.Name != "Gruvbox Dark" {
+		t.Fatalf("first visible row returned %#v, want Gruvbox Dark preview", got)
+	}
+	for range 4 {
+		g.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	if got, ok := g.Update(tea.MouseClickMsg{X: 1, Y: 4, Button: tea.MouseLeft})().(command.ThemeMsg); !ok || got.Name != "Clay" {
+		t.Fatalf("click on visible Clay returned %#v, want Clay ThemeMsg", got)
+	}
+}
+
+func TestThemeGroupFooterClickDoesNotKeepATheme(t *testing.T) {
+	g := New(theme.Default())
+	m := settings.New([]settings.Group{g})
+	m.SetSize(80, 12)
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for range 7 {
+		m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	}
+	cmd := m.Update(tea.MouseClickMsg{X: 6, Y: 9, Button: tea.MouseLeft})
+	if cmd == nil {
+		t.Fatal("footer click returned no restore command")
+	}
+	if got, ok := cmd().(command.PreviewThemeMsg); !ok || got.Theme.Name != "Frost" {
+		t.Fatalf("footer click returned %#v, want Frost restore and no saved theme", got)
+	}
+}
+
+func TestThemeGroupExternalThemeBecomesRestorePoint(t *testing.T) {
+	g := New(theme.Default())
+	g.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	dracula, _ := theme.ByName("Dracula")
+	g.SetCommittedTheme(dracula)
+	if got, ok := g.Leave()().(command.PreviewThemeMsg); !ok || got.Theme.Name != "Dracula" {
+		t.Fatalf("Leave after external change returned %#v, want Dracula preview", got)
 	}
 }
 

@@ -13,6 +13,8 @@ import (
 type Group struct {
 	pick   *themepick.Model
 	before theme.Theme
+	width  int
+	height int
 }
 
 // New returns the group with the current theme selected.
@@ -36,15 +38,39 @@ func (g *Group) Update(msg tea.Msg) tea.Cmd {
 			return g.keep()
 		}
 	case tea.MouseClickMsg:
-		if msg.Button != tea.MouseLeft || msg.Y < 0 || msg.Y >= len(g.pick.Items()) {
+		if msg.Button != tea.MouseLeft || msg.X < 0 || msg.X >= g.width || msg.Y < 0 || msg.Y >= g.height {
 			return nil
 		}
-		if msg.Y == g.pick.Selected() {
+		first, last := ui.ListWindow(len(g.pick.Items()), g.pick.Selected(), g.height)
+		index := first + msg.Y
+		if index >= last {
+			return nil
+		}
+		if index == g.pick.Selected() {
 			return g.keep()
 		}
-		return preview(g.pick.Move(msg.Y - g.pick.Selected()))
+		return preview(g.pick.Move(index - g.pick.Selected()))
 	}
 	return nil
+}
+
+// SetSize sets the visible theme list area for mouse hit testing.
+func (g *Group) SetSize(width, height int) { g.width, g.height = width, height }
+
+// SetCommittedTheme updates the theme to restore after an external config change.
+func (g *Group) SetCommittedTheme(th theme.Theme) {
+	previewing := g.pick.Shown().Name != g.before.Name
+	g.before = th
+	g.pick.SetBefore(th)
+	if !previewing {
+		g.pick = themepick.New(theme.Builtin(), th)
+	}
+}
+
+// ThemePreview reports the current temporary selection, if it differs from the restore point.
+func (g *Group) ThemePreview() (theme.Theme, bool) {
+	th := g.pick.Shown()
+	return th, th.Name != g.before.Name
 }
 
 // Leave restores the theme from before the group opened or the last one kept.

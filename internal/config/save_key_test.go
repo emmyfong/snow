@@ -17,6 +17,7 @@ func TestSetKeyKeepsComments(t *testing.T) {
 		{name: "missing key", before: "[theme]\n# keep\nbackground = \"terminal\"\n", key: []string{"theme", "name"}, want: "[theme]\nname = \"Nord\"\n# keep\nbackground = \"terminal\"\n"},
 		{name: "trailing comment", before: "[theme]\nname = 'old' # keep\n", key: []string{"theme", "name"}, want: "[theme]\nname = \"Nord\" # keep\n"},
 		{name: "quoted key", before: "[keys.bind]\n# keep\n", key: []string{"keys", "bind", "|"}, want: "[keys.bind]\n\"|\" = \"Nord\"\n# keep\n"},
+		{name: "equals in quoted key", before: "[keys.bind]\n\"=\" = \"split-right\"\n", key: []string{"keys", "bind", "="}, want: "[keys.bind]\n\"=\" = \"Nord\"\n"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -70,5 +71,24 @@ func TestSetKeyRoundTrip(t *testing.T) {
 		if got := cfg.Keys.Bind[key]; got != want {
 			t.Errorf("Keys.Bind[%q] = %q, want %q", key, got, want)
 		}
+	}
+}
+
+func TestSetKeyReplacesScalarLiterals(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "[scrollback]\nlines = 2000 # keep lines\n[chat]\nusage = true # keep usage\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := SetKey(path, []string{"scrollback", "lines"}, "3000"); err != nil {
+		t.Fatalf("SetKey integer: %v", err)
+	}
+	if err := SetKey(path, []string{"chat", "usage"}, "false"); err != nil {
+		t.Fatalf("SetKey boolean: %v", err)
+	}
+	want := "[scrollback]\nlines = 3000 # keep lines\n[chat]\nusage = false # keep usage\n"
+	got, err := os.ReadFile(path)
+	if err != nil || string(got) != want {
+		t.Fatalf("file:\n%s\nwant:\n%s\nerror: %v", got, want, err)
 	}
 }

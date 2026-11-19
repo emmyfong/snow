@@ -102,6 +102,7 @@ func Run(opts Options) (Result, error) {
 		dir, _ = os.Getwd()
 	}
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
+	a.configTheme = th
 	a.setKeys(table)
 	a.terminalBackground = cfg.Theme.Background == config.BackgroundTerminal
 	if opts.ConfigPath != "" {

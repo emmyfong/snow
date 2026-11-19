@@ -19,17 +19,18 @@ var ErrCannotEdit = errors.New("config: the setting is in a form snow cannot edi
 // the file when it is missing. Only that one line changes: other settings,
 // comments, and a comment after the value stay as they are.
 func SetTheme(path, name string) error {
-	if err := SetKey(path, []string{"theme", "name"}, Quote(name)); err != nil {
-		return fmt.Errorf("config: %s: theme.name: %w", path, err)
-	}
-	text, err := os.ReadFile(path)
-	if err != nil {
+	data, err := os.ReadFile(path)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("config: read %s: %w", path, err)
 	}
-	if cfg, perr := parse(string(text)); perr != nil || cfg.Theme.Name != name {
+	text, err := setKey(string(data), []string{"theme", "name"}, Quote(name))
+	if err != nil {
+		return fmt.Errorf("config: %s: theme.name: %w", path, err)
+	}
+	if cfg, perr := parse(text); perr != nil || cfg.Theme.Name != name {
 		return fmt.Errorf("config: %s: theme.name: %w", path, ErrCannotEdit)
 	}
-	return nil
+	return writeFile(path, text)
 }
 
 // SetChatModel writes model as [chat] model and effort as [chat] effort in
@@ -49,24 +50,22 @@ func SetChatModel(path, model, effort string) error {
 		// header after it would make a file other TOML readers reject.
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	}
-	if err := SetKey(path, []string{"chat", "model"}, Quote(model)); err != nil {
+	text, err := setKey(string(data), []string{"chat", "model"}, Quote(model))
+	if err != nil {
 		return fmt.Errorf("config: %s: chat.model: %w", path, err)
 	}
-	if err := SetKey(path, []string{"chat", "effort"}, Quote(effort)); err != nil {
+	text, err = setKey(text, []string{"chat", "effort"}, Quote(effort))
+	if err != nil {
 		return fmt.Errorf("config: %s: chat.effort: %w", path, err)
 	}
-	text, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("config: read %s: %w", path, err)
-	}
-	if cfg, perr := parse(string(text)); perr != nil {
+	if cfg, perr := parse(text); perr != nil {
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	} else if cfg.Chat.Model != model {
 		return fmt.Errorf("config: %s: chat.model: %w", path, ErrCannotEdit)
 	} else if cfg.Chat.Effort != effort {
 		return fmt.Errorf("config: %s: chat.effort: %w", path, ErrCannotEdit)
 	}
-	return nil
+	return writeFile(path, text)
 }
 
 // Quote returns value as a valid TOML basic string, preserving every rune.
@@ -170,7 +169,8 @@ func setKey(data string, key []string, value string) (string, error) {
 	if len(parts) == 0 || parts[len(parts)-1] != key[len(key)-1] || !strings.HasPrefix(rest, "=") {
 		return "", ErrCannotEdit // the parent is an inline table
 	}
-	eq := strings.Index(line, "=")
+	leading := len(line) - len(strings.TrimLeft(line, " \t"))
+	eq := leading + len(trimmed) - len(rest) + strings.Index(rest, "=")
 	after := strings.TrimLeft(line[eq+1:], " \t")
 	end := valueEnd(after)
 	if end < 0 {
@@ -196,22 +196,43 @@ func quotePath(path []string) []string {
 	return quoted
 }
 
-// valueEnd returns the index just past the string value at the start of s,
-// or -1 when s does not start with a one-line string.
+// valueEnd returns the end of a one-line TOML value, before its comment.
+// Multiline or unbalanced values cannot be rewritten safely.
 func valueEnd(s string) int {
-	switch {
-	case strings.HasPrefix(s, `"""`), strings.HasPrefix(s, "'''"):
-		return -1
-	case strings.HasPrefix(s, `"`):
-		if end := closingQuote(s); end > 0 {
-			return end + 1
+	var quote byte
+	depth := 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if quote != 0 {
+			if quote == '"' && c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
 		}
-	case strings.HasPrefix(s, "'"):
-		if end := strings.IndexByte(s[1:], '\''); end >= 0 {
-			return end + 2
+		if i+2 < len(s) && (s[i:i+3] == `"""` || s[i:i+3] == `'''`) {
+			return -1
+		}
+		switch c {
+		case '"', '\'':
+			quote = c
+		case '[', '{':
+			depth++
+		case ']', '}':
+			depth--
+		case '#':
+			if depth == 0 {
+				return len(strings.TrimRight(s[:i], " \t"))
+			}
 		}
 	}
-	return -1
+	if quote != 0 || depth != 0 {
+		return -1
+	}
+	return len(strings.TrimRight(s, " \t"))
 }
 
 // writeFile replaces path with text: it writes a temporary file beside it

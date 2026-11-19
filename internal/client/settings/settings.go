@@ -26,6 +26,14 @@ type Group interface {
 	View(th theme.Theme, width, height int) string
 }
 
+type sizedGroup interface {
+	SetSize(width, height int)
+}
+
+type committedThemeGroup interface {
+	SetCommittedTheme(theme.Theme)
+}
+
 // CloseMsg asks the app to close the settings screen.
 type CloseMsg struct{}
 
@@ -51,18 +59,80 @@ func New(groups []Group) *Model {
 // AddGroups appends groups after the existing screen state has been created.
 func (m *Model) AddGroups(groups []Group) {
 	m.groups = append(m.groups, groups...)
+	m.sizeGroups()
 }
 
 // SetNotice shows a config read failure while the screen uses defaults.
-func (m *Model) SetNotice(notice string) { m.notice = notice }
+func (m *Model) SetNotice(notice string) {
+	m.notice = notice
+	m.sizeGroups()
+}
 
 // SetSize sets the screen size in cells.
-func (m *Model) SetSize(cols, rows int) { m.cols, m.rows = cols, rows }
+func (m *Model) SetSize(cols, rows int) {
+	m.cols, m.rows = cols, rows
+	m.sizeGroups()
+}
+
+func (m *Model) groupSize() (int, int) {
+	w := min(72, m.cols-4)
+	if w < 4 {
+		return 0, 0
+	}
+	extraRows := 1
+	if m.notice != "" {
+		extraRows++
+	}
+	listRows := max(m.rows-4, extraRows+1) - extraRows
+	inner := w - 2
+	listWidth := min(22, max(inner/3, 12))
+	return max(inner-listWidth-3, 1), listRows
+}
+
+func (m *Model) sizeGroups() {
+	width, height := m.groupSize()
+	for _, group := range m.groups {
+		if sized, ok := group.(sizedGroup); ok {
+			sized.SetSize(width, height)
+		}
+	}
+}
 
 // SetTheme changes the theme used to draw the screen.
 func (m *Model) SetTheme(th theme.Theme) {
 	m.base = th
 	m.adaptTheme()
+}
+
+// SetPreviewTheme changes the drawing theme without changing the restore point.
+func (m *Model) SetPreviewTheme(th theme.Theme) {
+	m.theme = th
+	if m.profile != nil {
+		m.theme = m.theme.ForBackground(*m.profile, m.paintedBackground)
+	}
+}
+
+// SetCommittedTheme updates group restore points after an external config change.
+func (m *Model) SetCommittedTheme(th theme.Theme) {
+	for _, group := range m.groups {
+		if themed, ok := group.(committedThemeGroup); ok {
+			themed.SetCommittedTheme(th)
+		}
+	}
+}
+
+// CurrentTheme returns the raw theme shown by the active group, or the screen.
+func (m *Model) CurrentTheme() theme.Theme {
+	if m.active {
+		if group, ok := m.groups[m.selected].(interface {
+			ThemePreview() (theme.Theme, bool)
+		}); ok {
+			if th, previewing := group.ThemePreview(); previewing {
+				return th
+			}
+		}
+	}
+	return m.base
 }
 
 // SetPaintedBackground adapts secondary text to the background Snow applies.
@@ -72,7 +142,7 @@ func (m *Model) SetPaintedBackground(bg color.Color) {
 }
 
 func (m *Model) adaptTheme() {
-	m.theme = m.base
+	m.theme = m.CurrentTheme()
 	if m.profile != nil {
 		m.theme = m.theme.ForBackground(*m.profile, m.paintedBackground)
 	}
@@ -106,13 +176,15 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case tea.MouseMsg:
 		if m.active {
-			cmd := m.groups[m.selected].Update(m.groupMsg(msg))
 			if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft && m.onFooter(click.X, click.Y) {
 				leave := m.groups[m.selected].Leave()
 				m.active = false
-				return tea.Sequence(cmd, leave)
+				return leave
 			}
-			return cmd
+			if click, ok := msg.(tea.MouseClickMsg); ok && !m.onDetail(click.X, click.Y) {
+				return nil
+			}
+			return m.groups[m.selected].Update(m.groupMsg(msg))
 		}
 		click, ok := msg.(tea.MouseClickMsg)
 		if !ok || click.Button != tea.MouseLeft {
@@ -154,14 +226,9 @@ func (m *Model) box() string {
 	if len(m.groups) == 0 {
 		body = []string{muted.Render("No settings groups yet."), " " + ui.KeyHints(m.theme, []ui.Hint{{Key: "Esc", Desc: "close"}}, inner-1)}
 	} else {
-		extraRows := 1
-		if m.notice != "" {
-			extraRows++
-		}
-		bodyRows := max(m.rows-4, extraRows+1)
-		listRows := bodyRows - extraRows
+		rightWidth, listRows := m.groupSize()
+		inner := w - 2
 		listWidth := min(22, max(inner/3, 12))
-		rightWidth := max(inner-listWidth-3, 1)
 		items := make([]ui.ListItem, len(m.groups))
 		for i, group := range m.groups {
 			items[i] = ui.ListItem{Cols: []string{group.Title()}}
@@ -207,10 +274,7 @@ func (m *Model) groupAt(x, y int) (int, bool) {
 	_, h := ui.Size(box)
 	left, top := max((m.cols-w)/2, 0), max((m.rows-h)/2, 0)
 	inner := w - 2
-	listRows := max(m.rows-5, 1)
-	if m.notice != "" {
-		listRows = max(listRows-1, 1)
-	}
+	_, listRows := m.groupSize()
 	listWidth := min(22, max(inner/3, 12))
 	if x < left+1 || x >= left+1+listWidth || y < top+1 || y >= top+1+listRows {
 		return 0, false
@@ -218,6 +282,22 @@ func (m *Model) groupAt(x, y int) (int, bool) {
 	first, last := ui.ListWindow(len(m.groups), m.selected, listRows)
 	i := first + y - (top + 1)
 	return i, i < last
+}
+
+func (m *Model) onDetail(x, y int) bool {
+	w := min(72, m.cols-4)
+	if w < 4 {
+		return false
+	}
+	box := m.box()
+	_, h := ui.Size(box)
+	left, top := max((m.cols-w)/2, 0), max((m.rows-h)/2, 0)
+	inner := w - 2
+	listWidth := min(22, max(inner/3, 12))
+	detailWidth, listRows := m.groupSize()
+	left += 1 + listWidth + 3
+	top++
+	return x >= left && x < left+detailWidth && y >= top && y < top+listRows
 }
 
 func (m *Model) groupMsg(msg tea.MouseMsg) tea.Msg {

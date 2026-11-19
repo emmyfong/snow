@@ -11,14 +11,19 @@ import (
 // key positions, so this scans the text. When key itself has no line of its
 // own (it sits in an inline table), keyLine returns the line of its deepest
 // parent that has one. It returns 0 when no part of key is found.
-//
-// The scan does not track multi-line strings, so a line inside one that
-// looks like a key can match. A wrong line there is harmless: the error
-// still names the key.
 func keyLine(data string, key []string) int {
 	var table []string
+	var multiline byte
 	best, bestLen := 0, 0
 	for i, line := range strings.Split(data, "\n") {
+		if multiline != 0 {
+			multiline = multilineState(line, multiline)
+			continue
+		}
+		// Continuation lines can start a multiline string even though they do
+		// not contain a key. Scan before parsing so skipped array lines still
+		// keep fake table headers inside the string from being treated as keys.
+		multiline = multilineState(line, 0)
 		line = strings.TrimSpace(line)
 		var path []string
 		switch {
@@ -48,6 +53,56 @@ func keyLine(data string, key []string) int {
 		}
 	}
 	return best
+}
+
+func multilineState(line string, quote byte) byte {
+	for i := 0; i < len(line); {
+		if quote != 0 {
+			if quote == '"' && line[i] == '\\' {
+				i += 2
+				continue
+			}
+			if line[i] == quote {
+				end := i
+				for end < len(line) && line[end] == quote {
+					end++
+				}
+				if end-i >= 3 {
+					quote = 0
+					i = end
+					continue
+				}
+			}
+			i++
+			continue
+		}
+		if line[i] == '#' {
+			break
+		}
+		if i+2 < len(line) && (line[i:i+3] == `"""` || line[i:i+3] == `'''`) {
+			quote = line[i]
+			i += 3
+			continue
+		}
+		if line[i] == '"' || line[i] == '\'' {
+			end := i + 1
+			for end < len(line) {
+				if line[i] == '"' && line[end] == '\\' {
+					end += 2
+					continue
+				}
+				if line[end] == line[i] {
+					end++
+					break
+				}
+				end++
+			}
+			i = end
+			continue
+		}
+		i++
+	}
+	return quote
 }
 
 // splitKey reads a dotted TOML key, such as `a."b.c".d`, from the start of

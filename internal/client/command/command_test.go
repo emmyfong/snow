@@ -23,11 +23,11 @@ func TestMatchCommands(t *testing.T) {
 		query string
 		want  []string
 	}{
-		{"", []string{"new", "sessions", "rename", "kill", "theme", "help", "quit"}},
-		{"n", []string{"new", "rename", "sessions"}},
+		{"", []string{"new", "sessions", "rename", "kill", "theme", "settings", "help", "quit"}},
+		{"n", []string{"new", "rename", "settings", "sessions"}},
 		{"re", []string{"rename"}},
-		{"s", []string{"sessions"}},
-		{"t", []string{"theme", "quit"}},
+		{"s", []string{"sessions", "settings"}},
+		{"t", []string{"theme", "settings", "quit"}},
 		{"xyz", nil},
 	}
 	for _, tt := range tests {
@@ -101,11 +101,11 @@ func TestFuzzyMatch(t *testing.T) {
 // there, in table order.
 func TestMatchFiltersByPlace(t *testing.T) {
 	home := names(Match("", Home))
-	if want := []string{"new", "sessions", "rename", "kill", "theme", "help", "quit"}; !slices.Equal(home, want) {
+	if want := []string{"new", "sessions", "rename", "kill", "theme", "settings", "help", "quit"}; !slices.Equal(home, want) {
 		t.Errorf("home commands %v, want %v", home, want)
 	}
 	inSession := names(Match("", InSession))
-	if want := []string{"new", "switch", "rename", "kill", "chat", "agents", "theme", "help", "menu"}; !slices.Equal(inSession, want) {
+	if want := []string{"new", "switch", "rename", "kill", "chat", "agents", "theme", "settings", "help", "menu"}; !slices.Equal(inSession, want) {
 		t.Errorf("session commands %v, want %v", inSession, want)
 	}
 	if chat := Match("", Chat); len(chat) != 0 {

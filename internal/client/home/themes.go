@@ -15,11 +15,19 @@ import (
 // setBase makes th the page's theme, adapted to the terminal's colors once
 // they are known.
 func (m *Model) setBase(th theme.Theme) {
-	m.base, m.theme = th, th
+	m.base = th
+	m.setVisibleTheme(th)
+}
+
+func (m *Model) setVisibleTheme(th theme.Theme) {
+	m.theme = th
 	if m.profile != nil {
 		m.theme = th.ForBackground(*m.profile, m.paintedBackground)
 	}
 }
+
+// SetPreviewTheme changes the drawing theme without changing the restore point.
+func (m *Model) SetPreviewTheme(th theme.Theme) { m.setVisibleTheme(th) }
 
 // SetPaintedBackground adapts secondary text to the background Snow applies.
 // A nil color means the terminal supplies its own background.
@@ -51,6 +59,14 @@ func (m *Model) SetTheme(th theme.Theme) {
 
 // Theme returns the theme the page draws with.
 func (m *Model) Theme() theme.Theme { return m.theme }
+
+// CurrentTheme returns the raw theme shown by the page or its open picker.
+func (m *Model) CurrentTheme() theme.Theme {
+	if m.themePick != nil {
+		return m.themePick.Shown()
+	}
+	return m.base
+}
 
 // cmdTheme sets the named theme, or opens the theme list when no name is
 // given.
