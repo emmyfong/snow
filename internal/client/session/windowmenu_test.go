@@ -92,7 +92,7 @@ func testSessionHelpRow(t *testing.T, row int) {
 	}
 }
 
-func TestHelpRowOpensPanelInSession(t *testing.T) { testSessionHelpRow(t, 7) }
+func TestHelpRowOpensPanelInSession(t *testing.T) { testSessionHelpRow(t, 6) }
 
 func sessionHelpGolden(t *testing.T, cols, rows int) {
 	t.Helper()
@@ -100,14 +100,12 @@ func sessionHelpGolden(t *testing.T, cols, rows int) {
 	panes := threePanes(cols, rows)
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
 	fill(m, panes)
-	chooseWindowRow(m, 7, false)
+	chooseWindowRow(m, 6, false)
 	golden.RequireEqual(t, m.View().Content)
 }
 
 func TestSessionHelpGolden80x24(t *testing.T)  { sessionHelpGolden(t, 80, 24) }
 func TestSessionHelpGolden120x40(t *testing.T) { sessionHelpGolden(t, 120, 40) }
-
-func TestKeyboardShortcutsRowOpensSessionHelp(t *testing.T) { testSessionHelpRow(t, 6) }
 
 func TestConnectRowOpensLoginPicker(t *testing.T) {
 	m, r := modelScreen(t, 80, 24, "anthropic/claude-sonnet-5-5")

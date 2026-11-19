@@ -10,7 +10,6 @@ var layoutRows = []rowSpec{
 	{"Agents", "choose-agent"},
 	{"Connect", "connect"},
 	{"Theme", "/theme"},
-	{"Keyboard shortcuts", "/help"},
 	{"Help", "/help"},
 	{"Leave Snow running", "detach"},
 }

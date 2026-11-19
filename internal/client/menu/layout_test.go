@@ -17,14 +17,14 @@ func TestLayoutMenuRows(t *testing.T) {
 			{"New chat", "", "new-chat"}, {"New terminal", "Ctrl+b c", "new-window"},
 			{"Split", "Ctrl+b %", "split-right"}, {"Sessions", "Ctrl+b s", "sessions"},
 			{"Agents", "Ctrl+b w", "choose-agent"}, {"Connect", "", "connect"},
-			{"Theme", "", "/theme"}, {"Keyboard shortcuts", "", "/help"},
-			{"Help", "", "/help"}, {"Leave Snow running", "Ctrl+b d", "detach"},
+			{"Theme", "", "/theme"}, {"Help", "", "/help"},
+			{"Leave Snow running", "Ctrl+b d", "detach"},
 		}},
 		{name: "connect unavailable", want: []Item{
 			{"New chat", "", "new-chat"}, {"New terminal", "Ctrl+b c", "new-window"},
 			{"Split", "Ctrl+b %", "split-right"}, {"Sessions", "Ctrl+b s", "sessions"},
 			{"Agents", "Ctrl+b w", "choose-agent"}, {"Theme", "", "/theme"},
-			{"Keyboard shortcuts", "", "/help"}, {"Help", "", "/help"},
+			{"Help", "", "/help"},
 			{"Leave Snow running", "Ctrl+b d", "detach"},
 		}},
 	} {
@@ -37,6 +37,20 @@ func TestLayoutMenuRows(t *testing.T) {
 				if items[i] != tt.want[i] {
 					t.Errorf("row %d = %+v, want %+v", i, items[i], tt.want[i])
 				}
+			}
+		})
+	}
+}
+
+func TestLayoutMenuActionsAreUnique(t *testing.T) {
+	for _, connect := range []bool{false, true} {
+		t.Run(map[bool]string{false: "connect unavailable", true: "connect available"}[connect], func(t *testing.T) {
+			seen := make(map[string]string)
+			for _, item := range LayoutItems(keys.Default(), connect) {
+				if previous, ok := seen[item.Action]; ok {
+					t.Errorf("%q and %q share action %q", previous, item.Label, item.Action)
+				}
+				seen[item.Action] = item.Label
 			}
 		})
 	}
