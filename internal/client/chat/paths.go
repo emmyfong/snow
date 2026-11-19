@@ -60,12 +60,19 @@ func relativePath(tok, root string) (string, int, bool) {
 	}
 	line := 0
 	p := tok
+	p = strings.TrimSuffix(p, ":")
 	if i := strings.LastIndexByte(p, ':'); i > 0 && i+1 < len(p) && allDigits(p[i+1:]) {
-		n, err := strconv.Atoi(p[i+1:])
+		lineSuffix := p[i+1:]
+		p = p[:i]
+		if j := strings.LastIndexByte(p, ':'); j > 0 && j+1 < len(p) && allDigits(p[j+1:]) {
+			lineSuffix = p[j+1:]
+			p = p[:j]
+		}
+		n, err := strconv.Atoi(lineSuffix)
 		if err != nil || n < 1 {
 			return "", 0, false
 		}
-		p, line = p[:i], n
+		line = n
 	}
 	p = filepath.ToSlash(p)
 	if _, ok := drivePath(p); ok {
