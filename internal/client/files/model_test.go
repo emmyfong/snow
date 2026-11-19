@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
@@ -177,6 +178,19 @@ func TestFilesPaneGolden(t *testing.T) {
 				m.SetState(tree())
 				golden.RequireEqual(t, strings.Join(m.View(), "\n"))
 			})
+		}
+	}
+}
+
+// TestFilesHintsListWorkingKeys shows only actions the pane handles.
+func TestFilesHintsListWorkingKeys(t *testing.T) {
+	got := ansi.Strip(strings.Join(model(tree(), 80, 24).View(), "\n"))
+	if !strings.Contains(got, "Enter view") {
+		t.Fatalf("files pane hints %q, want Enter view", got)
+	}
+	for _, hint := range []string{"edit", "add to chat"} {
+		if strings.Contains(got, hint) {
+			t.Fatalf("files pane hints %q, unexpectedly includes %q", got, hint)
 		}
 	}
 }
