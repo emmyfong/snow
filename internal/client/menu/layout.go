@@ -15,5 +15,17 @@ var layoutRows = []rowSpec{
 	{"Leave Snow running", "detach"},
 }
 
-// LayoutItems returns the rows in the window menu.
-func LayoutItems(t *keys.Table) []Item { return buildItems(t, layoutRows) }
+// LayoutItems returns the rows in the window menu. connect is true when the
+// focused pane can open a login or runtime picker.
+func LayoutItems(t *keys.Table, connect bool) []Item {
+	rows := layoutRows
+	if !connect {
+		rows = make([]rowSpec, 0, len(layoutRows)-1)
+		for _, row := range layoutRows {
+			if row.action != "connect" {
+				rows = append(rows, row)
+			}
+		}
+	}
+	return buildItems(t, rows)
+}

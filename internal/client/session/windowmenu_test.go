@@ -44,7 +44,7 @@ func chooseWindowRow(m *Model, index int, mouse bool) tea.Cmd {
 }
 
 func TestMenuKeyboardMouseParity(t *testing.T) {
-	for i, it := range menu.LayoutItems(keys.Default()) {
+	for i, it := range menu.LayoutItems(keys.Default(), true) {
 		t.Run(it.Label, func(t *testing.T) {
 			var states []string
 			var sent [][]api.Message
@@ -73,7 +73,7 @@ func TestMenuKeyboardMouseParity(t *testing.T) {
 
 func TestMenuCommandRow(t *testing.T) {
 	m := attached(t, 80, 24)
-	chooseWindowRow(m, 6, false)
+	chooseWindowRow(m, 5, false)
 	if m.prompt == nil || m.prompt.mode != modeThemes {
 		t.Fatal("Theme did not run session theme command")
 	}
@@ -92,7 +92,7 @@ func testSessionHelpRow(t *testing.T, row int) {
 	}
 }
 
-func TestHelpRowOpensPanelInSession(t *testing.T) { testSessionHelpRow(t, 8) }
+func TestHelpRowOpensPanelInSession(t *testing.T) { testSessionHelpRow(t, 7) }
 
 func sessionHelpGolden(t *testing.T, cols, rows int) {
 	t.Helper()
@@ -100,14 +100,14 @@ func sessionHelpGolden(t *testing.T, cols, rows int) {
 	panes := threePanes(cols, rows)
 	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: panes}}})
 	fill(m, panes)
-	chooseWindowRow(m, 8, false)
+	chooseWindowRow(m, 7, false)
 	golden.RequireEqual(t, m.View().Content)
 }
 
 func TestSessionHelpGolden80x24(t *testing.T)  { sessionHelpGolden(t, 80, 24) }
 func TestSessionHelpGolden120x40(t *testing.T) { sessionHelpGolden(t, 120, 40) }
 
-func TestKeyboardShortcutsRowOpensSessionHelp(t *testing.T) { testSessionHelpRow(t, 7) }
+func TestKeyboardShortcutsRowOpensSessionHelp(t *testing.T) { testSessionHelpRow(t, 6) }
 
 func TestConnectRowOpensLoginPicker(t *testing.T) {
 	m, r := modelScreen(t, 80, 24, "anthropic/claude-sonnet-5-5")
@@ -147,10 +147,10 @@ func TestSessionHelpListsConfiguredKeys(t *testing.T) {
 	}
 }
 
-func TestConnectRowExplainsTerminalLimitation(t *testing.T) {
+func TestLoginPickerExplainsTerminalLimitation(t *testing.T) {
 	m := attached(t, 80, 24)
-	chooseWindowRow(m, 5, false)
-	if !strings.Contains(m.message, "chat panes") || m.menu != nil {
-		t.Fatalf("terminal Connect did not explain its limit: %q", m.message)
+	m.openLoginPicker(1)
+	if !strings.Contains(m.message, "chat panes") {
+		t.Fatalf("terminal login picker did not explain its limit: %q", m.message)
 	}
 }

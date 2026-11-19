@@ -30,6 +30,25 @@ func TestRightClickOpensMenuWithShortcuts(t *testing.T) {
 	}
 }
 
+func TestWindowMenuConnectOnlyInChat(t *testing.T) {
+	chat, _ := chatScreen(t, 100, 30)
+	chat.openWindowMenu()
+	if !strings.Contains(ansi.Strip(content(chat)), "Connect") {
+		t.Fatalf("chat window menu lacks Connect:\n%s", content(chat))
+	}
+
+	terminal := screen(100, 30)
+	terminal.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{
+		Index: 1, Name: "shell", Panes: []api.PaneInfo{{
+			ID: 1, Kind: api.PaneTerminal, Rect: api.Rect{Y: 1, W: 100, H: 27}, Profile: "shell", Focused: true,
+		}},
+	}}})
+	terminal.openWindowMenu()
+	if strings.Contains(ansi.Strip(content(terminal)), "Connect") {
+		t.Fatalf("terminal window menu offers Connect:\n%s", content(terminal))
+	}
+}
+
 func TestRightClickFocusesTheClickedPane(t *testing.T) {
 	m, r := threePaneScreen(t)
 	m.Update(rightClick(5, 5))
