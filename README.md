@@ -106,15 +106,14 @@ sessions come back. Say `n` to keep working in the old server.
 
 Run `snow`. It starts a background server and opens the home page, which
 lists your sessions. Press Enter to open the new-session dialog. Choose
-`Plain shell` and press Enter to start a session. A new session has a Chat
-pane and a shell pane, with Chat focused first. This path does not need a
-provider API key. Press `Ctrl+b` then Right to focus the shell pane.
+`Plain shell` and press Enter to start a session with one shell pane. This
+path does not need a provider API key. To open native Chat in the session,
+press `Ctrl+b :`, type `chat`, and press Enter.
 
-To use native chat, connect a provider with `snow auth login <provider>` or
-type `/login` in Chat, then choose a model with `/model`. With no saved key,
-Chat shows how to connect one. If no model is configured, choose one before
-sending the first message. To cancel the new-session dialog, press `Esc`;
-Snow returns to Home without creating a session.
+In Chat, use `/login` to save a provider key and `/model` to choose a model.
+With no saved key, Chat shows how to connect one. If no model is configured,
+choose one before sending the first message. To cancel the new-session
+dialog, press `Esc`; Snow returns to Home without creating a session.
 
 ```text
 snow           open the home page
@@ -154,8 +153,11 @@ other setting and hook, and saves a copy as `settings.json.snow.bak`. On
 Windows it offers each WSL distribution that has `claude` too.
 `snow claude status` reports whether both the hooks and MCP server are set.
 `snow claude remove` removes only Snow's hook and MCP registration. Restart
-Claude Code sessions to use the changes. Until the hooks are set, the home
-page says so while a Claude Code pane is open. Run `snow claude setup` with
+Claude Code sessions to use the changes. The hook reports agent activity to
+Snow. MCP lets the Claude Code agent list and read terminal panes in the same
+Snow session and request typing in them; Claude Code asks you to approve each
+typing request. Until the hooks are set, the home page says so while a
+Claude Code pane is open. Run `snow claude setup` with
 snow under its own name, `snow` or `snow.exe`. A settings file holds one
 Snow hook: in a WSL distribution, the Windows `snow.exe` sets it for the
 panes of the Windows Snow, and a Linux `snow` there replaces it with its
