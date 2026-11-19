@@ -12,11 +12,11 @@ import (
 // openLoginPicker shows the login picker over pane id and asks the server
 // for a fresh provider list.
 func (m *Model) openLoginPicker(id int) tea.Cmd {
+	if !m.canLogin(id) {
+		return m.ShowError("The login picker works in chat panes.")
+	}
 	if runtime, ok := m.own[id].(runtimeChooser); ok && runtime.RuntimeInfo() != nil {
 		return m.openRuntimePicker(id)
-	}
-	if _, ok := m.own[id].(modelChooser); !ok {
-		return m.ShowError("The login picker works in chat panes.")
 	}
 	if m.loginPane != 0 {
 		return m.ShowError("A key check is still running.")
@@ -34,6 +34,14 @@ func (m *Model) openLoginPicker(id int) tea.Cmd {
 	delete(m.authWait, id)
 	m.send(&api.AuthListRequest{})
 	return nil
+}
+
+func (m *Model) canLogin(id int) bool {
+	if runtime, ok := m.own[id].(runtimeChooser); ok && runtime.RuntimeInfo() != nil {
+		return true
+	}
+	_, ok := m.own[id].(modelChooser)
+	return ok
 }
 
 // anyConnected reports whether any provider in list has a key.

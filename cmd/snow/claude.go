@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/emmyfong/snow/internal/claudecode"
 	"github.com/emmyfong/snow/internal/shell"
@@ -50,8 +51,11 @@ func parseClaudeCommand(args []string) (command, error) {
 
 // parseClaude reads the arguments after "claude".
 func parseClaude(args []string) (claudeAction, error) {
-	if len(args) != 1 {
+	if len(args) == 0 {
 		return "", errors.New("claude needs setup, remove, or status")
+	}
+	if len(args) > 1 {
+		return "", fmt.Errorf("too many arguments for snow claude: %s", strings.Join(args[1:], " "))
 	}
 	switch a := claudeAction(args[0]); a {
 	case claudeSetup, claudeRemove, claudeStatus:

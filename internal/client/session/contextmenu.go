@@ -24,7 +24,9 @@ func (m *Model) openWindowMenu() {
 			break
 		}
 	}
-	m.showMenu(menu.LayoutItems(m.keys), x, 0)
+	focused := m.focused()
+	connect := focused != nil && m.canLogin(focused.ID)
+	m.showMenu(menu.LayoutItems(m.keys, connect), x, 0)
 }
 
 func (m *Model) showMenu(items []menu.Item, x, y int) {
