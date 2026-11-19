@@ -97,7 +97,7 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 		}
 	case tea.MouseMsg:
 		if m.active {
-			cmd := m.groups[m.selected].Update(msg)
+			cmd := m.groups[m.selected].Update(m.groupMsg(msg))
 			if click, ok := msg.(tea.MouseClickMsg); ok && click.Button == tea.MouseLeft && m.onFooter(click.X, click.Y) {
 				leave := m.groups[m.selected].Leave()
 				m.active = false
@@ -198,6 +198,22 @@ func (m *Model) groupAt(x, y int) (int, bool) {
 	first, last := ui.ListWindow(len(m.groups), m.selected, listRows)
 	i := first + y - (top + 1)
 	return i, i < last
+}
+
+func (m *Model) groupMsg(msg tea.MouseMsg) tea.Msg {
+	click, ok := msg.(tea.MouseClickMsg)
+	if !ok {
+		return msg
+	}
+	w := min(72, m.cols-4)
+	box := m.box()
+	_, h := ui.Size(box)
+	left, top := max((m.cols-w)/2, 0), max((m.rows-h)/2, 0)
+	inner := w - 2
+	listWidth := min(22, max(inner/3, 12))
+	click.X -= left + 1 + listWidth + 3
+	click.Y -= top + 1
+	return click
 }
 
 func (m *Model) onFooter(x, y int) bool {

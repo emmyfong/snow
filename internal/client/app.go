@@ -14,6 +14,7 @@ import (
 	"github.com/emmyfong/snow/internal/client/newsession"
 	"github.com/emmyfong/snow/internal/client/session"
 	"github.com/emmyfong/snow/internal/client/settings"
+	"github.com/emmyfong/snow/internal/client/settings/themegroup"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/internal/config"
 	"github.com/emmyfong/snow/pkg/api"
@@ -393,9 +394,12 @@ func (a *app) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.applyTheme(th)
 		}
 		return a, a.useTheme(msg.Name)
+	case command.PreviewThemeMsg:
+		a.applyTheme(msg.Theme)
+		return a, nil
 	case command.SettingsMsg:
 		if a.back == nil {
-			s := settings.New(nil)
+			s := settings.New([]settings.Group{themegroup.New(a.theme)})
 			s.SetTheme(a.theme)
 			a.back = a.screen
 			a.show(s)

@@ -449,6 +449,57 @@ func TestSettingsServerEventsReachSession(t *testing.T) {
 	}
 }
 
+func TestSettingsThemeSavesName(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# keep this comment\n[theme]\nname = \"Frost\"\nbackground = \"terminal\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.saveTheme = func(name string) error { return config.SetTheme(path, name) }
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	run(a, cmd)
+	_, cmd = a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	cmd = run(a, cmd)
+	run(a, cmd)
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "# keep this comment") || !strings.Contains(string(data), "[keys]") {
+		t.Fatalf("theme save removed unrelated config:\n%s", data)
+	}
+	cfg, err := config.Load(path)
+	if err != nil || cfg.Theme.Name != "Campbell" {
+		t.Fatalf("config theme after save = %q, err %v; want Campbell", cfg.Theme.Name, err)
+	}
+}
+
+func TestSettingsThemePreviewDoesNotSave(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.toml")
+	before := "# keep\n[theme]\nname = \"Frost\"\n\n[keys]\nprefix = \"C-a\"\n"
+	if err := os.WriteFile(path, []byte(before), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	a := newHomeApp(func(api.Message) {}, "v0.1.0", "", theme.Default())
+	a.saveTheme = func(name string) error { return config.SetTheme(path, name) }
+	a.Update(command.SettingsMsg{})
+	a.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	for range 3 {
+		_, cmd := a.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+		run(a, cmd)
+	}
+	if a.theme.Name != "Dark+" {
+		t.Fatalf("theme preview = %q, want Dark+", a.theme.Name)
+	}
+	if got, err := os.ReadFile(path); err != nil || string(got) != before {
+		t.Fatalf("preview changed config: %q, %v", got, err)
+	}
+}
+
 // TestHomeRequestsReachTheServer: the home page asks the app to send a kill
 // or a rename; the app sends it as is.
 func TestHomeRequestsReachTheServer(t *testing.T) {
