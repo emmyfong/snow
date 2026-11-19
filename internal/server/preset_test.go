@@ -197,7 +197,7 @@ func TestLayoutTwiceNamesWindows(t *testing.T) {
 		t.Fatal("files pane did not open")
 	}
 	c.Send(&api.Command{Op: api.OpOpen, Target: chat, Args: map[string]string{api.ArgKind: api.PaneGit}})
-	l = nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 3 })
+	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 3 })
 	layoutCmd(c, chat, "focus")
 	if e := nextError(t, c); e.Code != api.CodeNotice || e.Message != "Moved 2 panes to a new window: files." {
 		t.Fatalf("second layout notice %+v", e)
