@@ -105,15 +105,21 @@ sessions come back. Say `n` to keep working in the old server.
 ## First run
 
 Run `snow`. It starts a background server and opens the home page, which
-lists your sessions. Type a name and press Enter to create a session, or
-Enter alone for a numbered one. Pick a running or saved session with the
-arrow keys and Enter.
+lists your sessions. Press Enter to open the new-session dialog. Choose
+`Plain shell` and press Enter to start a session with one shell pane. This
+path does not need a provider API key. To open native Chat in the session,
+press `Ctrl+b :`, type `chat`, and press Enter.
+
+In Chat, use `/login` to save a provider key and `/model` to choose a model.
+With no saved key, Chat shows how to connect one. If no model is configured,
+choose one before sending the first message. To cancel the new-session
+dialog, press `Esc`; Snow returns to Home without creating a session.
 
 ```text
 snow           open the home page
 snow <name>    attach to session <name>, or create it
 snow auth      save or remove provider API keys
-snow claude    add Snow's hooks to Claude Code's settings
+snow claude    configure Snow's hooks and MCP server in Claude Code
 snow version   print the version
 snow help      show the commands
 ```
@@ -141,13 +147,18 @@ mount point.
 
 Run `snow claude setup` once so Snow can show which agent needs you. It
 adds one hook, `snow hook`, to `~/.claude/settings.json` (or the file in
-`CLAUDE_CONFIG_DIR`), shows the change, and asks first. It keeps every
+`CLAUDE_CONFIG_DIR`) and registers Snow's MCP server through Claude Code's
+`claude mcp` command. It shows each change and asks first. It keeps every
 other setting and hook, and saves a copy as `settings.json.snow.bak`. On
 Windows it offers each WSL distribution that has `claude` too.
-`snow claude status` says whether the hooks are set, and
-`snow claude remove` takes out only Snow's. Claude Code sessions use the
-change when they start again. Until the hooks are set, the home page
-says so while a Claude Code pane is open. Run `snow claude setup` with
+`snow claude status` reports whether both the hooks and MCP server are set.
+`snow claude remove` removes only Snow's hook and MCP registration. Restart
+Claude Code sessions to use the changes. The hook reports agent activity to
+Snow. MCP lets the Claude Code agent list and read terminal panes in the same
+Snow session and request typing in another pane. Snow refuses requests to its
+own pane, another agent's pane, and ended panes. Claude Code controls whether
+to ask for approval before typing. Until the hooks are set, the home page says
+so while a Claude Code pane is open. Run `snow claude setup` with
 snow under its own name, `snow` or `snow.exe`. A settings file holds one
 Snow hook: in a WSL distribution, the Windows `snow.exe` sets it for the
 panes of the Windows Snow, and a Linux `snow` there replaces it with its
@@ -552,8 +563,7 @@ save = true           # false saves nothing
 lines = 2000          # output lines saved per pane, 0 to 2000
 
 [chat]
-model = ""            # "provider/model"; empty: the default of the first
-                      # provider with a saved key
+model = ""            # "provider/model"; empty: choose before first message
 effort = ""           # for example "high"; empty: the provider's choice
 usage = true          # false hides the context gauge and the cost
 
