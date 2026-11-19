@@ -11,7 +11,7 @@
 
 [1m Reads, repeated[m
   internal/usage/usage.go            2 reads  unchanged #1-#2
-    [38;2;107;124;140m1 same, 0 changed; evidence: tool result text[m
+    [38;2;107;124;140m#1 09:05, #2 09:20; 1 same, 0 changed; evidence: tool result text[m
 
 [1m Notes[m
   [38;2;107;124;140mThis runtime does not report context occupancy or the hidden prompt's content.[m

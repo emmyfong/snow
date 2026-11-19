@@ -60,6 +60,30 @@ func TestContextUnavailableDoesNotEstimateHiddenPrompt(t *testing.T) {
 	if err := dc.Validate(); err != nil {
 		t.Fatalf("direct state does not validate: %v", err)
 	}
+
+	// A measured prompt larger than the table's window still draws. The
+	// count is a fact; the window may be out of date.
+	large := directConversation(
+		&convstore.User{At: at, Text: "read a big file"},
+		&convstore.Assistant{At: at, Model: "claude-sonnet-4-5", Stop: convstore.StopEndTurn,
+			Usage: &convstore.Usage{Input: 500_000}},
+	)
+	lc := Context(large)
+	if !lc.Occupancy.Known || lc.Occupancy.Tokens != 500_000 || lc.Occupancy.Window != 200_000 {
+		t.Fatalf("large occupancy %+v; want the measured 500000 of 200000", lc.Occupancy)
+	}
+	if err := lc.Validate(); err != nil {
+		t.Fatalf("large state does not validate: %v", err)
+	}
+	found := false
+	for _, n := range lc.Notes {
+		if strings.Contains(n, "out of date") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("notes %q; want the stale-window note", lc.Notes)
+	}
 }
 
 // TestRepeatedReadFreshness: two identical reads are unchanged; a read

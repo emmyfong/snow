@@ -238,6 +238,9 @@ func contextNotes(p *parsed, st api.ContextState, e evidenceResult) []string {
 	if st.Occupancy.Known && st.Occupancy.Window == 0 {
 		out = append(out, "The model's context window is unknown; only the prompt's token count is shown.")
 	}
+	if st.Occupancy.Known && st.Occupancy.Window > 0 && st.Occupancy.Tokens > st.Occupancy.Window {
+		out = append(out, "The measured prompt is larger than the model's listed context window; the window may be out of date.")
+	}
 	if len(st.Sources) == 0 {
 		out = append(out, "No successful file reads or changes are saved for this conversation.")
 	}

@@ -11,22 +11,22 @@ import (
 
 // View returns the pane's rows, each at most its width.
 func (m *Model) View() []string {
-	if m.width <= 0 || m.height <= 0 {
+	if m.Width <= 0 || m.Height <= 0 {
 		return nil
 	}
 	rows := []string{m.header()}
 	body := m.lines()
-	first := min(max(m.top, 0), max(len(body)-m.bodyHeight(), 0))
-	for i := first; i < len(body) && len(rows) < m.height-1; i++ {
+	first := min(max(m.Top, 0), max(len(body)-m.BodyHeight(), 0))
+	for i := first; i < len(body) && len(rows) < m.Height-1; i++ {
 		rows = append(rows, body[i])
 	}
-	if len(rows) < m.height-1 {
-		rows = append(rows, make([]string, m.height-1-len(rows))...)
+	if len(rows) < m.Height-1 {
+		rows = append(rows, make([]string, m.Height-1-len(rows))...)
 	}
 	rows = append(rows, m.hints())
-	rows = rows[:min(len(rows), m.height)]
+	rows = rows[:min(len(rows), m.Height)]
 	for i, r := range rows {
-		rows[i] = ansi.Truncate(r, m.width, "")
+		rows[i] = ansi.Truncate(r, m.Width, "")
 	}
 	return rows
 }
@@ -43,7 +43,7 @@ func (m *Model) header() string {
 	if right == "" {
 		return left
 	}
-	gap := m.width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	gap := m.Width - ansi.StringWidth(left) - ansi.StringWidth(right)
 	if gap < 1 {
 		return left
 	}
@@ -52,7 +52,7 @@ func (m *Model) header() string {
 
 // hints are the keys the pane offers on its bottom row.
 func (m *Model) hints() string {
-	return " " + ui.KeyHints(m.th, []ui.Hint{{Key: "r", Desc: "refresh"}}, max(m.width-1, 0))
+	return " " + ui.KeyHints(m.th, []ui.Hint{{Key: "r", Desc: "refresh"}}, max(m.Width-1, 0))
 }
 
 // lines builds the body rows: totals, models, turns, then notes.
@@ -195,18 +195,21 @@ func (m *Model) noteLines() []string {
 	bold := lipgloss.NewStyle().Bold(true)
 	out := []string{"", bold.Render(" Notes")}
 	for _, note := range m.st.Notes {
-		out = append(out, "  "+muted.Render(ui.PlainLine(note)))
+		for _, line := range ui.WrapText(ui.PlainLine(note), max(m.Width-2, 1)) {
+			out = append(out, "  "+muted.Render(line))
+		}
 	}
 	return out
 }
 
-// short cuts s to n cells for a column.
+// short cuts s to n cells for a column, keeping the file name's end.
 func short(s string, n int) string {
+	s = ui.PlainLine(s)
 	if i := strings.LastIndexByte(s, '/'); i >= 0 {
 		s = s[i+1:]
 	}
-	if len(s) > n {
-		return s[:max(n-1, 0)] + "…"
+	if ansi.StringWidth(s) <= n {
+		return s
 	}
-	return s
+	return ansi.Truncate(s, max(n-1, 0), "") + "…"
 }

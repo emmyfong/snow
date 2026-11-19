@@ -1,15 +1,21 @@
-package context
+package contextpane
 
 import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/exp/golden"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
+
+// stamp is when a repeated read happened.
+func stamp(hour, minute int) time.Time {
+	return time.Date(2026, 11, 17, hour, minute, 0, 0, time.UTC)
+}
 
 // states are the context screens the goldens pin: a full observable
 // breakdown from the direct-API path, and a partial one where a runtime
@@ -31,9 +37,11 @@ func states() map[string]api.ContextState {
 		},
 		Reads: []api.ContextRead{
 			{Path: "internal/usage/context.go", Range: "1-40", Reads: 3, Same: 2, Result: "unchanged",
-				Evidence: "tool result text", FirstTurn: 1, LastTurn: 4},
+				Evidence: "tool result text", FirstTurn: 1, LastTurn: 4,
+				FirstAt: stamp(13, 12), LastAt: stamp(14, 2)},
 			{Path: "internal/server/usagepane.go", Reads: 2, Changed: 1, Result: "changed",
-				Evidence: "tool result text", FirstTurn: 2, LastTurn: 5},
+				Evidence: "tool result text", FirstTurn: 2, LastTurn: 5,
+				FirstAt: stamp(13, 40), LastAt: stamp(14, 10)},
 		},
 		Notes: []string{
 			"Per-source token counts are unavailable: tool calls do not report the tokens their content added.",
@@ -55,7 +63,8 @@ func states() map[string]api.ContextState {
 		},
 		Reads: []api.ContextRead{
 			{Path: "internal/usage/usage.go", Reads: 2, Same: 1, Result: "unchanged",
-				Evidence: "tool result text", FirstTurn: 1, LastTurn: 2},
+				Evidence: "tool result text", FirstTurn: 1, LastTurn: 2,
+				FirstAt: stamp(9, 5), LastAt: stamp(9, 20)},
 		},
 		Notes: []string{
 			"This runtime does not report context occupancy or the hidden prompt's content.",

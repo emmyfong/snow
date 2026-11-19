@@ -54,7 +54,10 @@ type ContextState struct {
 type ContextOccupancy struct {
 	Known  bool `json:"known"`
 	Tokens int  `json:"tokens,omitempty"`
-	// Window is the model's context window in tokens; 0 means unknown.
+	// Window is the model's context window in tokens; 0 means unknown. A
+	// measured Tokens count may exceed it when the price table's window is
+	// out of date, so the pane draws that fact instead of refusing the
+	// state.
 	Window int `json:"window,omitempty"`
 	// Source names what Tokens measures, such as the last prompt of a
 	// direct-API reply.
@@ -110,9 +113,6 @@ func (st *ContextState) Validate() error {
 	}
 	if st.Occupancy.Tokens < 0 || st.Occupancy.Window < 0 {
 		return fmt.Errorf("%w: occupancy %d over %d", ErrInvalidSidePane, st.Occupancy.Tokens, st.Occupancy.Window)
-	}
-	if st.Occupancy.Known && st.Occupancy.Window > 0 && st.Occupancy.Tokens > st.Occupancy.Window {
-		return fmt.Errorf("%w: occupancy %d over a window of %d", ErrInvalidSidePane, st.Occupancy.Tokens, st.Occupancy.Window)
 	}
 	if len(st.Sources) > MaxContextSources {
 		return fmt.Errorf("%w: %d sources, at most %d", ErrInvalidSidePane, len(st.Sources), MaxContextSources)

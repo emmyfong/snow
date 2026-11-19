@@ -13,6 +13,15 @@ import (
 // conversation's file again, so a live turn shows without a key.
 const conversationPoll = 2 * time.Second
 
+// conversationResolve is how often a pane with no conversation looks for
+// one. Listing the store reads every conversation file, so a miss waits
+// much longer than a file that is already known.
+const conversationResolve = 30 * time.Second
+
+// chatOff is what a conversation pane shows when chat is off, so it has no
+// conversation store to read.
+const chatOff = "Chat is off, so this pane cannot read conversations."
+
 // convWorker reads one conversation's file on its own goroutine and hands
 // each new pane state to apply. It stats the file first, so an unchanged
 // conversation costs one call, not a parse. It runs off the model
@@ -27,6 +36,11 @@ type convWorker[T any] struct {
 	have bool
 	size int64
 	mod  time.Time
+
+	// resolved is when the worker last looked for a conversation, and
+	// resolveEvery overrides how long it waits before looking again.
+	resolved     time.Time
+	resolveEvery time.Duration
 
 	build  func(*convstore.Conversation) T // the state a loaded conversation makes
 	noConv func(T) T                       // the state for a pane with no conversation
@@ -55,7 +69,11 @@ func (w *convWorker[T]) run(ctx context.Context, jobs <-chan struct{}) {
 // read builds the pane's state from the conversation file.
 func (w *convWorker[T]) read(force bool) T {
 	if w.conv == "" {
+		if !force && time.Since(w.resolved) < w.resolveInterval() {
+			return w.cur
+		}
 		ok, err := w.resolve()
+		w.resolved = time.Now()
 		switch {
 		case err != nil:
 			return w.fail(w.cur, err)
@@ -80,6 +98,23 @@ func (w *convWorker[T]) read(force bool) T {
 	}
 	w.have, w.size, w.mod = true, fi.Size(), fi.ModTime()
 	return w.build(loaded)
+}
+
+// resolveInterval is how long a pane with no conversation waits before it
+// looks for one again.
+func (w *convWorker[T]) resolveInterval() time.Duration {
+	if w.resolveEvery > 0 {
+		return w.resolveEvery
+	}
+	return conversationResolve
+}
+
+// closedChan returns a channel that is already closed, for a pane that has
+// no worker to wait for.
+func closedChan() chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
 }
 
 // resolve names the newest conversation in the pane's folder and profile,

@@ -1,4 +1,4 @@
-package context
+package contextpane
 
 import (
 	"fmt"
@@ -12,22 +12,22 @@ import (
 
 // View returns the pane's rows, each at most its width.
 func (m *Model) View() []string {
-	if m.width <= 0 || m.height <= 0 {
+	if m.Width <= 0 || m.Height <= 0 {
 		return nil
 	}
 	rows := []string{m.header()}
 	body := m.lines()
-	first := min(max(m.top, 0), max(len(body)-m.bodyHeight(), 0))
-	for i := first; i < len(body) && len(rows) < m.height-1; i++ {
+	first := min(max(m.Top, 0), max(len(body)-m.BodyHeight(), 0))
+	for i := first; i < len(body) && len(rows) < m.Height-1; i++ {
 		rows = append(rows, body[i])
 	}
-	if len(rows) < m.height-1 {
-		rows = append(rows, make([]string, m.height-1-len(rows))...)
+	if len(rows) < m.Height-1 {
+		rows = append(rows, make([]string, m.Height-1-len(rows))...)
 	}
 	rows = append(rows, m.hints())
-	rows = rows[:min(len(rows), m.height)]
+	rows = rows[:min(len(rows), m.Height)]
 	for i, r := range rows {
-		rows[i] = ansi.Truncate(r, m.width, "")
+		rows[i] = ansi.Truncate(r, m.Width, "")
 	}
 	return rows
 }
@@ -44,7 +44,7 @@ func (m *Model) header() string {
 	if right == "" {
 		return left
 	}
-	gap := m.width - ansi.StringWidth(left) - ansi.StringWidth(right)
+	gap := m.Width - ansi.StringWidth(left) - ansi.StringWidth(right)
 	if gap < 1 {
 		return left
 	}
@@ -53,7 +53,7 @@ func (m *Model) header() string {
 
 // hints are the keys the pane offers on its bottom row.
 func (m *Model) hints() string {
-	return " " + ui.KeyHints(m.th, []ui.Hint{{Key: "r", Desc: "refresh"}}, max(m.width-1, 0))
+	return " " + ui.KeyHints(m.th, []ui.Hint{{Key: "r", Desc: "refresh"}}, max(m.Width-1, 0))
 }
 
 // lines builds the body rows: occupancy, sources, repeated reads, notes.
@@ -103,7 +103,7 @@ func (m *Model) occupancyLines() []string {
 		out = append(out, m.field("source", o.Source))
 	}
 	if !o.Known && o.Reason != "" {
-		for _, line := range ui.WrapText(o.Reason, max(m.width-2, 1)) {
+		for _, line := range ui.WrapText(o.Reason, max(m.Width-2, 1)) {
 			out = append(out, "  "+muted.Render(line))
 		}
 	}
@@ -155,10 +155,20 @@ func (m *Model) readLines() []string {
 		}
 		out = append(out, fmt.Sprintf("  %-34s %d reads  %-9s #%d-#%d",
 			tail(label, 34), r.Reads, r.Result, r.FirstTurn, r.LastTurn))
-		out = append(out, "    "+muted.Render(fmt.Sprintf("%d same, %d changed; evidence: %s",
-			r.Same, r.Changed, evidence(r.Evidence))))
+		out = append(out, "    "+muted.Render(fmt.Sprintf("%s%d same, %d changed; evidence: %s",
+			readTiming(r), r.Same, r.Changed, evidence(r.Evidence))))
 	}
 	return out
+}
+
+// readTiming names when the first and last read happened, when the records
+// carry times.
+func readTiming(r api.ContextRead) string {
+	if r.FirstAt.IsZero() || r.LastAt.IsZero() {
+		return ""
+	}
+	return fmt.Sprintf("#%d %s, #%d %s; ",
+		r.FirstTurn, r.FirstAt.Format("15:04"), r.LastTurn, r.LastAt.Format("15:04"))
 }
 
 // noteLines explain the limits of the data.
@@ -170,7 +180,7 @@ func (m *Model) noteLines() []string {
 	muted := lipgloss.NewStyle().Foreground(m.th.Muted)
 	out := []string{"", bold.Render(" Notes")}
 	for _, note := range m.st.Notes {
-		for _, line := range ui.WrapText(ui.PlainLine(note), max(m.width-2, 1)) {
+		for _, line := range ui.WrapText(ui.PlainLine(note), max(m.Width-2, 1)) {
 			out = append(out, "  "+muted.Render(line))
 		}
 	}

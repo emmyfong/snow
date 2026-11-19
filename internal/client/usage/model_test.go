@@ -52,9 +52,10 @@ func state() api.UsageState {
 	}
 }
 
-// TestUsagePaneGolden draws the pane at both sizes.
+// TestUsagePaneGolden draws the pane at both sizes and in a narrow split,
+// where a note wraps instead of losing its end.
 func TestUsagePaneGolden(t *testing.T) {
-	for _, size := range [][2]int{{80, 24}, {120, 40}} {
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {50, 30}} {
 		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
 			m := New(7, theme.Default())
 			m.SetSize(size[0], size[1])
@@ -92,24 +93,24 @@ func TestUsageScrollStaysInside(t *testing.T) {
 	m := New(7, theme.Default())
 	m.SetSize(60, 6)
 	m.SetState(state())
-	last := max(len(m.lines())-m.bodyHeight(), 0)
+	last := max(len(m.lines())-m.BodyHeight(), 0)
 	m.Key(tea.Key{Code: tea.KeyEnd})
-	if m.top != last {
-		t.Fatalf("top %d after End, want %d", m.top, last)
+	if m.Top != last {
+		t.Fatalf("top %d after End, want %d", m.Top, last)
 	}
 	m.Scroll(1) // one notch toward older rows
-	if want := max(last-1, 0); m.top != want {
-		t.Fatalf("top %d after one wheel notch, want %d", m.top, want)
+	if want := max(last-1, 0); m.Top != want {
+		t.Fatalf("top %d after one wheel notch, want %d", m.Top, want)
 	}
 	m.Scroll(-100)
-	if m.top != last {
-		t.Fatalf("top %d after scrolling past the end, want %d", m.top, last)
+	if m.Top != last {
+		t.Fatalf("top %d after scrolling past the end, want %d", m.Top, last)
 	}
 	m.Key(tea.Key{Code: tea.KeyHome})
 	for range 40 {
 		m.Key(tea.Key{Code: tea.KeyUp})
 	}
-	if m.top != 0 {
-		t.Fatalf("top %d after scrolling past the start, want 0", m.top)
+	if m.Top != 0 {
+		t.Fatalf("top %d after scrolling past the start, want 0", m.Top)
 	}
 }

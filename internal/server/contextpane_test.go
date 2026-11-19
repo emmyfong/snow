@@ -77,7 +77,7 @@ func TestContextPaneSavedAndRestored(t *testing.T) {
 	cp := openContextPane(t, c, chat)
 
 	var saved store.Pane
-	var restored *pane
+	var name string
 	s.call(func(st *state) {
 		snap := st.snapshot(st.sessions["work"])
 		for _, w := range snap.Windows {
@@ -95,22 +95,25 @@ func TestContextPaneSavedAndRestored(t *testing.T) {
 			t.Errorf("restore: %v", err)
 			return
 		}
+		name = sess.name
 		st.sessions[sess.name] = sess
-		for _, w := range sess.windows {
-			for _, rp := range w.panes {
-				if rp.sideKind == api.PaneContext {
-					restored = rp
-				}
-			}
-		}
 	})
 	if saved.Kind != api.PaneContext || saved.Conversation != conv {
 		t.Fatalf("saved pane %+v; want the context kind on %q", saved, conv)
 	}
-	if restored == nil {
-		t.Fatal("restore did not open a context pane")
+	if name == "" {
+		t.Fatal("restore did not start a session")
 	}
-	if got := restored.side.(conversationSide).Conversation(); got != conv {
-		t.Fatalf("restored pane follows %q, want %q", got, conv)
+	// The restored pane rebuilds its occupancy from the conversation file,
+	// not from the field it opened with.
+	st := waitRestoredSide(t, s, name, api.PaneContext, func(st api.SideState) bool {
+		c, ok := st.(*api.ContextState)
+		return ok && c.Occupancy.Known && c.Occupancy.Tokens > 0
+	}).(*api.ContextState)
+	if st.Conversation != conv {
+		t.Fatalf("restored pane follows %q, want %q", st.Conversation, conv)
+	}
+	if st.Occupancy.Tokens != 10 {
+		t.Fatalf("restored occupancy %+v; want the saved prompt's 10 tokens", st.Occupancy)
 	}
 }

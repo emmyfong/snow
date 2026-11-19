@@ -11,9 +11,9 @@
 
 [1m Reads, repeated[m
   internal/usage/context.go:1-40     3 reads  unchanged #1-#4
-    [38;2;107;124;140m2 same, 0 changed; evidence: tool result text[m
+    [38;2;107;124;140m#1 13:12, #4 14:02; 2 same, 0 changed; evidence: tool result text[m
   internal/server/usagepane.go       2 reads  changed   #2-#5
-    [38;2;107;124;140m0 same, 1 changed; evidence: tool result text[m
+    [38;2;107;124;140m#2 13:40, #5 14:10; 0 same, 1 changed; evidence: tool result text[m
 
 [1m Notes[m
   [38;2;107;124;140mPer-source token counts are unavailable: tool calls do not report the tokens their content added.[m

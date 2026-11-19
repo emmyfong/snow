@@ -44,6 +44,34 @@ func usageState(t *testing.T, s *api.SidePaneState) api.UsageState {
 	return st
 }
 
+// waitRestoredSide waits for the restored side pane of kind in session name
+// to publish a state that ready accepts, and returns it.
+func waitRestoredSide(t *testing.T, s *Server, name, kind string, ready func(api.SideState) bool) api.SideState {
+	t.Helper()
+	var out api.SideState
+	eventually(t, "the restored "+kind+" pane", func() bool {
+		s.call(func(st *state) {
+			sess, ok := st.sessions[name]
+			if !ok {
+				return
+			}
+			for _, w := range sess.windows {
+				for _, p := range w.panes {
+					if p.sideKind != kind || p.side == nil {
+						continue
+					}
+					if st := p.side.State(); st != nil && ready(st) {
+						out = st
+						return
+					}
+				}
+			}
+		})
+		return out != nil
+	})
+	return out
+}
+
 // TestUsagePaneFollowsChat: a usage pane opened from a chat follows that
 // chat's conversation, and its totals come from the saved records.
 func TestUsagePaneFollowsChat(t *testing.T) {
@@ -99,7 +127,7 @@ func TestUsagePaneSavedAndRestored(t *testing.T) {
 	})
 
 	var saved store.Pane
-	var restored *pane
+	var name string
 	s.call(func(st *state) {
 		snap := st.snapshot(st.sessions["work"])
 		for _, w := range snap.Windows {
@@ -117,22 +145,25 @@ func TestUsagePaneSavedAndRestored(t *testing.T) {
 			t.Errorf("restore: %v", err)
 			return
 		}
+		name = sess.name
 		st.sessions[sess.name] = sess
-		for _, w := range sess.windows {
-			for _, rp := range w.panes {
-				if rp.sideKind == api.PaneUsage {
-					restored = rp
-				}
-			}
-		}
 	})
 	if saved.Kind != api.PaneUsage || saved.Conversation != conv {
 		t.Fatalf("saved pane %+v; want the usage kind on %q", saved, conv)
 	}
-	if restored == nil {
-		t.Fatal("restore did not open a usage pane")
+	if name == "" {
+		t.Fatal("restore did not start a session")
 	}
-	if got := restored.side.(conversationSide).Conversation(); got != conv {
-		t.Fatalf("restored pane follows %q, want %q", got, conv)
+	// The restored pane rebuilds its totals from the conversation file, not
+	// from the field it opened with.
+	st := waitRestoredSide(t, s, name, api.PaneUsage, func(st api.SideState) bool {
+		u, ok := st.(*api.UsageState)
+		return ok && u.Totals.Input > 0
+	}).(*api.UsageState)
+	if st.Conversation != conv {
+		t.Fatalf("restored pane follows %q, want %q", st.Conversation, conv)
+	}
+	if st.Totals.Input != 10 || st.Totals.Output != 2 {
+		t.Fatalf("restored totals %+v; want the saved turn's 10 in and 2 out", st.Totals)
 	}
 }

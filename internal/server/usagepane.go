@@ -21,6 +21,7 @@ func usageKind() sideKind {
 type usagePane struct {
 	state api.UsageState
 	conv  string
+	off   bool // chat is off, so the pane has no store to read
 	jobs  chan struct{}
 	done  chan struct{}
 	stop  context.CancelFunc
@@ -28,7 +29,13 @@ type usagePane struct {
 
 func openUsage(ctx sideContext) (sidePane, error) {
 	if ctx.Conversations == nil {
-		return nil, errors.New("the usage pane needs conversations, and chat is off")
+		return &usagePane{
+			state: api.UsageState{Folder: ctx.Folder, Error: chatOff},
+			conv:  ctx.Conversation,
+			off:   true,
+			done:  closedChan(),
+			stop:  func() {},
+		}, nil
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	p := &usagePane{
@@ -81,6 +88,9 @@ func (p *usagePane) State() api.SideState {
 func (p *usagePane) Act(action string, _ map[string]string) error {
 	if action != api.UsageActRefresh {
 		return fmt.Errorf("the usage pane has no action %q", action)
+	}
+	if p.off {
+		return errors.New("the usage pane needs chat, and chat is off")
 	}
 	select {
 	case p.jobs <- struct{}{}:

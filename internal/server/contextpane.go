@@ -22,6 +22,7 @@ func contextKind() sideKind {
 type contextPane struct {
 	state api.ContextState
 	conv  string
+	off   bool // chat is off, so the pane has no store to read
 	jobs  chan struct{}
 	done  chan struct{}
 	stop  context.CancelFunc
@@ -29,7 +30,13 @@ type contextPane struct {
 
 func openContext(ctx sideContext) (sidePane, error) {
 	if ctx.Conversations == nil {
-		return nil, errors.New("the context pane needs conversations, and chat is off")
+		return &contextPane{
+			state: api.ContextState{Folder: ctx.Folder, Error: chatOff},
+			conv:  ctx.Conversation,
+			off:   true,
+			done:  closedChan(),
+			stop:  func() {},
+		}, nil
 	}
 	runCtx, cancel := context.WithCancel(context.Background())
 	p := &contextPane{
@@ -82,6 +89,9 @@ func (p *contextPane) State() api.SideState {
 func (p *contextPane) Act(action string, _ map[string]string) error {
 	if action != api.ContextActRefresh {
 		return fmt.Errorf("the context pane has no action %q", action)
+	}
+	if p.off {
+		return errors.New("the context pane needs chat, and chat is off")
 	}
 	select {
 	case p.jobs <- struct{}{}:

@@ -54,7 +54,9 @@ func Account(loaded *convstore.Conversation) api.UsageState {
 
 		if p.runtime {
 			if u := t.usage; u != nil {
-				addModel(models, modelOfTurn(p, t), row, u.Priced)
+				// A cumulative session estimate cannot be split between
+				// models, so no model row is priced.
+				addModel(models, modelOfTurn(p, t), row, false)
 				switch {
 				case u.Priced && u.Cumulative:
 					session, sessionSet, priced = u.Cost, true, true
@@ -338,6 +340,7 @@ func parse(loaded *convstore.Conversation) *parsed {
 	p := &parsed{runtime: loaded.Meta.Runtime != nil, model: loaded.Meta.Model}
 	pending := map[string]*call{}
 	var cur *turn
+	var lastUsage *api.ChatUsage
 
 	start := func(at time.Time, number int) *turn {
 		if number <= 0 {
@@ -408,12 +411,17 @@ func parse(loaded *convstore.Conversation) *parsed {
 				if cur == nil {
 					cur = start(r.At, 0)
 				}
-				if e.Usage != nil {
-					u := *e.Usage
-					cur.usage = &u
-					if u.Requested != "" {
-						p.model = u.Requested
-					}
+				if e.Usage == nil || sameCumulative(lastUsage, e.Usage) {
+					// A runtime may repeat its cumulative snapshot after the
+					// turn ended, or after the next turn started. The repeat
+					// belongs to the turn that already counted it.
+					continue
+				}
+				u := *e.Usage
+				cur.usage = &u
+				lastUsage = &u
+				if u.Requested != "" {
+					p.model = u.Requested
 				}
 			case api.ChatEventModel:
 				if e.Model != "" {
@@ -451,6 +459,17 @@ func parse(loaded *convstore.Conversation) *parsed {
 		}
 	}
 	return p
+}
+
+// sameCumulative reports whether b repeats a's cumulative snapshot. A
+// runtime may send the same session estimate twice, and the repeat belongs
+// to the turn that already counted it. An additive event can repeat a
+// legitimate per-turn value, so only cumulative events are compared.
+func sameCumulative(a, b *api.ChatUsage) bool {
+	return a != nil && b != nil && a.Cumulative && b.Cumulative &&
+		a.Input == b.Input && a.Output == b.Output &&
+		a.CacheRead == b.CacheRead && a.CacheWrite == b.CacheWrite &&
+		a.Cost == b.Cost
 }
 
 // price estimates the cost of one direct-API request.

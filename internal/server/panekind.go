@@ -45,7 +45,8 @@ type sideContext struct {
 	// means the pane finds the newest conversation in its folder.
 	Conversation string
 	// Conversations reads saved conversations. A pane that follows one
-	// needs it; nil means the object cannot open.
+	// needs it; nil means chat is off, so the pane opens with a note that
+	// it cannot read conversations.
 	Conversations *convstore.Store
 	// Changed tells the server the pane's state changed, from any
 	// goroutine. The server sends State to the pane's clients.

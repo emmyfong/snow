@@ -2,19 +2,19 @@ package session
 
 import (
 	tea "charm.land/bubbletea/v2"
-	"github.com/emmyfong/snow/internal/client/context"
+	"github.com/emmyfong/snow/internal/client/contextpane"
 	"github.com/emmyfong/snow/internal/client/theme"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
 // contextPane fits a context pane to ownPane.
 type contextPane struct {
-	*context.Model
+	*contextpane.Model
 	rev *uint64 // the newest state revision shown
 }
 
 func newContextPane(id int, th theme.Theme) contextPane {
-	return contextPane{Model: context.New(id, th), rev: new(uint64)}
+	return contextPane{Model: contextpane.New(id, th), rev: new(uint64)}
 }
 
 // Feed shows a newer state of the pane. A state this client cannot read

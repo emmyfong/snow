@@ -81,6 +81,13 @@ func TestUsageCumulativeEvents(t *testing.T) {
 			t.Fatalf("row scope %q, want main-agent", r.Scope)
 		}
 	}
+	// A session estimate cannot be split between models, so no model row
+	// may claim a cost.
+	for _, m := range st.Models {
+		if m.Priced || m.Cost != 0 {
+			t.Fatalf("model %+v; want no per-model cost for a cumulative source", m)
+		}
+	}
 }
 
 // TestUsageDuplicateEvents: a runtime that repeats the same result must not
@@ -103,6 +110,27 @@ func TestUsageDuplicateEvents(t *testing.T) {
 	}
 	if got := st.Totals.Cost; math.Abs(got-0.25) > 1e-9 {
 		t.Fatalf("cost %v, want 0.25", got)
+	}
+
+	// The same result may arrive after a new turn started. It belongs to
+	// the turn that already counted it, so the new turn stays unknown.
+	interleaved := runtimeConversation(t,
+		event(t, api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 1, Text: "one"}),
+		event(t, api.ChatEvent{Kind: api.ChatEventUsage, Usage: usage}),
+		event(t, api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 1, Reason: api.ChatEndDone}),
+		event(t, api.ChatEvent{Kind: api.ChatEventTurnStarted, Turn: 2, Text: "two"}),
+		event(t, api.ChatEvent{Kind: api.ChatEventUsage, Usage: usage}),
+		event(t, api.ChatEvent{Kind: api.ChatEventTurnEnded, Turn: 2, Reason: api.ChatEndDone}),
+	)
+	ist := Account(interleaved)
+	if ist.Turns != 2 || ist.Unknown != 1 || len(ist.Rows) != 2 {
+		t.Fatalf("interleaved turns %d, unknown %d, rows %d; want 2, 1, 2", ist.Turns, ist.Unknown, len(ist.Rows))
+	}
+	if ist.Totals.Input != 200 || ist.Totals.Output != 20 {
+		t.Fatalf("interleaved totals %+v; want the repeat counted once", ist.Totals)
+	}
+	if !ist.Rows[0].Unknown || ist.Rows[0].Turn != 2 {
+		t.Fatalf("newest row %+v; want the second turn unknown", ist.Rows[0])
 	}
 }
 
