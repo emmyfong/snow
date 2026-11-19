@@ -155,9 +155,10 @@ Windows it offers each WSL distribution that has `claude` too.
 `snow claude remove` removes only Snow's hook and MCP registration. Restart
 Claude Code sessions to use the changes. The hook reports agent activity to
 Snow. MCP lets the Claude Code agent list and read terminal panes in the same
-Snow session and request typing in them; Claude Code asks you to approve each
-typing request. Until the hooks are set, the home page says so while a
-Claude Code pane is open. Run `snow claude setup` with
+Snow session and request typing in another pane. Snow refuses requests to its
+own pane, another agent's pane, and ended panes. Claude Code controls whether
+to ask for approval before typing. Until the hooks are set, the home page says
+so while a Claude Code pane is open. Run `snow claude setup` with
 snow under its own name, `snow` or `snow.exe`. A settings file holds one
 Snow hook: in a WSL distribution, the Windows `snow.exe` sets it for the
 panes of the Windows Snow, and a Linux `snow` there replaces it with its
