@@ -15,6 +15,13 @@ type Template struct {
 	Children []Template `json:"children,omitempty"`
 }
 
+const (
+	// MinTemplateCols is the least width a layout template may give a pane.
+	MinTemplateCols = 10
+	// MinTemplateRows is the least height a layout template may give a pane.
+	MinTemplateRows = 3
+)
+
 // Kinds returns the leaves' kinds in the order Tree.Panes lists panes:
 // depth first, left to right and top to bottom.
 func (t Template) Kinds() []string {
@@ -97,7 +104,7 @@ func (t Template) Prune(keep func(kind string) bool) (pruned Template, ok bool) 
 
 // Build returns the Tree of t with ids as its panes, one per leaf in Kinds
 // order. It refuses with ErrTooSmall when a pane would be smaller than
-// MinCols by MinRows in a window of cols by rows cells.
+// MinTemplateCols by MinTemplateRows in a window of cols by rows cells.
 func (t Template) Build(ids []PaneID, cols, rows int) (*Tree, error) {
 	if err := t.Validate(); err != nil {
 		return nil, err
@@ -123,9 +130,9 @@ func (t Template) Build(ids []PaneID, cols, rows int) (*Tree, error) {
 		return nil, err
 	}
 	for id, r := range place(tree.Root, Rect{W: max(cols, 0), H: max(rows, 0)}).Panes {
-		if r.W < MinCols || r.H < MinRows {
+		if r.W < MinTemplateCols || r.H < MinTemplateRows {
 			return nil, fmt.Errorf("%w: pane %d would be %dx%d in a %dx%d window, minimum %dx%d",
-				ErrTooSmall, id, r.W, r.H, cols, rows, MinCols, MinRows)
+				ErrTooSmall, id, r.W, r.H, cols, rows, MinTemplateCols, MinTemplateRows)
 		}
 	}
 	return tree, nil

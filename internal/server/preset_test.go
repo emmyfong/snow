@@ -220,6 +220,9 @@ func TestLayoutOpensMissingKind(t *testing.T) {
 	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
 	starts := h.calls.Load()
 	layoutCmd(c, shell, "focus")
+	if e := nextError(t, c); e.Code != api.CodeNotice || e.Message != "Moved 1 pane to a new window: "+shellProfile()+"." {
+		t.Fatalf("layout notice %+v", e)
+	}
 	l := nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 })
 	if ps := shownPanes(l); len(ps) != 1 || ps[0].Kind != api.PaneChat || !ps[0].Focused {
 		t.Fatalf("shown panes %+v, want one focused chat", ps)
@@ -236,7 +239,7 @@ func TestLayoutTooSmall(t *testing.T) {
 	c := connect(t, s, 100, 2) // one row for panes: chat over shell cannot fit
 	chat, shell := openChatBesideShell(t, c)
 	layoutCmd(c, chat, "ide")
-	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "minimum") {
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "minimum 10x3") {
 		t.Fatalf("got %+v, want the layout refused", e)
 	}
 	var ids []int

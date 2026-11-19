@@ -3,6 +3,7 @@ package layout
 import (
 	"errors"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -56,6 +57,32 @@ func TestTemplateTooSmall(t *testing.T) {
 	}
 	if !reflect.DeepEqual(*tree, before) {
 		t.Fatalf("tree changed to %+v", tree)
+	}
+}
+
+func TestTemplateBuildMinimum(t *testing.T) {
+	tests := []struct {
+		name    string
+		cols    int
+		rows    int
+		wantErr bool
+	}{
+		{name: "pane below useful minimum", cols: 80, rows: 14, wantErr: true},
+		{name: "ide fits 80x22", cols: 80, rows: 22},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ide.Build([]PaneID{1, 2, 3, 4, 5}, tt.cols, tt.rows)
+			if tt.wantErr {
+				if !errors.Is(err, ErrTooSmall) || !strings.Contains(err.Error(), "minimum 10x3") {
+					t.Fatalf("Build error %v, want ErrTooSmall with minimum 10x3", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("Build error %v, want success", err)
+			}
+		})
 	}
 }
 
