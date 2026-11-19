@@ -198,6 +198,9 @@ func TestRuntimeWindowCloseKeepsSameCountReplacement(t *testing.T) {
 	client.Send(&api.Command{Op: api.OpCloseWindow, Target: window})
 	eventually(t, "both runtime stops to start", func() bool { _, err := os.Stat(gate + ".entered"); return err == nil })
 	client.Send(&api.Command{Op: api.OpLayout, Target: first, Args: map[string]string{api.ArgName: "focus"}})
+	if e := nextError(t, client); e.Code != api.CodeNotice || e.Message != "Moved 1 pane to a new window: chat." {
+		t.Fatalf("layout notice %+v", e)
+	}
 	_ = nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
 	client.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{api.ArgKind: api.PaneChat, api.ArgDir: api.DirRight}})
 	layout = nextLayout(t, client, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
