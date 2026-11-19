@@ -41,7 +41,8 @@ func TestWindowsExitDetected(t *testing.T) {
 }
 
 func TestWindowsCloseEndsLongRunningProgram(t *testing.T) {
-	p := startReal(t, Spec{Path: "cmd.exe", Args: []string{"/c", "ping -n 600 127.0.0.1"}})
+	p := startReal(t, Spec{Path: "cmd.exe", Args: []string{"/c", "echo snow-close-ready & ping -n 600 127.0.0.1"}})
+	waitForCount(t, p, "snow-close-ready", 1)
 	start := time.Now()
 	if err := p.Close(); err != nil {
 		t.Fatalf("close: %v", err)
