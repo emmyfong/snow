@@ -22,6 +22,7 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/agent", desc: "server-side package; agents run in the server; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/clauderuntime", desc: "server-side runtime processes; use pkg/api" }
             - { pkg: "github.com/emmyfong/snow/internal/tool", desc: "server-side package; tools run in the server; use pkg/api" }
+            - { pkg: "github.com/emmyfong/snow/internal/usage", desc: "server-side accounting; the client reads the state through pkg/api" }
         convstore-keeps-its-own-format:
           files: ["**/internal/convstore/**", "!$test"]
           deny:
@@ -55,6 +56,12 @@ linters:
             - { pkg: "github.com/emmyfong/snow/internal/client", desc: "agents report through events; the server forwards them" }
             - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "agents never read keys; providers get them through KeySource" }
             - { pkg: "github.com/emmyfong/snow/internal/signin", desc: "sign-in belongs to the server and snow auth" }
+        usage-sits-below-server:
+          files: ["**/internal/usage/**", "!$test"]
+          deny:
+            - { pkg: "github.com/emmyfong/snow/internal/server", desc: "the server runs the panes; accounting never calls back into it" }
+            - { pkg: "github.com/emmyfong/snow/internal/client", desc: "accounting is server-side; the client reads pkg/api states" }
+            - { pkg: "github.com/emmyfong/snow/internal/credential", desc: "accounting never reads keys" }
         claudecode-uses-documented-surfaces:
           # An allow list: this package touches Claude Code's hooks and
           # settings only, so nothing that holds keys or logins can creep in.

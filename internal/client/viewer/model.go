@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/emmyfong/snow/internal/client/theme"
+	"github.com/emmyfong/snow/internal/client/ui"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -119,8 +120,7 @@ func (m *Model) reveal(line int) {
 
 // clampTop keeps the first visible row inside the file.
 func (m *Model) clampTop() {
-	rows := len(m.st.Lines)
-	m.top = min(max(m.top, 0), max(rows-m.bodyHeight(), 0))
+	m.top = ui.Scroll(m.top, 0, len(m.st.Lines), m.bodyHeight())
 }
 
 // row is one drawn row of the body.
@@ -174,8 +174,7 @@ func (m *Model) Key(k tea.Key) api.Message {
 
 // scrollBy moves the first visible row by rows.
 func (m *Model) scrollBy(rows int) {
-	m.top += rows
-	m.clampTop()
+	m.top = ui.Scroll(m.top, rows, len(m.st.Lines), m.bodyHeight())
 }
 
 // Click selects no line; the viewer's text is read, not chosen.

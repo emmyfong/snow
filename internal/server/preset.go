@@ -163,7 +163,7 @@ func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, n
 	opened := map[int]*pane{}
 	for _, leaf := range plan.open {
 		r := rects[layout.PaneID(leaf.id)]
-		p, err := st.openPane(leaf.id, r.W, r.H, leaf.kind, profile, dir)
+		p, err := st.openPane(leaf.id, r.W, r.H, leaf.kind, profile, dir, 0)
 		if err != nil {
 			for _, o := range opened {
 				st.closePane(o)

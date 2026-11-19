@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/emmyfong/snow/internal/convstore"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -33,9 +34,20 @@ type sidePane interface {
 type sideContext struct {
 	Pane   int
 	Folder string // the folder of the pane it opened from, or the session's
+	// Profile is the profile of the pane it opened from, for the folder's
+	// distribution and for finding its conversation.
+	Profile string
 	// Distro is the WSL distribution Folder belongs to, from the profile
 	// of the pane it opened from; empty for a folder of the OS Snow runs on.
 	Distro string
+	// Conversation is the conversation a pane that follows one starts on:
+	// the chat pane it opened from, or the name a saved pane kept. Empty
+	// means the pane finds the newest conversation in its folder.
+	Conversation string
+	// Conversations reads saved conversations. A pane that follows one
+	// needs it; nil means chat is off, so the pane opens with a note that
+	// it cannot read conversations.
+	Conversations *convstore.Store
 	// Changed tells the server the pane's state changed, from any
 	// goroutine. The server sends State to the pane's clients.
 	Changed func()
@@ -47,6 +59,12 @@ type sideContext struct {
 	// Agent returns the agent Snow saw make commit hash, or "". It runs
 	// only on the model goroutine.
 	Agent func(hash string) string
+}
+
+// conversationSide is a side pane that follows one conversation, so a saved
+// session names it and a restore shows the same one.
+type conversationSide interface {
+	Conversation() string
 }
 
 // sideKind is a pane kind that opens a side pane. Open runs on the model
@@ -66,7 +84,7 @@ type paneKinds struct {
 // sideKinds returns Snow's own side kinds, with each of extra in place of
 // the one of its name, or added after them.
 func sideKinds(extra []sideKind) []sideKind {
-	kinds := []sideKind{gitKind(), filesKind(), viewerKind()}
+	kinds := []sideKind{gitKind(), filesKind(), viewerKind(), usageKind(), contextKind()}
 	for _, x := range extra {
 		i := slices.IndexFunc(kinds, func(k sideKind) bool { return k.Name == x.Name })
 		if i < 0 {
@@ -117,16 +135,26 @@ func (k *paneKinds) kinds() []api.PaneKindInfo {
 }
 
 // openSide opens side pane id of kind in folder, which belongs to the
-// distribution of profile, the profile of the pane it opened from. It
-// returns ErrUnknownKind for a kind that is not registered.
-func (s *Server) openSide(st *state, id int, kind, profile, folder string) (*pane, error) {
+// distribution of profile, the profile of the pane it opened from. A pane
+// that follows a conversation starts on conversation; empty means the chat
+// pane from names it, or the pane finds the folder's newest conversation.
+// It returns ErrUnknownKind for a kind that is not registered.
+func (s *Server) openSide(st *state, id int, kind, profile, folder, conversation string, from int) (*pane, error) {
 	sk, ok := s.kinds.side[kind]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownKind, kind)
 	}
+	if conversation == "" {
+		conversation = st.sideConversation(from)
+	}
+	var conversations *convstore.Store
+	if s.opts.Chat != nil {
+		conversations = s.opts.Chat.Store
+	}
 	distro, _ := s.distroOf(profile)
 	sp, err := sk.Open(sideContext{
-		Pane: id, Folder: folder, Distro: distro, Agent: st.marks.agent,
+		Pane: id, Folder: folder, Profile: profile, Distro: distro, Agent: st.marks.agent,
+		Conversation: conversation, Conversations: conversations,
 		Changed: func() { s.post(func(st *state) { st.sideChanged(id) }) },
 		Apply: func(f func()) {
 			s.send(func(st *state) {
@@ -142,6 +170,20 @@ func (s *Server) openSide(st *state, id int, kind, profile, folder string) (*pan
 		return nil, fmt.Errorf("open %s pane: the kind opened nothing", kind)
 	}
 	return &pane{id: id, dir: folder, side: sp, sideKind: kind, sideRev: 1, sideFrom: profile}, nil
+}
+
+// sideConversation returns the conversation of the chat pane pane id names,
+// or "" when it is not a chat.
+func (st *state) sideConversation(pane int) string {
+	if pane == 0 {
+		return ""
+	}
+	for _, sess := range st.sessions {
+		if _, p := sess.findPane(pane); p != nil && p.chat != nil {
+			return p.chat.conv.ID()
+		}
+	}
+	return ""
 }
 
 // sideChanged moves side pane id to its next state revision, which the next

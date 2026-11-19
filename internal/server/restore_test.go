@@ -119,6 +119,33 @@ func TestRestoreLayout(t *testing.T) {
 	}
 }
 
+// TestRestoreSidePaneWithoutChat: a saved conversation pane opens with a
+// note when chat is off, instead of failing the whole session restore.
+func TestRestoreSidePaneWithoutChat(t *testing.T) {
+	dir := t.TempDir()
+	tree := layout.New(7)
+	raw, err := json.Marshal(tree)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeSnapshot(t, dir, store.Snapshot{Name: "api", Windows: []store.Window{{
+		Index: 1, Name: "dev", Layout: raw, Focused: 7,
+		Panes: []store.Pane{{ID: 7, Kind: api.PaneUsage, Profile: shellProfile(), Folder: t.TempDir()}},
+	}}})
+	s, _ := restoreServer(t, dir)
+	c := connect(t, s, 100, 30)
+	c.Send(&api.Attach{Session: "api"})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
+	id := shownPanes(l)[0].ID
+	st := usageState(t, c.WaitSide(id, func(s *api.SidePaneState) bool {
+		var u api.UsageState
+		return api.DecodeSideState(s, &u) == nil && u.Error != ""
+	}))
+	if !strings.Contains(st.Error, "Chat is off") {
+		t.Fatalf("state %+v; want the chat-off note", st)
+	}
+}
+
 func TestRestoreFolderFallback(t *testing.T) {
 	dir := t.TempDir()
 	here := t.TempDir()

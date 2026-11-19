@@ -69,7 +69,9 @@ func (sess *session) findPane(id int) (*window, *pane) {
 // a chat in dir opened from a pane running profile, or a side pane of a
 // registered kind in dir. A side pane checks its folder itself, off the
 // model goroutine.
-func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane, error) {
+// openPane starts a pane of kind for a window. from is the pane it opens
+// from, whose chat conversation a conversation-bound pane follows, or 0.
+func (st *state) openPane(id, cols, rows int, kind, profile, dir string, from int) (*pane, error) {
 	switch kind {
 	case api.PaneChat:
 		if p, ok, err := st.takePrestarted(id, profile, dir); ok {
@@ -79,14 +81,14 @@ func (st *state) openPane(id, cols, rows int, kind, profile, dir string) (*pane,
 	case "", api.PaneTerminal:
 		return st.srv.startPane(id, cols, rows, profile, dir, "")
 	}
-	return st.srv.openSide(st, id, kind, profile, dir)
+	return st.srv.openSide(st, id, kind, profile, dir, "", from)
 }
 
 // newWindow starts a window with one pane of kind, as openPane does, adds
 // it to sess at the lowest free index, and shows it.
 func (st *state) newWindow(sess *session, kind, profile, dir string) (*window, error) {
 	return st.newWindowWith(sess, func(id, cols, rows int) (*pane, error) {
-		return st.openPane(id, cols, rows, kind, profile, dir)
+		return st.openPane(id, cols, rows, kind, profile, dir, 0)
 	})
 }
 
@@ -129,7 +131,7 @@ func (st *state) splitPane(sess *session, w *window, target int, d layout.Direct
 		return err
 	}
 	r := layout.Rects(w.tree, cols, rows).Panes[layout.PaneID(id)]
-	p, err := st.openPane(id, r.W, r.H, kind, profile, dir)
+	p, err := st.openPane(id, r.W, r.H, kind, profile, dir, target)
 	if err != nil {
 		// The split succeeded on a tree with more than one pane, so closing
 		// the new pane cannot fail.

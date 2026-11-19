@@ -95,7 +95,7 @@ cmd/snow/            the binary; thin wiring only
 internal/<pillar>/   product code, one package per concern:
                      term, layout, shell, transport, server, client,
                      store, config, provider, credential, signin,
-                     convstore, agent, tool, claudecode, clauderuntime,
+                     convstore, usage, agent, tool, claudecode, clauderuntime,
                      gateway, notify,
                      mcp, worktree, git, later: skills, gate, editor
 pkg/api/             the only public package: API types for other clients
@@ -110,12 +110,15 @@ pkg/api/             the only public package: API types for other clients
 Import direction. depguard fails CI on a wrong import.
 
 ```
-cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore, notify, private
+cmd/snow ──► client ──► pkg/api ◄── server ──► provider, credential, gate, skills, store, convstore, usage, notify, private
    │           │                       │
    │           │                       ├──► agent ──► provider, convstore, tool ──► shell
    │           │                       │    (the server runs agents; agents never import server,
    │           │                       │     client, credential, or signin; tools never import
    │           │                       │     agent, server, convstore, provider, or credential)
+   │           │                       ├──► usage ──► convstore, provider, pkg/api
+   │           │                       │    (accounting for the usage and context panes; it reads
+   │           │                       │     the same records the chat replays)
    │           │                       ├──► clauderuntime ──► shell, private, convstore, pkg/api
    │           │                       │    (Snow's own Claude Code connections: sign-in, status,
    │           │                       │    and the chat runtime, natively or in a WSL distribution)

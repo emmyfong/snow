@@ -1,0 +1,24 @@
+[1m Context[m                                                            [38;2;138;155;171mShip the fix[m
+[1m Occupancy[m
+  [38;2;138;155;171mcontext  [m unavailable
+  [38;2;138;155;171mThis runtime does not report how much of its context window it used. Snow does[m
+  [38;2;138;155;171mnot estimate the hidden prompt.[m
+
+[1m Sources[m
+  [38;2;138;155;171mper-source token counts are unavailable[m
+  internal/usage/usage.go            read 2x
+  internal/server/convpane.go        changed
+
+[1m Reads, repeated[m
+  internal/usage/usage.go            2 reads  unchanged #1-#2
+    [38;2;138;155;171m#1 09:05, #2 09:20; 1 same, 0 changed; evidence: tool result text[m
+
+[1m Notes[m
+  [38;2;138;155;171mThis runtime does not report context occupancy or the hidden prompt's content.[m
+  [38;2;138;155;171mPer-source token counts are unavailable: tool calls do not report the tokens[m
+  [38;2;138;155;171mtheir content added.[m
+  [38;2;138;155;171mRepeated reads compare tool result text, not a saved file version. A file[m
+  [38;2;138;155;171mchange can justify a second read.[m
+
+
+ [38;2;127;184;230mr[m [38;2;138;155;171mrefresh[m
