@@ -53,7 +53,6 @@ func Parse(data []byte, size int64) Doc {
 	d := Doc{Size: size}
 	if i := bytes.IndexByte(data[:min(len(data), binaryLen)], 0); i >= 0 {
 		d.Binary = true
-		d.Limit = "Binary file, not shown."
 		return d
 	}
 	if len(data) > MaxBytes {

@@ -56,6 +56,17 @@ func windowNamed(l *api.Layout, name string) *api.WindowInfo {
 	return nil
 }
 
+func windowWithPane(l *api.Layout, id int) *api.WindowInfo {
+	for i := range l.Windows {
+		for _, p := range l.Windows[i].Panes {
+			if p.ID == id {
+				return &l.Windows[i]
+			}
+		}
+	}
+	return nil
+}
+
 // TestLayoutKeepsPanes: /layout ide keeps the chat and the shell, the same
 // panes with the same conversation and PTY, and puts the chat over the
 // shell.
@@ -138,23 +149,64 @@ func TestLayoutSkipsUnregisteredKind(t *testing.T) {
 }
 
 // TestLayoutMovesOtherPanes: panes the preset does not hold go to a new
-// window named moved, which is not shown; nothing closes.
+// window named after the first moved pane, which is not shown; nothing closes.
 func TestLayoutMovesOtherPanes(t *testing.T) {
 	s, _, _ := newHeldServer(t)
 	c := connect(t, s, 100, 30)
 	chat, shell := openChatBesideShell(t, c)
 	_, termBefore := paneState(t, s, shell)
 	layoutCmd(c, chat, "focus")
-	l := nextLayout(t, c, func(l *api.Layout) bool { return windowNamed(l, "moved") != nil })
+	e := nextError(t, c)
+	if e.Code != api.CodeNotice || e.Message != "Moved 1 pane to a new window: "+shellProfile()+"." {
+		t.Fatalf("got %+v, want a moved-pane notice", e)
+	}
+	l := nextLayout(t, c, func(l *api.Layout) bool { return windowWithPane(l, shell) != nil })
 	if ps := shownPanes(l); len(ps) != 1 || ps[0].ID != chat {
 		t.Fatalf("shown panes %+v, want the chat alone", ps)
 	}
-	moved := windowNamed(l, "moved")
-	if l.Active == moved.Index || len(moved.Panes) != 1 || moved.Panes[0].ID != shell {
+	moved := windowWithPane(l, shell)
+	if moved.Name != shellProfile() || l.Active == moved.Index || len(moved.Panes) != 1 || moved.Panes[0].ID != shell {
 		t.Fatalf("moved window %+v, active %d", moved, l.Active)
 	}
 	if _, got := paneState(t, s, shell); got != termBefore {
 		t.Fatal("the moved shell was replaced")
+	}
+}
+
+// TestLayoutTwiceNamesWindows: repeated focus layouts name each background
+// window after its first pane.
+func TestLayoutTwiceNamesWindows(t *testing.T) {
+	s, _, _ := newHeldServer(t)
+	c := connect(t, s, 100, 30)
+	chat, shell := openChatBesideShell(t, c)
+	layoutCmd(c, chat, "focus")
+	if e := nextError(t, c); e.Code != api.CodeNotice || !strings.Contains(e.Message, shellProfile()) {
+		t.Fatalf("first layout notice %+v", e)
+	}
+	nextLayout(t, c, func(l *api.Layout) bool { return windowWithPane(l, shell) != nil })
+
+	c.Send(&api.Command{Op: api.OpOpen, Target: chat, Args: map[string]string{api.ArgKind: api.PaneFiles}})
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	files := 0
+	for _, p := range shownPanes(l) {
+		if p.Kind == api.PaneFiles {
+			files = p.ID
+		}
+	}
+	if files == 0 {
+		t.Fatal("files pane did not open")
+	}
+	c.Send(&api.Command{Op: api.OpOpen, Target: chat, Args: map[string]string{api.ArgKind: api.PaneGit}})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 3 })
+	layoutCmd(c, chat, "focus")
+	if e := nextError(t, c); e.Code != api.CodeNotice || e.Message != "Moved 2 panes to a new window: files." {
+		t.Fatalf("second layout notice %+v", e)
+	}
+	l = nextLayout(t, c, func(l *api.Layout) bool { return windowWithPane(l, files) != nil })
+	first := windowWithPane(l, shell)
+	second := windowWithPane(l, files)
+	if first == nil || second == nil || first.Name != shellProfile() || second.Name != api.PaneFiles || first.Name == second.Name || len(second.Panes) != 2 {
+		t.Fatalf("background windows %+v and %+v; want distinct pane names", first, second)
 	}
 }
 
@@ -168,6 +220,9 @@ func TestLayoutOpensMissingKind(t *testing.T) {
 	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 1 })
 	starts := h.calls.Load()
 	layoutCmd(c, shell, "focus")
+	if e := nextError(t, c); e.Code != api.CodeNotice || e.Message != "Moved 1 pane to a new window: "+shellProfile()+"." {
+		t.Fatalf("layout notice %+v", e)
+	}
 	l := nextLayout(t, c, func(l *api.Layout) bool { return chatIn(l) != 0 })
 	if ps := shownPanes(l); len(ps) != 1 || ps[0].Kind != api.PaneChat || !ps[0].Focused {
 		t.Fatalf("shown panes %+v, want one focused chat", ps)
@@ -184,7 +239,7 @@ func TestLayoutTooSmall(t *testing.T) {
 	c := connect(t, s, 100, 2) // one row for panes: chat over shell cannot fit
 	chat, shell := openChatBesideShell(t, c)
 	layoutCmd(c, chat, "ide")
-	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "minimum") {
+	if e := nextError(t, c); e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, "minimum 10x3") {
 		t.Fatalf("got %+v, want the layout refused", e)
 	}
 	var ids []int

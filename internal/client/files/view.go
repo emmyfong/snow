@@ -139,8 +139,6 @@ func (m *Model) errorRow() string {
 func (m *Model) hints() string {
 	return " " + ui.KeyHints(m.th, []ui.Hint{
 		{Key: "Enter", Desc: "view"},
-		{Key: "e", Desc: "edit"},
-		{Key: "@", Desc: "add to chat"},
 	}, max(m.width-1, 0))
 }
 

@@ -3,6 +3,7 @@ package server
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/emmyfong/snow/internal/apitest"
@@ -64,6 +65,24 @@ func TestOpenFileOpensViewer(t *testing.T) {
 	}
 	if st.Lines[3].Text != "\treturn a + b" {
 		t.Fatalf("line 4 %q", st.Lines[3].Text)
+	}
+}
+
+// TestViewerErrorNamesRelativePath: a read failure uses the folder-relative
+// path shown in the viewer header.
+func TestViewerErrorNamesRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	v, pane := openViewerPane(t, dir, "missing.go", 0)
+	s := v.WaitSide(pane, func(s *api.SidePaneState) bool {
+		var st api.ViewerState
+		return api.DecodeSideState(s, &st) == nil && !st.Loading && st.Error != ""
+	})
+	var st api.ViewerState
+	if err := api.DecodeSideState(s, &st); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(st.Error, "missing.go: ") || strings.Contains(st.Error, dir) {
+		t.Fatalf("viewer error %q, want a relative missing.go path", st.Error)
 	}
 }
 

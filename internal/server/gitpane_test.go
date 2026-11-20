@@ -162,6 +162,9 @@ func TestGitPaneActionRefused(t *testing.T) {
 	t.Cleanup(s.Close)
 	c := connect(t, s, 120, 30)
 	pane := openGitPane(t, c, repo)
+	// The initial state is sent after the layout. Drain it before Reply reads
+	// the invalid action's error from the same connection.
+	waitGit(t, c, pane, func(st *api.GitState) bool { return !st.Loading })
 	for _, a := range []*api.SidePaneAction{
 		{Pane: pane, Action: api.GitActCommit, Args: map[string]string{api.ArgGitMessage: " "}},
 		{Pane: pane, Action: api.GitActStage},

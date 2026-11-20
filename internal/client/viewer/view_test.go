@@ -55,7 +55,6 @@ func states() map[string]api.ViewerState {
 			Folder: "/home/u/snow",
 			Path:   "testdata/logo.bin",
 			Binary: true,
-			Limit:  "Binary file: 6 bytes.",
 		},
 	}
 }
@@ -98,7 +97,7 @@ func TestViewerRevealScrolls(t *testing.T) {
 func TestViewerBinaryTakesNoHighlight(t *testing.T) {
 	m := New(7, theme.Default())
 	m.SetSize(80, 24)
-	m.SetState(api.ViewerState{Path: "logo.bin", Binary: true, Limit: "Binary file: 6 bytes."})
+	m.SetState(api.ViewerState{Path: "logo.bin", Binary: true})
 	if len(m.styled) != 0 || len(m.bodyRows()) != 0 {
 		t.Fatalf("%d styled rows, %d body rows; want none", len(m.styled), len(m.bodyRows()))
 	}

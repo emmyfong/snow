@@ -33,6 +33,16 @@ func TestPathDetect(t *testing.T) {
 			want: []pathToken{{Path: "internal/server/chat.go", Line: 12}},
 		},
 		{
+			name: "line and column",
+			text: "at internal/server/chat.go:12:5 here",
+			want: []pathToken{{Path: "internal/server/chat.go", Line: 12}},
+		},
+		{
+			name: "line then colon",
+			text: "at internal/server/chat.go:12: undefined",
+			want: []pathToken{{Path: "internal/server/chat.go", Line: 12}},
+		},
+		{
 			name: "absolute inside",
 			text: "/work/project/internal/server/chat.go",
 			want: []pathToken{{Path: "internal/server/chat.go"}},
@@ -72,6 +82,12 @@ func TestPathDetect(t *testing.T) {
 			fold: "C:/work/project",
 			text: "C:/WORK/PROJECT/internal/server/chat.go:4",
 			want: []pathToken{{Path: "internal/server/chat.go", Line: 4}},
+		},
+		{
+			name: "windows drive line and column",
+			fold: "C:/work/project",
+			text: "C:/WORK/PROJECT/internal/server/chat.go:3:7",
+			want: []pathToken{{Path: "internal/server/chat.go", Line: 3}},
 		},
 		{
 			name: "windows unicode folder",

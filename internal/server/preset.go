@@ -130,8 +130,9 @@ func (st *state) planTemplate(sess *session, w *window, tmpl layout.Template, na
 // applyLayout applies preset cmd.Args[ArgName] to the window holding pane
 // cmd.Target, as planLayout plans it. New panes take the target pane's
 // profile and folder. Panes the preset does not hold move to a new window
-// named "moved", which is not shown; nothing closes. On an error the
-// window is unchanged. notice names the kinds the preset skipped.
+// named after the first moved pane, which is not shown; nothing closes. On
+// an error the window is unchanged. notice reports moved panes and kinds
+// the server skipped.
 func (st *state) applyLayout(sess *session, cmd *api.Command) (notice string, err error) {
 	w, target := sess.findPane(cmd.Target)
 	if target == nil {
@@ -148,8 +149,8 @@ func (st *state) applyLayout(sess *session, cmd *api.Command) (notice string, er
 
 // applyTemplate applies tmpl, called name in messages, to window w as
 // planTemplate plans it. New panes start with profile in dir. Panes the
-// template does not hold move to a new window named "moved", which is not
-// shown; nothing closes. On an error the window is unchanged.
+// template does not hold move to a new background window named after its
+// first pane; nothing closes. On an error the window is unchanged.
 func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, name, profile, dir string) (notice string, err error) {
 	plan, err := st.planTemplate(sess, w, tmpl, name)
 	if err != nil {
@@ -173,8 +174,15 @@ func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, n
 		opened[leaf.id] = p
 	}
 
+	var notices []string
 	if len(plan.moved) > 0 {
-		st.moveToWindow(sess, w, plan.moved, "moved")
+		windowName := w.panes[plan.moved[0]].name()
+		st.moveToWindow(sess, w, plan.moved, windowName)
+		paneWord := "panes"
+		if len(plan.moved) == 1 {
+			paneWord = "pane"
+		}
+		notices = append(notices, fmt.Sprintf("Moved %d %s to a new window: %s.", len(plan.moved), paneWord, windowName))
 	}
 	for id, p := range opened {
 		w.panes[id] = p
@@ -187,9 +195,9 @@ func (st *state) applyTemplate(sess *session, w *window, tmpl layout.Template, n
 		}
 	}
 	if len(plan.skipped) > 0 {
-		notice = fmt.Sprintf("Snow cannot open these panes yet, so the %s layout leaves them out: %s.", name, strings.Join(plan.skipped, ", "))
+		notices = append(notices, fmt.Sprintf("Snow cannot open these panes yet, so the %s layout leaves them out: %s.", name, strings.Join(plan.skipped, ", ")))
 	}
-	return notice, nil
+	return strings.Join(notices, " "), nil
 }
 
 // moveToWindow takes panes ids out of window w and puts them side by side

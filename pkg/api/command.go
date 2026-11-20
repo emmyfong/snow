@@ -48,7 +48,7 @@ type LayoutPreset struct {
 // LayoutPresets lists the presets in the order a picker shows them. A
 // preset reuses each pane of a kind it holds, opens the kinds the window
 // lacks, skips kinds the server cannot open, and moves the panes it does
-// not hold to a new background window named "moved".
+// not hold to a new background window named after its first moved pane.
 var LayoutPresets = []LayoutPreset{
 	{Name: "ide", Desc: "Files, viewer over chat over terminal, and git"},
 	{Name: "focus", Desc: "The chat alone"},
