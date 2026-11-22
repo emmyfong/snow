@@ -104,12 +104,17 @@ func Run(opts Options) (Result, error) {
 	}
 
 	dir := opts.Dir
+	homeNotice := ""
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
-		} // The server reports when an empty folder falls back to home.
+		} else {
+			// The client reports this failure on the home page.
+			homeNotice = "Snow could not read the current folder. New sessions start in your home folder."
+		}
 	}
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
+	a.setHomeNotice(homeNotice)
 	if mismatch != nil {
 		a.askRestart(mismatch)
 	}

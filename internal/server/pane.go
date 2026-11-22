@@ -111,6 +111,13 @@ func usableDir(dir string) string {
 }
 
 func usableDirReport(dir string) (string, bool) {
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false
+		}
+		return home, false
+	}
 	if filepath.IsAbs(dir) {
 		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
 			return dir, false
@@ -125,7 +132,7 @@ func usableDirReport(dir string) (string, bool) {
 
 func folderFallbackNotice(dir string) string {
 	if dir == "" {
-		return "The current folder could not be read. The pane started in your home folder."
+		return ""
 	}
 	if _, fellBack := usableDirReport(dir); fellBack {
 		return "Folder was not found: " + dir + ". The pane started in your home folder."

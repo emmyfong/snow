@@ -71,7 +71,7 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 		st.enqueue(c, &api.Error{Code: api.CodeCommandFailed, Message: err.Error()})
 		return
 	}
-	if notice == "" && st.nextPane > firstNewPane && requestedFolder != "" {
+	if notice == "" && st.nextPane > firstNewPane && requestedFolder != "" && folderNoticePaneKind(cmd.Args[api.ArgKind]) {
 		notice = st.srv.paneFolderNotice(requestedProfile, requestedFolder)
 	}
 	if notice != "" {
@@ -87,6 +87,15 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	st.changed(sess)
 	if changesTree[cmd.Op] {
 		st.rememberLayout(sess)
+	}
+}
+
+func folderNoticePaneKind(kind string) bool {
+	switch kind {
+	case "", api.PaneTerminal, api.PaneChat:
+		return true
+	default:
+		return false
 	}
 }
 

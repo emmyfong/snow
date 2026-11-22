@@ -121,9 +121,10 @@ func TestAgentWorktreeLaunch(t *testing.T) {
 }
 
 func TestAgentNewMissingFolder(t *testing.T) {
+	cwd := t.TempDir()
 	s := agentServer(t)
 	c := connect(t, s, 100, 30)
-	first := attachIn(t, c, t.TempDir())
+	first := attachIn(t, c, cwd)
 	missing := filepath.Join(t.TempDir(), "missing")
 	c.Send(&api.Command{Op: api.OpAgentNew, Target: first, Args: map[string]string{
 		api.ArgProfile: "Claude Code", api.ArgFolder: missing,

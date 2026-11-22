@@ -1,12 +1,15 @@
 package server
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/emmyfong/snow/internal/apitest"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -63,9 +66,52 @@ func TestUsableDirReport(t *testing.T) {
 	if used, fellBack := usableDirReport(missing); used != home || !fellBack {
 		t.Fatalf("missing directory returned %q, fellBack %t", used, fellBack)
 	}
-	if used, fellBack := usableDirReport(""); used != home || !fellBack {
+	if used, fellBack := usableDirReport(""); used != home || fellBack {
 		t.Fatalf("empty directory returned %q, fellBack %t", used, fellBack)
 	}
+}
+
+func TestEmptyFolderNoNotice(t *testing.T) {
+	s := newTestServer(t)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "home", Create: true})
+	promptText := strings.TrimRight(prompt(), " ")
+	deadline := time.Now().Add(apitest.Wait)
+	for !strings.Contains(c.Screen(), promptText) && time.Now().Before(deadline) {
+		message, err := c.Next(min(100*time.Millisecond, time.Until(deadline)))
+		if err != nil && !errors.Is(err, apitest.ErrTimeout) {
+			t.Fatal(err)
+		}
+		if notice, ok := message.(*api.Error); ok && notice.Code == api.CodeNotice {
+			t.Fatalf("empty folder sent a notice: %+v", notice)
+		}
+	}
+	if !strings.Contains(c.Screen(), promptText) {
+		t.Fatalf("empty-folder session did not start:\n%s", c.Screen())
+	}
+	deadline = time.Now().Add(100 * time.Millisecond)
+	for time.Now().Before(deadline) {
+		message, err := c.Next(time.Until(deadline))
+		if errors.Is(err, apitest.ErrTimeout) {
+			return
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if notice, ok := message.(*api.Error); ok && notice.Code == api.CodeNotice {
+			t.Fatalf("empty folder sent a notice: %+v", notice)
+		}
+	}
+}
+
+func TestSidePaneDoesNotReportFolderFallback(t *testing.T) {
+	s := newTestServer(t)
+	c, first := attached(t, s, 80, 24)
+	missing := filepath.Join(t.TempDir(), "missing")
+	c.Send(&api.Command{Op: api.OpOpen, Target: first, Args: map[string]string{
+		api.ArgKind: api.PaneFiles, api.ArgFolder: missing,
+	}})
+	nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
 }
 
 func TestSplitMissingFolderNotice(t *testing.T) {

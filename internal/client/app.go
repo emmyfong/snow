@@ -210,6 +210,12 @@ func (a *app) showHome(notice string) {
 	}
 }
 
+func (a *app) setHomeNotice(notice string) {
+	if h, ok := a.screen.(*home.Model); ok {
+		h.SetNotice(notice)
+	}
+}
+
 // attach asks the server for session, creating it when create is set, and
 // then reports where the terminal stands. The server skips a notification
 // for a pane a focused client shows, so it must not wait for a later focus
