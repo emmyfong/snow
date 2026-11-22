@@ -72,7 +72,10 @@ func TestControlRejectsReusedPermissionIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 	nextClientFrame(t, c)
-	if err := c.Answer(ctx, "approve-1", true, nil, ""); err != nil {
+	// The runtime reads the answer, then fails the protocol. The stop can
+	// reach the sender before the writer reports the finished write, so
+	// delivery can be uncertain here. The protocol error is what must hold.
+	if err := c.Answer(ctx, "approve-1", true, nil, ""); err != nil && !errors.Is(err, ErrDelivery) {
 		t.Fatal(err)
 	}
 	select {
