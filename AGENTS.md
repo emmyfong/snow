@@ -10,44 +10,44 @@ without the user.
 
 ## Planning and collaboration
 
-Clarify goals, scope, and design before implementing ambiguous product work.
-Use the user's previous answers and inspect available project context first.
-Ask when an unresolved choice changes behavior, scope, cost, persistent data,
-permissions, compatibility, or a substantial design commitment. Explain the
-tradeoff and offer a recommendation. Handle routine details independently.
+- A request to explore or plan does not authorize implementation. Honor
+  approval already given; do not ask for it again.
+- Ask before a choice that changes behavior, scope, cost, persistent data,
+  permissions, compatibility, or a substantial design commitment. Explain the
+  tradeoff and give a recommendation. Handle routine details yourself.
+- Continue independent work while a question is pending. Leave dependent work
+  pending.
+- Tell the user about findings that change the plan. Revisit the affected
+  decision when new evidence invalidates it or materially expands scope.
+- To clarify an idea, its scope, or its design, follow `plan-with-user`.
 
-State requirements, proposals, assumptions, and unresolved choices separately.
-Compare the smallest adequate approach with broader alternatives when it matters.
-Reuse existing components and justify new abstractions. Judge code by required
-behavior and maintainability, not a line count. Revisit the affected decision if
-new evidence invalidates the plan or materially expands scope.
+## Skills
 
-Keep the user informed about consequential findings. Continue independent work
-while a question is pending; leave dependent work pending. A request to explore
-or plan does not authorize implementation. Honor approval already given without
-asking for it again.
+Snow's procedures live in `.claude/skills/<name>/SKILL.md`. Every agent reads
+the same copy by path; slash commands and automatic discovery depend on the
+host. Do not copy a skill into an agent-specific folder.
 
-## Shared skills
+Before you start a task, find its row below, open that `SKILL.md`, and follow
+it. Read only the skills the task needs and the references they link.
 
-Project skills live in `.claude/skills/`. All agents can read these Markdown
-instructions. Automatic discovery and slash commands depend on the agent host;
-if discovery is absent, open the applicable `SKILL.md` by path. Keep one shared
-copy rather than duplicate skills in agent-specific folders. Read only skills
-relevant to the current task and their needed references.
+| When | Skill |
+|---|---|
+| The user has an idea, or the goal, scope, or design is unclear | `plan-with-user` |
+| Agreed work must become issues, or existing issues need revising | `compose-issues` |
+| The user asks to plan many epics, a release, or the whole project | `plan-program` |
+| The user asks what to work on next | `next-issue` |
+| The user names one issue or epic to build, or `next-issue` hands one over | `issue-handler` |
+| A change renders in the terminal UI (`internal/client`) | `tui` |
+| A design choice is settled, or a change may reopen one | `decision-record` |
+| Before you open a PR, or the user asks for a review | `review-wave` |
+| After a milestone, before compaction, at a handoff or model switch | `context` |
+| You launch or coordinate subagents, or the user asks for parallel issue work | `manage-subagents` |
+| A prompt, context, caching, or coordination change needs measuring | `evaluate-context` |
+| A skill step failed, the user corrected a skill, or the user asks for a skill change | `compose-skill` |
 
-- `plan-with-user`: clarify an idea and develop its scope and design.
-- `compose-issues`: turn agreed work into issues or revise existing issues.
-- `next-issue`: select ready work from current issues.
-- `issue-handler`: implement one agreed issue or epic in a worktree.
-- `review-wave`: review a branch or PR before publication.
-- `context`: save current working memory and handoffs.
-- `decision-record`: record an agreed architecture decision.
-- `evaluate-context`: evaluate context policies by task quality and total usage.
-- `tui`: design or change Snow's terminal interface.
-- `plan-program`: plan many epics with drafting and verifying subagents.
-- `agent-orchestration`: coordinate parallel issue implementation and verification teams.
-- `manage-subagents`: manage delegated objectives, capacity, verification, and handoffs.
-- `compose-skill`: propose skill improvements and deliver approved changes.
+The usual flow is `plan-with-user`, then `compose-issues` (or `plan-program`
+for many epics), then `next-issue`, then `issue-handler`. `issue-handler` uses
+`tui`, `decision-record`, `review-wave`, and `context` along the way.
 
 Skill improvements need user approval. When you find a problem, use
 `compose-skill` to propose the correction before editing any skill. An explicit
@@ -237,6 +237,11 @@ folder, without edits across the codebase.
   Its sub-issues are the steps. A standalone issue counts as an epic of one.
 - Take on an epic with the `issue-handler` skill, in its own worktree under
   `.worktrees/`. Never build an epic in the main checkout.
+- Remove a worktree and its local branch once its PR is merged. The agent that
+  opened the PR has usually stopped by then, so the top-level agent sweeps
+  merged worktrees before it starts new work
+  (`.claude/skills/issue-handler/references/prune-worktrees.md`). Never remove
+  a worktree with uncommitted changes or commits that are not in the PR.
 - Sub-issues may be blocked by other issues. A blocker inside the epic sets
   the build order. A blocker outside the epic stops that sub-issue; ask the
   user.

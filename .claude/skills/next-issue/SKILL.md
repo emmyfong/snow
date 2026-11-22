@@ -7,10 +7,15 @@ description: Choose the next epic to work on in Snow. Reads open epics and stand
 
 Find the open epics that are ready to start, rank them, and let the user pick.
 An epic is one PR. A standalone issue (no parent epic, no sub-issues) counts as
-an epic of one. Discovery reads only. After the user selects work or delegates selection and
+an epic of one. Discovery reads only, except the merged-worktree sweep in step 1. After the user selects work or delegates selection and
 implementation, this skill can assign that work before handing it off.
 
 ## 1. Collect
+
+First sweep merged worktrees with
+[prune-worktrees](../issue-handler/references/prune-worktrees.md), unless a
+manager already swept. A merged worktree still has a local branch, so it would
+hide ready work in step 2.
 
 ```sh
 R=$(gh repo view --json nameWithOwner --jq .nameWithOwner)

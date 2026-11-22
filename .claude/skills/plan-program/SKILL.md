@@ -25,6 +25,9 @@ same briefs to that host's subagents.
 
 ## 1. Set up the program
 
+If the program's goals or scope are unclear, clarify them with
+`plan-with-user` first. This skill starts when the outcome is agreed.
+
 1. Record the scope, the user's decisions, and their dates in
    `.context/compose/program/PROGRAM.md`. Record the planning commit:
    `git fetch origin && git rev-parse origin/main`.

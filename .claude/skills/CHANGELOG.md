@@ -5,6 +5,43 @@ Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
 `pending review` entries. Historical entries record the policy at their date;
 they do not override the current approval rules.
 
+## 2026-11-21 AGENTS.md, issue-handler, next-issue, manage-subagents: skill routing and merged-worktree sweep
+- Evidence: on 2026-11-21 the main checkout had 26 worktrees; 21 had merged
+  PRs. `issue-handler` step 8 removes a worktree only after the user merges,
+  and the agent stops at step 7, so step 8 never ran. The extra files made
+  parallel searches over `/mnt/c` fail with EIO three times. `AGENTS.md` listed
+  the skills without telling agents to use them. `agent-orchestration` and
+  `manage-subagents` repeated the same settings, capacity, and verification
+  rules. `plan-with-user` repeated the `AGENTS.md` planning section. In Claude
+  Code, `superpowers:brainstorming` ran instead of `plan-with-user`. The user
+  asked for the cleanup rule, the routing, and both merges.
+- Change: new `issue-handler/references/prune-worktrees.md`, called from
+  `issue-handler` step 2, `next-issue` step 1, and `manage-subagents` step 7.
+  `AGENTS.md` has a removal rule and a routing table for every skill, and its
+  planning section is four rules plus a pointer to `plan-with-user`.
+  `agent-orchestration` is merged into `manage-subagents` step 7 and removed.
+  `plan-program` starts with `plan-with-user` when the goals are unclear.
+  `CLAUDE.md` gives Snow skills precedence for planning. After review, the
+  sweep checks only `.worktrees/`, skips the current worktree, keeps on any
+  command error or open PR, and does not run `git worktree prune`. Only the
+  top-level agent sweeps; a worker that a manager launched skips it.
+  `issue-handler` step 8 runs the sweep for its own worktree.
+- Test: three scenarios, walked through with only `AGENTS.md` and the skills.
+  (1) Start an epic while a merged worktree exists: the routing table gives
+  `issue-handler`, and its step 2 runs the sweep first. Through `next-issue`,
+  step 1 runs it. (2) Run three issues in parallel: the table gives
+  `manage-subagents` step 7, which sweeps, selects with `next-issue`, and
+  launches `issue-handler` workers. (3) Plan one new idea: the table and
+  `CLAUDE.md` give `plan-with-user`, then `compose-issues`. The walk-through
+  found that the sweep used `<root>` before `issue-handler` defined it; the
+  reference now defines it. The 2026-11-21 sweep of the main checkout removed
+  21 merged worktrees and kept 5 (no PR or detached HEAD). One merged PR head
+  was missing locally, so the reference now checks ancestry through GitHub.
+  A review wave (two reviewers) on 5884ea8 found 4 major, 10 minor, and 1 nit
+  findings; all are fixed. Documentation checks passed: whitespace, front
+  matter, links, and no remaining `agent-orchestration` reference.
+- Status: pending review
+
 ## 2026-11-17 tui: describe the theme background and bar colors
 - Evidence: #318 and #319 change the theme defaults and bar colors. In the
   #316 terminal check, conhost applied the requested colors but ignored the
