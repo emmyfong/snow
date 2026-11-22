@@ -86,6 +86,18 @@ func TestArrowsSelectASession(t *testing.T) {
 	}
 }
 
+func TestHomeStartNotice(t *testing.T) {
+	const notice = "Snow could not read the current folder. New sessions start in your home folder."
+	m := screen(120, 40)
+	m.SetNotice(notice)
+	if m.notice != notice {
+		t.Fatalf("home notice = %q, want %q", m.notice, notice)
+	}
+	if view := ansi.Strip(m.View().Content); !strings.Contains(view, "Snow could not read the current folder.") {
+		t.Fatalf("home page does not show startup notice:\n%s", view)
+	}
+}
+
 func TestTypingFiltersTheList(t *testing.T) {
 	m := screen(80, 24, session("api-server", time.Minute, 0), session("dotfiles", time.Hour, 0))
 	typeText(m, "dot")

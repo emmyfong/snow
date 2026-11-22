@@ -228,6 +228,9 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 	case clipboard.ErrMsg:
 		return m.ShowError(msg.Error())
 	case *api.Error:
+		if msg.Code == api.CodeNotice {
+			return m.showNotice(msg.Message)
+		}
 		if m.windowRuntimePending && msg.Code == api.CodeBadCommand && msg.Message == api.ErrInvalidRuntime.Error() {
 			m.windowRuntimePending = false
 			return nil
@@ -245,9 +248,6 @@ func (m *Model) Update(msg tea.Msg) tea.Cmd {
 			m.startupRuntimeID, m.startupRuntimePane = "", 0
 			m.runtimeAfter, m.runtimeBinding, m.runtimeBindFailed = "", "", true
 			return m.ShowError(msg.Message)
-		}
-		if msg.Code == api.CodeNotice {
-			return m.showNotice(msg.Message)
 		}
 		if cmd, ok := m.authError(msg.Message); ok {
 			return cmd

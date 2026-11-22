@@ -120,6 +120,26 @@ func TestAgentWorktreeLaunch(t *testing.T) {
 	}
 }
 
+func TestAgentNewMissingFolder(t *testing.T) {
+	cwd := t.TempDir()
+	s := agentServer(t)
+	c := connect(t, s, 100, 30)
+	first := attachIn(t, c, cwd)
+	missing := filepath.Join(t.TempDir(), "missing")
+	c.Send(&api.Command{Op: api.OpAgentNew, Target: first, Args: map[string]string{
+		api.ArgProfile: "Claude Code", api.ArgFolder: missing,
+	}})
+	e := nextError(t, c)
+	if e.Code != api.CodeCommandFailed || !strings.Contains(e.Message, missing) || !strings.Contains(e.Message, "No agent started") {
+		t.Fatalf("missing-folder agent error %+v", e)
+	}
+	var windows int
+	s.call(func(st *state) { windows = len(st.sessions["work"].windows) })
+	if windows != 1 {
+		t.Fatalf("missing-folder agent opened %d windows, want 1", windows)
+	}
+}
+
 // TestAgentWorktreeLaunchFailure: an agent that cannot start leaves no
 // window, no worktree, and no branch, and the error says why. A bad branch
 // name is refused with the worktree's typed error.

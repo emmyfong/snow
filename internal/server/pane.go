@@ -2,6 +2,7 @@ package server
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 	"sync/atomic"
 	"time"
@@ -105,16 +106,50 @@ func (s *Server) startPaneArgs(id, cols, rows int, profile, dir, preamble string
 // user's home folder. The server, not the client, starts the program, and
 // it may not see the client's folder.
 func usableDir(dir string) string {
+	used, _ := usableDirReport(dir)
+	return used
+}
+
+func usableDirReport(dir string) (string, bool) {
+	if dir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", false
+		}
+		return home, false
+	}
 	if filepath.IsAbs(dir) {
 		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
-			return dir
+			return dir, false
 		}
 	}
 	home, err := os.UserHomeDir()
 	if err != nil {
+		return "", dir != ""
+	}
+	return home, true
+}
+
+func folderFallbackNotice(dir string) string {
+	if dir == "" {
 		return ""
 	}
-	return home
+	if _, fellBack := usableDirReport(dir); fellBack {
+		return "Folder was not found: " + dir + ". The pane started in your home folder."
+	}
+	return ""
+}
+
+func (s *Server) paneFolderNotice(profile, dir string) string {
+	if profile == "" && s.launch.shell != nil {
+		if sh, ok := s.launch.shell(""); ok {
+			profile = sh.Name
+		}
+	}
+	if _, wsl := s.distroOf(profile); wsl && path.IsAbs(dir) {
+		return ""
+	}
+	return folderFallbackNotice(dir)
 }
 
 // folder returns the pane's folder: the one its shell last reported, or the

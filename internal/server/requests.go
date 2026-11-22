@@ -61,6 +61,9 @@ func (st *state) attach(c *client, m *api.Attach, snap *store.Snapshot, chats ma
 			st.enqueue(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 			return
 		}
+		if notice := st.srv.paneFolderNotice("", m.Dir); notice != "" {
+			notices = append(notices, notice)
+		}
 	}
 	st.focusOnAttach(sess, m.Pane)
 	prev := c.session
