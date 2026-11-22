@@ -39,6 +39,52 @@ func TestMissingFolderFallsBack(t *testing.T) {
 	c.WaitScreen(strings.TrimRight(prompt(), " "))
 }
 
+func TestMissingFolderNotice(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "missing")
+	s := newTestServer(t)
+	c := connect(t, s, 80, 24)
+	c.Send(&api.Attach{Session: "lost", Create: true, Dir: missing})
+	e := nextError(t, c)
+	if e.Code != api.CodeNotice || !strings.Contains(e.Message, missing) || !strings.Contains(e.Message, "home folder") {
+		t.Fatalf("fallback notice %+v", e)
+	}
+	c.WaitScreen(strings.TrimRight(prompt(), " "))
+}
+
+func TestUsableDirReport(t *testing.T) {
+	dir := t.TempDir()
+	if used, fellBack := usableDirReport(dir); used != dir || fellBack {
+		t.Fatalf("usable directory returned %q, fellBack %t", used, fellBack)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	missing := filepath.Join(t.TempDir(), "missing")
+	if used, fellBack := usableDirReport(missing); used != home || !fellBack {
+		t.Fatalf("missing directory returned %q, fellBack %t", used, fellBack)
+	}
+	if used, fellBack := usableDirReport(""); used != home || !fellBack {
+		t.Fatalf("empty directory returned %q, fellBack %t", used, fellBack)
+	}
+}
+
+func TestSplitMissingFolderNotice(t *testing.T) {
+	s := newTestServer(t)
+	c, first := attached(t, s, 80, 24)
+	missing := filepath.Join(t.TempDir(), "missing")
+	c.Send(&api.Command{Op: api.OpSplit, Target: first, Args: map[string]string{
+		api.ArgDir: api.DirRight, api.ArgFolder: missing,
+	}})
+	e := nextError(t, c)
+	if e.Code != api.CodeNotice || !strings.Contains(e.Message, missing) || !strings.Contains(e.Message, "home folder") {
+		t.Fatalf("fallback notice %+v", e)
+	}
+	l := nextLayout(t, c, func(l *api.Layout) bool { return len(shownPanes(l)) == 2 })
+	if len(shownPanes(l)) != 2 {
+		t.Fatalf("split did not start after fallback: %+v", l)
+	}
+}
+
 // TestPaneEnv: a pane's shell sees SNOW with the socket path and the pane
 // ID, so a nested snow can tell it runs inside a session, and SNOW_PANE and
 // SNOW_SOCKET, so snow hook can tell the server which pane it runs in.

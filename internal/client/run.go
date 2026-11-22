@@ -105,9 +105,9 @@ func Run(opts Options) (Result, error) {
 
 	dir := opts.Dir
 	if dir == "" {
-		// Without a folder the session starts in the home folder; an error
-		// here only loses that convenience.
-		dir, _ = os.Getwd()
+		if cwd, err := os.Getwd(); err == nil {
+			dir = cwd
+		} // The server reports when an empty folder falls back to home.
 	}
 	a := newHomeApp(send, opts.Version, dir, th, session.WithKeys(table), session.WithChatUsage(cfg.Chat.Usage))
 	if mismatch != nil {

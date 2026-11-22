@@ -64,6 +64,13 @@ func (st *state) agentNew(c *client, sess *session, cmd *api.Command) {
 		role = &r
 	}
 	distro, _ := st.srv.distroOf(profile)
+	if distro == "" {
+		if _, fellBack := usableDirReport(folder); fellBack {
+			st.enqueue(c, &api.Error{Code: api.CodeCommandFailed,
+				Message: "Folder was not found: " + folder + ". No agent started."})
+			return
+		}
+	}
 	repo := worktree.Repo{Path: folder, Distro: distro}
 	branch := cmd.Args[api.ArgBranch]
 	srv := st.srv
