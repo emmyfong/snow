@@ -11,7 +11,8 @@ import (
 
 // TestConvWorkerResolveIsThrottled: a pane with no conversation does not
 // list the whole store on every poll. It looks again on a slower timer, and
-// a forced read looks at once.
+// a forced read looks at once. The interval is long and the test moves the
+// last lookup back by hand, so slow file work on Windows cannot end it early.
 func TestConvWorkerResolveIsThrottled(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "conversations")
 	store, err := convstore.Open(dir)
@@ -21,7 +22,7 @@ func TestConvWorkerResolveIsThrottled(t *testing.T) {
 	folder := t.TempDir()
 	w := &convWorker[api.UsageState]{
 		store: store, folder: folder, profile: "sh",
-		resolveEvery: 40 * time.Millisecond,
+		resolveEvery: time.Hour,
 		build: func(*convstore.Conversation) api.UsageState {
 			return api.UsageState{Conversation: "found"}
 		},
@@ -57,7 +58,8 @@ func TestConvWorkerResolveIsThrottled(t *testing.T) {
 	if st := w.read(false); st.Conversation != "" {
 		t.Fatalf("state %+v; want the interval to hold off the lookup", st)
 	}
-	eventually(t, "the worker to find the new conversation", func() bool {
-		return w.read(false).Conversation == "found"
-	})
+	w.resolved = w.resolved.Add(-w.resolveEvery)
+	if st := w.read(false); st.Conversation != "found" {
+		t.Fatalf("state %+v; want a lookup once the interval passed", st)
+	}
 }
