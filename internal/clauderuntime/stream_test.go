@@ -170,6 +170,38 @@ func TestStreamBlockedInputIsCancellable(t *testing.T) {
 	}
 }
 
+// TestStreamWriteResultWinsOverStop: a write that finished before the stream
+// stopped was delivered. When the result and the stop are both ready, the
+// sender must report the result. Otherwise a caller keeps input that already
+// reached the runtime, as when the runtime answers and then fails.
+func TestStreamWriteResultWinsOverStop(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+	stopped := make(chan struct{})
+	close(stopped)
+	tests := []struct {
+		name     string
+		ctx      context.Context
+		stopping chan struct{}
+	}{
+		{"stopped", context.Background(), stopped},
+		{"cancelled", cancelled, make(chan struct{})},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := &Stream{stopping: tt.stopping}
+			// Select picks a ready case at random, so one attempt can pass by luck.
+			for i := range 200 {
+				done := make(chan error, 1)
+				done <- nil
+				if err := s.awaitWrite(tt.ctx, done); err != nil {
+					t.Fatalf("attempt %d: completed write reported as %v", i, err)
+				}
+			}
+		})
+	}
+}
+
 // TestStreamExplainsMissingClaude: a launch that cannot find claude, such
 // as the WSL script in a distribution without it, ends with a message that
 // says so, and still keeps Claude's diagnostic output out of the error.

@@ -109,7 +109,8 @@ func (s *Stream) Done() <-chan struct{} { return s.done }
 func (s *Stream) Err() error { return s.err }
 
 // Send writes a single JSON message. A cancellation after enqueueing can leave
-// delivery ambiguous, reported as ErrDelivery. It never retries the write.
+// delivery ambiguous, reported as ErrDelivery. A stop that comes just after a
+// finished write can also report ErrDelivery. It never retries the write.
 func (s *Stream) Send(ctx context.Context, message any) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -132,13 +133,27 @@ func (s *Stream) Send(ctx context.Context, message any) error {
 		return ErrClosed
 	case s.writes <- req:
 	}
+	return s.awaitWrite(ctx, req.done)
+}
+
+// awaitWrite waits for the writer's result for one queued request. A result
+// that is ready wins over a cancellation or a stop that is also ready: select
+// picks among ready cases at random, and a finished write is not uncertain.
+func (s *Stream) awaitWrite(ctx context.Context, done <-chan error) error {
+	var stopped error
 	select {
-	case err := <-req.done:
+	case err := <-done:
 		return err
 	case <-ctx.Done():
-		return errors.Join(ErrDelivery, ctx.Err())
+		stopped = ctx.Err()
 	case <-s.stopping:
-		return errors.Join(ErrDelivery, ErrClosed)
+		stopped = ErrClosed
+	}
+	select {
+	case err := <-done:
+		return err
+	default:
+		return errors.Join(ErrDelivery, stopped)
 	}
 }
 
