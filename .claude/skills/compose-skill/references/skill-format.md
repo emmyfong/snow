@@ -63,5 +63,5 @@ task work while approval is pending.
 - [ ] Under about 200 lines; long detail is in `references/`.
 - [ ] Ends with "Improve this skill".
 - [ ] `grep -rn '—' .claude/skills/<name>/` prints nothing.
-- [ ] The `AGENTS.md` catalog lists the skill with a one-line purpose.
+- [ ] The `AGENTS.md` routing table has a row for the skill.
 - [ ] A changelog entry records the evidence and the test.

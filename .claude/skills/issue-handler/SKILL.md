@@ -63,6 +63,11 @@ file or permit concurrent edits. Recheck ownership on takeover or resumption.
 
 ## 2. Set up the worktree
 
+First sweep merged worktrees with
+[prune-worktrees](references/prune-worktrees.md). Skip the sweep if a manager
+launched you; the manager has already swept. A merged worktree leaves through
+this sweep or step 8.
+
 Branch type from the epic's labels: `bug` gives `fix`, `docs` gives `docs`,
 `tests` gives `test`, `optimization` gives `perf`, anything else gives `feat`.
 The slug is three to five words of the epic title in kebab case.
@@ -192,20 +197,11 @@ failures and merges. Update `CONTEXT.md` with a Handoff. Do not merge.
 
 ## 8. After the user merges
 
-Confirm the merge first. A squash merge leaves the branch unmerged in git's
-view, so `-D` is required and safe only after this check.
-
-```sh
-gh pr view <pr> --json state --jq .state   # must print MERGED
-```
-
 Check that the epic and its sub-issues closed. Run the graduation step of the
-`context` skill. Then:
-
-```sh
-git -C <root> worktree remove <wt>
-git -C <root> branch -D <branch>
-```
+`context` skill. Then change to `<root>` and run
+[prune-worktrees](references/prune-worktrees.md) for this worktree only. Its
+checks confirm the merge before it removes the worktree and branch. If no
+session returns after the merge, the next sweep removes them.
 
 ## Spikes
 
