@@ -58,15 +58,26 @@ func (m *Model) header() string {
 	return left
 }
 
-// statusRow is the last action's failure, in the error colors, or its
-// outcome.
-func (m *Model) statusRow() string {
-	if m.st.Error != "" {
-		style := lipgloss.NewStyle().Foreground(m.th.ErrorFG).Background(m.th.Error)
-		text := ansi.Truncate(" "+ui.PlainLine(m.st.Error), m.width, "...")
-		return style.Render(text + strings.Repeat(" ", max(m.width-ansi.StringWidth(text), 0)))
+// statusRows are the last action's failure, in the error colors, or its
+// outcome. Errors wrap to three rows; notices stay on one row.
+func (m *Model) statusRows() []string {
+	if m.st.Error == "" {
+		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(" " + ui.PlainLine(m.st.Notice))}
 	}
-	return lipgloss.NewStyle().Foreground(m.th.Success).Render(" " + ui.PlainLine(m.st.Notice))
+	const maxErrorRows = 3
+	text := " " + ui.PlainLine(m.st.Error)
+	lines := strings.Split(ansi.Wrap(text, max(m.width, 1), ""), "\n")
+	if len(lines) > maxErrorRows {
+		lines = lines[:maxErrorRows]
+		lines[maxErrorRows-1] = ansi.Truncate(lines[maxErrorRows-1], max(m.width-1, 1), "") + "…"
+	}
+	style := lipgloss.NewStyle().Foreground(m.th.ErrorFG).Background(m.th.Error)
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		line = ansi.Truncate(line, m.width, "")
+		out[i] = style.Render(line + strings.Repeat(" ", max(m.width-ansi.StringWidth(line), 0)))
+	}
+	return out
 }
 
 func (m *Model) boxOptions() ui.TextAreaOptions {

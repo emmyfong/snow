@@ -116,7 +116,9 @@ func (m *Model) chrome() (status, box, hints bool) {
 	} else {
 		box = false
 	}
-	status = status && m.height > need
+	if status {
+		status = m.statusHeight(box, true) > 0
+	}
 	return status, box, true
 }
 
@@ -125,7 +127,7 @@ func (m *Model) listHeight() int {
 	status, box, hints := m.chrome()
 	h := m.height - 1
 	if status {
-		h--
+		h -= m.statusHeight(box, hints)
 	}
 	if box {
 		h -= boxRows
@@ -134,6 +136,19 @@ func (m *Model) listHeight() int {
 		h--
 	}
 	return max(h, 1)
+}
+
+// statusHeight is the number of status rows that fit while keeping one list
+// row and the other chrome visible.
+func (m *Model) statusHeight(box, hints bool) int {
+	available := m.height - 2 // header and one list row
+	if box {
+		available -= boxRows
+	}
+	if hints {
+		available--
+	}
+	return min(len(m.statusRows()), max(available, 0))
 }
 
 // diffHeight is the rows the diff gets: all but the header and the hints.

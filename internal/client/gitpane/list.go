@@ -23,7 +23,10 @@ func (m *Model) listLayout(l *layout) {
 		l.add("", hitNone, 0)
 	}
 	if status {
-		l.add(m.statusRow(), hitNone, 0)
+		rows := m.statusRows()
+		for _, row := range rows[:m.statusHeight(box, hints)] {
+			l.add(row, hitNone, 0)
+		}
 	}
 	if box {
 		// The box grows upward as the message gets longer, so it sits on

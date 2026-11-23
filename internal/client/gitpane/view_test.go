@@ -32,6 +32,9 @@ func goldenStates() map[string]func() *Model {
 		"GitError": func() *Model {
 			return model(api.GitState{Folder: "/home/u/snow", Error: "git status: fatal: unsafe repository"}, 0, 0)
 		},
+		"LongGitError": func() *Model {
+			return model(api.GitState{Folder: "/home/u/snow", Error: "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)}, 0, 0)
+		},
 		"Loading": func() *Model {
 			st := changes()
 			st.Loading = true

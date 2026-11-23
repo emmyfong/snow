@@ -156,6 +156,29 @@ func TestCommitFailedKeepsMessage(t *testing.T) {
 	}
 }
 
+// TestCommitErrorWraps: a long error keeps its useful ending visible.
+func TestCommitErrorWraps(t *testing.T) {
+	st := changes()
+	st.Error = "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)
+	m := model(st, 40, 14)
+	view := strings.Join(m.View(), "\n")
+	if !strings.Contains(view, "unmerged files") {
+		t.Fatalf("error ending is missing from pane:\n%s", view)
+	}
+	rows := 0
+	for _, row := range m.View() {
+		if strings.Contains(ansi.Strip(row), "git commit:") || strings.Contains(ansi.Strip(row), "reason") || strings.Contains(ansi.Strip(row), "unmerged") || strings.Contains(ansi.Strip(row), "resolve") {
+			rows++
+		}
+		if ansi.StringWidth(row) > 40 {
+			t.Fatalf("row wider than pane: %q", row)
+		}
+	}
+	if rows > 3 {
+		t.Fatalf("error used %d rows, want at most 3", rows)
+	}
+}
+
 // TestCommitRefusedLocally: no message, or nothing staged, sends nothing
 // and says why.
 func TestCommitRefusedLocally(t *testing.T) {
