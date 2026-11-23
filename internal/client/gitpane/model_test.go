@@ -95,6 +95,18 @@ func TestListKeys(t *testing.T) {
 func TestCommitBox(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
+	var escapeHint string
+	for _, h := range m.listHints() {
+		if h.Key == "esc" {
+			escapeHint = h.Desc
+		}
+	}
+	if !strings.Contains(escapeHint, "keep draft") || strings.Contains(escapeHint, "cancel") {
+		t.Errorf("Esc hint %q, want it to say the draft stays", escapeHint)
+	}
+	if got := m.boxOptions().Placeholder; got != "Enter commits. Esc closes and keeps the draft." {
+		t.Errorf("commit placeholder %q", got)
+	}
 	for _, s := range []string{"f", "i", "x"} {
 		if a := m.Key(key(s)); a != nil {
 			t.Fatalf("typing sent %+v", a)

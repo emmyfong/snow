@@ -73,7 +73,7 @@ func (m *Model) boxOptions() ui.TextAreaOptions {
 	return ui.TextAreaOptions{
 		Width: max(m.width-1, 1), Height: boxRows, Prompt: boxPrompt,
 		Value: string(m.msg), Cursor: m.cursor,
-		Placeholder: "Enter commits, Esc cancels",
+		Placeholder: "Enter commits. Esc closes and keeps the draft.",
 	}
 }
 
@@ -84,7 +84,7 @@ func (m *Model) listHints() []hint {
 		return []hint{
 			{ui.Hint{Key: "enter", Desc: "commit"}, tea.Key{Code: tea.KeyEnter}},
 			{ui.Hint{Key: "ctrl+j", Desc: "new line"}, tea.Key{Code: 'j', Mod: tea.ModCtrl}},
-			{ui.Hint{Key: "esc", Desc: "cancel"}, tea.Key{Code: tea.KeyEscape}},
+			{ui.Hint{Key: "esc", Desc: "close, keep draft"}, tea.Key{Code: tea.KeyEscape}},
 		}
 	case len(m.entries()) == 0:
 		return []hint{refresh}
