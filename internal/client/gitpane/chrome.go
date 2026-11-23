@@ -26,7 +26,7 @@ func (m *Model) header() string {
 	}
 	var extra []string
 	if m.loaded && m.st.Folder != "" {
-		extra = append(extra, "in "+ui.FolderName(m.st.Folder))
+		extra = append(extra, "in "+ui.FolderShort(m.st.Folder))
 	}
 	switch {
 	case m.st.Initial:

@@ -30,3 +30,17 @@ func FolderTail(folder string) string {
 	}
 	return strings.Join(parts[max(len(parts)-2, 0):], "/")
 }
+
+// FolderShort returns the last two elements of folder, prefixed by "…/" when
+// earlier elements were omitted. It returns "/" for a root and "-" for no folder.
+func FolderShort(folder string) string {
+	parts := strings.FieldsFunc(strings.ReplaceAll(PlainLine(folder), `\`, "/"), func(r rune) bool { return r == '/' })
+	if len(parts) == 0 {
+		return FolderName(folder)
+	}
+	tail := strings.Join(parts[max(len(parts)-2, 0):], "/")
+	if len(parts) > 2 {
+		return "…/" + tail
+	}
+	return tail
+}
