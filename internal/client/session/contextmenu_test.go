@@ -231,3 +231,36 @@ func TestMenuNewWindowCloseWindowAndDetach(t *testing.T) {
 		t.Fatal("Detach did not ask to detach")
 	}
 }
+
+// TestGitMenuRemoveWorktree offers the same confirmation as the x key only
+// on a selected worktree without an agent.
+func TestGitMenuRemoveWorktree(t *testing.T) {
+	m, _ := gitScreen(t, 100, 30)
+	st := api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{
+		{Path: "/home/u/snow", Branch: "main", Main: true},
+		{Path: "/home/u/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m.Update(gitState(t, 2, st))
+	m.Update(press(tea.KeyDown, 0, "")) // main checkout
+	m.Update(press(tea.KeyDown, 0, "")) // clean linked worktree
+	m.openMenu(50, 3)
+	if !strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
+		t.Fatalf("menu lacks Remove worktree:\n%s", content(m))
+	}
+	for range 17 { // the Git action is the last menu item
+		m.menu.Key(tea.Key{Code: tea.KeyDown})
+	}
+	m.menuResult(m.menu.Key(tea.Key{Code: tea.KeyEnter}))
+	git := m.own[2].(gitPane)
+	if !strings.Contains(ansi.Strip(strings.Join(git.View(), "\n")), "Remove worktree clean?") {
+		t.Fatalf("menu did not open the x confirmation:\n%s", strings.Join(git.View(), "\n"))
+	}
+
+	m, _ = gitScreen(t, 100, 30)
+	st.Worktrees = st.Worktrees[:1]
+	m.Update(gitState(t, 2, st))
+	m.openMenu(50, 3)
+	if strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
+		t.Fatalf("menu offers removal without a selected linked worktree:\n%s", content(m))
+	}
+}

@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	pathpkg "path"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/emmyfong/snow/internal/git"
@@ -113,6 +115,15 @@ func (w *gitWorker) action(ctx context.Context, j gitJob) (string, error) {
 		return "", nil
 	case api.GitActCloseDiff:
 		w.diff = nil
+	case api.GitActRemoveWorktree:
+		err := w.withWait(ctx, gitReadWait, func(c context.Context) error {
+			return worktree.Repo(w.repo).Remove(c, path)
+		})
+		if err != nil {
+			return "", err
+		}
+		name := pathpkg.Base(strings.ReplaceAll(path, `\`, "/"))
+		return "Removed worktree " + name + ".", nil
 	}
 	return "", nil
 }

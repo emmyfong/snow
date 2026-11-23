@@ -61,6 +61,10 @@ func (m *Model) header() string {
 // statusRows are the last action's failure, in the error colors, or its
 // outcome. Errors wrap to three rows; notices stay on one row.
 func (m *Model) statusRows() []string {
+	if m.removePath != "" {
+		text := " Remove worktree " + ui.FolderName(m.removePath) + "? y removes it, n keeps it."
+		return []string{lipgloss.NewStyle().Foreground(m.th.PromptFG).Background(m.th.PromptBG).Render(ansi.Truncate(text, m.width, "…"))}
+	}
 	if m.st.Error == "" {
 		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(" " + ui.PlainLine(m.st.Notice))}
 	}
@@ -91,6 +95,11 @@ func (m *Model) boxOptions() ui.TextAreaOptions {
 func (m *Model) listHints() []hint {
 	refresh := hint{ui.Hint{Key: "r", Desc: "refresh"}, tea.Key{Code: 'r', Text: "r"}}
 	switch {
+	case m.removePath != "":
+		return []hint{
+			{ui.Hint{Key: "y", Desc: "remove"}, tea.Key{Code: 'y', Text: "y"}},
+			{ui.Hint{Key: "n", Desc: "keep"}, tea.Key{Code: 'n', Text: "n"}},
+		}
 	case m.mode == modeCommit:
 		return []hint{
 			{ui.Hint{Key: "enter", Desc: "commit"}, tea.Key{Code: tea.KeyEnter}},
@@ -112,6 +121,9 @@ func (m *Model) listHints() []hint {
 			enter = "open"
 		}
 		hs = append(hs, hint{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}})
+	}
+	if m.CanRemoveSelectedWorktree() {
+		hs = append(hs, hint{ui.Hint{Key: "x", Desc: "remove"}, tea.Key{Code: 'x', Text: "x"}})
 	}
 	return append(hs,
 		hint{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},

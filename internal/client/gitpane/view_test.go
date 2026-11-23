@@ -50,7 +50,17 @@ func goldenStates() map[string]func() *Model {
 			return m
 		},
 		"Worktrees": func() *Model { return worktreeModel(0, 0) },
-		"History":   func() *Model { return model(history(), 0, 0) },
+		"RemoveWorktree": func() *Model {
+			st := api.GitState{Folder: "/home/u/snow", Branch: "main", Worktrees: []api.GitWorktree{
+				{Path: "/home/u/snow", Branch: "main", Main: true},
+				{Path: "/home/u/snow/.worktrees/clean", Branch: "clean"},
+			}}
+			m := model(st, 0, 0)
+			m.Key(key("down"))
+			m.Key(key("x"))
+			return m
+		},
+		"History": func() *Model { return model(history(), 0, 0) },
 		"Committed": func() *Model {
 			st := changes()
 			st.Changes = st.Changes[3:]

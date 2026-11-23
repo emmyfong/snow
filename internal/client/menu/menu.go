@@ -50,6 +50,16 @@ func PaneItems(t *keys.Table) []Item {
 	return buildItems(t, rows)
 }
 
+// PaneItemsWithGit appends the worktree action when a Git pane has a
+// removable worktree selected.
+func PaneItemsWithGit(t *keys.Table, removeWorktree bool) []Item {
+	items := PaneItems(t)
+	if removeWorktree {
+		items = append(items, Item{Label: "Remove worktree", Shortcut: "x", Action: "git-remove-worktree"})
+	}
+	return items
+}
+
 // Result is what a key press or a click did to the menu.
 type Result int
 

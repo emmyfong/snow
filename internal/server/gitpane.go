@@ -29,11 +29,12 @@ type gitPane struct {
 	state api.GitState // owned by the model goroutine
 	// pending counts the jobs taken and not yet answered, so a state the
 	// worker read before a job never shows the pane as done with it.
-	pending int
-	agent   func(hash string) string
-	jobs    chan gitJob
-	cancel  context.CancelFunc
-	done    chan struct{}
+	pending       int
+	agent         func(hash string) string
+	worktreeInUse func(path string) bool
+	jobs          chan gitJob
+	cancel        context.CancelFunc
+	done          chan struct{}
 }
 
 // gitJob is one action for the worker.
@@ -45,11 +46,12 @@ type gitJob struct {
 func openGit(ctx sideContext) (sidePane, error) {
 	runCtx, cancel := context.WithCancel(context.Background())
 	p := &gitPane{
-		state:  api.GitState{Folder: ctx.Folder, Loading: true},
-		jobs:   make(chan gitJob, gitJobs),
-		cancel: cancel,
-		done:   make(chan struct{}),
-		agent:  ctx.Agent,
+		state:         api.GitState{Folder: ctx.Folder, Loading: true},
+		jobs:          make(chan gitJob, gitJobs),
+		cancel:        cancel,
+		done:          make(chan struct{}),
+		agent:         ctx.Agent,
+		worktreeInUse: ctx.WorktreeInUse,
 	}
 	w := &gitWorker{
 		repo:  git.Repo{Path: ctx.Folder, Distro: ctx.Distro},
@@ -94,6 +96,9 @@ func (p *gitPane) Act(action string, args map[string]string) error {
 	if err := checkGitAction(action, args); err != nil {
 		return err
 	}
+	if action == api.GitActRemoveWorktree && p.worktreeInUse != nil && p.worktreeInUse(args[api.ArgGitPath]) {
+		return fmt.Errorf("cannot remove worktree %s: a pane is using it", args[api.ArgGitPath])
+	}
 	select {
 	case p.jobs <- gitJob{action: action, args: args}:
 	default:
@@ -116,7 +121,7 @@ func checkGitAction(action string, args map[string]string) error {
 	switch action {
 	case api.GitActRefresh, api.GitActStageAll, api.GitActCloseDiff:
 		return nil
-	case api.GitActStage, api.GitActUnstage, api.GitActDiff:
+	case api.GitActStage, api.GitActUnstage, api.GitActDiff, api.GitActRemoveWorktree:
 		if args[api.ArgGitPath] == "" {
 			return fmt.Errorf("git %s: no file named", action)
 		}

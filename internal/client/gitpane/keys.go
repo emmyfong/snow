@@ -19,6 +19,9 @@ import (
 // box: Enter commits; Alt+Enter, Shift+Enter, and Ctrl+J add a line; Esc
 // closes the box and keeps the message.
 func (m *Model) Key(k tea.Key) api.Message {
+	if m.removePath != "" {
+		return m.removeKey(k)
+	}
 	if !m.loaded {
 		return nil
 	}
@@ -64,6 +67,19 @@ func (m *Model) listKey(k tea.Key) api.Message {
 		m.openCommit()
 	case k.Text == "r":
 		return m.action(api.GitActRefresh, nil)
+	case k.Text == "x":
+		if wt := m.selectedWorktree(); wt != nil {
+			m.removePath = wt.Path
+		}
+	}
+	return nil
+}
+
+func (m *Model) removeKey(k tea.Key) api.Message {
+	path := m.removePath
+	m.removePath = ""
+	if k.Text == "y" {
+		return m.action(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: path})
 	}
 	return nil
 }

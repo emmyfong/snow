@@ -138,3 +138,58 @@ func TestHistoryRows(t *testing.T) {
 		t.Errorf("a commit row offers a diff:\n%s", view)
 	}
 }
+
+// TestWorktreeRemoveKey asks before removing an unowned linked worktree.
+func TestWorktreeRemoveKey(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	m.Key(key("down")) // the unowned linked worktree
+	if !m.CanRemoveSelectedWorktree() {
+		t.Fatal("selected clean worktree is not removable")
+	}
+	if msg := m.Key(key("x")); msg != nil || !strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "Remove worktree clean?") {
+		t.Fatalf("x did not ask for confirmation; message=%#v\n%s", msg, strings.Join(m.View(), "\n"))
+	}
+	if msg := m.Key(key("y")); msg == nil {
+		t.Fatal("y did not send the remove action")
+	} else if a, ok := msg.(*api.SidePaneAction); !ok || a.Action != api.GitActRemoveWorktree || a.Args[api.ArgGitPath] != "/src/snow/.worktrees/clean" {
+		t.Fatalf("y sent %#v", msg)
+	}
+
+	m = model(st, 80, 24)
+	m.Key(key("down"))
+	m.Key(key("x"))
+	if msg := m.Key(key("n")); msg != nil || m.removePath != "" {
+		t.Fatalf("n did not cancel: msg=%#v removePath=%q", msg, m.removePath)
+	}
+
+	m = model(st, 80, 24)
+	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
+	m.Key(key("down"))
+	if msg := m.Key(key("x")); msg != nil || m.removePath != "" {
+		t.Fatalf("x on an owned worktree asked to remove it: msg=%#v removePath=%q", msg, m.removePath)
+	}
+}
+
+// TestWorktreeRemoveHint shows x only for an unowned linked worktree.
+func TestWorktreeRemoveHint(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
+		t.Fatal("main checkout shows x remove")
+	}
+	m.Key(key("down"))
+	if view := ansi.Strip(strings.Join(m.View(), "\n")); !strings.Contains(view, "x remove") {
+		t.Fatalf("unowned worktree lacks x remove:\n%s", view)
+	}
+	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
+	if view := ansi.Strip(strings.Join(m.View(), "\n")); strings.Contains(view, "x remove") {
+		t.Fatalf("owned worktree shows x remove:\n%s", view)
+	}
+}

@@ -59,6 +59,9 @@ type sideContext struct {
 	// Agent returns the agent Snow saw make commit hash, or "". It runs
 	// only on the model goroutine.
 	Agent func(hash string) string
+	// WorktreeInUse reports whether a live pane owns path. It runs on the
+	// model goroutine, where session state is safe to read.
+	WorktreeInUse func(path string) bool
 }
 
 // conversationSide is a side pane that follows one conversation, so a saved
@@ -155,7 +158,8 @@ func (s *Server) openSide(st *state, id int, kind, profile, folder, conversation
 	sp, err := sk.Open(sideContext{
 		Pane: id, Folder: folder, Profile: profile, Distro: distro, Agent: st.marks.agent,
 		Conversation: conversation, Conversations: conversations,
-		Changed: func() { s.post(func(st *state) { st.sideChanged(id) }) },
+		WorktreeInUse: st.worktreeInUse,
+		Changed:       func() { s.post(func(st *state) { st.sideChanged(id) }) },
 		Apply: func(f func()) {
 			s.send(func(st *state) {
 				f()

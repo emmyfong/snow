@@ -93,6 +93,7 @@ type Model struct {
 	committing bool
 	sentNotice string
 	note       string
+	removePath string // worktree waiting for removal confirmation
 }
 
 // New returns the git pane for pane, waiting for its first state.
@@ -141,6 +142,21 @@ func (m *Model) Note() string {
 
 // SetAgents gives the pane its session's agents, which own worktrees.
 func (m *Model) SetAgents(agents []api.AgentInfo) { m.agents = agents }
+
+// CanRemoveSelectedWorktree reports whether the selected row is a linked
+// worktree with no agent using it.
+func (m *Model) CanRemoveSelectedWorktree() bool {
+	return m.selectedWorktree() != nil
+}
+
+func (m *Model) selectedWorktree() *api.GitWorktree {
+	es := m.entries()
+	i := m.selected(es)
+	if i < 0 || es[i].wt == nil || es[i].wt.Main || len(owners(*es[i].wt, m.st.Worktrees, m.agents)) > 0 {
+		return nil
+	}
+	return es[i].wt
+}
 
 // entries are the rows the user can select: staged changes first, then
 // the others, each in git's order, then the worktrees when the repository

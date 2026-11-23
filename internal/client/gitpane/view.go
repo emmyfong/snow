@@ -105,15 +105,12 @@ func (m *Model) Click(x, y int) api.Message {
 // and the list only.
 func (m *Model) chrome() (status, box, hints bool) {
 	// A read that failed shows its error in the body instead.
-	status = (m.st.Error != "" && !m.readFailed()) || m.st.Notice != ""
+	status = m.removePath != "" || (m.st.Error != "" && !m.readFailed()) || m.st.Notice != ""
 	box = m.mode == modeCommit
 	if m.height < 4 {
 		return false, false, false
 	}
-	need := 3 // header, one list row, hints
-	if box && m.height >= need+boxRows {
-		need += boxRows
-	} else {
+	if box && m.height < 3+boxRows { // header, one list row, hints, and box
 		box = false
 	}
 	if status {
