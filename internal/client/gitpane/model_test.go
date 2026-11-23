@@ -95,6 +95,18 @@ func TestListKeys(t *testing.T) {
 func TestCommitBox(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
+	var escapeHint string
+	for _, h := range m.listHints() {
+		if h.Key == "esc" {
+			escapeHint = h.Desc
+		}
+	}
+	if !strings.Contains(escapeHint, "keep draft") || strings.Contains(escapeHint, "cancel") {
+		t.Errorf("Esc hint %q, want it to say the draft stays", escapeHint)
+	}
+	if got := m.boxOptions().Placeholder; got != "Enter commits. Esc closes and keeps the draft." {
+		t.Errorf("commit placeholder %q", got)
+	}
 	for _, s := range []string{"f", "i", "x"} {
 		if a := m.Key(key(s)); a != nil {
 			t.Fatalf("typing sent %+v", a)
@@ -141,6 +153,29 @@ func TestCommitFailedKeepsMessage(t *testing.T) {
 	m.Key(key("esc"))
 	if m.mode != modeList || string(m.msg) != "x" {
 		t.Errorf("Esc: mode %d, message %q; want the list and the message kept", m.mode, string(m.msg))
+	}
+}
+
+// TestCommitErrorWraps: a long error keeps its useful ending visible.
+func TestCommitErrorWraps(t *testing.T) {
+	st := changes()
+	st.Error = "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)
+	m := model(st, 40, 14)
+	view := strings.Join(m.View(), "\n")
+	if !strings.Contains(view, "unmerged files") {
+		t.Fatalf("error ending is missing from pane:\n%s", view)
+	}
+	rows := 0
+	for _, row := range m.View() {
+		if strings.Contains(ansi.Strip(row), "git commit:") || strings.Contains(ansi.Strip(row), "reason") || strings.Contains(ansi.Strip(row), "unmerged") || strings.Contains(ansi.Strip(row), "resolve") {
+			rows++
+		}
+		if ansi.StringWidth(row) > 40 {
+			t.Fatalf("row wider than pane: %q", row)
+		}
+	}
+	if rows > 3 {
+		t.Fatalf("error used %d rows, want at most 3", rows)
 	}
 }
 
@@ -289,5 +324,24 @@ func TestCursor(t *testing.T) {
 	x, y, ok := m.Cursor()
 	if !ok || y != 22 || x != 1+len(boxPrompt)+2 {
 		t.Errorf("cursor at %d,%d (%v), want %d,22", x, y, ok, 1+len(boxPrompt)+2)
+	}
+}
+
+// TestCommitErrorShortPaneMarksTruncation: a height-limited status row shows
+// that more error text remains.
+func TestCommitErrorShortPaneMarksTruncation(t *testing.T) {
+	st := changes()
+	st.Error = "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)
+	m := model(st, 40, 7)
+	m.Key(key("c"))
+	var status []string
+	for _, row := range m.View() {
+		line := ansi.Strip(row)
+		if strings.Contains(line, "git commit:") || strings.Contains(line, "reason") || strings.Contains(line, "unmerged") || strings.Contains(line, "later") {
+			status = append(status, line)
+		}
+	}
+	if len(status) != 1 || !strings.HasSuffix(strings.TrimRight(status[len(status)-1], " "), "…") {
+		t.Fatalf("short pane status rows = %q, want one row ending in ellipsis", status)
 	}
 }

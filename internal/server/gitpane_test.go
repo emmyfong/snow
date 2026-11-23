@@ -1,10 +1,12 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -13,6 +15,7 @@ import (
 	"github.com/emmyfong/snow/internal/git"
 	"github.com/emmyfong/snow/internal/gittest"
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/internal/worktree"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -93,6 +96,27 @@ func TestGitPaneStageCommit(t *testing.T) {
 	}
 	if who := gittest.Run(t, repo, "log", "-1", "--format=%an <%ae>|%B"); who != "Test <test@example.com>|add b" {
 		t.Errorf("commit %q, want the user's identity and the message alone", who)
+	}
+}
+
+func TestGitPaneRefusesConflictMarkers(t *testing.T) {
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	writeFile(t, repo, "a.txt", "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>> remote\n")
+	s := New(testOptions())
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	pane := openGitPane(t, c, repo)
+	waitGit(t, c, pane, func(st *api.GitState) bool {
+		return len(st.Changes) == 1 && st.Changes[0].Path == "a.txt" && !st.Loading
+	})
+
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActStage, Args: map[string]string{api.ArgGitPath: "a.txt"}})
+	st := waitGit(t, c, pane, func(st *api.GitState) bool {
+		return !st.Loading && strings.Contains(st.Error, "conflict markers remain")
+	})
+	if !strings.Contains(st.Error, "a.txt") {
+		t.Fatalf("error %q does not name the file", st.Error)
 	}
 }
 
@@ -197,6 +221,8 @@ func TestCheckGitAction(t *testing.T) {
 		{api.GitActRefresh, nil, true},
 		{api.GitActStageAll, nil, true},
 		{api.GitActStage, map[string]string{api.ArgGitPath: "a"}, true},
+		{api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: "/repo/.worktrees/a"}, true},
+		{api.GitActRemoveWorktree, nil, false},
 		{api.GitActStage, nil, false},
 		{api.GitActDiff, map[string]string{api.ArgGitPath: "a", api.ArgGitStaged: "true"}, true},
 		{api.GitActCommit, map[string]string{api.ArgGitMessage: "m"}, true},
@@ -467,5 +493,88 @@ func TestHistoryStaleEvidence(t *testing.T) {
 	st := waitGit(t, c, git, func(st *api.GitState) bool { return len(st.History) == 2 && !st.Loading })
 	if st.History[0].Agent != "" {
 		t.Errorf("%s is marked %q on stale evidence", st.History[0].Short, st.History[0].Agent)
+	}
+}
+
+// TestGitPaneRemoveWorktree removes a clean linked worktree and refuses a dirty one.
+func TestGitPaneRemoveWorktree(t *testing.T) {
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	clean, err := (worktree.Repo{Path: repo}).Create(context.Background(), "clean")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := New(testOptions())
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	pane := openGitPane(t, c, repo)
+	waitGit(t, c, pane, func(st *api.GitState) bool { return len(st.Worktrees) == 2 })
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActRemoveWorktree, Args: map[string]string{api.ArgGitPath: clean.Path}})
+	st := waitGit(t, c, pane, func(st *api.GitState) bool {
+		return !st.Loading && strings.HasPrefix(st.Notice, "Removed worktree clean")
+	})
+	if len(st.Worktrees) != 1 {
+		t.Fatalf("worktrees after remove: %+v", st.Worktrees)
+	}
+	if _, err := os.Stat(clean.Path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("removed worktree still exists (stat error %v)", err)
+	}
+
+	dirty, err := (worktree.Repo{Path: repo}).Create(context.Background(), "dirty")
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, dirty.Path, "untracked.txt", "keep me\n")
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActRefresh})
+	waitGit(t, c, pane, func(st *api.GitState) bool { return !st.Loading && len(st.Worktrees) == 2 })
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActRemoveWorktree, Args: map[string]string{api.ArgGitPath: dirty.Path}})
+	st = waitGit(t, c, pane, func(st *api.GitState) bool { return !st.Loading && strings.Contains(st.Error, "uncommitted changes") })
+	if len(st.Worktrees) != 2 {
+		t.Fatalf("dirty worktree disappeared: %+v", st.Worktrees)
+	}
+	if _, err := os.Stat(dirty.Path); err != nil {
+		t.Fatalf("dirty worktree was removed: %v", err)
+	}
+}
+
+// TestGitPaneRemoveWorktreeInUse refuses the action before it enters the worker queue.
+func TestGitPaneRemoveWorktreeInUse(t *testing.T) {
+	path := "/repo/.worktrees/agent"
+	used := false
+	p := &gitPane{
+		state: api.GitState{Worktrees: []api.GitWorktree{{Path: path, Branch: "agent"}}},
+		jobs:  make(chan gitJob, 1),
+		worktreeInUse: func(got string) bool {
+			used = true
+			return got == path
+		},
+	}
+	err := p.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: path})
+	if err == nil || !strings.Contains(err.Error(), "a pane is using it") {
+		t.Fatalf("Act error = %v, want active pane refusal", err)
+	}
+	if len(p.jobs) != 0 {
+		t.Fatal("remove job was queued for an active worktree")
+	}
+
+	used = false
+	alias := strings.ToUpper(path)
+	err = p.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: alias})
+	if err == nil || !strings.Contains(err.Error(), "current worktree list") || used {
+		t.Fatalf("Act accepted a path alias: error=%v, active check called=%v", err, used)
+	}
+	if len(p.jobs) != 0 {
+		t.Fatal("remove job was queued for a path alias")
+	}
+}
+
+func TestStateReportsWorktreeInUse(t *testing.T) {
+	st := &state{sessions: map[string]*session{"s": {windows: []*window{{panes: map[int]*pane{1: {worktree: `C:\src\agent`}}}}}}}
+	if !st.worktreeInUse("C:/src/agent") || st.worktreeInUse("C:/src/other") {
+		t.Fatal("worktree ownership lookup did not match the active pane")
+	}
+	caseAlias := st.worktreeInUse("c:/SRC/AGENT")
+	if (runtime.GOOS == "windows" || runtime.GOOS == "darwin") != caseAlias {
+		t.Fatalf("case alias match = %v on %s", caseAlias, runtime.GOOS)
 	}
 }

@@ -3,14 +3,16 @@ package server
 import (
 	"cmp"
 	"fmt"
-	"github.com/emmyfong/snow/internal/layout"
-	"github.com/emmyfong/snow/internal/store"
+	pathpkg "path"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/emmyfong/snow/internal/layout"
+	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -47,6 +49,29 @@ type state struct {
 	runtimeReady  map[string]bool // a runtime started since the last sign-in change
 	// runtimeModels holds the models each connection's Claude Code reported.
 	runtimeModels map[string][]api.ModelInfo
+}
+
+// worktreeInUse reports whether a live pane owns path.
+func (st *state) worktreeInUse(path string) bool {
+	for _, sess := range st.sessions {
+		for _, w := range sess.windows {
+			for _, p := range w.panes {
+				if p.worktree != "" && sameWorktreePath(p.worktree, path) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func sameWorktreePath(a, b string) bool {
+	a = pathpkg.Clean(strings.ReplaceAll(a, `\`, "/"))
+	b = pathpkg.Clean(strings.ReplaceAll(b, `\`, "/"))
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 type session struct {

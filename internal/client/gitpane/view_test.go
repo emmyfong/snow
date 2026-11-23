@@ -32,6 +32,9 @@ func goldenStates() map[string]func() *Model {
 		"GitError": func() *Model {
 			return model(api.GitState{Folder: "/home/u/snow", Error: "git status: fatal: unsafe repository"}, 0, 0)
 		},
+		"LongGitError": func() *Model {
+			return model(api.GitState{Folder: "/home/u/snow", Error: "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)}, 0, 0)
+		},
 		"Loading": func() *Model {
 			st := changes()
 			st.Loading = true
@@ -47,7 +50,17 @@ func goldenStates() map[string]func() *Model {
 			return m
 		},
 		"Worktrees": func() *Model { return worktreeModel(0, 0) },
-		"History":   func() *Model { return model(history(), 0, 0) },
+		"RemoveWorktree": func() *Model {
+			st := api.GitState{Folder: "/home/u/snow", Branch: "main", Worktrees: []api.GitWorktree{
+				{Path: "/home/u/snow", Branch: "main", Main: true},
+				{Path: "/home/u/snow/.worktrees/clean", Branch: "clean"},
+			}}
+			m := model(st, 0, 0)
+			m.Key(key("down"))
+			m.Key(key("x"))
+			return m
+		},
+		"History": func() *Model { return model(history(), 0, 0) },
 		"Committed": func() *Model {
 			st := changes()
 			st.Changes = st.Changes[3:]

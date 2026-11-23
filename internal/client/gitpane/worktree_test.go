@@ -122,11 +122,11 @@ func history() api.GitState {
 }
 
 // TestHistoryRows: a commit shows its agent only when Snow saw the agent
-// make it, and "unknown" otherwise; Enter on a commit does nothing.
+// make it; Enter on a commit does nothing.
 func TestHistoryRows(t *testing.T) {
 	m := model(history(), 80, 24)
 	view := ansi.Strip(strings.Join(m.View(), "\n"))
-	for _, want := range []string{"No changes.", "History (2)", "aaaaaaa  by window 2 agent/1  feat(git): add the git pane", "bbbbbbb  unknown  docs: fix a typo"} {
+	for _, want := range []string{"No changes.", "History (2)", "aaaaaaa  by window 2 agent/1  feat(git): add the git pane", "bbbbbbb  docs: fix a typo"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view lacks %q:\n%s", want, view)
 		}
@@ -136,5 +136,87 @@ func TestHistoryRows(t *testing.T) {
 	}
 	if strings.Contains(view, "enter diff") {
 		t.Errorf("a commit row offers a diff:\n%s", view)
+	}
+}
+
+// TestWorktreeRemoveKey asks before removing an unowned linked worktree.
+func TestWorktreeRemoveKey(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	m.Key(key("down")) // the unowned linked worktree
+	if !m.CanRemoveSelectedWorktree() {
+		t.Fatal("selected clean worktree is not removable")
+	}
+	if msg := m.Key(key("x")); msg != nil || !strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "Remove worktree clean?") {
+		t.Fatalf("x did not ask for confirmation; message=%#v\n%s", msg, strings.Join(m.View(), "\n"))
+	}
+	if msg := m.Key(key("y")); msg == nil {
+		t.Fatal("y did not send the remove action")
+	} else if a, ok := msg.(*api.SidePaneAction); !ok || a.Action != api.GitActRemoveWorktree || a.Args[api.ArgGitPath] != "/src/snow/.worktrees/clean" {
+		t.Fatalf("y sent %#v", msg)
+	}
+
+	m = model(st, 80, 24)
+	m.Key(key("down"))
+	m.Key(key("x"))
+	if msg := m.Key(key("n")); msg != nil || m.removePath != "" {
+		t.Fatalf("n did not cancel: msg=%#v removePath=%q", msg, m.removePath)
+	}
+
+	m = model(st, 80, 24)
+	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
+	m.Key(key("down"))
+	if msg := m.Key(key("x")); msg != nil || m.removePath != "" {
+		t.Fatalf("x on an owned worktree asked to remove it: msg=%#v removePath=%q", msg, m.removePath)
+	}
+}
+
+// TestWorktreeRemoveHint shows x only for an unowned linked worktree.
+func TestWorktreeRemoveHint(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
+		t.Fatal("change row shows x remove")
+	}
+	m.Key(key("down")) // main checkout
+	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
+		t.Fatal("main checkout shows x remove")
+	}
+	m.Key(key("down"))
+	if view := ansi.Strip(strings.Join(m.View(), "\n")); !strings.Contains(view, "x remove") {
+		t.Fatalf("unowned worktree lacks x remove:\n%s", view)
+	}
+	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
+	if view := ansi.Strip(strings.Join(m.View(), "\n")); strings.Contains(view, "x remove") {
+		t.Fatalf("owned worktree shows x remove:\n%s", view)
+	}
+}
+
+func TestCanRemoveSelectedWorktreeOnlyInListMode(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	m.Key(key("down"))
+	if !m.CanRemoveSelectedWorktree() {
+		t.Fatal("list mode does not allow removing an unowned linked worktree")
+	}
+	m.openCommit()
+	if m.CanRemoveSelectedWorktree() {
+		t.Fatal("commit mode allows the remove menu action")
+	}
+
+	st.Diff = &api.GitDiff{Path: "README.md"}
+	m = model(st, 80, 24)
+	m.selectIndex(m.entries(), 1)
+	if m.CanRemoveSelectedWorktree() {
+		t.Fatal("diff mode allows the remove menu action")
 	}
 }

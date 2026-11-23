@@ -12,7 +12,13 @@ import (
 // openMenu shows the pane menu at cell x, y in the window area. It does not open when
 // the screen is too small to show every item; the keys still work.
 func (m *Model) openMenu(x, y int) {
-	m.showMenu(menu.PaneItems(m.keys), x, y)
+	removeWorktree := false
+	if pane := m.focused(); pane != nil {
+		if git, ok := m.own[pane.ID].(gitPane); ok {
+			removeWorktree = git.CanRemoveSelectedWorktree()
+		}
+	}
+	m.showMenu(menu.PaneItemsWithGit(m.keys, removeWorktree), x, y)
 }
 
 func (m *Model) openWindowMenu() {
@@ -74,6 +80,9 @@ func (m *Model) runFromMenu(action string) tea.Cmd {
 	if strings.HasPrefix(action, "/") {
 		name, rest := command.Split(strings.TrimPrefix(action, "/"))
 		return commandRuns[name](m, rest)
+	}
+	if action == "git-remove-worktree" {
+		return m.ownKey(tea.Key{Code: 'x', Text: "x"})
 	}
 	if action == "connect" {
 		if p := m.focused(); p != nil {
