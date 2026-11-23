@@ -150,7 +150,7 @@ func TestMakeWorktreeStoresGitPathWhenWorktreeDirectoryIsSymlink(t *testing.T) {
 		}
 	})
 
-	want := filepath.Join(target, "agent-symlink")
+	want := filepath.Join(realPath(t, target), "agent-symlink")
 	if l.wt.Path != want {
 		t.Fatalf("stored worktree path = %q, want Git's canonical path %q", l.wt.Path, want)
 	}
@@ -162,7 +162,9 @@ func TestMakeWorktreeStoresGitPathWhenWorktreeDirectoryIsSymlink(t *testing.T) {
 	snap := store.Snapshot{Windows: []store.Window{{Panes: []store.Pane{{
 		Profile: "Claude Code", Worktree: filepath.Join(link, "agent-symlink"), Branch: "renamed/externally",
 	}}}}}
-	s.canonicalizeSavedWorktrees(&snap)
+	if err := s.canonicalizeSavedWorktrees(&snap); err != nil {
+		t.Fatal(err)
+	}
 	if got := snap.Windows[0].Panes[0].Worktree; got != l.wt.Path {
 		t.Fatalf("restored worktree path = %q, want Git's canonical path %q", got, l.wt.Path)
 	}
@@ -179,6 +181,16 @@ func TestMakeWorktreeStoresGitPathWhenWorktreeDirectoryIsSymlink(t *testing.T) {
 	}
 	if len(gitPane.jobs) != 0 {
 		t.Fatal("active symlinked worktree was queued for removal")
+	}
+}
+
+func TestCanonicalizeSavedWorktreesRefusesUnknownPath(t *testing.T) {
+	s := agentServer(t)
+	snap := store.Snapshot{Windows: []store.Window{{Panes: []store.Pane{{
+		Profile: "Claude Code", Worktree: filepath.Join(t.TempDir(), "missing"), Branch: "agent/1",
+	}}}}}
+	if err := s.canonicalizeSavedWorktrees(&snap); err == nil {
+		t.Fatal("canonicalizeSavedWorktrees accepted an unresolvable worktree")
 	}
 }
 

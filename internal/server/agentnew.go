@@ -141,10 +141,11 @@ func makeWorktree(repo worktree.Repo, branch string) (launched, error) {
 		return l, fmt.Errorf("make the agent's worktree: %w", err)
 	}
 	l.ok = true
-	l.wt.Path, err = repo.CanonicalPath(ctx, l.wt.Path)
+	path, err := repo.CanonicalPath(ctx, l.wt.Path)
 	if err != nil {
 		return l, fmt.Errorf("find the agent's worktree: %w", err)
 	}
+	l.wt.Path = path
 	if l.dir, err = repo.In(ctx, l.wt); err != nil {
 		// The worktree is there; only the subfolder is unknown.
 		l.dir = l.wt.Path

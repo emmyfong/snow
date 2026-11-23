@@ -18,9 +18,9 @@ import (
 
 // canonicalizeSavedWorktrees replaces saved aliases with the paths Git lists.
 // It runs before restore reaches the model goroutine, which must not wait for Git.
-func (s *Server) canonicalizeSavedWorktrees(snap *store.Snapshot) {
+func (s *Server) canonicalizeSavedWorktrees(snap *store.Snapshot) error {
 	if snap == nil {
-		return
+		return nil
 	}
 	for wi := range snap.Windows {
 		for pi := range snap.Windows[wi].Panes {
@@ -35,11 +35,12 @@ func (s *Server) canonicalizeSavedWorktrees(snap *store.Snapshot) {
 			cancel()
 			if err != nil {
 				s.log.Warn("list saved agent worktree", "worktree", pane.Worktree, "err", err)
-				continue
+				return fmt.Errorf("restore agent worktree %s: %w", pane.Worktree, err)
 			}
 			pane.Worktree = path
 		}
 	}
+	return nil
 }
 
 // loadSaved reads the snapshot of session when it is saved and not
