@@ -1,9 +1,11 @@
 package server
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -13,6 +15,7 @@ import (
 	"github.com/emmyfong/snow/internal/gittest"
 	"github.com/emmyfong/snow/internal/store"
 	"github.com/emmyfong/snow/internal/term"
+	"github.com/emmyfong/snow/internal/worktree"
 	"github.com/emmyfong/snow/pkg/api"
 )
 
@@ -117,6 +120,65 @@ func TestAgentWorktreeLaunch(t *testing.T) {
 	}
 	if board[0].Branch != "agent/1" || board[1].Worktree != b.Worktree {
 		t.Fatalf("board %+v, want each agent's branch and worktree", board)
+	}
+}
+
+func TestMakeWorktreeStoresGitPathWhenWorktreeDirectoryIsSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("creating directory symlinks needs Windows-specific privileges")
+	}
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	target := t.TempDir()
+	link := filepath.Join(repo, ".worktrees")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+
+	l, err := makeWorktree(worktree.Repo{Path: repo}, "agent/symlink")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !l.ok {
+		t.Fatal("makeWorktree returned no worktree")
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), gitWait)
+		defer cancel()
+		if err := l.repo.Discard(ctx, l.wt); err != nil {
+			t.Errorf("discard worktree: %v", err)
+		}
+	})
+
+	want := filepath.Join(target, "agent-symlink")
+	if l.wt.Path != want {
+		t.Fatalf("stored worktree path = %q, want Git's canonical path %q", l.wt.Path, want)
+	}
+	if got := filepath.Join(link, "agent-symlink"); sameWorktreePath(got, l.wt.Path) {
+		t.Fatalf("test paths unexpectedly have the same spelling: %q and %q", got, l.wt.Path)
+	}
+
+	s := agentServer(t)
+	snap := store.Snapshot{Windows: []store.Window{{Panes: []store.Pane{{
+		Profile: "Claude Code", Worktree: filepath.Join(link, "agent-symlink"), Branch: "renamed/externally",
+	}}}}}
+	s.canonicalizeSavedWorktrees(&snap)
+	if got := snap.Windows[0].Panes[0].Worktree; got != l.wt.Path {
+		t.Fatalf("restored worktree path = %q, want Git's canonical path %q", got, l.wt.Path)
+	}
+	st := &state{sessions: map[string]*session{"work": {windows: []*window{{panes: map[int]*pane{
+		1: {worktree: l.wt.Path, branch: l.wt.Branch},
+	}}}}}}
+	gitPane := &gitPane{
+		state: api.GitState{Worktrees: []api.GitWorktree{{Path: l.wt.Path, Branch: l.wt.Branch}}},
+		jobs:  make(chan gitJob, 1), worktreeInUse: st.worktreeInUse,
+	}
+	err = gitPane.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: l.wt.Path})
+	if err == nil || !strings.Contains(err.Error(), "a pane is using it") {
+		t.Fatalf("removal of active canonical path error = %v", err)
+	}
+	if len(gitPane.jobs) != 0 {
+		t.Fatal("active symlinked worktree was queued for removal")
 	}
 }
 

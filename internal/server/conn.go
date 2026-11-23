@@ -109,6 +109,7 @@ func (s *Server) read(c *client) {
 				s.reply(c, &api.Error{Code: api.CodeAttachFailed, Message: err.Error()})
 				continue
 			}
+			s.canonicalizeSavedWorktrees(snap)
 			chats, roles := s.resumeChats(snap), s.restoreRoles(snap)
 			pre := s.prestartSession(m, snap)
 			s.withPrestarted(pre, func(st *state) { st.attach(c, m, snap, chats, roles) })
