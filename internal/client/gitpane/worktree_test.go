@@ -122,11 +122,11 @@ func history() api.GitState {
 }
 
 // TestHistoryRows: a commit shows its agent only when Snow saw the agent
-// make it, and "unknown" otherwise; Enter on a commit does nothing.
+// make it; Enter on a commit does nothing.
 func TestHistoryRows(t *testing.T) {
 	m := model(history(), 80, 24)
 	view := ansi.Strip(strings.Join(m.View(), "\n"))
-	for _, want := range []string{"No changes.", "History (2)", "aaaaaaa  by window 2 agent/1  feat(git): add the git pane", "bbbbbbb  unknown  docs: fix a typo"} {
+	for _, want := range []string{"No changes.", "History (2)", "aaaaaaa  by window 2 agent/1  feat(git): add the git pane", "bbbbbbb  docs: fix a typo"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view lacks %q:\n%s", want, view)
 		}

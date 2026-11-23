@@ -140,14 +140,15 @@ func (m *Model) listBody(h int) []row {
 var sectionNames = map[int]string{secStaged: "Staged", secChanges: "Changes", secWorktrees: "Worktrees", secHistory: "History"}
 
 // commitCols are a history row's cells: its short hash, the agent Snow
-// saw make it or "unknown", and its subject. The mark comes before the
-// subject so a narrow pane cuts the subject, not the mark.
+// saw make it when known, and its subject. The mark comes before the subject
+// so a narrow pane cuts the subject, not the mark.
 func commitCols(cm api.GitCommit) []string {
-	agent := "unknown"
+	parts := []string{ui.PlainLine(cm.Short)}
 	if cm.Agent != "" {
-		agent = "by " + ui.PlainLine(cm.Agent)
+		parts = append(parts, "by "+ui.PlainLine(cm.Agent))
 	}
-	return []string{"", strings.Join([]string{ui.PlainLine(cm.Short), agent, ui.PlainLine(cm.Subject)}, "  ")}
+	parts = append(parts, ui.PlainLine(cm.Subject))
+	return []string{"", strings.Join(parts, "  ")}
 }
 
 // worktreeCols are a worktree row's cells: "*" for the checkout the pane
