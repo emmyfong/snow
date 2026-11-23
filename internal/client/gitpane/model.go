@@ -146,7 +146,7 @@ func (m *Model) SetAgents(agents []api.AgentInfo) { m.agents = agents }
 // CanRemoveSelectedWorktree reports whether the selected row is a linked
 // worktree with no agent using it.
 func (m *Model) CanRemoveSelectedWorktree() bool {
-	return m.selectedWorktree() != nil
+	return m.mode == modeList && m.removePath == "" && m.selectedWorktree() != nil
 }
 
 func (m *Model) selectedWorktree() *api.GitWorktree {

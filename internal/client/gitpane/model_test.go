@@ -326,3 +326,22 @@ func TestCursor(t *testing.T) {
 		t.Errorf("cursor at %d,%d (%v), want %d,22", x, y, ok, 1+len(boxPrompt)+2)
 	}
 }
+
+// TestCommitErrorShortPaneMarksTruncation: a height-limited status row shows
+// that more error text remains.
+func TestCommitErrorShortPaneMarksTruncation(t *testing.T) {
+	st := changes()
+	st.Error = "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)
+	m := model(st, 40, 7)
+	m.Key(key("c"))
+	var status []string
+	for _, row := range m.View() {
+		line := ansi.Strip(row)
+		if strings.Contains(line, "git commit:") || strings.Contains(line, "reason") || strings.Contains(line, "unmerged") || strings.Contains(line, "later") {
+			status = append(status, line)
+		}
+	}
+	if len(status) != 1 || !strings.HasSuffix(strings.TrimRight(status[len(status)-1], " "), "…") {
+		t.Fatalf("short pane status rows = %q, want one row ending in ellipsis", status)
+	}
+}

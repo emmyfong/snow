@@ -107,7 +107,12 @@ func (r Repo) ConflictMarkers(ctx context.Context, cached bool, paths ...string)
 
 	// git diff --cached --check omits unmerged index entries. Inspect only
 	// those files in the work tree so a user still gets the marker warning.
-	unmerged, err := r.unmergedPaths(ctx)
+	root, err := r.Run(ctx, r.Path, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return nil, r.Classify(err)
+	}
+	root = strings.TrimSpace(root)
+	unmerged, err := r.unmergedPaths(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -115,15 +120,11 @@ func (r Repo) ConflictMarkers(ctx context.Context, cached bool, paths ...string)
 	if len(unmerged) == 0 {
 		return nil, nil
 	}
-	root, err := r.Run(ctx, r.Path, "rev-parse", "--show-toplevel")
-	if err != nil {
-		return nil, r.Classify(err)
-	}
-	return r.workingConflictMarkers(ctx, strings.TrimSpace(root), unmerged, true)
+	return r.workingConflictMarkers(ctx, root, unmerged, true)
 }
 
 func (r Repo) workingConflictMarkers(ctx context.Context, dir string, paths []string, noIndex bool) ([]string, error) {
-	args := []string{"grep"}
+	args := []string{"grep", "--basic-regexp"}
 	if noIndex {
 		args = append(args, "--no-index")
 	} else {
@@ -167,8 +168,8 @@ func (r Repo) workingConflictMarkers(ctx context.Context, dir string, paths []st
 	return files, nil
 }
 
-func (r Repo) unmergedPaths(ctx context.Context) ([]string, error) {
-	out, err := r.Run(ctx, r.Path, "ls-files", "--unmerged", "-z")
+func (r Repo) unmergedPaths(ctx context.Context, root string) ([]string, error) {
+	out, err := r.Run(ctx, root, "ls-files", "--unmerged", "-z")
 	if err != nil {
 		return nil, r.Classify(err)
 	}

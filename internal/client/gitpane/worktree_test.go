@@ -176,11 +176,15 @@ func TestWorktreeRemoveKey(t *testing.T) {
 
 // TestWorktreeRemoveHint shows x only for an unowned linked worktree.
 func TestWorktreeRemoveHint(t *testing.T) {
-	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{
 		{Path: "/src/snow", Branch: "main", Main: true},
 		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
 	}}
 	m := model(st, 80, 24)
+	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
+		t.Fatal("change row shows x remove")
+	}
+	m.Key(key("down")) // main checkout
 	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
 		t.Fatal("main checkout shows x remove")
 	}
@@ -191,5 +195,28 @@ func TestWorktreeRemoveHint(t *testing.T) {
 	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
 	if view := ansi.Strip(strings.Join(m.View(), "\n")); strings.Contains(view, "x remove") {
 		t.Fatalf("owned worktree shows x remove:\n%s", view)
+	}
+}
+
+func TestCanRemoveSelectedWorktreeOnlyInListMode(t *testing.T) {
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Worktrees: []api.GitWorktree{
+		{Path: "/src/snow", Branch: "main", Main: true},
+		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
+	}}
+	m := model(st, 80, 24)
+	m.Key(key("down"))
+	if !m.CanRemoveSelectedWorktree() {
+		t.Fatal("list mode does not allow removing an unowned linked worktree")
+	}
+	m.openCommit()
+	if m.CanRemoveSelectedWorktree() {
+		t.Fatal("commit mode allows the remove menu action")
+	}
+
+	st.Diff = &api.GitDiff{Path: "README.md"}
+	m = model(st, 80, 24)
+	m.selectIndex(m.entries(), 1)
+	if m.CanRemoveSelectedWorktree() {
+		t.Fatal("diff mode allows the remove menu action")
 	}
 }

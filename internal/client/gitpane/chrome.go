@@ -58,22 +58,50 @@ func (m *Model) header() string {
 	return left
 }
 
-// statusRows are the last action's failure, in the error colors, or its
-// outcome. Errors wrap to three rows; notices stay on one row.
-func (m *Model) statusRows() []string {
+// statusLines are the unstyled rows of the last outcome and whether they
+// omit text. Errors wrap to three rows; notices stay on one row.
+func (m *Model) statusLines() ([]string, bool) {
 	if m.removePath != "" {
-		text := " Remove worktree " + ui.FolderName(m.removePath) + "? y removes it, n keeps it."
-		return []string{lipgloss.NewStyle().Foreground(m.th.PromptFG).Background(m.th.PromptBG).Render(ansi.Truncate(text, m.width, "…"))}
+		return []string{" Remove worktree " + ui.FolderName(m.removePath) + "? y removes it, n keeps it."}, false
 	}
 	if m.st.Error == "" {
-		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(" " + ui.PlainLine(m.st.Notice))}
+		return []string{" " + ui.PlainLine(m.st.Notice)}, false
 	}
 	const maxErrorRows = 3
-	text := " " + ui.PlainLine(m.st.Error)
-	lines := strings.Split(ansi.Wrap(text, max(m.width, 1), ""), "\n")
-	if len(lines) > maxErrorRows {
+	lines := strings.Split(ansi.Wrap(" "+ui.PlainLine(m.st.Error), max(m.width, 1), ""), "\n")
+	omitted := len(lines) > maxErrorRows
+	if omitted {
 		lines = lines[:maxErrorRows]
-		lines[maxErrorRows-1] = ansi.Truncate(lines[maxErrorRows-1], max(m.width-1, 1), "") + "…"
+	}
+	return lines, omitted
+}
+
+// statusRows render at most limit visible rows and mark an error when text
+// remains beyond the last row that fits.
+func (m *Model) statusRows(limit int) []string {
+	lines, omitted := m.statusLines()
+	if limit < len(lines) {
+		lines = lines[:max(limit, 0)]
+		omitted = true
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	if m.removePath != "" {
+		text := ansi.Truncate(lines[0], m.width, "…")
+		return []string{lipgloss.NewStyle().Foreground(m.th.PromptFG).Background(m.th.PromptBG).Render(text)}
+	}
+	if m.st.Error == "" {
+		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(ansi.Truncate(lines[0], m.width, ""))}
+	}
+	if omitted && m.width > 0 {
+		last := lines[len(lines)-1]
+		if m.width == 1 {
+			last = "…"
+		} else {
+			last = ansi.Truncate(last, m.width-1, "") + "…"
+		}
+		lines[len(lines)-1] = last
 	}
 	style := lipgloss.NewStyle().Foreground(m.th.ErrorFG).Background(m.th.Error)
 	out := make([]string, len(lines))

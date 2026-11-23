@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"fmt"
 	pathpkg "path"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -55,13 +56,22 @@ func (st *state) worktreeInUse(path string) bool {
 	for _, sess := range st.sessions {
 		for _, w := range sess.windows {
 			for _, p := range w.panes {
-				if p.worktree != "" && pathpkg.Clean(strings.ReplaceAll(p.worktree, `\`, "/")) == pathpkg.Clean(strings.ReplaceAll(path, `\`, "/")) {
+				if p.worktree != "" && sameWorktreePath(p.worktree, path) {
 					return true
 				}
 			}
 		}
 	}
 	return false
+}
+
+func sameWorktreePath(a, b string) bool {
+	a = pathpkg.Clean(strings.ReplaceAll(a, `\`, "/"))
+	b = pathpkg.Clean(strings.ReplaceAll(b, `\`, "/"))
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		return strings.EqualFold(a, b)
+	}
+	return a == b
 }
 
 type session struct {

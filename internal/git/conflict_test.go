@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -95,4 +96,47 @@ func conflictedRepo(t *testing.T) string {
 		t.Fatal("merge succeeded, want a content conflict")
 	}
 	return dir
+}
+
+func TestGitStageRefusesConflictMarkersWithFixedPatternConfig(t *testing.T) {
+	dir := repo(t)
+	write(t, dir, "a.txt", "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>> remote\n")
+	before := gittest.Run(t, dir, "ls-files", "--stage", "--", "a.txt")
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "grep.patternType")
+	t.Setenv("GIT_CONFIG_VALUE_0", "fixed")
+
+	err := (Repo{Path: dir}).Stage(context.Background(), "a.txt")
+	if !errors.Is(err, ErrConflictMarkers) || !strings.Contains(err.Error(), "a.txt") {
+		t.Fatalf("Stage error = %v, want conflict-marker refusal naming a.txt", err)
+	}
+	if got := gittest.Run(t, dir, "ls-files", "--stage", "--", "a.txt"); got != before {
+		t.Fatalf("Stage changed the index with grep.patternType=fixed: before=%q after=%q", before, got)
+	}
+}
+
+func TestGitCommitRefusesUnmergedMarkersFromSubfolder(t *testing.T) {
+	root := repo(t)
+	write(t, root, "sub/a.txt", "base\n")
+	write(t, root, "outside.txt", "base\n")
+	gittest.Run(t, root, "add", "sub/a.txt", "outside.txt")
+	gittest.Run(t, root, "commit", "-q", "-m", "add subfolder files")
+	gittest.Run(t, root, "checkout", "-q", "-b", "other")
+	write(t, root, "sub/a.txt", "other sub\n")
+	write(t, root, "outside.txt", "other outside\n")
+	gittest.Run(t, root, "commit", "-qam", "other edits")
+	gittest.Run(t, root, "checkout", "-q", "main")
+	write(t, root, "sub/a.txt", "main sub\n")
+	write(t, root, "outside.txt", "main outside\n")
+	gittest.Run(t, root, "commit", "-qam", "main edits")
+	if _, err := (Repo{Path: root}).Run(context.Background(), root, "merge", "other"); err == nil {
+		t.Fatal("merge succeeded, want conflicts")
+	}
+
+	sub := filepath.Join(root, "sub")
+	r := Repo{Path: sub}
+	_, err := r.Commit(context.Background(), "finish merge")
+	if !errors.Is(err, ErrConflictMarkers) || !strings.Contains(err.Error(), "sub/a.txt") || !strings.Contains(err.Error(), "outside.txt") {
+		t.Fatalf("Commit error = %v, want conflict-marker refusal naming both files", err)
+	}
 }

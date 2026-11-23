@@ -23,8 +23,8 @@ func (m *Model) listLayout(l *layout) {
 		l.add("", hitNone, 0)
 	}
 	if status {
-		rows := m.statusRows()
-		for _, row := range rows[:m.statusHeight(box, hints)] {
+		rows := m.statusRows(m.statusHeight(box, hints))
+		for _, row := range rows {
 			l.add(row, hitNone, 0)
 		}
 	}

@@ -145,7 +145,8 @@ func (m *Model) statusHeight(box, hints bool) int {
 	if hints {
 		available--
 	}
-	return min(len(m.statusRows()), max(available, 0))
+	lines, _ := m.statusLines()
+	return min(len(lines), max(available, 0))
 }
 
 // diffHeight is the rows the diff gets: all but the header and the hints.

@@ -96,8 +96,14 @@ func (p *gitPane) Act(action string, args map[string]string) error {
 	if err := checkGitAction(action, args); err != nil {
 		return err
 	}
-	if action == api.GitActRemoveWorktree && p.worktreeInUse != nil && p.worktreeInUse(args[api.ArgGitPath]) {
-		return fmt.Errorf("cannot remove worktree %s: a pane is using it", args[api.ArgGitPath])
+	if action == api.GitActRemoveWorktree {
+		path := args[api.ArgGitPath]
+		if !p.hasWorktree(path) {
+			return fmt.Errorf("cannot remove worktree %s: it is not in the current worktree list", path)
+		}
+		if p.worktreeInUse != nil && p.worktreeInUse(path) {
+			return fmt.Errorf("cannot remove worktree %s: a pane is using it", path)
+		}
 	}
 	select {
 	case p.jobs <- gitJob{action: action, args: args}:
@@ -114,6 +120,17 @@ func (p *gitPane) Close() error {
 	p.cancel()
 	<-p.done
 	return nil
+}
+
+// hasWorktree requires the exact path returned by the latest git read. This
+// keeps aliases from bypassing the active-pane check before Repo.Remove.
+func (p *gitPane) hasWorktree(path string) bool {
+	for _, wt := range p.state.Worktrees {
+		if wt.Path == path && !wt.Main {
+			return true
+		}
+	}
+	return false
 }
 
 // checkGitAction checks action and its arguments before git runs.

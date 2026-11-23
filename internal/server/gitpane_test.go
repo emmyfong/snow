@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -538,13 +539,32 @@ func TestGitPaneRemoveWorktree(t *testing.T) {
 
 // TestGitPaneRemoveWorktreeInUse refuses the action before it enters the worker queue.
 func TestGitPaneRemoveWorktreeInUse(t *testing.T) {
-	p := &gitPane{jobs: make(chan gitJob, 1), worktreeInUse: func(string) bool { return true }}
-	err := p.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: "/repo/.worktrees/agent"})
+	path := "/repo/.worktrees/agent"
+	used := false
+	p := &gitPane{
+		state: api.GitState{Worktrees: []api.GitWorktree{{Path: path, Branch: "agent"}}},
+		jobs:  make(chan gitJob, 1),
+		worktreeInUse: func(got string) bool {
+			used = true
+			return got == path
+		},
+	}
+	err := p.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: path})
 	if err == nil || !strings.Contains(err.Error(), "a pane is using it") {
 		t.Fatalf("Act error = %v, want active pane refusal", err)
 	}
 	if len(p.jobs) != 0 {
 		t.Fatal("remove job was queued for an active worktree")
+	}
+
+	used = false
+	alias := strings.ToUpper(path)
+	err = p.Act(api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: alias})
+	if err == nil || !strings.Contains(err.Error(), "current worktree list") || used {
+		t.Fatalf("Act accepted a path alias: error=%v, active check called=%v", err, used)
+	}
+	if len(p.jobs) != 0 {
+		t.Fatal("remove job was queued for a path alias")
 	}
 }
 
@@ -552,5 +572,9 @@ func TestStateReportsWorktreeInUse(t *testing.T) {
 	st := &state{sessions: map[string]*session{"s": {windows: []*window{{panes: map[int]*pane{1: {worktree: `C:\src\agent`}}}}}}}
 	if !st.worktreeInUse("C:/src/agent") || st.worktreeInUse("C:/src/other") {
 		t.Fatal("worktree ownership lookup did not match the active pane")
+	}
+	caseAlias := st.worktreeInUse("c:/SRC/AGENT")
+	if (runtime.GOOS == "windows" || runtime.GOOS == "darwin") != caseAlias {
+		t.Fatalf("case alias match = %v on %s", caseAlias, runtime.GOOS)
 	}
 }

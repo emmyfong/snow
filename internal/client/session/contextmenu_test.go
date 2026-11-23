@@ -243,6 +243,22 @@ func TestGitMenuRemoveWorktree(t *testing.T) {
 	m.Update(gitState(t, 2, st))
 	m.Update(press(tea.KeyDown, 0, "")) // main checkout
 	m.Update(press(tea.KeyDown, 0, "")) // clean linked worktree
+	m.Update(press('c', 0, "c"))
+	m.openMenu(50, 3)
+	if strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
+		t.Fatalf("commit-mode menu offers removal:\n%s", content(m))
+	}
+	m.menu = nil
+	m.Update(press(tea.KeyEscape, 0, ""))
+	diffState := st
+	diffState.Diff = &api.GitDiff{Path: "README.md"}
+	m.Update(gitState(t, 3, diffState))
+	m.openMenu(50, 3)
+	if strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
+		t.Fatalf("diff-mode menu offers removal:\n%s", content(m))
+	}
+	m.menu = nil
+	m.Update(gitState(t, 4, st))
 	m.openMenu(50, 3)
 	if !strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
 		t.Fatalf("menu lacks Remove worktree:\n%s", content(m))
