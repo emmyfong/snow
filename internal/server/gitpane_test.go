@@ -96,6 +96,27 @@ func TestGitPaneStageCommit(t *testing.T) {
 	}
 }
 
+func TestGitPaneRefusesConflictMarkers(t *testing.T) {
+	repo := t.TempDir()
+	gittest.Repo(t, repo)
+	writeFile(t, repo, "a.txt", "<<<<<<< HEAD\nlocal\n=======\nremote\n>>>>>>> remote\n")
+	s := New(testOptions())
+	t.Cleanup(s.Close)
+	c := connect(t, s, 120, 30)
+	pane := openGitPane(t, c, repo)
+	waitGit(t, c, pane, func(st *api.GitState) bool {
+		return len(st.Changes) == 1 && st.Changes[0].Path == "a.txt" && !st.Loading
+	})
+
+	c.Send(&api.SidePaneAction{Pane: pane, Action: api.GitActStage, Args: map[string]string{api.ArgGitPath: "a.txt"}})
+	st := waitGit(t, c, pane, func(st *api.GitState) bool {
+		return !st.Loading && strings.Contains(st.Error, "conflict markers remain")
+	})
+	if !strings.Contains(st.Error, "a.txt") {
+		t.Fatalf("error %q does not name the file", st.Error)
+	}
+}
+
 // TestGitPaneDiffFollowsStage: staging the file whose diff is open shows
 // its staged diff, not an empty one, and stage all stages every change.
 func TestGitPaneDiffFollowsStage(t *testing.T) {
