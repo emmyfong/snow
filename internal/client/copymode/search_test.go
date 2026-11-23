@@ -191,3 +191,21 @@ func TestSearchHighlightsVisibleMatches(t *testing.T) {
 		t.Fatal("highlighted text is missing")
 	}
 }
+
+// TestSearchCtrlCIgnored: Ctrl+C in the search prompt does nothing. The
+// prompt stays open with its text, and no request leaves.
+func TestSearchCtrlCIgnored(t *testing.T) {
+	m, srv := open(t, 100)
+	key(m, press('?', 0, "?"))
+	typeText(m, "needle")
+	srv.requests, srv.searches = nil, nil
+	if got := key(m, press('c', tea.ModCtrl, "")); got != Open {
+		t.Fatalf("Ctrl+C returned %v, want Open", got)
+	}
+	if want := "Search up: needle"; m.Prompt() != want {
+		t.Fatalf("prompt %q, want %q", m.Prompt(), want)
+	}
+	if len(srv.requests) != 0 || len(srv.searches) != 0 {
+		t.Fatalf("Ctrl+C sent requests %v and searches %v, want none", srv.requests, srv.searches)
+	}
+}

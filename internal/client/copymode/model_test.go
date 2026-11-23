@@ -151,6 +151,41 @@ func TestExit(t *testing.T) {
 	}
 }
 
+// TestCopyModeCtrlCExits: Ctrl+C leaves copy mode, with the history shown and
+// while it loads.
+func TestCopyModeCtrlCExits(t *testing.T) {
+	m, _ := open(t, 100)
+	if key(m, press('c', tea.ModCtrl, "")) != Exited {
+		t.Error("Ctrl+C did not leave copy mode")
+	}
+	m = New(Options{Pane: 1, Cols: 80, Rows: 24, Send: func(api.Message) {}})
+	if key(m, press('c', tea.ModCtrl, "")) != Exited {
+		t.Error("Ctrl+C did not leave copy mode while loading")
+	}
+}
+
+// TestInterruptsAcceptsLockBits: a lock key adds its bit on Windows console
+// input, and Ctrl+C still interrupts. Shift and Alt still keep the key.
+func TestInterruptsAcceptsLockBits(t *testing.T) {
+	locks := tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock
+	for _, tc := range []struct {
+		name string
+		key  tea.Key
+		want bool
+	}{
+		{"ctrl+c", tea.Key{Code: 'c', Mod: tea.ModCtrl}, true},
+		{"ctrl+c with lock bits", tea.Key{Code: 'c', Mod: tea.ModCtrl | locks}, true},
+		{"ctrl+shift+c", tea.Key{Code: 'c', Mod: tea.ModCtrl | tea.ModShift}, false},
+		{"ctrl+alt+c", tea.Key{Code: 'c', Mod: tea.ModCtrl | tea.ModAlt}, false},
+		{"c", tea.Key{Code: 'c'}, false},
+		{"ctrl+x", tea.Key{Code: 'x', Mod: tea.ModCtrl}, false},
+	} {
+		if got := Interrupts(tc.key); got != tc.want {
+			t.Errorf("%s: Interrupts = %v, want %v", tc.name, got, tc.want)
+		}
+	}
+}
+
 func TestLoadingShowsTheScreen(t *testing.T) {
 	m := New(Options{Pane: 1, Cols: 20, Rows: 2, Screen: []string{"one", "two"}, Send: func(api.Message) {}})
 	if got := rows(m); got[0] != "one            [...]" || got[1] != "two" {
