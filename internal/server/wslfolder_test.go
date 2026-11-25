@@ -76,8 +76,9 @@ func TestFolderForOtherDistroStartsHome(t *testing.T) {
 	p := shell.Profile{Name: "snowtest", Kind: shell.KindWSL, Path: "wsl.exe", Args: []string{"-d", "snowtest"}, Distro: "snowtest"}
 	folder := folderFor(p, `\\wsl.localhost\other\home\u\api`)
 	launch := p.Launch(shell.Hooks{}, folder)
-	if slices.Contains(launch.Args, "--cd") {
-		t.Fatalf("other-distro UNC passed to --cd: %q", launch.Args)
+	i := slices.Index(launch.Args, "--cd")
+	if i < 0 || i+1 >= len(launch.Args) || launch.Args[i+1] != "~" {
+		t.Fatalf("other-distro UNC should explicitly select the distro home with --cd ~: %q", launch.Args)
 	}
 }
 
@@ -121,7 +122,7 @@ func TestWSLFolderShapes(t *testing.T) {
 	}{
 		{"WSL Linux folder", wsl, "/home/u/api", "/home/u/api"},
 		{"WSL UNC folder in same distribution", wsl, `\\wsl.localhost\snowtest\home\u\api`, "/home/u/api"},
-		{"WSL UNC folder in another distribution", wsl, `\\wsl.localhost\other\home\u\api`, ""},
+		{"WSL UNC folder in another distribution", wsl, `\\wsl.localhost\other\home\u\api`, "~"},
 		{"WSL missing drive folder", wsl, `C:\snow-test-missing-9f3a`, home},
 		{"WSL empty folder", wsl, "", home},
 		{"Windows UNC folder", windows, `\\wsl.localhost\snowtest\home\u\api`, home},

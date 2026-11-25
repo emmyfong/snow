@@ -324,7 +324,7 @@ func folderFor(p shell.Profile, dir string) string {
 			return linux
 		}
 		if _, _, ok := shell.UNCToWSL(dir); ok {
-			return "" // A different distribution starts in its home folder.
+			return "~" // WSL inherits the Windows working directory unless home is explicit.
 		}
 	}
 	return usableDir(dir)
