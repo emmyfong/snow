@@ -44,8 +44,8 @@ func TestSidePaneTerminalHasNoSecrets(t *testing.T) {
 
 func TestSidePaneLabelIsKind(t *testing.T) {
 	_, _, gitPane, _ := sidePaneFromAgent(t)
-	if gitPane.Profile != "" || gitPane.Kind != api.PaneGit {
-		t.Fatalf("side pane %+v, want empty profile and kind %q", gitPane, api.PaneGit)
+	if gitPane.Profile != sidePaneAgentProfile || gitPane.Kind != api.PaneGit {
+		t.Fatalf("side pane %+v, want the source profile %q and kind %q", gitPane, sidePaneAgentProfile, api.PaneGit)
 	}
 }
 

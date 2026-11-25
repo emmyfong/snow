@@ -37,6 +37,24 @@ func TestOpenNewWindowDialog(t *testing.T) {
 	}
 }
 
+func TestOpenNewWindowUsesSidePaneProfileForReadiness(t *testing.T) {
+	r := &recorder{}
+	m := New(r.send)
+	m.SetSize(80, 24)
+	profile := "Claude Code (Ubuntu)"
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{{
+		ID: 1, Kind: api.PaneGit, Profile: profile, Folder: "/home/user/repo", Focused: true,
+	}}}}})
+	m.openNewWindow()
+	if len(r.sent) == 0 {
+		t.Fatal("opening new-window dialog sent no runtime request")
+	}
+	req, ok := r.sent[0].(*api.RuntimeRequest)
+	if !ok || req.Action != api.RuntimeList || req.Profile != profile || req.Folder != "/home/user/repo" {
+		t.Fatalf("runtime readiness request %+v, want %q in /home/user/repo", r.sent[0], profile)
+	}
+}
+
 func TestNewWindowLayout(t *testing.T) {
 	m, r := pickerScreen(t, 80, 24)
 	m.openNewWindow()
