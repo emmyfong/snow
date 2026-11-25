@@ -220,14 +220,14 @@ func (st *state) paneSecrets(sess *session, cmd *api.Command) []string {
 	if cmd.Args[api.ArgKind] == api.PaneChat || cmd.Args[api.ArgHostShell] == "true" {
 		return nil
 	}
-	var from int
+	var profile string
 	switch cmd.Op {
 	case api.OpSplit:
-		from = cmd.Target
+		profile, _ = st.newPaneArgs(sess, cmd, cmd.Target)
 	case api.OpNewWindow:
+		profile, _ = st.newWindowArgs(sess, cmd)
 	default:
 		return nil
 	}
-	profile, _ := st.newPaneArgs(sess, cmd, from)
 	return st.srv.launch.secrets(profile)
 }

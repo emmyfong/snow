@@ -70,7 +70,7 @@ func (st *state) layout(sess *session) *api.Layout {
 			p := w.panes[int(id)]
 			folder := p.dir // a chat's folder
 			profile := p.profile
-			if profile == "" {
+			if profile == "" && p.side == nil {
 				profile = p.sideFrom
 			}
 			if p.term != nil {

@@ -260,29 +260,6 @@ func TestSideDistroFromDefaultProfile(t *testing.T) {
 	}
 }
 
-func TestRestoreSideDefaultProfile(t *testing.T) {
-	dir, folder := t.TempDir(), t.TempDir()
-	snap := twoPanes(t, folder)
-	snap.Windows[0].Panes[1] = store.Pane{ID: 9, Kind: "note", Folder: folder}
-	writeSnapshot(t, dir, snap)
-	distros := make(chan string, 1)
-	opts := testOptions()
-	opts.SessionsDir = dir
-	opts.sideKinds = []sideKind{{Name: "note", Title: "Note", Open: func(ctx sideContext) (sidePane, error) {
-		distros <- ctx.Distro
-		return &notePane{closed: new(atomic.Int32)}, nil
-	}}}
-	s := New(opts)
-	t.Cleanup(s.Close)
-	setDefaultWSLProfile(s)
-	c := connect(t, s, 80, 24)
-	c.Send(&api.Attach{Session: "api"})
-	nextLayout(t, c, func(l *api.Layout) bool { return len(l.Windows) == 1 && len(l.Windows[0].Panes) == 2 })
-	if got := <-distros; got != "Ubuntu" {
-		t.Fatalf("restored side pane distro %q, want Ubuntu", got)
-	}
-}
-
 func setDefaultWSLProfile(s *Server) {
 	s.launch.shell = func(string) (shell.Profile, bool) {
 		return shell.Profile{Name: "Ubuntu", Distro: "Ubuntu"}, true

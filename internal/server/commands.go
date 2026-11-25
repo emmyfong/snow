@@ -54,11 +54,11 @@ func (st *state) run(c *client, sess *session, cmd *api.Command) {
 	var notice string
 	var requestedProfile, requestedFolder string
 	if cmd.Op == api.OpNewWindow || cmd.Op == api.OpSplit || cmd.Op == api.OpOpen {
-		from := cmd.Target
 		if cmd.Op == api.OpNewWindow {
-			from = 0
+			requestedProfile, requestedFolder = st.newWindowArgs(sess, cmd)
+		} else {
+			requestedProfile, requestedFolder = st.newPaneArgs(sess, cmd, cmd.Target)
 		}
-		requestedProfile, requestedFolder = st.newPaneArgs(sess, cmd, from)
 	}
 	firstNewPane := st.nextPane
 	var err error
@@ -114,7 +114,7 @@ func (st *state) apply(sess *session, cmd *api.Command) error {
 	}
 	switch cmd.Op {
 	case api.OpNewWindow:
-		profile, dir := st.newPaneArgs(sess, cmd, 0)
+		profile, dir := st.newWindowArgs(sess, cmd)
 		if cmd.Args[api.ArgHostShell] == "true" {
 			if st.srv.launch.shell == nil {
 				return errors.New("server: host shell selection is unavailable with custom profiles")
@@ -248,6 +248,28 @@ func (st *state) newPaneArgs(sess *session, cmd *api.Command, from int) (profile
 		if folder == "" {
 			folder = p.folder()
 		}
+	}
+	return profile, folder
+}
+
+// newWindowArgs returns the profile and folder for a new window. A terminal
+// opened from an agent side pane uses that agent's host shell when available.
+func (st *state) newWindowArgs(sess *session, cmd *api.Command) (profile, folder string) {
+	profile, folder = st.newPaneArgs(sess, cmd, 0)
+	if cmd.Args[api.ArgProfile] != "" || cmd.Args[api.ArgHostShell] == "true" ||
+		(cmd.Args[api.ArgKind] != "" && cmd.Args[api.ArgKind] != api.PaneTerminal) {
+		return profile, folder
+	}
+	w := sess.shown()
+	if w == nil {
+		return profile, folder
+	}
+	p := w.panes[w.focused]
+	if p == nil || p.side == nil || st.srv.launch.isAgent == nil || !st.srv.launch.isAgent(p.sideFrom) || st.srv.launch.shell == nil {
+		return profile, folder
+	}
+	if host, ok := st.srv.launch.shell(profile); ok {
+		profile = host.Name
 	}
 	return profile, folder
 }

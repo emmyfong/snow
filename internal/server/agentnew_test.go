@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -67,6 +68,18 @@ func agentNew(from int, profile, branch string) *api.Command {
 		args[api.ArgBranch] = branch
 	}
 	return &api.Command{Op: api.OpAgentNew, Target: from, Args: args}
+}
+
+func TestAgentNewFromSidePaneKeepsProfile(t *testing.T) {
+	_, c, gitPane, loaded := sidePaneFromNativeAgent(t)
+	c.Send(agentNew(gitPane.ID, "Claude Code", ""))
+	newAgent, _ := agentWindow(t, c, 2)
+	if newAgent.Profile != "Claude Code" {
+		t.Fatalf("agent window profile %q, want the explicit Claude Code profile", newAgent.Profile)
+	}
+	if names := <-loaded; !slices.Equal(names, []string{"agent-secret"}) {
+		t.Fatalf("agent-new loaded secrets %v, want Claude Code secrets", names)
+	}
 }
 
 // agentWindow waits for a layout with n windows and returns the newest
