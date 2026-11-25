@@ -195,3 +195,72 @@ func capInputTo(raw json.RawMessage, n int) json.RawMessage {
 	}
 	return b
 }
+
+// findChat returns the session and chat pane with ID id, or nils.
+func (st *state) findChat(id int) (*session, *pane) {
+	for _, sess := range st.sessions {
+		if _, p := sess.findPane(id); p != nil && p.chat != nil {
+			return sess, p
+		}
+	}
+	return nil, nil
+}
+
+// chatEvent folds e into its pane's snapshot and sends it to the clients
+// of the pane's session. An event for a pane that is gone is dropped.
+func (st *state) chatEvent(e *api.ChatEvent) {
+	sess, p := st.findChat(e.Pane)
+	if p == nil {
+		return
+	}
+	if e.Agent != p.chat.snap.Agent {
+		return // an event of a conversation this pane replaced
+	}
+	before := p.agentNow()
+	p.chat.snap.Apply(e)
+	if p.chat.kept != "" && len(p.chat.snap.Entries) > 0 {
+		// The chat has a message of its own: the session names it now.
+		p.chat.kept = ""
+		st.save(sess)
+	}
+	switch {
+	case p.agentNow() != before:
+		st.agentChanged(sess)
+	case e.Kind == api.ChatEventUsage, e.Kind == api.ChatEventModel:
+		st.syncAgents() // the list shows the chat's model and cost
+	}
+	for c := range st.clients {
+		if c.session != sess.name || !c.chatLive[e.Pane] {
+			continue
+		}
+		// A client that falls behind skips events and later gets a
+		// snapshot instead, so it never loses text and never stalls the
+		// model goroutine.
+		if len(c.out) >= cap(c.out)/2 {
+			delete(c.chatLive, e.Pane)
+			continue
+		}
+		st.enqueue(c, e)
+	}
+}
+
+// syncChats sends c a snapshot of each chat pane of its session it is not
+// in step with: a new pane, a new attach, or a client that fell behind and
+// now has room again.
+func (st *state) syncChats(c *client) {
+	sess, ok := st.sessions[c.session]
+	if !ok || c.dropped || len(c.out) >= cap(c.out)/2 {
+		return
+	}
+	for _, w := range sess.windows {
+		for id, p := range w.panes {
+			if p.chat == nil || c.chatLive[id] {
+				continue
+			}
+			c.chatLive[id] = true
+			snap := p.chat.snap
+			snap.Folder = p.chat.folder
+			st.enqueue(c, fitSnapshot(snap))
+		}
+	}
+}
