@@ -68,6 +68,9 @@ func (m *Model) windowBarOptions() ui.WindowBarOptions {
 // promptHint shows how to leave an open prompt.
 const promptHint = "Esc: cancel"
 
+// scrollModeLabel names scroll mode and its exit key on the status line.
+const scrollModeLabel = "Scroll mode  Esc: exit"
+
 // windowPanes returns the shown window's panes with the rows each one draws,
 // for View and the pane controls' hit targets.
 func (m *Model) windowPanes() []ui.WindowPane {
@@ -110,13 +113,17 @@ func (m *Model) statusOptions() ui.StatusOptions {
 		opts.Right = m.copy.Status()
 		opts.Notice = ""
 	}
+	if m.copy != nil {
+		opts.Mode = scrollModeLabel
+	}
 	switch {
 	case m.rename != nil:
 		opts.Prompt = m.renamePrompt()
 	case m.copy != nil && m.copy.Prompt() != "":
 		opts.Prompt = m.copy.Prompt()
 	}
-	if (m.modal() && m.copy == nil) || opts.Prompt != "" {
+	// Scroll mode's own text names the exit key, so its prompt needs no hint.
+	if (m.modal() || opts.Prompt != "") && m.copy == nil {
 		opts.Hint = promptHint
 	}
 	return opts

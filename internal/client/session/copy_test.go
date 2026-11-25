@@ -157,6 +157,16 @@ func TestCopyModeCtrlCSendsToTheCopyPane(t *testing.T) {
 	}
 }
 
+// TestCopyModeNoticeNamesScrollMode: the copy-mode action calls the mode by
+// its on-screen name when the focused pane draws itself.
+func TestCopyModeNoticeNamesScrollMode(t *testing.T) {
+	m, _ := chatScreen(t, 100, 30)
+	handlers["copy-mode"](m, tea.Key{})
+	if !strings.Contains(m.message, "Scroll mode") {
+		t.Fatalf("message %q, want it to name Scroll mode", m.message)
+	}
+}
+
 func TestCopyModeClosesWithItsPane(t *testing.T) {
 	m, r := newPrefixScreen(t)
 	m.Update(ctrlB)

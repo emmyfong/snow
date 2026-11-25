@@ -52,7 +52,7 @@ func buildHandlers() map[string]handler {
 		"command-prompt": func(m *Model, _ tea.Key) tea.Cmd { return m.openPrompt() },
 		"copy-mode": func(m *Model, _ tea.Key) tea.Cmd {
 			if m.focusedOwn() != nil {
-				return m.ShowError("Copy mode works in terminal panes. Scroll a chat with the wheel or PgUp.")
+				return m.ShowError("Scroll mode works in terminal panes. Scroll a chat with the wheel or PgUp.")
 			}
 			m.enterCopy()
 			return nil
