@@ -89,7 +89,9 @@ func (m *Model) windowPanes() []ui.WindowPane {
 			lines = o.View()
 		}
 		name := p.Profile
-		if name == "" {
+		if p.Kind != "" && p.Kind != api.PaneTerminal && p.Kind != api.PaneChat {
+			name = p.Kind
+		} else if name == "" {
 			name = p.Kind
 		}
 		panes = append(panes, ui.WindowPane{Name: name, Kind: p.Kind, X: p.Rect.X, Y: p.Rect.Y, W: p.Rect.W, H: p.Rect.H, Lines: lines, Focused: p.Focused, Driven: p.Driven})

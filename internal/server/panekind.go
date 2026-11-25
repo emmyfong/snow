@@ -154,7 +154,7 @@ func (s *Server) openSide(st *state, id int, kind, profile, folder, conversation
 	if s.opts.Chat != nil {
 		conversations = s.opts.Chat.Store
 	}
-	distro, _ := s.distroOf(profile)
+	distro, _ := s.profileDistro(profile)
 	sp, err := sk.Open(sideContext{
 		Pane: id, Folder: folder, Profile: profile, Distro: distro, Agent: st.marks.agent,
 		Conversation: conversation, Conversations: conversations,
