@@ -127,12 +127,6 @@ func (m *Model) listHints() []hint {
 			{ui.Hint{Key: "y", Desc: "remove"}, tea.Key{Code: 'y', Text: "y"}},
 			{ui.Hint{Key: "n", Desc: "keep"}, tea.Key{Code: 'n', Text: "n"}},
 		}
-	case m.mode == modeCommit:
-		return []hint{
-			{ui.Hint{Key: "enter", Desc: "commit"}, tea.Key{Code: tea.KeyEnter}},
-			{ui.Hint{Key: "ctrl+j", Desc: "new line"}, tea.Key{Code: 'j', Mod: tea.ModCtrl}},
-			{ui.Hint{Key: "esc", Desc: "close, keep draft"}, tea.Key{Code: tea.KeyEscape}},
-		}
 	}
 	return nil
 }

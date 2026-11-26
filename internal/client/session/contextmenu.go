@@ -61,9 +61,10 @@ func (m *Model) menuKey(k tea.Key) tea.Cmd {
 // chooses or dismisses; a right click dismisses; the rest is ignored.
 func (m *Model) menuMouse(msg tea.MouseMsg) tea.Cmd {
 	if wheel, ok := msg.(tea.MouseWheelMsg); ok {
-		if wheel.Button == tea.MouseWheelUp {
+		switch wheel.Button {
+		case tea.MouseWheelUp:
 			m.menu.Scroll(wheelRows)
-		} else if wheel.Button == tea.MouseWheelDown {
+		case tea.MouseWheelDown:
 			m.menu.Scroll(-wheelRows)
 		}
 		return nil

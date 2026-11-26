@@ -65,6 +65,50 @@ func goldenStates() map[string]func() *Model {
 			}
 			return m
 		},
+		"CommitOmitted": func() *Model {
+			st := changes()
+			st.Omitted = 2000
+			m := model(st, 0, 0)
+			m.Key(key("c"))
+			m.Paste("Commit the staged files")
+			return m
+		},
+		"CommitMany": func() *Model {
+			st := changes()
+			st.Changes = nil
+			for i := 1; i <= 7; i++ {
+				st.Changes = append(st.Changes, api.GitChange{Path: fmt.Sprintf("internal/git/staged-%d.go", i), Index: "A"})
+			}
+			m := model(st, 0, 0)
+			m.Key(key("c"))
+			m.Paste("Commit the staged files")
+			return m
+		},
+		"CommitEmpty": func() *Model {
+			m := model(api.GitState{Folder: "/home/u/snow", Branch: "main"}, 0, 0)
+			m.Key(key("c"))
+			return m
+		},
+		"CommitReadError": func() *Model {
+			m := model(api.GitState{Folder: "/home/u/snow", Error: "git status: fatal: unsafe repository"}, 0, 0)
+			m.Key(key("c"))
+			return m
+		},
+		"CommitLongError": func() *Model {
+			st := changes()
+			st.Error = "git commit: " + strings.Repeat("reason ", 7) + "unmerged files remain; " + strings.Repeat("later ", 6)
+			m := model(st, 0, 0)
+			m.Key(key("c"))
+			m.Paste("Add the git pane\nKeep a useful body\nand the final line")
+			return m
+		},
+		"CommitUnfocused": func() *Model {
+			m := model(changes(), 0, 0)
+			m.Key(key("c"))
+			m.Paste("Keep the draft")
+			m.SetFocused(false)
+			return m
+		},
 		"Worktrees": func() *Model { return worktreeModel(0, 0) },
 		"RemoveWorktree": func() *Model {
 			st := api.GitState{Folder: "/home/u/snow", Branch: "main", Worktrees: []api.GitWorktree{

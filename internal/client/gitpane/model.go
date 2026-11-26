@@ -17,7 +17,7 @@ type mode int
 const (
 	modeList   mode = iota // the changes
 	modeDiff               // one file's diff
-	modeCommit             // the changes, with the commit message box
+	modeCommit             // the staged files and commit message box
 )
 
 // entry is one row the user can select: a file's staged or its unstaged

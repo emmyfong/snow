@@ -15,7 +15,12 @@ func (m *Model) listLayout(l *layout) {
 	l.add(m.header(), hitNone, 0)
 	status, box, hints := m.chrome()
 	h := m.listHeight()
-	body := m.listBody(h)
+	var body []row
+	if m.mode == modeCommit {
+		body = m.commitBody(h)
+	} else {
+		body = m.listBody(h)
+	}
 	for _, r := range body {
 		l.add(r.text, r.hit, r.index)
 	}
@@ -30,7 +35,7 @@ func (m *Model) listLayout(l *layout) {
 	}
 	if box {
 		// The box grows upward as the message gets longer, so it sits on
-		// the hints.
+		// the action row.
 		rows := strings.Split(ui.TextArea(th, m.boxOptions()), "\n")
 		for range boxRows - len(rows) {
 			l.add("", hitBox, 0)
@@ -40,8 +45,8 @@ func (m *Model) listLayout(l *layout) {
 			l.add(" "+r, hitBox, 0)
 		}
 	}
-	if hints && m.mode == modeList && m.removePath == "" {
-		opts, _ := m.listButtons()
+	if hints && m.removePath == "" {
+		opts, _ := m.buttons()
 		l.add(ui.ButtonRow(th, opts), hitButtons, 0)
 	} else if hints {
 		l.hints = m.listHints()

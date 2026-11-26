@@ -96,7 +96,7 @@ func (m *Model) Click(x, y int) api.Message {
 			}
 		}
 	case hitButtons:
-		opts, actions := m.listButtons()
+		opts, actions := m.buttons()
 		for _, sp := range ui.ButtonRowSpans(opts) {
 			if x >= sp.X && x < sp.X+sp.W {
 				return m.Key(actions[sp.Index].Key)
@@ -113,7 +113,7 @@ func (m *Model) Click(x, y int) api.Message {
 // and the list only.
 func (m *Model) chrome() (status, box, hints bool) {
 	// A read that failed shows its error in the body instead.
-	status = m.removePath != "" || (m.st.Error != "" && !m.readFailed()) || m.st.Notice != ""
+	status = m.removePath != "" || (m.st.Error != "" && (!m.readFailed() || m.mode == modeCommit)) || m.st.Notice != ""
 	box = m.mode == modeCommit
 	if m.height < 4 {
 		return false, false, false
@@ -121,10 +121,11 @@ func (m *Model) chrome() (status, box, hints bool) {
 	if box && m.height < 3+boxRows { // header, one list row, hints, and box
 		box = false
 	}
+	hints = m.focused
 	if status {
-		status = m.statusHeight(box, true) > 0
+		status = m.statusHeight(box, hints) > 0
 	}
-	return status, box, m.mode != modeList || m.focused
+	return status, box, hints
 }
 
 // listHeight is the rows the changes get.

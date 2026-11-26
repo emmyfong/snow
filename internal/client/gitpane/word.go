@@ -43,7 +43,7 @@ func (m *Model) changeCell(e entry, width int) string {
 	const wordWidth = 10
 	word, fg, bg := changeWord(m.th, e)
 	style := lipgloss.NewStyle().Foreground(fg)
-	selected := m.selKey == e.key()
+	selected := m.mode != modeCommit && m.selKey == e.key()
 	if selected && bg == nil {
 		bg = m.th.Selection
 	}

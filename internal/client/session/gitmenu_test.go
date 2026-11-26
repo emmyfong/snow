@@ -33,10 +33,16 @@ func TestGitMenuItems(t *testing.T) {
 		for i := 0; i < 40; i++ {
 			box, x, y := m.menu.View(m.theme, m.cols, m.windowRows())
 			for row, text := range strings.Split(ansi.Strip(box), "\n") {
-				if strings.Contains(text, tt.label) && !(tt.label == "Stage" && (strings.Contains(text, "Stage all") || strings.Contains(text, "Stage or unstage"))) {
-					m.menuResult(m.menu.Click(m.theme, m.cols, m.windowRows(), x+2, y+row))
-					goto chosen
+				if !strings.Contains(text, tt.label) {
+					continue
 				}
+				if tt.label == "Stage" {
+					if strings.Contains(text, "Stage all") || strings.Contains(text, "Stage or unstage") {
+						continue
+					}
+				}
+				m.menuResult(m.menu.Click(m.theme, m.cols, m.windowRows(), x+2, y+row))
+				goto chosen
 			}
 			m.menu.Key(tea.Key{Code: tea.KeyDown})
 		}
@@ -101,5 +107,65 @@ func TestGitMenuWheel(t *testing.T) {
 	m.menuMouse(tea.MouseWheelMsg{X: 50, Y: 5, Button: tea.MouseWheelUp})
 	if m.menu.Selected() != 0 {
 		t.Fatal("wheel did not move back")
+	}
+}
+
+func TestGitCommitMenuItems(t *testing.T) {
+	for _, tt := range []struct{ label, shortcut string }{
+		{"Commit", "Enter"}, {"Clear message", "Ctrl+U"}, {"Close, keep draft", "Esc"},
+	} {
+		t.Run(tt.label, func(t *testing.T) {
+			m, r := gitScreen(t, 80, 24)
+			m.Update(gitState(t, 2, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Index: "A"}}}))
+			m.ownKey(tea.Key{Code: 'c', Text: "c"})
+			m.own[2].Paste("Keep the draft")
+			var action string
+			for _, it := range m.paneMenuItems() {
+				if it.Label == tt.label && it.Shortcut == tt.shortcut {
+					action = it.Action
+				}
+			}
+			if action == "" {
+				t.Fatalf("commit menu lacks %s (%s)", tt.label, tt.shortcut)
+			}
+			m.runFromMenu(action)
+			switch tt.label {
+			case "Commit":
+				if len(r.sent) == 0 {
+					t.Fatal("Commit sent nothing")
+				}
+				a, ok := r.sent[len(r.sent)-1].(*api.SidePaneAction)
+				if !ok || a.Action != api.GitActCommit || a.Args[api.ArgGitMessage] != "Keep the draft" {
+					t.Fatalf("Commit sent %#v", r.sent[len(r.sent)-1])
+				}
+			case "Clear message":
+				if strings.Contains(strings.Join(m.own[2].View(), "\n"), "Keep the draft") {
+					t.Fatal("Clear kept draft text")
+				}
+			case "Close, keep draft":
+				if _, _, ok := m.own[2].Cursor(); ok {
+					t.Fatal("Close kept commit mode open")
+				}
+				m.ownKey(tea.Key{Code: 'c', Text: "c"})
+				if !strings.Contains(strings.Join(m.own[2].View(), "\n"), "Keep the draft") {
+					t.Fatal("Close discarded draft")
+				}
+			}
+		})
+	}
+}
+
+func TestGitCommitMenuGolden(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}, {30, 8}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			m, _ := gitScreen(t, size[0], size[1])
+			m.ownKey(tea.Key{Code: 'c', Text: "c"})
+			m.own[2].Paste("Keep the draft")
+			m.openMenu(size[0]/2, 0)
+			if m.menu == nil {
+				t.Fatal("commit menu did not open")
+			}
+			golden.RequireEqual(t, content(m))
+		})
 	}
 }

@@ -167,12 +167,14 @@ func (m *Model) diffKey(k tea.Key) api.Message {
 }
 
 func (m *Model) commitKey(k tea.Key) api.Message {
-	switch {
-	case k.Code == tea.KeyEscape:
-		m.mode = modeList
-	case k.Code == tea.KeyEnter && k.Mod&(tea.ModShift|tea.ModAlt) != 0, k.Code == 'j' && k.Mod == tea.ModCtrl:
+	if k.Code == tea.KeyEnter && k.Mod&(tea.ModShift|tea.ModAlt) != 0 || k.Code == 'j' && k.Mod == tea.ModCtrl {
 		m.msg, m.cursor = keys.InsertAt(m.msg, m.cursor, "\n")
-	case k.Code == tea.KeyEnter:
+		return nil
+	}
+	switch actionForKey(commitActions, k) {
+	case actionClose:
+		m.mode = modeList
+	case actionSendCommit:
 		return m.commit()
 	default:
 		m.msg, m.cursor, _ = keys.EditAt(m.msg, m.cursor, k)

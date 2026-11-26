@@ -97,9 +97,9 @@ func TestCommitBox(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
 	var escapeHint string
-	for _, h := range m.listHints() {
-		if h.Key == "esc" {
-			escapeHint = h.Desc
+	for _, h := range m.MenuActions() {
+		if h.Shortcut == "Esc" {
+			escapeHint = h.Label
 		}
 	}
 	if !strings.Contains(escapeHint, "keep draft") || strings.Contains(escapeHint, "cancel") {
