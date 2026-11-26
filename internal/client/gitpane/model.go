@@ -137,12 +137,9 @@ func (m *Model) SetState(st api.GitState) {
 	m.keepSelection()
 }
 
-// Note returns a note for the status bar about the last key, once, or "".
-func (m *Model) Note() string {
-	n := m.note
-	m.note = ""
-	return n
-}
+// Note returns no status-line note. Git messages stay in the pane until
+// the next key or click.
+func (m *Model) Note() string { return "" }
 
 // SetAgents gives the pane its session's agents, which own worktrees.
 func (m *Model) SetAgents(agents []api.AgentInfo) { m.agents = agents }

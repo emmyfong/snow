@@ -1,7 +1,9 @@
 package session
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -25,6 +27,22 @@ func gitScreen(t *testing.T, cols, rows int) (*Model, *recorder) {
 	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ git status"}}})
 	m.Update(gitState(t, 1, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}}))
 	return m, r
+}
+
+func TestGitNoteStaysOffStatusLine(t *testing.T) {
+	m, _ := gitScreen(t, 80, 24)
+	git := m.own[2].(gitPane)
+	if _, note := git.Key(tea.Key{Code: 'u', Text: "u"}); note != "" {
+		t.Errorf("git returned status-line note %q", note)
+	}
+	if !strings.Contains(strings.Join(git.View(), "\n"), "Select a staged file to unstage.") {
+		t.Fatal("git pane lost its note")
+	}
+	m.Update(press('u', 0, "u"))
+	rows := strings.Split(content(m), "\n")
+	if strings.Contains(rows[len(rows)-1], "staged file") {
+		t.Fatalf("git note reached the session status line: %q", rows[len(rows)-1])
+	}
 }
 
 func gitState(t *testing.T, rev uint64, st api.GitState) *api.SidePaneState {
@@ -70,5 +88,15 @@ func TestGitPaneOlderState(t *testing.T) {
 	m.Update(&api.SidePaneState{Pane: 2, Kind: api.PaneGit, Rev: 4, State: json.RawMessage(`{"ahead":-1}`)})
 	if v := m.View().Content; !strings.Contains(v, "cannot read") {
 		t.Fatal("a bad state does not say so")
+	}
+}
+
+func TestGitNoteGolden(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			m, _ := gitScreen(t, size[0], size[1])
+			m.Update(press('u', 0, "u"))
+			golden.RequireEqual(t, content(m))
+		})
 	}
 }

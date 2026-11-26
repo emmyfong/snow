@@ -40,6 +40,5 @@ func (g gitPane) Animating() bool { return false }
 
 func (g gitPane) Tick() {}
 
-// result returns the pane's message for the server, or nil, and the
-// pane's note.
-func (g gitPane) result(msg api.Message) (api.Message, string) { return msg, g.Note() }
+// result returns the pane's message. Its notes stay in its own status row.
+func (g gitPane) result(msg api.Message) (api.Message, string) { return msg, "" }

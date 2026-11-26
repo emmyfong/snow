@@ -19,6 +19,7 @@ import (
 // box: Enter commits; Alt+Enter, Shift+Enter, and Ctrl+J add a line; Esc
 // closes the box and keeps the message.
 func (m *Model) Key(k tea.Key) api.Message {
+	m.note = ""
 	if m.removePath != "" {
 		return m.removeKey(k)
 	}

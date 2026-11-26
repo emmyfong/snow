@@ -27,6 +27,25 @@ func goldenStates() map[string]func() *Model {
 	}
 	return map[string]func() *Model{
 		"Changes": func() *Model { return model(changes(), 0, 0) },
+		"Note": func() *Model {
+			m := model(api.GitState{Folder: "/home/u/snow", Branch: "main"}, 0, 0)
+			m.Key(key("s"))
+			return m
+		},
+		"CommitRefused": func() *Model {
+			m := model(api.GitState{Folder: "/home/u/snow", Branch: "main"}, 0, 0)
+			m.Key(key("c"))
+			m.Paste("Stage the files first")
+			m.Key(key("enter"))
+			return m
+		},
+		"NoteError": func() *Model {
+			st := changes()
+			st.Error = "git stage: permission denied"
+			m := model(st, 0, 0)
+			m.Key(key("s"))
+			return m
+		},
 		"ChangeWords": func() *Model {
 			st := changes()
 			st.Changes = []api.GitChange{

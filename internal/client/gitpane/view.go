@@ -69,10 +69,12 @@ func (m *Model) Cursor() (x, y int, ok bool) {
 // shows its diff. A click on a key hint presses its key, and a click on
 // the commit box opens it.
 func (m *Model) Click(x, y int) api.Message {
+	// Hit testing uses the layout the user saw before its note clears.
+	l := m.layout()
+	m.note = ""
 	if !m.loaded {
 		return nil
 	}
-	l := m.layout()
 	if y < 0 || y >= len(l.rows) {
 		return nil
 	}
@@ -113,7 +115,7 @@ func (m *Model) Click(x, y int) api.Message {
 // and the list only.
 func (m *Model) chrome() (status, box, hints bool) {
 	// A read that failed shows its error in the body instead.
-	status = m.removePath != "" || (m.st.Error != "" && (!m.readFailed() || m.mode == modeCommit)) || m.st.Notice != ""
+	status = m.removePath != "" || (m.note != "" && (!m.readFailed() || m.mode == modeCommit)) || (m.st.Error != "" && (!m.readFailed() || m.mode == modeCommit)) || m.st.Notice != ""
 	box = m.mode == modeCommit
 	if m.height < 4 {
 		return false, false, false

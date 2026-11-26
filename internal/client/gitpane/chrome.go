@@ -65,7 +65,11 @@ func (m *Model) statusLines() ([]string, bool) {
 		return []string{" Remove worktree " + ui.FolderName(m.removePath) + "? y removes it, n keeps it."}, false
 	}
 	if m.st.Error == "" {
-		return []string{" " + ui.PlainLine(m.st.Notice)}, false
+		text := m.st.Notice
+		if m.note != "" {
+			text = m.note
+		}
+		return []string{" " + ui.PlainLine(text)}, false
 	}
 	const maxErrorRows = 3
 	lines := strings.Split(ansi.Wrap(" "+ui.PlainLine(m.st.Error), max(m.width, 1), ""), "\n")
@@ -92,6 +96,9 @@ func (m *Model) statusRows(limit int) []string {
 		return []string{lipgloss.NewStyle().Foreground(m.th.PromptFG).Background(m.th.PromptBG).Render(text)}
 	}
 	if m.st.Error == "" {
+		if m.note != "" {
+			return []string{lipgloss.NewStyle().Foreground(m.th.Muted).Render(ansi.Truncate(lines[0], m.width, "…"))}
+		}
 		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(ansi.Truncate(lines[0], m.width, ""))}
 	}
 	if omitted && m.width > 0 {

@@ -107,7 +107,7 @@ func TestCommitMessageLimitUnchanged(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
 	m.Paste(strings.Repeat("x", api.MaxCommitMessage+1))
-	if msg := m.Key(key("enter")); msg != nil || !strings.Contains(m.Note(), "too long") {
+	if msg := m.Key(key("enter")); msg != nil || !strings.Contains(strings.Join(m.View(), "\n"), "too long") {
 		t.Fatalf("oversized message: %#v", msg)
 	}
 }

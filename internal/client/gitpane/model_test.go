@@ -75,7 +75,7 @@ func TestListKeys(t *testing.T) {
 	if a := m.Key(key("s")); a != nil {
 		t.Fatalf("s on a staged-only file sent %+v", a)
 	}
-	if n := m.Note(); !strings.Contains(n, "already staged") {
+	if n := strings.Join(m.View(), "\n"); !strings.Contains(n, "already staged") {
 		t.Errorf("note %q", n)
 	}
 	wantAction(t, m.Key(key("enter")), api.GitActDiff, map[string]string{api.ArgGitPath: "internal/git/status.go", api.ArgGitStaged: "true"})
@@ -185,7 +185,7 @@ func TestCommitErrorWraps(t *testing.T) {
 func TestCommitRefusedLocally(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
-	if a := m.Key(key("enter")); a != nil || !strings.Contains(m.Note(), "message") {
+	if a := m.Key(key("enter")); a != nil || !strings.Contains(strings.Join(m.View(), "\n"), "message") {
 		t.Error("an empty message was sent")
 	}
 	st := changes()
@@ -193,7 +193,7 @@ func TestCommitRefusedLocally(t *testing.T) {
 	m = model(st, 80, 24)
 	m.Key(key("c"))
 	m.Key(key("x"))
-	if a := m.Key(key("enter")); a != nil || !strings.Contains(m.Note(), "Nothing is staged") {
+	if a := m.Key(key("enter")); a != nil || !strings.Contains(strings.Join(m.View(), "\n"), "Nothing is staged") {
 		t.Error("a commit with nothing staged was sent")
 	}
 }
