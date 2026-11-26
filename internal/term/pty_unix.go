@@ -60,7 +60,8 @@ func startPTY(spec Spec, cols, rows int) (PTY, error) {
 // returns a file Go's poller manages when the descriptor is non-blocking.
 func pollable(f *os.File) (*os.File, error) {
 	defer func() { _ = f.Close() }()
-	fd, err := unix.Dup(int(f.Fd())) //nolint:gosec // file descriptors fit in int
+	// Set close-on-exec atomically so concurrent forks cannot inherit a master.
+	fd, err := unix.FcntlInt(f.Fd(), unix.F_DUPFD_CLOEXEC, 0)
 	if err != nil {
 		return nil, fmt.Errorf("dup pty: %w", err)
 	}
