@@ -5,6 +5,33 @@ Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
 `pending review` entries. Historical entries record the policy at their date;
 they do not override the current approval rules.
 
+## 2026-11-25 tui: catalog ButtonRow and pane-local messages
+- Evidence: #488 identifies the missing ButtonRow catalog entry from #481 and
+  the StatusBar wording that conflicts with #483's pane-local messages. The
+  user approved both exact rows on 2026-11-25 before editing. At base
+  `c407660`, `internal/client/ui/buttonrow.go` does not exist. The signatures
+  come from #481, not from an implementation on main.
+- Change: limit the StatusBar message rule to session messages and notices.
+  Describe messages in a pane's own status row. Add the ButtonRow signatures,
+  width, label style, drop order, right-edge label, click spans, and ChoiceBox
+  one-row use with its multi-row fallback. Change no other catalog rows.
+- Test: scenario: a contributor adds Stage and Diff buttons with Commit at the
+  right edge, then handles a refused stage in the git pane. Expected behavior:
+  reuse ButtonRow and its spans, drop Diff first in a narrow row, keep Commit
+  when it fits alone, and show the refusal in the pane's status row.
+  Manual walk-through with AGENTS.md and the changed tui skill: the routing
+  selects tui; reuse leads to ButtonRow; the row keeps its width and does not
+  wrap; the same options supply click spans; the StatusBar row puts the
+  refusal in the pane while session notices stay on the status line.
+  ChoiceBox keeps one button per row when its buttons do not fit one row.
+  The guidance uses file paths and Go signatures with no host-specific action,
+  so the steps are readable in Claude Code, Codex, and OpenCode. This is a
+  manual instruction walk-through, not an executed cross-host or runtime test.
+  Whitespace, skill frontmatter, references, table structure, exact approved
+  wording, and the two-file scope checks pass. Go and visual checks do not
+  apply because no product code or rendered output changes.
+- Status: pending review
+
 ## 2026-11-21 AGENTS.md, issue-handler, next-issue, manage-subagents: skill routing and merged-worktree sweep
 - Evidence: on 2026-11-21 the main checkout had 26 worktrees; 21 had merged
   PRs. `issue-handler` step 8 removes a worktree only after the user merges,
