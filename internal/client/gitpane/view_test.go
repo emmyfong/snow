@@ -128,7 +128,9 @@ func goldenStates() map[string]func() *Model {
 			m.SetFocused(false)
 			return m
 		},
-		"Worktrees": func() *Model { return worktreeModel(0, 0) },
+		"Worktrees":       func() *Model { return worktreeModel(0, 0) },
+		"WorktreeOwned":   func() *Model { m := worktreeModel(0, 0); m.selectIndex(m.entries(), 2); return m },
+		"WorktreeUnowned": func() *Model { m := worktreeModel(0, 0); m.selectIndex(m.entries(), 3); return m },
 		"RemoveWorktree": func() *Model {
 			st := api.GitState{Folder: "/home/u/snow", Branch: "main", Worktrees: []api.GitWorktree{
 				{Path: "/home/u/snow", Branch: "main", Main: true},

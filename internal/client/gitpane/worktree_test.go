@@ -1,6 +1,7 @@
 package gitpane
 
 import (
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -46,6 +47,54 @@ func TestWorktreeOwner(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestWorktreeButtons(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		index  int
+		remove bool
+	}{
+		{"main", 1, false}, {"owned", 2, false}, {"unowned", 3, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := worktreeModel(80, 24)
+			m.selectIndex(m.entries(), tt.index)
+			row := ansi.Strip(m.View()[23])
+			if !strings.Contains(row, "Open") || !strings.Contains(row, "Commit...") || strings.Contains(row, "Remove") != tt.remove {
+				t.Fatalf("buttons: %q", row)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		width        int
+		open, remove bool
+	}{{30, true, true}, {22, true, false}, {17, false, false}} {
+		m := worktreeModel(tt.width, 8)
+		m.selectIndex(m.entries(), 3)
+		row := ansi.Strip(m.View()[7])
+		if !strings.Contains(row, "Commit...") || strings.Contains(row, "Open") != tt.open || strings.Contains(row, "Remove") != tt.remove {
+			t.Errorf("width %d buttons: %q", tt.width, row)
+		}
+	}
+}
+
+func TestRemoveButtonSameAsKey(t *testing.T) {
+	makeModel := func() *Model { m := worktreeModel(80, 24); m.selectIndex(m.entries(), 3); return m }
+	click, press := makeModel(), makeModel()
+	row := ansi.Strip(click.View()[23])
+	x := strings.Index(row, "Remove")
+	if x < 0 {
+		t.Fatalf("no Remove button: %q", row)
+	}
+	got, want := click.Click(x, 23), press.Key(key("x"))
+	if !reflect.DeepEqual(got, want) || click.removePath != press.removePath || click.removePath == "" {
+		t.Fatalf("Remove click differs from x: %#v / %#v", got, want)
+	}
+	if got, want = click.Key(key("y")), press.Key(key("y")); !reflect.DeepEqual(got, want) {
+		t.Fatalf("confirmation differs: %#v / %#v", got, want)
+	}
+	wantAction(t, got, api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: "/home/u/snow/.worktrees/spike"})
 }
 
 // worktrees is a state with a change and a linked worktree that an agent

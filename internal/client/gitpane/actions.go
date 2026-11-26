@@ -62,7 +62,7 @@ var listActions = []actionSpec{
 	{Action: Action{"Stage or unstage", "Space", tea.Key{Code: tea.KeySpace, Text: " "}}, id: actionToggle, rule: whenFile},
 	{Action: Action{"Stage all", "a", tea.Key{Code: 'a', Text: "a"}}, id: actionStageAll},
 	{Action: Action{"Refresh", "r", tea.Key{Code: 'r', Text: "r"}}, id: actionRefresh, button: true},
-	{Action: Action{"Remove worktree", "x", tea.Key{Code: 'x', Text: "x"}}, id: actionRemove, rule: whenRemovable},
+	{Action: Action{"Remove", "x", tea.Key{Code: 'x', Text: "x"}}, id: actionRemove, rule: whenRemovable, button: true, menuLabel: "Remove worktree"},
 }
 
 var commitActions = []actionSpec{
