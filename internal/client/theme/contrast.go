@@ -48,6 +48,13 @@ func (t Theme) ForBackground(p colorprofile.Profile, painted color.Color) Theme 
 	t.Background = p.Convert(t.Background)
 	fix(&t.Text, t.Background)
 	t.Text = p.Convert(t.Text)
+	if p < colorprofile.TrueColor {
+		// Change words draw directly on the default background. Palette
+		// reduction must not turn their text into that same color.
+		for _, fg := range []*color.Color{&t.Added, &t.Modified, &t.Removed, &t.Accent, &t.Muted} {
+			fix(fg, t.Background)
+		}
+	}
 	if painted != nil && p < colorprofile.TrueColor {
 		fix(&t.Muted, painted)
 		fix(&t.Queued, painted)

@@ -1,6 +1,7 @@
 package gitpane
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -97,12 +98,20 @@ func TestWorktreeEnter(t *testing.T) {
 // alone shows no section.
 func TestWorktreeRows(t *testing.T) {
 	view := ansi.Strip(strings.Join(worktreeModel(80, 24).View(), "\n"))
-	for _, want := range []string{"Worktrees (3)", "*   snow  main", "agent-1  agent/1  window 2", "spike  detached  locked"} {
+	for _, want := range []string{"Worktrees (3)", "snow", "main", "agent-1", "agent/1", "window 2", "spike", "detached", "locked"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view lacks %q:\n%s", want, view)
 		}
 	}
 	st, _ := worktrees()
+	m := worktreeModel(80, 24)
+	want := [][]string{{"*", "snow", "main", "", ""}, {"", "agent-1", "agent/1", "", "window 2"}, {"", "spike", "detached", "locked", ""}}
+	for i, wt := range st.Worktrees {
+		got := m.worktreeCols(wt)
+		if !slices.Equal(got, want[i]) {
+			t.Errorf("worktree %d cells = %q, want %q", i, got, want[i])
+		}
+	}
 	st.Worktrees = st.Worktrees[:1]
 	if view := ansi.Strip(strings.Join(model(st, 80, 24).View(), "\n")); strings.Contains(view, "Worktrees") {
 		t.Errorf("one checkout shows a section:\n%s", view)

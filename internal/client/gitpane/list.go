@@ -92,8 +92,7 @@ func (m *Model) listBody(h int) []row {
 	for _, e := range es {
 		count[e.section()]++
 	}
-	codeW := 1
-	pathW := max(m.width-2-codeW-3, 4) // pointer, code, column gap
+	var groups []int
 	if len(m.st.Changes) == 0 {
 		heading("No changes.")
 	}
@@ -107,6 +106,7 @@ func (m *Model) listBody(h int) []row {
 			if sec >= secWorktrees && (i == 0 || es[i-1].section() < secWorktrees) {
 				omitted()
 			}
+			groups = append(groups, len(items))
 			heading(fmt.Sprintf("%s (%d)", sectionNames[sec], count[sec]))
 		}
 		if i == m.selected(es) {
@@ -118,24 +118,32 @@ func (m *Model) listBody(h int) []row {
 		case e.wt != nil:
 			items = append(items, ui.ListItem{Cols: m.worktreeCols(*e.wt)})
 		default:
-			items = append(items, ui.ListItem{Cols: []string{code(e), cutLeft(pathText(e.change), pathW)}})
+			items = append(items, ui.ListItem{Cols: []string{m.changeCell(e, max(m.width-2, 0))}})
 		}
 		itemEntry = append(itemEntry, i)
 	}
 	if count[secWorktrees]+count[secHistory] == 0 {
 		omitted()
 	}
-	view, rows := ui.ListRows(m.th, ui.ListOptions{Items: items, Selected: sel, Width: m.width, Height: h})
+	// Each section owns its columns. A long change path must not push a
+	// worktree's branch and owner off the pane.
+	groups = append(groups, len(items))
+	first, last := ui.ListWindow(len(items), sel, h)
 	var out []row
-	for i, r := range strings.Split(view, "\n") {
-		if i >= len(rows) {
-			break
+	start := 0
+	for _, end := range groups {
+		visible := min(end, last) - max(start, first)
+		if visible > 0 {
+			view, rows := ui.ListRows(m.th, ui.ListOptions{Items: items[start:end], Selected: sel - start, Width: m.width, Height: visible})
+			for i, text := range strings.Split(view, "\n") {
+				if e := itemEntry[start+rows[i]]; e >= 0 {
+					out = append(out, row{text: text, hit: hitEntry, index: e})
+				} else {
+					out = append(out, row{text: text})
+				}
+			}
 		}
-		if e := itemEntry[rows[i]]; e >= 0 {
-			out = append(out, row{text: r, hit: hitEntry, index: e})
-		} else {
-			out = append(out, row{text: r})
-		}
+		start = end
 	}
 	return out
 }
@@ -154,40 +162,25 @@ func commitCols(cm api.GitCommit) []string {
 	return []string{"", strings.Join(parts, "  ")}
 }
 
-// worktreeCols are a worktree row's cells: "*" for the checkout the pane
-// shows, then its folder name, branch, lock, and owner in one cell, so a
-// long path in the changes does not push them out of a narrow pane.
+// worktreeCols are a worktree row's cells: its current-checkout mark,
+// folder, branch, lock, and owner. Empty cells preserve column alignment.
 func (m *Model) worktreeCols(wt api.GitWorktree) []string {
-	mark := ""
+	mark, branch, lock := "", ui.PlainLine(wt.Branch), ""
 	if m.current(wt) {
 		mark = "*"
 	}
-	parts := []string{ui.FolderName(ui.PlainLine(wt.Path))}
-	if wt.Branch != "" {
-		parts = append(parts, ui.PlainLine(wt.Branch))
-	} else {
-		parts = append(parts, "detached")
+	if branch == "" {
+		branch = "detached"
 	}
 	if wt.Locked {
-		parts = append(parts, "locked")
+		lock = "locked"
 	}
-	if own := ownerText(wt, owners(wt, m.st.Worktrees, m.agents)); own != "" {
-		parts = append(parts, own)
-	}
-	return []string{mark, strings.Join(parts, "  ")}
+	return []string{mark, ui.FolderName(ui.PlainLine(wt.Path)), branch, lock, ownerText(wt, owners(wt, m.st.Worktrees, m.agents))}
 }
 
 // current reports whether wt is the checkout the pane's folder is in.
 func (m *Model) current(wt api.GitWorktree) bool {
 	return len(owners(wt, m.st.Worktrees, []api.AgentInfo{{Folder: m.st.Folder}})) > 0
-}
-
-// code is the one-letter code of an entry's change.
-func code(e entry) string {
-	if e.staged {
-		return e.change.Index
-	}
-	return e.change.Work
 }
 
 // pathText is a change's path, and a rename's old path before it.

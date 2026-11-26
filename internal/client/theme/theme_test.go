@@ -73,19 +73,24 @@ func TestTokensDownsample(t *testing.T) {
 		for _, p := range profiles {
 			th := base.For(p)
 			pairs := map[string][2]color.Color{
-				"default text": {th.Text, th.Background},
-				"status bar":   {th.BarFG, th.BarBG},
-				"active tab":   {th.TabActive, th.TabActiveBG},
-				"question":     {th.PromptFG, th.PromptBG},
-				"error":        {th.ErrorFG, th.Error},
-				"position":     {th.IndicatorFG, th.IndicatorBG},
-				"match":        {th.MatchFG, th.MatchBG},
-				"current":      {th.CurrentFG, th.CurrentBG},
-				"selected":     {th.SelectedFG, th.SelectedBG},
-				"list row":     {th.SelectionFG, th.Selection},
-				"you label":    {th.UserFG, th.UserBG},
-				"snow label":   {th.AgentFG, th.AgentBG},
-				"activity":     {th.ActivityFG, th.ActivityBG},
+				"default text":   {th.Text, th.Background},
+				"added word":     {th.Added, th.Background},
+				"modified word":  {th.Modified, th.Background},
+				"deleted word":   {th.Removed, th.Background},
+				"renamed word":   {th.Accent, th.Background},
+				"untracked word": {th.Muted, th.Background},
+				"status bar":     {th.BarFG, th.BarBG},
+				"active tab":     {th.TabActive, th.TabActiveBG},
+				"question":       {th.PromptFG, th.PromptBG},
+				"error":          {th.ErrorFG, th.Error},
+				"position":       {th.IndicatorFG, th.IndicatorBG},
+				"match":          {th.MatchFG, th.MatchBG},
+				"current":        {th.CurrentFG, th.CurrentBG},
+				"selected":       {th.SelectedFG, th.SelectedBG},
+				"list row":       {th.SelectionFG, th.Selection},
+				"you label":      {th.UserFG, th.UserBG},
+				"snow label":     {th.AgentFG, th.AgentBG},
+				"activity":       {th.ActivityFG, th.ActivityBG},
 			}
 			for what, pair := range pairs {
 				if r := contrast(p.Convert(pair[0]), p.Convert(pair[1])); r < minContrast {
@@ -104,7 +109,7 @@ func TestTokensDownsample(t *testing.T) {
 // exactly as designed.
 func TestTrueColorKeepsThePalette(t *testing.T) {
 	for _, th := range Builtin() {
-		if got := th.For(colorprofile.TrueColor); got.Background != th.Background || got.Text != th.Text || got.BarFG != th.BarFG || got.PromptFG != th.PromptFG || got.TabActive != th.TabActive || got.TabActiveBG != th.TabActiveBG {
+		if got := th.For(colorprofile.TrueColor); got.Background != th.Background || got.Text != th.Text || got.BarFG != th.BarFG || got.PromptFG != th.PromptFG || got.TabActive != th.TabActive || got.TabActiveBG != th.TabActiveBG || got.Added != th.Added || got.Modified != th.Modified || got.Removed != th.Removed || got.Accent != th.Accent || got.Muted != th.Muted {
 			t.Errorf("%s: For(TrueColor) changed the palette", th.Name)
 		}
 	}
@@ -219,8 +224,8 @@ func TestMutedOnPaintedBackground(t *testing.T) {
 					t.Errorf("%s %s: muted contrast %.2f, want 3:1", th.Name, p, got)
 				}
 			}
-			if plain := th.For(p); plain.Muted != th.Muted || plain.Queued != th.Queued {
-				t.Errorf("%s %s: changed secondary text in terminal mode", th.Name, p)
+			if plain := th.For(p); plain.Queued != th.Queued {
+				t.Errorf("%s %s: changed queued text in terminal mode", th.Name, p)
 			}
 		}
 		if painted := th.ForBackground(colorprofile.TrueColor, th.Background); painted.Muted != th.Muted || painted.Queued != th.Queued {

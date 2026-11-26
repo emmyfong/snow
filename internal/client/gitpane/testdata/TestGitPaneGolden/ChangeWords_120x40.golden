@@ -1,0 +1,40 @@
+[1m feat/195-git-pane[m[38;2;138;155;171m  in …/u/snow[m[38;2;138;155;171m, 2 ahead, 1 behind[m
+  [38;2;138;155;171mStaged (3)[m                                                                                                            
+[1;38;2;255;255;255;48;2;45;74;102m> [38;2;143;209;158;48;2;45;74;102madded[m[38;2;255;255;255;48;2;45;74;102m     internal/git/status.go                                                                                      [m[m
+  [38;2;127;184;230mrenamed[m   docs/old.md -> docs/new.md                                                                                  
+  [38;2;127;184;230mcopied[m    copy.go                                                                                                     
+  [38;2;138;155;171mChanges (5)[m                                                                                                           
+  [38;2;215;180;106mmodified[m  internal/server/gitpane.go                                                                                  
+  [38;2;224;122;122mdeleted[m   old.go                                                                                                      
+  [38;2;0;0;0;48;2;224;122;122mconflict[m  main.go                                                                                                     
+  [38;2;138;155;171muntracked[m notes/todo.txt                                                                                              
+  [38;2;215;180;106mmodified[m  界/very/long/path/that/keeps/the/filename.go                                                                
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;127;184;230ms[m [38;2;138;155;171mstage[m   [38;2;127;184;230mu[m [38;2;138;155;171munstage[m   [38;2;127;184;230mc[m [38;2;138;155;171mcommit[m   [38;2;127;184;230menter[m [38;2;138;155;171mdiff[m   [38;2;127;184;230ma[m [38;2;138;155;171mstage all[m   [38;2;127;184;230mr[m [38;2;138;155;171mrefresh[m
