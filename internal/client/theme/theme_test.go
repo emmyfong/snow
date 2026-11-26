@@ -65,13 +65,13 @@ func TestResolveFillsMissingTokens(t *testing.T) {
 
 // TestTokensDownsample: every text-on-background pair stays readable when a
 // terminal can show only 256 or 16 colors. Readable means a contrast ratio of
-// at least 3:1, the WCAG minimum for bold interface text. For adjusts a
-// theme to the terminal's colors.
+// at least 3:1, the WCAG minimum for bold interface text. ForBackground
+// adapts the theme when Snow paints the known background.
 func TestTokensDownsample(t *testing.T) {
 	profiles := []colorprofile.Profile{colorprofile.TrueColor, colorprofile.ANSI256, colorprofile.ANSI}
 	for _, base := range Builtin() {
 		for _, p := range profiles {
-			th := base.For(p)
+			th := base.ForBackground(p, base.Background)
 			pairs := map[string][2]color.Color{
 				"default text":   {th.Text, th.Background},
 				"added word":     {th.Added, th.Background},
@@ -224,12 +224,44 @@ func TestMutedOnPaintedBackground(t *testing.T) {
 					t.Errorf("%s %s: muted contrast %.2f, want 3:1", th.Name, p, got)
 				}
 			}
-			if plain := th.For(p); plain.Queued != th.Queued {
-				t.Errorf("%s %s: changed queued text in terminal mode", th.Name, p)
+			if plain := th.For(p); plain.Muted != th.Muted || plain.Queued != th.Queued {
+				t.Errorf("%s %s: changed secondary text in terminal mode", th.Name, p)
 			}
 		}
 		if painted := th.ForBackground(colorprofile.TrueColor, th.Background); painted.Muted != th.Muted || painted.Queued != th.Queued {
 			t.Errorf("%s: changed exact true-color palette", th.Name)
+		}
+	}
+}
+
+func TestTerminalBackgroundKeepsTextColors(t *testing.T) {
+	for _, base := range Builtin() {
+		for _, p := range []colorprofile.Profile{colorprofile.TrueColor, colorprofile.ANSI256, colorprofile.ANSI} {
+			got := base.For(p)
+			for name, pair := range map[string][2]color.Color{
+				"Added": {got.Added, base.Added}, "Modified": {got.Modified, base.Modified},
+				"Removed": {got.Removed, base.Removed}, "Accent": {got.Accent, base.Accent},
+				"Muted": {got.Muted, base.Muted}, "Queued": {got.Queued, base.Queued},
+			} {
+				if pair[0] != pair[1] {
+					t.Errorf("%s %s: terminal background changed %s", base.Name, p, name)
+				}
+			}
+		}
+	}
+}
+
+func TestTextOnKnownPaintedBackground(t *testing.T) {
+	for _, base := range Builtin() {
+		for _, p := range []colorprofile.Profile{colorprofile.ANSI256, colorprofile.ANSI} {
+			for _, bg := range []color.Color{base.Background, black, white} {
+				got := base.ForBackground(p, bg)
+				for name, fg := range map[string]color.Color{"Added": got.Added, "Modified": got.Modified, "Removed": got.Removed, "Accent": got.Accent, "Muted": got.Muted, "Queued": got.Queued} {
+					if r := contrast(p.Convert(fg), p.Convert(bg)); r < minContrast {
+						t.Errorf("%s %s: %s on known background %v contrast %.2f", base.Name, p, name, bg, r)
+					}
+				}
+			}
 		}
 	}
 }
