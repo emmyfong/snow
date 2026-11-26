@@ -67,6 +67,7 @@ func worktrees() (api.GitState, []api.AgentInfo) {
 func worktreeModel(w, h int) *Model {
 	st, agents := worktrees()
 	m := New(7, testTheme())
+	m.SetFocused(true)
 	m.SetAgents(agents)
 	m.SetSize(w, h)
 	m.SetState(st)
@@ -183,27 +184,33 @@ func TestWorktreeRemoveKey(t *testing.T) {
 	}
 }
 
-// TestWorktreeRemoveHint shows x only for an unowned linked worktree.
+// TestWorktreeRemoveHint keeps removal discoverable in the menu while the
+// button row replaces key hints. Its button arrives in #484.
 func TestWorktreeRemoveHint(t *testing.T) {
-	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{
-		{Path: "/src/snow", Branch: "main", Main: true},
-		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
-	}}
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{{Path: "/src/snow", Branch: "main", Main: true}, {Path: "/src/snow/.worktrees/clean", Branch: "clean"}}}
 	m := model(st, 80, 24)
-	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
-		t.Fatal("change row shows x remove")
+	hasRemove := func() bool {
+		for _, a := range m.MenuActions() {
+			if a.Label == "Remove worktree" && a.Shortcut == "x" {
+				return true
+			}
+		}
+		return false
 	}
-	m.Key(key("down")) // main checkout
-	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
-		t.Fatal("main checkout shows x remove")
+	if hasRemove() {
+		t.Fatal("change row offers Remove")
 	}
 	m.Key(key("down"))
-	if view := ansi.Strip(strings.Join(m.View(), "\n")); !strings.Contains(view, "x remove") {
-		t.Fatalf("unowned worktree lacks x remove:\n%s", view)
+	if hasRemove() {
+		t.Fatal("main checkout offers Remove")
+	}
+	m.Key(key("down"))
+	if !hasRemove() {
+		t.Fatal("unowned worktree lacks Remove menu entry")
 	}
 	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
-	if view := ansi.Strip(strings.Join(m.View(), "\n")); strings.Contains(view, "x remove") {
-		t.Fatalf("owned worktree shows x remove:\n%s", view)
+	if hasRemove() {
+		t.Fatal("owned worktree offers Remove")
 	}
 }
 

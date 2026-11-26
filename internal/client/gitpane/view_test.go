@@ -90,7 +90,7 @@ func goldenStates() map[string]func() *Model {
 // size of a side pane.
 func TestGitPaneGolden(t *testing.T) {
 	for name, mk := range goldenStates() {
-		for _, size := range [][2]int{{80, 24}, {120, 40}, {30, 20}} {
+		for _, size := range [][2]int{{80, 24}, {120, 40}, {30, 20}, {30, 8}} {
 			t.Run(fmt.Sprintf("%s_%dx%d", name, size[0], size[1]), func(t *testing.T) {
 				m := mk()
 				m.SetSize(size[0], size[1])

@@ -40,7 +40,10 @@ func (m *Model) listLayout(l *layout) {
 			l.add(" "+r, hitBox, 0)
 		}
 	}
-	if hints {
+	if hints && m.mode == modeList && m.removePath == "" {
+		opts, _ := m.listButtons()
+		l.add(ui.ButtonRow(th, opts), hitButtons, 0)
+	} else if hints {
 		l.hints = m.listHints()
 		hs := make([]ui.Hint, len(l.hints))
 		for i, h := range l.hints {
@@ -66,6 +69,9 @@ func (m *Model) listBody(h int) []row {
 		for _, s := range lines {
 			for _, w := range strings.Split(ansi.Wrap(s, max(m.width-1, 1), ""), "\n") {
 				out = append(out, row{text: " " + muted.Render(w)})
+				if len(out) >= h {
+					return out
+				}
 			}
 		}
 		return out

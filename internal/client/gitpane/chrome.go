@@ -121,7 +121,6 @@ func (m *Model) boxOptions() ui.TextAreaOptions {
 }
 
 func (m *Model) listHints() []hint {
-	refresh := hint{ui.Hint{Key: "r", Desc: "refresh"}, tea.Key{Code: 'r', Text: "r"}}
 	switch {
 	case m.removePath != "":
 		return []hint{
@@ -134,27 +133,6 @@ func (m *Model) listHints() []hint {
 			{ui.Hint{Key: "ctrl+j", Desc: "new line"}, tea.Key{Code: 'j', Mod: tea.ModCtrl}},
 			{ui.Hint{Key: "esc", Desc: "close, keep draft"}, tea.Key{Code: tea.KeyEscape}},
 		}
-	case len(m.entries()) == 0:
-		return []hint{refresh}
 	}
-	hs := []hint{
-		{ui.Hint{Key: "s", Desc: "stage"}, tea.Key{Code: 's', Text: "s"}},
-		{ui.Hint{Key: "u", Desc: "unstage"}, tea.Key{Code: 'u', Text: "u"}},
-		{ui.Hint{Key: "c", Desc: "commit"}, tea.Key{Code: 'c', Text: "c"}},
-	}
-	es := m.entries()
-	if i := m.selected(es); i < 0 || es[i].cm == nil {
-		enter := "diff"
-		if i >= 0 && es[i].wt != nil {
-			enter = "open"
-		}
-		hs = append(hs, hint{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}})
-	}
-	if m.CanRemoveSelectedWorktree() {
-		hs = append(hs, hint{ui.Hint{Key: "x", Desc: "remove"}, tea.Key{Code: 'x', Text: "x"}})
-	}
-	return append(hs,
-		hint{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},
-		refresh,
-	)
+	return nil
 }

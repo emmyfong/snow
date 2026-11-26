@@ -9,16 +9,25 @@ import (
 	"github.com/emmyfong/snow/internal/client/ui"
 )
 
-// openMenu shows the pane menu at cell x, y in the window area. It does not open when
-// the screen is too small to show every item; the keys still work.
+// openMenu shows a scrollable pane menu at cell x, y in the window area.
 func (m *Model) openMenu(x, y int) {
-	removeWorktree := false
+	items := m.paneMenuItems()
+	mm := menu.NewPane(items, x, y)
+	if box, _, _ := mm.View(m.theme, m.cols, m.windowRows()); box != "" {
+		m.menu = mm
+	}
+}
+
+func (m *Model) paneMenuItems() []menu.Item {
+	var items []menu.Item
 	if pane := m.focused(); pane != nil {
 		if git, ok := m.own[pane.ID].(gitPane); ok {
-			removeWorktree = git.CanRemoveSelectedWorktree()
+			for _, a := range git.MenuActions() {
+				items = append(items, menu.Item{Label: a.Label, Shortcut: a.Shortcut, Action: "git-key:" + a.Key.String()})
+			}
 		}
 	}
-	m.showMenu(menu.PaneItemsWithGit(m.keys, removeWorktree), x, y)
+	return append(items, menu.PaneItems(m.keys)...)
 }
 
 func (m *Model) openWindowMenu() {
@@ -51,6 +60,14 @@ func (m *Model) menuKey(k tea.Key) tea.Cmd {
 // menuMouse handles a mouse event while the menu is open. A left click
 // chooses or dismisses; a right click dismisses; the rest is ignored.
 func (m *Model) menuMouse(msg tea.MouseMsg) tea.Cmd {
+	if wheel, ok := msg.(tea.MouseWheelMsg); ok {
+		if wheel.Button == tea.MouseWheelUp {
+			m.menu.Scroll(wheelRows)
+		} else if wheel.Button == tea.MouseWheelDown {
+			m.menu.Scroll(-wheelRows)
+		}
+		return nil
+	}
 	click, ok := msg.(tea.MouseClickMsg)
 	if !ok {
 		return nil
@@ -81,8 +98,15 @@ func (m *Model) runFromMenu(action string) tea.Cmd {
 		name, rest := command.Split(strings.TrimPrefix(action, "/"))
 		return commandRuns[name](m, rest)
 	}
-	if action == "git-remove-worktree" {
-		return m.ownKey(tea.Key{Code: 'x', Text: "x"})
+	if name, ok := strings.CutPrefix(action, "git-key:"); ok {
+		if p := m.focused(); p != nil {
+			if git, ok := m.own[p.ID].(gitPane); ok {
+				if k, ok := git.MenuKey(name); ok {
+					return m.ownKey(k)
+				}
+			}
+		}
+		return nil
 	}
 	if action == "connect" {
 		if p := m.focused(); p != nil {

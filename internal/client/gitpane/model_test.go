@@ -29,6 +29,7 @@ func testTheme() theme.Theme { return theme.Default() }
 
 func model(st api.GitState, w, h int) *Model {
 	m := New(7, testTheme())
+	m.SetFocused(true)
 	m.SetSize(w, h)
 	m.SetState(st)
 	return m
@@ -265,15 +266,16 @@ func TestClick(t *testing.T) {
 	}
 	wantAction(t, m.Click(5, row), api.GitActDiff, nil)
 
-	hints := len(l.rows) - 1
-	if l.hits[hints] != hitHints {
-		t.Fatalf("last row is %d, want the hints", l.hits[hints])
+	buttons := len(l.rows) - 1
+	l = m.layout()
+	if l.hits[buttons] != hitButtons {
+		t.Fatalf("last row is %d, want buttons", l.hits[buttons])
 	}
-	wantAction(t, m.Click(1, hints), api.GitActStage, nil) // "s stage" comes first, after one cell
-	commit := strings.Index(ansi.Strip(l.rows[hints]), "c commit")
-	m.Click(commit, hints)
+	wantAction(t, m.Click(1, buttons), api.GitActStage, nil)
+	commit := strings.Index(ansi.Strip(l.rows[buttons]), "Commit...")
+	m.Click(commit, buttons)
 	if m.mode != modeCommit {
-		t.Error("a click on the commit hint did not open the box")
+		t.Error("a click on Commit did not open the box")
 	}
 }
 

@@ -50,26 +50,29 @@ func (m *Model) listKey(k tea.Key) api.Message {
 		m.move(es, 0)
 	case k.Code == tea.KeyEnd:
 		m.move(es, len(es)-1)
-	case k.Text == "s":
-		return m.stage(es, i)
-	case k.Text == "u":
-		return m.unstage(es, i)
-	case k.Code == tea.KeySpace:
-		if i >= 0 && es[i].file() && es[i].staged {
+	default:
+		switch listAction(k) {
+		case actionStage:
+			return m.stage(es, i)
+		case actionUnstage:
 			return m.unstage(es, i)
-		}
-		return m.stage(es, i)
-	case k.Text == "a":
-		return m.stageAll()
-	case k.Code == tea.KeyEnter || k.Text == "d":
-		return m.openDiff(es, i)
-	case k.Text == "c":
-		m.openCommit()
-	case k.Text == "r":
-		return m.action(api.GitActRefresh, nil)
-	case k.Text == "x":
-		if wt := m.selectedWorktree(); wt != nil {
-			m.removePath = wt.Path
+		case actionToggle:
+			if i >= 0 && es[i].file() && es[i].staged {
+				return m.unstage(es, i)
+			}
+			return m.stage(es, i)
+		case actionStageAll:
+			return m.stageAll()
+		case actionDiff, actionOpen:
+			return m.openDiff(es, i)
+		case actionCommit:
+			m.openCommit()
+		case actionRefresh:
+			return m.action(api.GitActRefresh, nil)
+		case actionRemove:
+			if wt := m.selectedWorktree(); wt != nil {
+				m.removePath = wt.Path
+			}
 		}
 	}
 	return nil

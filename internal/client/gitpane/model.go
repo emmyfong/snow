@@ -75,6 +75,7 @@ type Model struct {
 	th            theme.Theme
 	st            api.GitState
 	loaded        bool
+	focused       bool
 	width, height int
 	mode          mode
 	// The selected row: by key, so it stays on the same row when the list
@@ -100,6 +101,9 @@ type Model struct {
 func New(pane int, th theme.Theme) *Model {
 	return &Model{pane: pane, th: th.Resolve()}
 }
+
+// SetFocused sets whether the pane shows its action buttons.
+func (m *Model) SetFocused(focused bool) { m.focused = focused }
 
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = width, height }

@@ -22,6 +22,8 @@ func TestComponentsWidthSafe(t *testing.T) {
 			"List":           List(th, ListOptions{Items: items, Selected: 1, Width: w, Height: 5}),
 			"List zero":      List(th, ListOptions{Width: w}),
 			"KeyHints":       KeyHints(th, hints, w),
+			"ButtonRow":      ButtonRow(th, ButtonRowOptions{Width: w, Choices: []string{"Stage", "界"}, Right: "Commit..."}),
+			"ButtonRow zero": ButtonRow(th, ButtonRowOptions{Width: w}),
 			"Panel":          Panel(th, PanelOptions{Title: "Recent sessions", Body: "line one\nline two is long", Width: w}),
 			"Panel zero":     Panel(th, PanelOptions{Width: w}),
 			"Wordmark":       Wordmark(th, w),

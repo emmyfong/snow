@@ -17,10 +17,11 @@ const boxPrompt = "Message: "
 type hitKind int
 
 const (
-	hitNone  hitKind = iota
-	hitEntry         // a change; index is its entry
-	hitHints         // the key hints
-	hitBox           // the commit message box
+	hitNone    hitKind = iota
+	hitEntry           // a change; index is its entry
+	hitHints           // the key hints
+	hitBox             // the commit message box
+	hitButtons         // the action buttons
 )
 
 // hint is a key hint and the key a click on it presses.
@@ -94,6 +95,13 @@ func (m *Model) Click(x, y int) api.Message {
 				return m.Key(l.hints[sp.Index].key)
 			}
 		}
+	case hitButtons:
+		opts, actions := m.listButtons()
+		for _, sp := range ui.ButtonRowSpans(opts) {
+			if x >= sp.X && x < sp.X+sp.W {
+				return m.Key(actions[sp.Index].Key)
+			}
+		}
 	case hitBox:
 		m.openCommit()
 	}
@@ -116,7 +124,7 @@ func (m *Model) chrome() (status, box, hints bool) {
 	if status {
 		status = m.statusHeight(box, true) > 0
 	}
-	return status, box, true
+	return status, box, m.mode != modeList || m.focused
 }
 
 // listHeight is the rows the changes get.
