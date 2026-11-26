@@ -27,6 +27,9 @@ func goldenStates() map[string]func() *Model {
 	}
 	return map[string]func() *Model{
 		"Changes": func() *Model { return model(changes(), 0, 0) },
+		"SelectedConflict": func() *Model {
+			return model(api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: []api.GitChange{{Path: "main.go", Work: "U", Conflict: true}, {Path: "other.go", Work: "M"}}}, 0, 0)
+		},
 		"Note": func() *Model {
 			m := model(api.GitState{Folder: "/home/u/snow", Branch: "main"}, 0, 0)
 			m.Key(key("s"))

@@ -45,6 +45,9 @@ func (m *Model) changeCell(e entry, width int) string {
 	style := lipgloss.NewStyle().Foreground(fg)
 	selected := m.mode != modeCommit && m.selKey == e.key()
 	if selected && bg == nil {
+		// Status foregrounds target the normal background. Selection has
+		// its own contrast pair; conflicts retain their error chip.
+		style = style.Foreground(m.th.SelectionFG)
 		bg = m.th.Selection
 	}
 	if bg != nil {
