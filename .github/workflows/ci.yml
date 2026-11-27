@@ -24,6 +24,8 @@ jobs:
           version: v2.15.0
       - name: hook tests
         run: bash .claude/hooks/tests/run.sh
+      - name: workflow script tests
+        run: bash .github/scripts/tests/ci-job-summary.test.sh
 
   test:
     strategy:
@@ -62,7 +64,15 @@ jobs:
     if: always()
     needs: [lint, test, pr-title]
     runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
-        run: exit 1
-      - run: echo "all checks passed"
+      - uses: actions/checkout@v7
+      - name: report failed jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
+            > "$RUNNER_TEMP/ci-jobs.json"
+          bash .github/scripts/ci-job-summary.sh "$RUNNER_TEMP/ci-jobs.json"
