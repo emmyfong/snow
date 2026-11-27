@@ -119,6 +119,8 @@ func TestGitPaneClickKeepsPressTimeTargetAcrossFocus(t *testing.T) {
 	focused.Windows[0].Panes[0].Focused = false
 	focused.Windows[0].Panes[1].Focused = true
 	m.Update(&focused)
+	changes = append([]api.GitChange{{Path: "aaa.go", Work: "M"}}, changes...)
+	m.Update(gitState(t, 3, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: changes}))
 	m.Update(release(x, y))
 
 	var action *api.SidePaneAction

@@ -187,8 +187,12 @@ func (m *Model) entries() []entry {
 
 // selected returns the selected row's index in entries, or -1 for none.
 func (m *Model) selected(es []entry) int {
+	return indexByKey(es, m.selKey)
+}
+
+func indexByKey(es []entry, key string) int {
 	for i, e := range es {
-		if e.key() == m.selKey {
+		if e.key() == key {
 			return i
 		}
 	}

@@ -154,24 +154,24 @@ func actionForKey(actions []actionSpec, k tea.Key) actionID {
 	return actionNone
 }
 
-func (m *Model) buttons() (ui.ButtonRowOptions, []Action) {
+func (m *Model) buttons() (ui.ButtonRowOptions, []actionSpec) {
 	o := ui.ButtonRowOptions{Width: m.width}
-	var actions []Action
-	var right Action
+	var actions []actionSpec
+	var right actionSpec
 	for _, a := range m.actionSpecs() {
 		if !a.button || !m.actionAllowed(a.rule) {
 			continue
 		}
 		if a.id == actionCommit {
 			o.Right = a.Label
-			right = a.Action
+			right = a
 			continue
 		}
 		if a.id == actionRefresh && len(m.entries()) > 0 {
 			continue
 		}
 		o.Choices = append(o.Choices, a.Label)
-		actions = append(actions, a.Action)
+		actions = append(actions, a)
 	}
 	if o.Right != "" {
 		actions = append(actions, right)

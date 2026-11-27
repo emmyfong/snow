@@ -45,9 +45,13 @@ type layout struct {
 type ClickSnapshot struct {
 	x             int
 	y             int
+	mode          mode
 	layout        layout
 	buttonOptions ui.ButtonRowOptions
-	buttonActions []Action
+	buttonActions []actionSpec
+	entryKey      string
+	entrySelected bool
+	buttonEntry   string
 }
 
 func (l *layout) add(row string, kind hitKind, index int) {
@@ -87,13 +91,27 @@ func (m *Model) Click(x, y int) api.Message {
 // mouse press that will be completed on release.
 func (m *Model) CaptureClick(x, y int) ClickSnapshot {
 	buttonOptions, buttonActions := m.buttons()
-	return ClickSnapshot{
+	l := m.layout()
+	es := m.entries()
+	selected := m.selected(es)
+	snapshot := ClickSnapshot{
 		x:             x,
 		y:             y,
-		layout:        m.layout(),
+		mode:          m.mode,
+		layout:        l,
 		buttonOptions: buttonOptions,
 		buttonActions: buttonActions,
 	}
+	if selected >= 0 {
+		snapshot.buttonEntry = es[selected].key()
+	}
+	if y >= 0 && y < len(l.hits) && l.hits[y] == hitEntry {
+		if i := l.index[y]; i >= 0 && i < len(es) {
+			snapshot.entryKey = es[i].key()
+			snapshot.entrySelected = i == selected
+		}
+	}
+	return snapshot
 }
 
 // ClickCaptured handles a click using the geometry saved by CaptureClick.
@@ -101,7 +119,7 @@ func (m *Model) ClickCaptured(snapshot ClickSnapshot) api.Message {
 	// Hit testing uses the layout the user saw before its note clears.
 	l := snapshot.layout
 	m.note = ""
-	if !m.loaded {
+	if !m.loaded || m.mode != snapshot.mode {
 		return nil
 	}
 	if snapshot.y < 0 || snapshot.y >= len(l.rows) {
@@ -110,8 +128,11 @@ func (m *Model) ClickCaptured(snapshot ClickSnapshot) api.Message {
 	switch l.hits[snapshot.y] {
 	case hitEntry:
 		es := m.entries()
-		i := l.index[snapshot.y]
-		if i == m.selected(es) {
+		i := indexByKey(es, snapshot.entryKey)
+		if i < 0 {
+			return nil
+		}
+		if snapshot.entrySelected {
 			return m.openDiff(es, i)
 		}
 		m.move(es, i)
@@ -129,13 +150,31 @@ func (m *Model) ClickCaptured(snapshot ClickSnapshot) api.Message {
 	case hitButtons:
 		for _, sp := range ui.ButtonRowSpans(snapshot.buttonOptions) {
 			if snapshot.x >= sp.X && snapshot.x < sp.X+sp.W {
-				return m.Key(snapshot.buttonActions[sp.Index].Key)
+				a := snapshot.buttonActions[sp.Index]
+				if actionNeedsEntry(a.id) {
+					es := m.entries()
+					i := indexByKey(es, snapshot.buttonEntry)
+					if i < 0 {
+						return nil
+					}
+					m.selectIndex(es, i)
+				}
+				return m.Key(a.Key)
 			}
 		}
 	case hitBox:
 		m.openCommit()
 	}
 	return nil
+}
+
+func actionNeedsEntry(id actionID) bool {
+	switch id {
+	case actionStage, actionUnstage, actionDiff, actionOpen, actionRemove:
+		return true
+	default:
+		return false
+	}
 }
 
 // Chrome rows: the header and the key hints, plus the status row and the
