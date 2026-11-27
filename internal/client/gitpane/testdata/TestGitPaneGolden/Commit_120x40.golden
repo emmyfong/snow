@@ -1,4 +1,4 @@
-[1m feat/195-git-pane[m[38;2;138;155;171m  in snow[m[38;2;138;155;171m, 2 ahead, 1 behind[m
+[1m feat/195-git-pane[m[38;2;138;155;171m  in …/u/snow[m[38;2;138;155;171m, 2 ahead, 1 behind[m
   [38;2;138;155;171mStaged (3)[m                                                                                                            
 [1;38;2;255;255;255;48;2;45;74;102m> A   internal/git/status.go                                                                                            [m
   M   internal/server/gitpane.go                                                                                        
@@ -37,4 +37,4 @@
 
 
  [38;2;127;184;230mMessage: [mAdd the git pane                                                                                              
- [38;2;127;184;230menter[m [38;2;138;155;171mcommit[m   [38;2;127;184;230mctrl+j[m [38;2;138;155;171mnew line[m   [38;2;127;184;230mesc[m [38;2;138;155;171mcancel[m
+ [38;2;127;184;230menter[m [38;2;138;155;171mcommit[m   [38;2;127;184;230mctrl+j[m [38;2;138;155;171mnew line[m   [38;2;127;184;230mesc[m [38;2;138;155;171mclose, keep draft[m

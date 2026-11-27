@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -31,6 +32,27 @@ func (r Repo) List(ctx context.Context) ([]Worktree, error) {
 		}
 	}
 	return wts, nil
+}
+
+// CanonicalPath returns the path Git lists for the worktree at path. It
+// resolves native filesystem aliases through the same comparison used by
+// Remove, without asking callers to do filesystem work on a state goroutine.
+func (r Repo) CanonicalPath(ctx context.Context, path string) (string, error) {
+	root, err := r.git(ctx, path, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", r.classify(err)
+	}
+	root = strings.TrimSpace(root)
+	worktrees, err := r.List(ctx)
+	if err != nil {
+		return "", err
+	}
+	for _, wt := range worktrees {
+		if r.same(wt.Path, root) {
+			return wt.Path, nil
+		}
+	}
+	return "", fmt.Errorf("%w: %s", ErrNotWorktree, path)
 }
 
 // parseList reads the output of git worktree list --porcelain: one block

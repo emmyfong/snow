@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,8 +12,36 @@ import (
 
 	"github.com/emmyfong/snow/internal/layout"
 	"github.com/emmyfong/snow/internal/store"
+	"github.com/emmyfong/snow/internal/worktree"
 	"github.com/emmyfong/snow/pkg/api"
 )
+
+// canonicalizeSavedWorktrees replaces saved aliases with the paths Git lists.
+// It runs before restore reaches the model goroutine, which must not wait for Git.
+func (s *Server) canonicalizeSavedWorktrees(snap *store.Snapshot) error {
+	if snap == nil {
+		return nil
+	}
+	for wi := range snap.Windows {
+		for pi := range snap.Windows[wi].Panes {
+			pane := &snap.Windows[wi].Panes[pi]
+			if pane.Worktree == "" {
+				continue
+			}
+			distro, _ := s.distroOf(pane.Profile)
+			ctx, cancel := context.WithTimeout(context.Background(), gitWait)
+			repo := worktree.Repo{Path: pane.Worktree, Distro: distro}
+			path, err := repo.CanonicalPath(ctx, pane.Worktree)
+			cancel()
+			if err != nil {
+				s.log.Warn("list saved agent worktree", "worktree", pane.Worktree, "err", err)
+				return fmt.Errorf("restore agent worktree %s: %w", pane.Worktree, err)
+			}
+			pane.Worktree = path
+		}
+	}
+	return nil
+}
 
 // loadSaved reads the snapshot of session when it is saved and not
 // running, for an attach to restore. It reads the file outside the model

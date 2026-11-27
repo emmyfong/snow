@@ -12,13 +12,14 @@ const PaneGit = "git"
 
 // The actions of a git pane, in SidePaneAction.Action.
 const (
-	GitActRefresh   = "refresh"    // read the folder's status again
-	GitActStage     = "stage"      // stage ArgGitPath
-	GitActStageAll  = "stage-all"  // stage every change
-	GitActUnstage   = "unstage"    // take ArgGitPath back out of the index
-	GitActCommit    = "commit"     // commit what is staged with ArgGitMessage
-	GitActDiff      = "diff"       // show ArgGitPath's diff; ArgGitStaged picks the staged one
-	GitActCloseDiff = "close-diff" // go back to the list of changes
+	GitActRefresh        = "refresh"         // read the folder's status again
+	GitActStage          = "stage"           // stage ArgGitPath
+	GitActStageAll       = "stage-all"       // stage every change
+	GitActUnstage        = "unstage"         // take ArgGitPath back out of the index
+	GitActCommit         = "commit"          // commit what is staged with ArgGitMessage
+	GitActDiff           = "diff"            // show ArgGitPath's diff; ArgGitStaged picks the staged one
+	GitActCloseDiff      = "close-diff"      // go back to the list of changes
+	GitActRemoveWorktree = "remove-worktree" // remove ArgGitPath when it is safe
 )
 
 // The arguments of a git pane's actions.

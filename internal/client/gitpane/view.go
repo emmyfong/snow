@@ -105,18 +105,17 @@ func (m *Model) Click(x, y int) api.Message {
 // and the list only.
 func (m *Model) chrome() (status, box, hints bool) {
 	// A read that failed shows its error in the body instead.
-	status = (m.st.Error != "" && !m.readFailed()) || m.st.Notice != ""
+	status = m.removePath != "" || (m.st.Error != "" && !m.readFailed()) || m.st.Notice != ""
 	box = m.mode == modeCommit
 	if m.height < 4 {
 		return false, false, false
 	}
-	need := 3 // header, one list row, hints
-	if box && m.height >= need+boxRows {
-		need += boxRows
-	} else {
+	if box && m.height < 3+boxRows { // header, one list row, hints, and box
 		box = false
 	}
-	status = status && m.height > need
+	if status {
+		status = m.statusHeight(box, true) > 0
+	}
 	return status, box, true
 }
 
@@ -125,7 +124,7 @@ func (m *Model) listHeight() int {
 	status, box, hints := m.chrome()
 	h := m.height - 1
 	if status {
-		h--
+		h -= m.statusHeight(box, hints)
 	}
 	if box {
 		h -= boxRows
@@ -134,6 +133,20 @@ func (m *Model) listHeight() int {
 		h--
 	}
 	return max(h, 1)
+}
+
+// statusHeight is the number of status rows that fit while keeping one list
+// row and the other chrome visible.
+func (m *Model) statusHeight(box, hints bool) int {
+	available := m.height - 2 // header and one list row
+	if box {
+		available -= boxRows
+	}
+	if hints {
+		available--
+	}
+	lines, _ := m.statusLines()
+	return min(len(lines), max(available, 0))
 }
 
 // diffHeight is the rows the diff gets: all but the header and the hints.

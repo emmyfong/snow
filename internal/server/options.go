@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"path"
 	"slices"
 	"sync/atomic"
 	"time"
@@ -316,12 +315,17 @@ func agentLauncher(detected []shell.Profile, hooks shell.Hooks, agents *agentSet
 }
 
 // folderFor returns the folder profile p starts in. A WSL pane reports Linux
-// folders, which do not exist for a Windows server, so an absolute Linux
-// path passes through and wsl --cd checks it. Other profiles get dir if it
-// exists here, or the home folder.
+// folders, which do not exist for a Windows server, so Linux and matching WSL
+// UNC paths pass through in Linux form. Other profiles get dir if it exists
+// here, or the home folder.
 func folderFor(p shell.Profile, dir string) string {
-	if p.Distro != "" && path.IsAbs(dir) {
-		return dir
+	if p.Distro != "" {
+		if linux, ok := distroFolder(p.Distro, dir); ok {
+			return linux
+		}
+		if _, _, ok := shell.UNCToWSL(dir); ok {
+			return "~" // WSL inherits the Windows working directory unless home is explicit.
+		}
 	}
 	return usableDir(dir)
 }

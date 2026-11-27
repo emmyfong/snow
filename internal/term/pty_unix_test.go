@@ -3,12 +3,41 @@
 package term
 
 import (
+	"context"
 	"errors"
+	"io"
+	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 )
+
+func TestPTYMasterNotInherited(t *testing.T) {
+	if _, err := os.Stat("/proc/self/fd"); errors.Is(err, os.ErrNotExist) {
+		t.Skip("requires /proc/self/fd")
+	} else if err != nil {
+		t.Fatal(err)
+	}
+	startReal(t, Spec{Path: "/bin/sh"})
+	p, err := startPTY(Spec{Path: "ls", Args: []string{"-l", "/proc/self/fd"}}, 200, 24)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = p.Close() })
+	output, err := io.ReadAll(p)
+	// Linux reports EIO when the last slave descriptor closes.
+	if err != nil && !errors.Is(err, syscall.EIO) {
+		t.Fatal(err)
+	}
+	if err := p.Wait(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(output), "ptmx") {
+		t.Fatalf("child inherited a PTY master:\n%s", output)
+	}
+}
 
 func TestUnixShellEcho(t *testing.T) {
 	p := startReal(t, Spec{Path: "/bin/sh"})

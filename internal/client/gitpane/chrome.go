@@ -26,7 +26,7 @@ func (m *Model) header() string {
 	}
 	var extra []string
 	if m.loaded && m.st.Folder != "" {
-		extra = append(extra, "in "+ui.FolderName(m.st.Folder))
+		extra = append(extra, "in "+ui.FolderShort(m.st.Folder))
 	}
 	switch {
 	case m.st.Initial:
@@ -58,33 +58,81 @@ func (m *Model) header() string {
 	return left
 }
 
-// statusRow is the last action's failure, in the error colors, or its
-// outcome.
-func (m *Model) statusRow() string {
-	if m.st.Error != "" {
-		style := lipgloss.NewStyle().Foreground(m.th.ErrorFG).Background(m.th.Error)
-		text := ansi.Truncate(" "+ui.PlainLine(m.st.Error), m.width, "...")
-		return style.Render(text + strings.Repeat(" ", max(m.width-ansi.StringWidth(text), 0)))
+// statusLines are the unstyled rows of the last outcome and whether they
+// omit text. Errors wrap to three rows; notices stay on one row.
+func (m *Model) statusLines() ([]string, bool) {
+	if m.removePath != "" {
+		return []string{" Remove worktree " + ui.FolderName(m.removePath) + "? y removes it, n keeps it."}, false
 	}
-	return lipgloss.NewStyle().Foreground(m.th.Success).Render(" " + ui.PlainLine(m.st.Notice))
+	if m.st.Error == "" {
+		return []string{" " + ui.PlainLine(m.st.Notice)}, false
+	}
+	const maxErrorRows = 3
+	lines := strings.Split(ansi.Wrap(" "+ui.PlainLine(m.st.Error), max(m.width, 1), ""), "\n")
+	omitted := len(lines) > maxErrorRows
+	if omitted {
+		lines = lines[:maxErrorRows]
+	}
+	return lines, omitted
+}
+
+// statusRows render at most limit visible rows and mark an error when text
+// remains beyond the last row that fits.
+func (m *Model) statusRows(limit int) []string {
+	lines, omitted := m.statusLines()
+	if limit < len(lines) {
+		lines = lines[:max(limit, 0)]
+		omitted = true
+	}
+	if len(lines) == 0 {
+		return nil
+	}
+	if m.removePath != "" {
+		text := ansi.Truncate(lines[0], m.width, "…")
+		return []string{lipgloss.NewStyle().Foreground(m.th.PromptFG).Background(m.th.PromptBG).Render(text)}
+	}
+	if m.st.Error == "" {
+		return []string{lipgloss.NewStyle().Foreground(m.th.Success).Render(ansi.Truncate(lines[0], m.width, ""))}
+	}
+	if omitted && m.width > 0 {
+		last := lines[len(lines)-1]
+		if m.width == 1 {
+			last = "…"
+		} else {
+			last = ansi.Truncate(last, m.width-1, "") + "…"
+		}
+		lines[len(lines)-1] = last
+	}
+	style := lipgloss.NewStyle().Foreground(m.th.ErrorFG).Background(m.th.Error)
+	out := make([]string, len(lines))
+	for i, line := range lines {
+		line = ansi.Truncate(line, m.width, "")
+		out[i] = style.Render(line + strings.Repeat(" ", max(m.width-ansi.StringWidth(line), 0)))
+	}
+	return out
 }
 
 func (m *Model) boxOptions() ui.TextAreaOptions {
 	return ui.TextAreaOptions{
 		Width: max(m.width-1, 1), Height: boxRows, Prompt: boxPrompt,
 		Value: string(m.msg), Cursor: m.cursor,
-		Placeholder: "Enter commits, Esc cancels",
+		Placeholder: "Enter commits. Esc closes and keeps the draft.",
 	}
 }
 
 func (m *Model) listHints() []hint {
 	refresh := hint{ui.Hint{Key: "r", Desc: "refresh"}, tea.Key{Code: 'r', Text: "r"}}
 	switch {
+	case m.removePath != "":
+		return []hint{
+			{ui.Hint{Key: "y", Desc: "remove"}, tea.Key{Code: 'y', Text: "y"}},
+			{ui.Hint{Key: "n", Desc: "keep"}, tea.Key{Code: 'n', Text: "n"}},
+		}
 	case m.mode == modeCommit:
 		return []hint{
 			{ui.Hint{Key: "enter", Desc: "commit"}, tea.Key{Code: tea.KeyEnter}},
 			{ui.Hint{Key: "ctrl+j", Desc: "new line"}, tea.Key{Code: 'j', Mod: tea.ModCtrl}},
-			{ui.Hint{Key: "esc", Desc: "cancel"}, tea.Key{Code: tea.KeyEscape}},
+			{ui.Hint{Key: "esc", Desc: "close, keep draft"}, tea.Key{Code: tea.KeyEscape}},
 		}
 	case len(m.entries()) == 0:
 		return []hint{refresh}
@@ -101,6 +149,9 @@ func (m *Model) listHints() []hint {
 			enter = "open"
 		}
 		hs = append(hs, hint{ui.Hint{Key: "enter", Desc: enter}, tea.Key{Code: tea.KeyEnter}})
+	}
+	if m.CanRemoveSelectedWorktree() {
+		hs = append(hs, hint{ui.Hint{Key: "x", Desc: "remove"}, tea.Key{Code: 'x', Text: "x"}})
 	}
 	return append(hs,
 		hint{ui.Hint{Key: "a", Desc: "stage all"}, tea.Key{Code: 'a', Text: "a"}},

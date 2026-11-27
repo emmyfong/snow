@@ -67,6 +67,32 @@ func TestZoomedGolden120x40(t *testing.T)       { goldenZoomed(t, 120, 40) }
 func TestThreeWindowsGolden80x24(t *testing.T)  { goldenThreeWindows(t, 80, 24) }
 func TestThreeWindowsGolden120x40(t *testing.T) { goldenThreeWindows(t, 120, 40) }
 
+func goldenSidePaneHeader(t *testing.T, cols, rows int) {
+	m := screen(cols, rows)
+	p := []api.PaneInfo{{
+		ID: 1, Kind: api.PaneGit, Rect: api.Rect{Y: 1, W: cols, H: rows - 3},
+		Profile: "Claude Code (Ubuntu)", Folder: "/home/user/repo", Focused: true,
+	}}
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Name: "dev", Panes: p}}})
+	golden.RequireEqual(t, m.View().Content)
+}
+
+func TestSidePaneHeaderGolden80x24(t *testing.T)  { goldenSidePaneHeader(t, 80, 24) }
+func TestSidePaneHeaderGolden120x40(t *testing.T) { goldenSidePaneHeader(t, 120, 40) }
+
+func TestSidePaneHeaderUsesKindAndKeepsSourceProfile(t *testing.T) {
+	m := screen(80, 24)
+	pane := api.PaneInfo{ID: 1, Kind: api.PaneGit, Profile: "Claude Code (Ubuntu)", Folder: "/home/user/repo", Focused: true}
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{Index: 1, Panes: []api.PaneInfo{pane}}}})
+	if got := m.windowPanes()[0].Name; got != api.PaneGit {
+		t.Fatalf("side pane header name %q, want %q", got, api.PaneGit)
+	}
+	m.openPicker("Split", api.Command{Op: api.OpSplit, Args: map[string]string{}})
+	if got := m.picker.Choice(); got != pane.Profile {
+		t.Fatalf("split picker profile %q, want source profile %q", got, pane.Profile)
+	}
+}
+
 func TestWindowTabsAbovePanes(t *testing.T) {
 	m := screen(80, 24)
 	p := []api.PaneInfo{{ID: 1, Rect: api.Rect{W: 80, H: 22}, Focused: true}}

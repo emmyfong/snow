@@ -28,3 +28,17 @@ func TestFolderTail(t *testing.T) {
 		}
 	}
 }
+
+func TestFolderShort(t *testing.T) {
+	for _, tt := range []struct{ in, want string }{
+		{"/a/b/c", "…/b/c"},
+		{"/a/b", "a/b"},
+		{`C:\x\y\z`, "…/y/z"},
+		{"/", "/"},
+		{"", "-"},
+	} {
+		if got := FolderShort(tt.in); got != tt.want {
+			t.Errorf("FolderShort(%q)=%q,want %q", tt.in, got, tt.want)
+		}
+	}
+}
