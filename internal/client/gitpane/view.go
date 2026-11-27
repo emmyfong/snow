@@ -39,6 +39,17 @@ type layout struct {
 	boxTop int // the first row of the commit box, or -1
 }
 
+// ClickSnapshot records the hit geometry and button actions visible when a
+// mouse press begins. It lets a later release use that same view even if
+// focus changes the pane layout between the two events.
+type ClickSnapshot struct {
+	x             int
+	y             int
+	layout        layout
+	buttonOptions ui.ButtonRowOptions
+	buttonActions []Action
+}
+
 func (l *layout) add(row string, kind hitKind, index int) {
 	l.rows = append(l.rows, row)
 	l.hits = append(l.hits, kind)
@@ -69,19 +80,37 @@ func (m *Model) Cursor() (x, y int, ok bool) {
 // shows its diff. A click on a key hint presses its key, and a click on
 // the commit box opens it.
 func (m *Model) Click(x, y int) api.Message {
+	return m.ClickCaptured(m.CaptureClick(x, y))
+}
+
+// CaptureClick saves the pane's current hit geometry and button actions for a
+// mouse press that will be completed on release.
+func (m *Model) CaptureClick(x, y int) ClickSnapshot {
+	buttonOptions, buttonActions := m.buttons()
+	return ClickSnapshot{
+		x:             x,
+		y:             y,
+		layout:        m.layout(),
+		buttonOptions: buttonOptions,
+		buttonActions: buttonActions,
+	}
+}
+
+// ClickCaptured handles a click using the geometry saved by CaptureClick.
+func (m *Model) ClickCaptured(snapshot ClickSnapshot) api.Message {
 	// Hit testing uses the layout the user saw before its note clears.
-	l := m.layout()
+	l := snapshot.layout
 	m.note = ""
 	if !m.loaded {
 		return nil
 	}
-	if y < 0 || y >= len(l.rows) {
+	if snapshot.y < 0 || snapshot.y >= len(l.rows) {
 		return nil
 	}
-	switch l.hits[y] {
+	switch l.hits[snapshot.y] {
 	case hitEntry:
 		es := m.entries()
-		i := l.index[y]
+		i := l.index[snapshot.y]
 		if i == m.selected(es) {
 			return m.openDiff(es, i)
 		}
@@ -93,15 +122,14 @@ func (m *Model) Click(x, y int) api.Message {
 		}
 		// The hints row is indented by one cell.
 		for _, sp := range ui.HintSpans(hs, m.width-1) {
-			if x-1 >= sp.X && x-1 < sp.X+sp.W {
+			if snapshot.x-1 >= sp.X && snapshot.x-1 < sp.X+sp.W {
 				return m.Key(l.hints[sp.Index].key)
 			}
 		}
 	case hitButtons:
-		opts, actions := m.buttons()
-		for _, sp := range ui.ButtonRowSpans(opts) {
-			if x >= sp.X && x < sp.X+sp.W {
-				return m.Key(actions[sp.Index].Key)
+		for _, sp := range ui.ButtonRowSpans(snapshot.buttonOptions) {
+			if snapshot.x >= sp.X && snapshot.x < sp.X+sp.W {
+				return m.Key(snapshot.buttonActions[sp.Index].Key)
 			}
 		}
 	case hitBox:

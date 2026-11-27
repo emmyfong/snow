@@ -76,6 +76,62 @@ func TestGitPaneKeys(t *testing.T) {
 	}
 }
 
+func TestGitPaneClickKeepsPressTimeTargetAcrossFocus(t *testing.T) {
+	m, r := gitScreen(t, 80, 24)
+	layout := *m.layout
+	layout.Windows = append([]api.WindowInfo(nil), m.layout.Windows...)
+	layout.Windows[0].Panes = append([]api.PaneInfo(nil), m.layout.Windows[0].Panes...)
+	layout.Windows[0].Panes[0].Focused = true
+	layout.Windows[0].Panes[1].Focused = false
+	m.Update(&layout)
+
+	changes := make([]api.GitChange, 30)
+	for i := range changes {
+		changes[i] = api.GitChange{Path: fmt.Sprintf("file-%d.go", i), Work: "M"}
+	}
+	m.Update(gitState(t, 2, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: changes}))
+	git := m.own[2].(gitPane)
+	git.Model.Key(tea.Key{Code: tea.KeyEnd})
+
+	view := git.View()
+	row := -1
+	for i, line := range view {
+		if strings.Contains(line, "file-29.go") {
+			row = i
+			break
+		}
+	}
+	if row < 0 {
+		t.Fatal("selected file is not visible before focus")
+	}
+
+	pane := layout.Windows[0].Panes[1]
+	x := pane.Rect.X + 2
+	y := m.areaTop() + pane.Rect.Y + row
+	m.Update(click(x, y))
+	if m.ownPress == nil {
+		t.Fatal("mouse press did not wait for release")
+	}
+
+	focused := *m.layout
+	focused.Windows = append([]api.WindowInfo(nil), m.layout.Windows...)
+	focused.Windows[0].Panes = append([]api.PaneInfo(nil), m.layout.Windows[0].Panes...)
+	focused.Windows[0].Panes[0].Focused = false
+	focused.Windows[0].Panes[1].Focused = true
+	m.Update(&focused)
+	m.Update(release(x, y))
+
+	var action *api.SidePaneAction
+	for _, sent := range r.sent {
+		if a, ok := sent.(*api.SidePaneAction); ok {
+			action = a
+		}
+	}
+	if action == nil || action.Action != api.GitActDiff || action.Args[api.ArgGitPath] != "file-29.go" {
+		t.Fatalf("release action = %+v, want diff file-29.go from the visible press-time row", action)
+	}
+}
+
 // TestGitPaneOlderState: a state older than the one shown is dropped, and
 // a state this client cannot read shows as an error.
 func TestGitPaneOlderState(t *testing.T) {

@@ -20,6 +20,7 @@ type grab struct {
 // sends no click.
 type ownClick struct {
 	pane, x, y int // the pane and the cell pressed, in pane coordinates
+	prepared   func() (api.Message, string)
 }
 
 // mouseMsg handles one mouse event. Clicks pick what they hit: a tab selects
@@ -164,7 +165,13 @@ func (m *Model) mousePress(ev tea.Mouse) tea.Cmd {
 			case tea.MouseLeft:
 				// A click waits for the release: a press that moves is a
 				// selection, not a click.
-				m.ownPress = &ownClick{pane: p.ID, x: h.X, y: h.Y}
+				press := &ownClick{pane: p.ID, x: h.X, y: h.Y}
+				if snapshotter, ok := o.(interface {
+					prepareClick(x, y int) func() (api.Message, string)
+				}); ok {
+					press.prepared = snapshotter.prepareClick(h.X, h.Y)
+				}
+				m.ownPress = press
 			case tea.MouseRight:
 				m.openMenu(ev.X, ev.Y-m.areaTop())
 			}
@@ -215,7 +222,13 @@ func (m *Model) mouseRelease(ev tea.Mouse) tea.Cmd {
 	if c := m.ownPress; c != nil {
 		m.ownPress = nil
 		if o := m.own[c.pane]; o != nil {
-			msg, note := o.Click(c.x, c.y)
+			var msg api.Message
+			var note string
+			if c.prepared != nil {
+				msg, note = c.prepared()
+			} else {
+				msg, note = o.Click(c.x, c.y)
+			}
 			cmd = m.ownResult(c.pane, o, msg, note)
 		}
 	}

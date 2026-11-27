@@ -36,6 +36,13 @@ func (g gitPane) Key(k tea.Key) (api.Message, string) { return g.result(g.Model.
 
 func (g gitPane) Click(x, y int) (api.Message, string) { return g.result(g.Model.Click(x, y)) }
 
+func (g gitPane) prepareClick(x, y int) func() (api.Message, string) {
+	snapshot := g.Model.CaptureClick(x, y)
+	return func() (api.Message, string) {
+		return g.result(g.Model.ClickCaptured(snapshot))
+	}
+}
+
 func (g gitPane) Animating() bool { return false }
 
 func (g gitPane) Tick() {}
