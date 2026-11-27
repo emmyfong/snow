@@ -148,6 +148,78 @@ func TestStatusBarCutsLongMessage(t *testing.T) {
 	}
 }
 
+// TestStatusBarKeepsMode: the mode text keeps the right end at every width.
+// A long notice and a short bar cut the session and folder first; the mode
+// text is cut only when it alone is wider than the bar.
+func TestStatusBarKeepsMode(t *testing.T) {
+	const mode = "Scroll mode  Esc: exit"
+	const notice = "No match for a very long query that keeps going"
+	for _, width := range []int{80, 60, 40, 22, 20, 12} {
+		o := StatusOptions{Width: width, Session: "work", Folder: "Projects/snow", Right: "1 need you", Notice: notice, Mode: mode}
+		out := StatusBar(theme.Default(), o)
+		if w := ansi.StringWidth(out); w != width {
+			t.Fatalf("width %d: bar is %d cells", width, w)
+		}
+		want := mode
+		if width < ansi.StringWidth(mode) {
+			want = ansi.Truncate(mode, width, "")
+		}
+		if got := ansi.Strip(out); !strings.HasSuffix(got, want) {
+			t.Fatalf("width %d: bar %q, want it to end with %q", width, got, want)
+		}
+	}
+}
+
+// TestStatusBarModeOutlivesANotice: a notice keeps its strip, and the mode
+// text follows it with a gap of its own.
+func TestStatusBarModeOutlivesANotice(t *testing.T) {
+	const mode = "Scroll mode  Esc: exit"
+	out := ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 80, Session: "work", Folder: "Projects/snow", Notice: "No match for build", Mode: mode}))
+	if !strings.Contains(out, "No match for build") || !strings.HasSuffix(out, "  "+mode) {
+		t.Fatalf("bar %q, want the notice and the mode text after a gap", out)
+	}
+}
+
+// TestStatusBarPromptKeepsMode: the mode text stays at the right end of the
+// prompt line, the prompt text is cut first, and the hint gives way to it.
+func TestStatusBarPromptKeepsMode(t *testing.T) {
+	const mode = "Scroll mode  Esc: exit"
+	const text = "Search up: a very long query that keeps going"
+	for _, width := range []int{120, 80, 40, 22, 20} {
+		o := StatusOptions{Width: width, Prompt: text, Hint: "Esc: cancel", Mode: mode}
+		out := StatusBar(theme.Default(), o)
+		if w := ansi.StringWidth(out); w != width {
+			t.Fatalf("width %d: bar is %d cells", width, w)
+		}
+		got := ansi.Strip(out)
+		wantMode := width >= ansi.StringWidth(mode)
+		if strings.HasSuffix(got, mode) != wantMode {
+			t.Fatalf("width %d: bar %q, want the mode text %v", width, got, wantMode)
+		}
+		if wantMode && strings.Contains(got, "Esc: cancel") {
+			t.Fatalf("width %d: bar %q kept the hint beside the mode text", width, got)
+		}
+	}
+}
+
+// TestStatusBarNeverOverflows: a mode text that nearly fills the bar leaves no
+// room for a notice, a message, or the needs-you count. The bar still draws
+// exactly its width.
+func TestStatusBarNeverOverflows(t *testing.T) {
+	const mode = "Scroll mode  Esc: exit"
+	for _, width := range []int{21, 22, 23, 24, 25, 26} {
+		for _, o := range []StatusOptions{
+			{Width: width, Session: "work", Folder: "Projects/snow", Notice: "No match", Mode: mode},
+			{Width: width, Session: "work", Folder: "Projects/snow", Message: "no room", Mode: mode},
+			{Width: width, Session: "work", Folder: "Projects/snow", Right: "1 need you", Mode: mode},
+		} {
+			if got := ansi.StringWidth(StatusBar(theme.Default(), o)); got != width {
+				t.Fatalf("width %d (right %q, notice %q, message %q): bar is %d cells", width, o.Right, o.Notice, o.Message, got)
+			}
+		}
+	}
+}
+
 func TestStatusBarFolderSeparator(t *testing.T) {
 	for _, folder := range []string{"Projects/snow", ""} {
 		got := strings.TrimSpace(ansi.Strip(StatusBar(theme.Default(), StatusOptions{Width: 80, Session: "work", Folder: folder})))

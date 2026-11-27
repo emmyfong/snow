@@ -2,6 +2,14 @@ package copymode
 
 import tea "charm.land/bubbletea/v2"
 
+// Interrupts reports whether k is Ctrl+C. In copy mode it leaves the mode
+// and reaches the pane, so the program there stops. A lock key sets its own
+// modifier bit on Windows console input, so the lock bits are masked.
+func Interrupts(k tea.Key) bool {
+	const locks = tea.ModCapsLock | tea.ModNumLock | tea.ModScrollLock
+	return k.Code == 'c' && k.Mod&^locks == tea.ModCtrl
+}
+
 // Key handles one key press and tells the session whether copy mode is
 // still open. Keys follow tmux's vi table, with the arrow keys and page keys
 // as well.
@@ -13,6 +21,9 @@ func (m *Model) Key(k tea.Key) (Result, tea.Cmd) {
 		return Open, nil
 	}
 	m.notice = ""
+	if Interrupts(k) {
+		return Exited, nil
+	}
 	if k.Code == tea.KeyEscape && m.selecting {
 		m.selecting = false
 		return Open, nil

@@ -44,9 +44,12 @@ func inCopyMode(t *testing.T, cols, rows int) (*Model, *recorder, []string) {
 	m := attached(t, cols, rows)
 	m.send = r.send
 	history := historyOf(300)
-	m.Update(ctrlB)
-	m.Update(press('[', 0, "["))
+	// A wheel notch opens copy mode, as it does for the user.
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelUp})
 	serve(m, r, history)
+	// The notch leaves the view above the bottom; a notch back down returns
+	// to it, with the cursor where the pane's was.
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelDown})
 	return m, r, history
 }
 
@@ -63,20 +66,104 @@ func TestPrefixBracketEntersCopyMode(t *testing.T) {
 	}
 }
 
+// TestCopyModeKeepsKeysFromThePane: every key but Ctrl+C stays out of the
+// pane while copy mode is open.
 func TestCopyModeKeepsKeysFromThePane(t *testing.T) {
-	m, r := newPrefixScreen(t)
-	m.Update(ctrlB)
-	m.Update(press('[', 0, "["))
+	m, r, _ := inCopyMode(t, 80, 24)
 	r.sent = nil
-	m.Update(press('k', 0, "k"))
-	m.Update(press('x', 0, "x"))
-	if got := r.keys(); len(got) != 0 {
-		t.Fatalf("copy mode sent keys %q to the pane", got)
+	for _, k := range []tea.KeyPressMsg{
+		press('k', 0, "k"),
+		press('x', 0, "x"),
+		press('b', tea.ModCtrl, ""), // the prefix key pages in copy mode
+		press(tea.KeyUp, 0, ""),
+		press(tea.KeyEnter, 0, ""),
+	} {
+		m.Update(k)
+		if got := r.keys(); len(got) != 0 {
+			t.Fatalf("copy mode sent keys %q to the pane for %+v", got, k)
+		}
 	}
-	m.Update(press('q', 0, "q"))
+	m.Update(press('c', tea.ModCtrl, ""))
+	if m.copy != nil {
+		t.Fatal("Ctrl+C left copy mode open")
+	}
+	if got := r.keys(); len(got) != 1 || got[0] != "ctrl+c" {
+		t.Fatalf("the pane got %q, want [ctrl+c]", got)
+	}
+	// The pane gets keys again.
 	m.Update(press('a', 0, "a"))
-	if got := r.keys(); len(got) != 1 || got[0] != "a" {
-		t.Fatalf("after q the pane got %q, want [a]", got)
+	if got := r.keys(); len(got) != 2 || got[1] != "a" {
+		t.Fatalf("after Ctrl+C the pane got %q, want [ctrl+c a]", got)
+	}
+}
+
+// TestCopyModeCtrlCReachesPane: Ctrl+C leaves copy mode and reaches the pane
+// the history belongs to, so the program stops.
+func TestCopyModeCtrlCReachesPane(t *testing.T) {
+	r := &recorder{}
+	m := attached(t, 80, 24)
+	m.send = r.send
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelUp})
+	serve(m, r, historyOf(300))
+	r.sent = nil
+	m.Update(press('c', tea.ModCtrl, ""))
+	if m.copy != nil {
+		t.Fatal("Ctrl+C left copy mode open")
+	}
+	if got := r.keys(); len(got) != 1 || got[0] != "ctrl+c" {
+		t.Fatalf("the pane got %q, want [ctrl+c]", got)
+	}
+	if in := r.sent[0].(*api.Input); in.Pane != 1 {
+		t.Fatalf("the key went to pane %d, want 1", in.Pane)
+	}
+}
+
+// TestCopyModeCtrlCSendsToTheCopyPane: the wheel can open copy mode over a
+// pane that does not have the focus. Ctrl+C goes to the pane whose history is
+// shown, not to the focused pane.
+func TestCopyModeCtrlCSendsToTheCopyPane(t *testing.T) {
+	r := &recorder{}
+	m := screen(80, 24)
+	m.send = r.send
+	m.Update(&api.Layout{Session: "work", Active: 1, Windows: []api.WindowInfo{{
+		Index: 1, Name: "dev",
+		Panes: []api.PaneInfo{
+			{ID: 1, Rect: api.Rect{Y: 1, W: 39, H: 21}, Profile: "sh"},
+			{ID: 2, Rect: api.Rect{X: 40, Y: 1, W: 40, H: 21}, Profile: "sh", Focused: true},
+		},
+	}}})
+	m.Update(tea.MouseWheelMsg{X: 5, Y: 6, Button: tea.MouseWheelUp})
+	serve(m, r, historyOf(300))
+	r.sent = nil
+	m.Update(press('c', tea.ModCtrl, ""))
+	if m.copy != nil {
+		t.Fatal("Ctrl+C left copy mode open")
+	}
+	var inputs []*api.Input
+	for _, msg := range r.sent {
+		if in, ok := msg.(*api.Input); ok {
+			inputs = append(inputs, in)
+		}
+	}
+	if len(inputs) != 1 {
+		t.Fatalf("sent %d inputs, want 1: %v", len(inputs), r.sent)
+	}
+	in := inputs[0]
+	if in.Pane != 1 {
+		t.Fatalf("the key went to pane %d, want the copy pane 1", in.Pane)
+	}
+	if in.Key == nil || in.Key.Code != "c" || len(in.Key.Mod) != 1 || in.Key.Mod[0] != api.ModCtrl || in.Key.Text != "" {
+		t.Fatalf("the key was %#v, want Code c, Mod [ctrl], and no text", in.Key)
+	}
+}
+
+// TestCopyModeNoticeNamesScrollMode: the copy-mode action calls the mode by
+// its on-screen name when the focused pane draws itself.
+func TestCopyModeNoticeNamesScrollMode(t *testing.T) {
+	m, _ := chatScreen(t, 100, 30)
+	handlers["copy-mode"](m, tea.Key{})
+	if !strings.Contains(m.message, "Scroll mode") {
+		t.Fatalf("message %q, want it to name Scroll mode", m.message)
 	}
 }
 

@@ -37,10 +37,18 @@ func (m *Model) enterCopyOn(id int) bool {
 	return true
 }
 
-// copyKey sends a key to copy mode and closes it when it exits.
+// copyKey sends a key to copy mode and closes it when it exits. Ctrl+C also
+// reaches the pane whose history is shown, so the program there stops.
 func (m *Model) copyKey(k tea.Key) tea.Cmd {
+	pane := m.copy.Pane()
 	res, cmd := m.copy.Key(k)
-	return m.afterCopy(res, cmd)
+	cmd = m.afterCopy(res, cmd)
+	if res == copymode.Exited && copymode.Interrupts(k) {
+		if key, ok := toAPIKey(k); ok {
+			m.send(&api.Input{Pane: pane, Key: &key})
+		}
+	}
+	return cmd
 }
 
 // copyReceive gives copy mode a message from the server.
