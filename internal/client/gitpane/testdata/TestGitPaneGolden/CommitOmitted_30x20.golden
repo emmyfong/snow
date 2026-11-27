@@ -1,0 +1,20 @@
+[1m feat/195-git-pane[m
+  [38;2;138;155;171mCommit 3 staged files shown[m
+  [38;2;138;155;171m2000 more changes not shown[m
+    [38;2;143;209;158madded[m     ...git/status.go
+    [38;2;215;180;106mmodified[m  ...er/gitpane.go
+    [38;2;127;184;230mrenamed[m   ...> docs/new.md
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;127;184;230mMessage: [mCommit the staged fi
+          les                 
+[38;2;127;184;230m Commit [m [38;2;127;184;230m Clear [m              

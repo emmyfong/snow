@@ -1,6 +1,8 @@
 package gitpane
 
 import (
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -47,6 +49,54 @@ func TestWorktreeOwner(t *testing.T) {
 	}
 }
 
+func TestWorktreeButtons(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		index  int
+		remove bool
+	}{
+		{"main", 1, false}, {"owned", 2, false}, {"unowned", 3, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			m := worktreeModel(80, 24)
+			m.selectIndex(m.entries(), tt.index)
+			row := ansi.Strip(m.View()[23])
+			if !strings.Contains(row, "Open") || !strings.Contains(row, "Commit...") || strings.Contains(row, "Remove") != tt.remove {
+				t.Fatalf("buttons: %q", row)
+			}
+		})
+	}
+	for _, tt := range []struct {
+		width        int
+		open, remove bool
+	}{{30, true, true}, {22, true, false}, {17, false, false}} {
+		m := worktreeModel(tt.width, 8)
+		m.selectIndex(m.entries(), 3)
+		row := ansi.Strip(m.View()[7])
+		if !strings.Contains(row, "Commit...") || strings.Contains(row, "Open") != tt.open || strings.Contains(row, "Remove") != tt.remove {
+			t.Errorf("width %d buttons: %q", tt.width, row)
+		}
+	}
+}
+
+func TestRemoveButtonSameAsKey(t *testing.T) {
+	makeModel := func() *Model { m := worktreeModel(80, 24); m.selectIndex(m.entries(), 3); return m }
+	click, press := makeModel(), makeModel()
+	row := ansi.Strip(click.View()[23])
+	x := strings.Index(row, "Remove")
+	if x < 0 {
+		t.Fatalf("no Remove button: %q", row)
+	}
+	got, want := click.Click(x, 23), press.Key(key("x"))
+	if !reflect.DeepEqual(got, want) || click.removePath != press.removePath || click.removePath == "" {
+		t.Fatalf("Remove click differs from x: %#v / %#v", got, want)
+	}
+	if got, want = click.Key(key("y")), press.Key(key("y")); !reflect.DeepEqual(got, want) {
+		t.Fatalf("confirmation differs: %#v / %#v", got, want)
+	}
+	wantAction(t, got, api.GitActRemoveWorktree, map[string]string{api.ArgGitPath: "/home/u/snow/.worktrees/spike"})
+}
+
 // worktrees is a state with a change and a linked worktree that an agent
 // works in.
 func worktrees() (api.GitState, []api.AgentInfo) {
@@ -66,6 +116,7 @@ func worktrees() (api.GitState, []api.AgentInfo) {
 func worktreeModel(w, h int) *Model {
 	st, agents := worktrees()
 	m := New(7, testTheme())
+	m.SetFocused(true)
 	m.SetAgents(agents)
 	m.SetSize(w, h)
 	m.SetState(st)
@@ -97,12 +148,20 @@ func TestWorktreeEnter(t *testing.T) {
 // alone shows no section.
 func TestWorktreeRows(t *testing.T) {
 	view := ansi.Strip(strings.Join(worktreeModel(80, 24).View(), "\n"))
-	for _, want := range []string{"Worktrees (3)", "*   snow  main", "agent-1  agent/1  window 2", "spike  detached  locked"} {
+	for _, want := range []string{"Worktrees (3)", "snow", "main", "agent-1", "agent/1", "window 2", "spike", "detached", "locked"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("view lacks %q:\n%s", want, view)
 		}
 	}
 	st, _ := worktrees()
+	m := worktreeModel(80, 24)
+	want := [][]string{{"*", "snow", "main", "", ""}, {"", "agent-1", "agent/1", "", "window 2"}, {"", "spike", "detached", "locked", ""}}
+	for i, wt := range st.Worktrees {
+		got := m.worktreeCols(wt)
+		if !slices.Equal(got, want[i]) {
+			t.Errorf("worktree %d cells = %q, want %q", i, got, want[i])
+		}
+	}
 	st.Worktrees = st.Worktrees[:1]
 	if view := ansi.Strip(strings.Join(model(st, 80, 24).View(), "\n")); strings.Contains(view, "Worktrees") {
 		t.Errorf("one checkout shows a section:\n%s", view)
@@ -174,27 +233,33 @@ func TestWorktreeRemoveKey(t *testing.T) {
 	}
 }
 
-// TestWorktreeRemoveHint shows x only for an unowned linked worktree.
+// TestWorktreeRemoveHint keeps removal discoverable in the menu while the
+// button row replaces key hints. Its button arrives in #484.
 func TestWorktreeRemoveHint(t *testing.T) {
-	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{
-		{Path: "/src/snow", Branch: "main", Main: true},
-		{Path: "/src/snow/.worktrees/clean", Branch: "clean"},
-	}}
+	st := api.GitState{Folder: "/src/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}, Worktrees: []api.GitWorktree{{Path: "/src/snow", Branch: "main", Main: true}, {Path: "/src/snow/.worktrees/clean", Branch: "clean"}}}
 	m := model(st, 80, 24)
-	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
-		t.Fatal("change row shows x remove")
+	hasRemove := func() bool {
+		for _, a := range m.MenuActions() {
+			if a.Label == "Remove worktree" && a.Shortcut == "x" {
+				return true
+			}
+		}
+		return false
 	}
-	m.Key(key("down")) // main checkout
-	if strings.Contains(ansi.Strip(strings.Join(m.View(), "\n")), "x remove") {
-		t.Fatal("main checkout shows x remove")
+	if hasRemove() {
+		t.Fatal("change row offers Remove")
 	}
 	m.Key(key("down"))
-	if view := ansi.Strip(strings.Join(m.View(), "\n")); !strings.Contains(view, "x remove") {
-		t.Fatalf("unowned worktree lacks x remove:\n%s", view)
+	if hasRemove() {
+		t.Fatal("main checkout offers Remove")
+	}
+	m.Key(key("down"))
+	if !hasRemove() {
+		t.Fatal("unowned worktree lacks Remove menu entry")
 	}
 	m.SetAgents([]api.AgentInfo{{Pane: 9, Folder: "/src/snow/.worktrees/clean"}})
-	if view := ansi.Strip(strings.Join(m.View(), "\n")); strings.Contains(view, "x remove") {
-		t.Fatalf("owned worktree shows x remove:\n%s", view)
+	if hasRemove() {
+		t.Fatal("owned worktree offers Remove")
 	}
 }
 

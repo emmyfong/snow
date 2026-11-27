@@ -195,6 +195,12 @@ func (m *Model) syncPanes() {
 	if m.layout == nil {
 		return
 	}
+	focusedID := m.focusedPaneID()
+	for id, pane := range m.own {
+		if f, ok := pane.(interface{ SetFocused(bool) }); ok {
+			f.SetFocused(id == focusedID)
+		}
+	}
 	listed, zoomed := map[int]bool{}, false
 	for _, w := range m.layout.Windows {
 		zoomed = zoomed || w.Zoomed
@@ -210,6 +216,9 @@ func (m *Model) syncPanes() {
 			}
 			if o := m.own[p.ID]; o != nil {
 				o.SetSize(p.Rect.W, p.Rect.H)
+				if f, ok := o.(interface{ SetFocused(bool) }); ok {
+					f.SetFocused(p.ID == focusedID)
+				}
 			}
 		}
 	}

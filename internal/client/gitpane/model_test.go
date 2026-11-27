@@ -29,6 +29,7 @@ func testTheme() theme.Theme { return theme.Default() }
 
 func model(st api.GitState, w, h int) *Model {
 	m := New(7, testTheme())
+	m.SetFocused(true)
 	m.SetSize(w, h)
 	m.SetState(st)
 	return m
@@ -74,7 +75,7 @@ func TestListKeys(t *testing.T) {
 	if a := m.Key(key("s")); a != nil {
 		t.Fatalf("s on a staged-only file sent %+v", a)
 	}
-	if n := m.Note(); !strings.Contains(n, "already staged") {
+	if n := strings.Join(m.View(), "\n"); !strings.Contains(n, "already staged") {
 		t.Errorf("note %q", n)
 	}
 	wantAction(t, m.Key(key("enter")), api.GitActDiff, map[string]string{api.ArgGitPath: "internal/git/status.go", api.ArgGitStaged: "true"})
@@ -96,9 +97,9 @@ func TestCommitBox(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
 	var escapeHint string
-	for _, h := range m.listHints() {
-		if h.Key == "esc" {
-			escapeHint = h.Desc
+	for _, h := range m.MenuActions() {
+		if h.Shortcut == "Esc" {
+			escapeHint = h.Label
 		}
 	}
 	if !strings.Contains(escapeHint, "keep draft") || strings.Contains(escapeHint, "cancel") {
@@ -184,7 +185,7 @@ func TestCommitErrorWraps(t *testing.T) {
 func TestCommitRefusedLocally(t *testing.T) {
 	m := model(changes(), 80, 24)
 	m.Key(key("c"))
-	if a := m.Key(key("enter")); a != nil || !strings.Contains(m.Note(), "message") {
+	if a := m.Key(key("enter")); a != nil || !strings.Contains(strings.Join(m.View(), "\n"), "message") {
 		t.Error("an empty message was sent")
 	}
 	st := changes()
@@ -192,7 +193,7 @@ func TestCommitRefusedLocally(t *testing.T) {
 	m = model(st, 80, 24)
 	m.Key(key("c"))
 	m.Key(key("x"))
-	if a := m.Key(key("enter")); a != nil || !strings.Contains(m.Note(), "Nothing is staged") {
+	if a := m.Key(key("enter")); a != nil || !strings.Contains(strings.Join(m.View(), "\n"), "Nothing is staged") {
 		t.Error("a commit with nothing staged was sent")
 	}
 }
@@ -265,15 +266,16 @@ func TestClick(t *testing.T) {
 	}
 	wantAction(t, m.Click(5, row), api.GitActDiff, nil)
 
-	hints := len(l.rows) - 1
-	if l.hits[hints] != hitHints {
-		t.Fatalf("last row is %d, want the hints", l.hits[hints])
+	buttons := len(l.rows) - 1
+	l = m.layout()
+	if l.hits[buttons] != hitButtons {
+		t.Fatalf("last row is %d, want buttons", l.hits[buttons])
 	}
-	wantAction(t, m.Click(1, hints), api.GitActStage, nil) // "s stage" comes first, after one cell
-	commit := strings.Index(ansi.Strip(l.rows[hints]), "c commit")
-	m.Click(commit, hints)
+	wantAction(t, m.Click(1, buttons), api.GitActStage, nil)
+	commit := strings.Index(ansi.Strip(l.rows[buttons]), "Commit...")
+	m.Click(commit, buttons)
 	if m.mode != modeCommit {
-		t.Error("a click on the commit hint did not open the box")
+		t.Error("a click on Commit did not open the box")
 	}
 }
 

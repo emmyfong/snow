@@ -30,7 +30,7 @@ func (t Theme) For(p colorprofile.Profile) Theme {
 }
 
 // ForBackground adapts a theme when Snow paints the given default background.
-// A nil background leaves secondary text suited to the terminal's own colors.
+// A nil background preserves change-word, muted, and queued colors.
 func (t Theme) ForBackground(p colorprofile.Profile, painted color.Color) Theme {
 	if p < colorprofile.ANSI {
 		t.Background, t.Text = nil, nil
@@ -49,7 +49,11 @@ func (t Theme) ForBackground(p colorprofile.Profile, painted color.Color) Theme 
 	fix(&t.Text, t.Background)
 	t.Text = p.Convert(t.Text)
 	if painted != nil && p < colorprofile.TrueColor {
-		fix(&t.Muted, painted)
+		// Only a known painted background can justify replacing a palette
+		// color. The terminal may supply a light or transparent background.
+		for _, fg := range []*color.Color{&t.Added, &t.Modified, &t.Removed, &t.Accent, &t.Muted} {
+			fix(fg, painted)
+		}
 		fix(&t.Queued, painted)
 	}
 	fix(&t.BarFG, t.BarBG)

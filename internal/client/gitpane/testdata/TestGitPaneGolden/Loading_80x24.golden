@@ -1,12 +1,12 @@
 [1m feat/195-git-pane[m[38;2;138;155;171m  in …/u/snow[m[38;2;138;155;171m, 2 ahead, 1 behind[m                      [38;2;138;155;171mreading [m
   [38;2;138;155;171mStaged (3)[m                                                                    
-[1;38;2;255;255;255;48;2;45;74;102m> A   internal/git/status.go                                                    [m
-  M   internal/server/gitpane.go                                                
-  R   docs/old.md -> docs/new.md                                                
+[1;38;2;255;255;255;48;2;45;74;102m> [38;2;255;255;255;48;2;45;74;102madded[m[38;2;255;255;255;48;2;45;74;102m     internal/git/status.go                                              [m[m
+  [38;2;215;180;106mmodified[m  internal/server/gitpane.go                                          
+  [38;2;127;184;230mrenamed[m   docs/old.md -> docs/new.md                                          
   [38;2;138;155;171mChanges (3)[m                                                                   
-  M   internal/server/gitpane.go                                                
-  M   README.md                                                                 
-  ?   notes/todo.txt                                                            
+  [38;2;215;180;106mmodified[m  internal/server/gitpane.go                                          
+  [38;2;215;180;106mmodified[m  README.md                                                           
+  [38;2;138;155;171muntracked[m notes/todo.txt                                                      
 
 
 
@@ -21,4 +21,4 @@
 
 
 
- [38;2;127;184;230ms[m [38;2;138;155;171mstage[m   [38;2;127;184;230mu[m [38;2;138;155;171munstage[m   [38;2;127;184;230mc[m [38;2;138;155;171mcommit[m   [38;2;127;184;230menter[m [38;2;138;155;171mdiff[m   [38;2;127;184;230ma[m [38;2;138;155;171mstage all[m   [38;2;127;184;230mr[m [38;2;138;155;171mrefresh[m
+[38;2;127;184;230m Unstage [m [38;2;127;184;230m Diff [m                                                     [38;2;127;184;230m Commit... [m

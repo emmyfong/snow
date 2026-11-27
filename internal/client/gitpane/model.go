@@ -17,7 +17,7 @@ type mode int
 const (
 	modeList   mode = iota // the changes
 	modeDiff               // one file's diff
-	modeCommit             // the changes, with the commit message box
+	modeCommit             // the staged files and commit message box
 )
 
 // entry is one row the user can select: a file's staged or its unstaged
@@ -75,6 +75,7 @@ type Model struct {
 	th            theme.Theme
 	st            api.GitState
 	loaded        bool
+	focused       bool
 	width, height int
 	mode          mode
 	// The selected row: by key, so it stays on the same row when the list
@@ -100,6 +101,9 @@ type Model struct {
 func New(pane int, th theme.Theme) *Model {
 	return &Model{pane: pane, th: th.Resolve()}
 }
+
+// SetFocused sets whether the pane shows its action buttons.
+func (m *Model) SetFocused(focused bool) { m.focused = focused }
 
 // SetSize sets the pane's size in cells.
 func (m *Model) SetSize(width, height int) { m.width, m.height = width, height }
@@ -133,12 +137,9 @@ func (m *Model) SetState(st api.GitState) {
 	m.keepSelection()
 }
 
-// Note returns a note for the status bar about the last key, once, or "".
-func (m *Model) Note() string {
-	n := m.note
-	m.note = ""
-	return n
-}
+// Note returns no status-line note. Git messages stay in the pane until
+// the next key or click.
+func (m *Model) Note() string { return "" }
 
 // SetAgents gives the pane its session's agents, which own worktrees.
 func (m *Model) SetAgents(agents []api.AgentInfo) { m.agents = agents }
@@ -186,8 +187,12 @@ func (m *Model) entries() []entry {
 
 // selected returns the selected row's index in entries, or -1 for none.
 func (m *Model) selected(es []entry) int {
+	return indexByKey(es, m.selKey)
+}
+
+func indexByKey(es []entry, key string) int {
 	for i, e := range es {
-		if e.key() == m.selKey {
+		if e.key() == key {
 			return i
 		}
 	}

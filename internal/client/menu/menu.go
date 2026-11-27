@@ -50,16 +50,6 @@ func PaneItems(t *keys.Table) []Item {
 	return buildItems(t, rows)
 }
 
-// PaneItemsWithGit appends the worktree action when a Git pane has a
-// removable worktree selected.
-func PaneItemsWithGit(t *keys.Table, removeWorktree bool) []Item {
-	items := PaneItems(t)
-	if removeWorktree {
-		items = append(items, Item{Label: "Remove worktree", Shortcut: "x", Action: "git-remove-worktree"})
-	}
-	return items
-}
-
 // Result is what a key press or a click did to the menu.
 type Result int
 
@@ -72,9 +62,10 @@ const (
 
 // Model is one open menu.
 type Model struct {
-	items    []Item
-	selected int
-	x, y     int // where the user clicked
+	items      []Item
+	selected   int
+	x, y       int // where the user clicked
+	scrollable bool
 }
 
 // New opens a menu for items at screen cell x, y.
@@ -125,9 +116,23 @@ func (m *Model) Click(th theme.Theme, cols, rows, x, y int) Result {
 	if x < bx || x >= bx+w || y < by || y >= by+h {
 		return Closed
 	}
-	if i := y - by - 1; x > bx && x < bx+w-1 && i >= 0 && i < len(m.items) {
-		m.selected = i
-		return Chosen
+	if i := y - by - 1; x > bx && x < bx+w-1 && i >= 0 && i < h-2 {
+		first, last, scrolling := m.viewport(rows)
+		if scrolling {
+			if i == 0 {
+				m.selected = max(first-(last-first), 0)
+				return Open
+			}
+			if i == last-first+1 {
+				m.selected = min(last+(last-first)-1, len(m.items)-1)
+				return Open
+			}
+			i--
+		}
+		if first+i < last {
+			m.selected = first + i
+			return Chosen
+		}
 	}
 	return Open
 }
@@ -140,25 +145,45 @@ func (m *Model) View(th theme.Theme, cols, rows int) (box string, x, y int) {
 	if len(m.items) == 0 {
 		return "", 0, 0
 	}
-	labelW, hintW := 0, 0
-	items := make([]string, len(m.items))
-	hints := make([]string, len(m.items))
-	for i, it := range m.items {
-		items[i], hints[i] = it.Label, it.Shortcut
-		labelW, hintW = max(labelW, ansi.StringWidth(it.Label)), max(hintW, ansi.StringWidth(it.Shortcut))
+	first, last, scrolling := m.viewport(rows)
+	if first == last {
+		return "", 0, 0
 	}
+	labelW, hintW := 0, 0
+	for _, it := range m.items {
+		labelW = max(labelW, ansi.StringWidth(it.Label))
+		hintW = max(hintW, ansi.StringWidth(it.Shortcut))
+	}
+	var items, hints []string
+	selected := m.selected - first
+	if scrolling {
+		items = append(items, "Scroll up")
+		hints = append(hints, "Up")
+		labelW = max(labelW, ansi.StringWidth("Scroll down"))
+		hintW = max(hintW, ansi.StringWidth("Down"))
+		selected++
+	}
+	for _, it := range m.items[first:last] {
+		items = append(items, it.Label)
+		hints = append(hints, it.Shortcut)
+	}
+	if scrolling {
+		items = append(items, "Scroll down")
+		hints = append(hints, "Down")
+	}
+
 	// Frame, pointer, label, a gap, the hint, and a margin.
 	width := 2 + ansi.StringWidth(th.Glyphs.Pointer) + labelW + 1
 	if hintW > 0 {
 		width += 2 + hintW
 	}
 	width = min(width, cols)
-	height := len(m.items) + 2
+	height := len(items) + 2
 	if width < 4 || height > rows {
 		// A menu that cannot show every item is no use; the keys still work.
 		return "", 0, 0
 	}
-	box = ui.Popup(th, ui.PopupOptions{Items: items, Hints: hints, Selected: m.selected, Width: width})
+	box = ui.Popup(th, ui.PopupOptions{Items: items, Hints: hints, Selected: selected, Width: width})
 	x = max(min(m.x, cols-width), 0)
 	y = max(min(m.y, rows-height), 0)
 	return strings.TrimRight(box, "\n"), x, y

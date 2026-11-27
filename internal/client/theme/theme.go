@@ -47,6 +47,7 @@ type Theme struct {
 	ActivityFG  color.Color // the line that says a turn is running
 	ActivityBG  color.Color
 	Added       color.Color // lines a change adds; on the terminal's background
+	Modified    color.Color // a modified change; on the terminal's background
 	Removed     color.Color // lines a change removes; on the terminal's background
 	Glyphs      Glyphs
 }
@@ -151,6 +152,7 @@ func (t Theme) Resolve() Theme {
 	fill(&t.ActivityFG, d.ActivityFG)
 	fill(&t.ActivityBG, d.ActivityBG)
 	fill(&t.Added, d.Added)
+	fill(&t.Modified, d.Modified)
 	fill(&t.Removed, d.Removed)
 	if t.Glyphs == (Glyphs{}) {
 		t.Glyphs = d.Glyphs
@@ -170,7 +172,7 @@ func (t Theme) colors() map[string]color.Color {
 		"SelectedFG": t.SelectedFG, "SelectedBG": t.SelectedBG,
 		"UserFG": t.UserFG, "UserBG": t.UserBG, "AgentFG": t.AgentFG, "AgentBG": t.AgentBG,
 		"Queued": t.Queued, "ActivityFG": t.ActivityFG, "ActivityBG": t.ActivityBG,
-		"Added": t.Added, "Removed": t.Removed,
+		"Added": t.Added, "Modified": t.Modified, "Removed": t.Removed,
 	}
 }
 

@@ -36,10 +36,16 @@ func (g gitPane) Key(k tea.Key) (api.Message, string) { return g.result(g.Model.
 
 func (g gitPane) Click(x, y int) (api.Message, string) { return g.result(g.Model.Click(x, y)) }
 
+func (g gitPane) prepareClick(x, y int) func() (api.Message, string) {
+	snapshot := g.CaptureClick(x, y)
+	return func() (api.Message, string) {
+		return g.result(g.ClickCaptured(snapshot))
+	}
+}
+
 func (g gitPane) Animating() bool { return false }
 
 func (g gitPane) Tick() {}
 
-// result returns the pane's message for the server, or nil, and the
-// pane's note.
-func (g gitPane) result(msg api.Message) (api.Message, string) { return msg, g.Note() }
+// result returns the pane's message. Its notes stay in its own status row.
+func (g gitPane) result(msg api.Message) (api.Message, string) { return msg, "" }

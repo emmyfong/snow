@@ -80,8 +80,8 @@ func boxColors(th theme.Theme, o ChoiceOptions) (fg, bg color.Color) {
 	return th.PromptFG, th.PromptBG
 }
 
-// ButtonSpan is where one choice of a ChoiceBox sits, in cells from the
-// box's top-left corner.
+// ButtonSpan is where a button sits, in cells from the component's top-left
+// corner. ButtonRow spans have Y zero; ChoiceBox spans include its frame.
 type ButtonSpan struct {
 	Index   int
 	X, Y, W int
@@ -99,24 +99,15 @@ func ChoiceButtons(o ChoiceOptions) []ButtonSpan {
 	labels := buttonLabels(o.Choices)
 	var out []ButtonSpan
 	if oneRow(labels, inner) {
-		x := 2 // the left edge and a space
-		for i, l := range labels {
-			out = append(out, ButtonSpan{Index: i, X: x, Y: y, W: ansi.StringWidth(l)})
-			x += ansi.StringWidth(l) + 1
+		for _, sp := range ButtonRowSpans(ButtonRowOptions{Width: inner - 1, Choices: o.Choices}) {
+			sp.X += 2 // the left edge and a space
+			sp.Y = y
+			out = append(out, sp)
 		}
 		return out
 	}
 	for i, l := range labels {
 		out = append(out, ButtonSpan{Index: i, X: 2, Y: y + i, W: min(ansi.StringWidth(l), inner-1)})
-	}
-	return out
-}
-
-// buttonLabels pads each choice with a space on each side.
-func buttonLabels(choices []string) []string {
-	out := make([]string, len(choices))
-	for i, c := range choices {
-		out[i] = " " + PlainLine(c) + " "
 	}
 	return out
 }
@@ -136,6 +127,19 @@ func buttonRows(th theme.Theme, o ChoiceOptions) []string {
 	on := lipgloss.NewStyle().Foreground(fg).Background(bg).Bold(true)
 	off := lipgloss.NewStyle().Foreground(th.Accent)
 	labels := buttonLabels(o.Choices)
+	if oneRow(labels, o.Width-2) {
+		opts := ButtonRowOptions{Width: o.Width - 3, Choices: o.Choices}
+		row := ButtonRow(th, opts)
+		if o.Selected >= 0 && o.Selected < len(labels) {
+			start := 0
+			for _, label := range labels[:o.Selected] {
+				start += len(off.Render(label)) + 1
+			}
+			before := off.Render(labels[o.Selected])
+			row = row[:start] + on.Render(labels[o.Selected]) + row[start+len(before):]
+		}
+		return []string{" " + strings.TrimRight(row, " ")}
+	}
 	styled := make([]string, len(labels))
 	for i, l := range labels {
 		if i == o.Selected {
@@ -143,9 +147,6 @@ func buttonRows(th theme.Theme, o ChoiceOptions) []string {
 		} else {
 			styled[i] = off.Render(l)
 		}
-	}
-	if oneRow(labels, o.Width-2) {
-		return []string{" " + strings.Join(styled, " ")}
 	}
 	rows := make([]string, len(styled))
 	for i, s := range styled {

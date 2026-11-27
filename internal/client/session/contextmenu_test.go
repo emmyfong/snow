@@ -263,8 +263,14 @@ func TestGitMenuRemoveWorktree(t *testing.T) {
 	if !strings.Contains(ansi.Strip(content(m)), "Remove worktree") {
 		t.Fatalf("menu lacks Remove worktree:\n%s", content(m))
 	}
-	for range 17 { // the Git action is the last menu item
+	for range len(m.paneMenuItems()) {
+		if m.menu.Action() == "git-key:x" {
+			break
+		}
 		m.menu.Key(tea.Key{Code: tea.KeyDown})
+	}
+	if m.menu.Action() != "git-key:x" {
+		t.Fatal("no remove menu action")
 	}
 	m.menuResult(m.menu.Key(tea.Key{Code: tea.KeyEnter}))
 	git := m.own[2].(gitPane)

@@ -1,0 +1,24 @@
+[1m feat/195-git-pane[m[38;2;138;155;171m  in …/u/snow[m[38;2;138;155;171m, 2 ahead, 1 behind[m
+  [38;2;138;155;171mCommit 3 staged files[m
+    [38;2;143;209;158madded[m     internal/git/status.go
+    [38;2;215;180;106mmodified[m  internal/server/gitpane.go
+    [38;2;127;184;230mrenamed[m   docs/old.md -> docs/new.md
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ [38;2;127;184;230mMessage: [mKeep the draft                                                        

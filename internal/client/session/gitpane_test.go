@@ -1,7 +1,9 @@
 package session
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -25,6 +27,22 @@ func gitScreen(t *testing.T, cols, rows int) (*Model, *recorder) {
 	m.Update(&api.PaneUpdate{Pane: 1, Lines: []api.LineUpdate{{Row: 0, Text: "$ git status"}}})
 	m.Update(gitState(t, 1, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: []api.GitChange{{Path: "README.md", Work: "M"}}}))
 	return m, r
+}
+
+func TestGitNoteStaysOffStatusLine(t *testing.T) {
+	m, _ := gitScreen(t, 80, 24)
+	git := m.own[2].(gitPane)
+	if _, note := git.Key(tea.Key{Code: 'u', Text: "u"}); note != "" {
+		t.Errorf("git returned status-line note %q", note)
+	}
+	if !strings.Contains(strings.Join(git.View(), "\n"), "Select a staged file to unstage.") {
+		t.Fatal("git pane lost its note")
+	}
+	m.Update(press('u', 0, "u"))
+	rows := strings.Split(content(m), "\n")
+	if strings.Contains(rows[len(rows)-1], "staged file") {
+		t.Fatalf("git note reached the session status line: %q", rows[len(rows)-1])
+	}
 }
 
 func gitState(t *testing.T, rev uint64, st api.GitState) *api.SidePaneState {
@@ -58,6 +76,64 @@ func TestGitPaneKeys(t *testing.T) {
 	}
 }
 
+func TestGitPaneClickKeepsPressTimeTargetAcrossFocus(t *testing.T) {
+	m, r := gitScreen(t, 80, 24)
+	layout := *m.layout
+	layout.Windows = append([]api.WindowInfo(nil), m.layout.Windows...)
+	layout.Windows[0].Panes = append([]api.PaneInfo(nil), m.layout.Windows[0].Panes...)
+	layout.Windows[0].Panes[0].Focused = true
+	layout.Windows[0].Panes[1].Focused = false
+	m.Update(&layout)
+
+	changes := make([]api.GitChange, 30)
+	for i := range changes {
+		changes[i] = api.GitChange{Path: fmt.Sprintf("file-%d.go", i), Work: "M"}
+	}
+	m.Update(gitState(t, 2, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: changes}))
+	git := m.own[2].(gitPane)
+	git.Model.Key(tea.Key{Code: tea.KeyEnd})
+
+	view := git.View()
+	row := -1
+	for i, line := range view {
+		if strings.Contains(line, "file-29.go") {
+			row = i
+			break
+		}
+	}
+	if row < 0 {
+		t.Fatal("selected file is not visible before focus")
+	}
+
+	pane := layout.Windows[0].Panes[1]
+	x := pane.Rect.X + 2
+	y := m.areaTop() + pane.Rect.Y + row
+	m.Update(click(x, y))
+	if m.ownPress == nil {
+		t.Fatal("mouse press did not wait for release")
+	}
+
+	focused := *m.layout
+	focused.Windows = append([]api.WindowInfo(nil), m.layout.Windows...)
+	focused.Windows[0].Panes = append([]api.PaneInfo(nil), m.layout.Windows[0].Panes...)
+	focused.Windows[0].Panes[0].Focused = false
+	focused.Windows[0].Panes[1].Focused = true
+	m.Update(&focused)
+	changes = append([]api.GitChange{{Path: "aaa.go", Work: "M"}}, changes...)
+	m.Update(gitState(t, 3, api.GitState{Folder: "/home/u/snow", Branch: "main", Changes: changes}))
+	m.Update(release(x, y))
+
+	var action *api.SidePaneAction
+	for _, sent := range r.sent {
+		if a, ok := sent.(*api.SidePaneAction); ok {
+			action = a
+		}
+	}
+	if action == nil || action.Action != api.GitActDiff || action.Args[api.ArgGitPath] != "file-29.go" {
+		t.Fatalf("release action = %+v, want diff file-29.go from the visible press-time row", action)
+	}
+}
+
 // TestGitPaneOlderState: a state older than the one shown is dropped, and
 // a state this client cannot read shows as an error.
 func TestGitPaneOlderState(t *testing.T) {
@@ -70,5 +146,15 @@ func TestGitPaneOlderState(t *testing.T) {
 	m.Update(&api.SidePaneState{Pane: 2, Kind: api.PaneGit, Rev: 4, State: json.RawMessage(`{"ahead":-1}`)})
 	if v := m.View().Content; !strings.Contains(v, "cannot read") {
 		t.Fatal("a bad state does not say so")
+	}
+}
+
+func TestGitNoteGolden(t *testing.T) {
+	for _, size := range [][2]int{{80, 24}, {120, 40}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			m, _ := gitScreen(t, size[0], size[1])
+			m.Update(press('u', 0, "u"))
+			golden.RequireEqual(t, content(m))
+		})
 	}
 }
