@@ -5,6 +5,17 @@ Approved skill changes use a dedicated issue, worktree, and PR. The user reviews
 `pending review` entries. Historical entries record the policy at their date;
 they do not override the current approval rules.
 
+## 2026-11-27 review-wave: run a full host test before PRs
+- Evidence: PR #507 changed shared theme tokens. Package-scoped checks missed
+  Files and Home golden failures on Ubuntu, macOS, and Windows.
+- Change: run one full host-platform test suite on the final tree before PR.
+  Keep package-scoped checks during implementation. Reuse an unchanged result.
+- Test: scenario walkthrough: a theme token changes while its Files and Home
+  consumers are untouched. The final gate runs all packages and catches stale
+  consumer goldens before PR. The `AGENTS.md` rule and local-gate reference
+  agree on commands and reuse conditions.
+- Status: pending review
+
 ## 2026-11-25 tui: catalog ButtonRow and pane-local messages
 - Evidence: #488 identifies the missing ButtonRow catalog entry from #481 and
   the StatusBar wording that conflicts with #483's pane-local messages. The
