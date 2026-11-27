@@ -76,3 +76,6 @@ jobs:
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" \
             > "$RUNNER_TEMP/ci-jobs.json"
           bash .github/scripts/ci-job-summary.sh "$RUNNER_TEMP/ci-jobs.json"
+      - name: enforce required job results
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

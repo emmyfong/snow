@@ -10,6 +10,8 @@ cat > "$tmp/failed.json" <<'JSON'
 {"jobs":[
   {"name":"test (ubuntu-latest)","conclusion":"failure","html_url":"https://example.test/ubuntu"},
   {"name":"test (macos-latest)","conclusion":"cancelled","html_url":"https://example.test/macos"},
+  {"name":"test (linux-timeout)","conclusion":"timed_out","html_url":"https://example.test/timeout"},
+  {"name":"deploy","conclusion":"action_required","html_url":"https://example.test/action-required"},
   {"name":"test (windows-latest)","conclusion":"skipped","html_url":"https://example.test/windows"},
   {"name":"lint","conclusion":"success","html_url":"https://example.test/lint"}
 ]}
@@ -18,10 +20,18 @@ JSON
 if output=$(bash "$summary" "$tmp/failed.json"); then
 	echo "expected failed and cancelled jobs to return status 1" >&2
 	exit 1
+else
+	status=$?
+fi
+if [[ $status -ne 1 ]]; then
+	echo "expected status 1, got $status: $output" >&2
+	exit 1
 fi
 for expected in \
 	"test (ubuntu-latest) (failure): https://example.test/ubuntu" \
-	"test (macos-latest) (cancelled): https://example.test/macos"; do
+	"test (macos-latest) (cancelled): https://example.test/macos" \
+	"test (linux-timeout) (timed_out): https://example.test/timeout" \
+	"deploy (action_required): https://example.test/action-required"; do
 	if [[ $output != *"$expected"* ]]; then
 		echo "summary missing '$expected': $output" >&2
 		exit 1
@@ -40,7 +50,7 @@ cat > "$tmp/success.json" <<'JSON'
 JSON
 
 output=$(bash "$summary" "$tmp/success.json")
-if [[ $output != "No CI jobs failed or were cancelled." ]]; then
+if [[ $output != "All completed CI jobs succeeded or were skipped." ]]; then
 	echo "unexpected success summary: $output" >&2
 	exit 1
 fi

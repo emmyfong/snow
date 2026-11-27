@@ -14,13 +14,16 @@ fi
 
 failures=$(jq -r '
 	.jobs[]
-	| select(.conclusion == "failure" or .conclusion == "cancelled")
+	| select(.conclusion != null
+		and .conclusion != "success"
+		and .conclusion != "skipped"
+		and .conclusion != "neutral")
 	| "- \(.name) (\(.conclusion)): \(.html_url)"
 ' "$jobs_file")
 
 if [[ -n $failures ]]; then
-	printf 'The following CI jobs failed or were cancelled:\n%s\n' "$failures"
+	printf 'The following CI jobs did not succeed:\n%s\n' "$failures"
 	exit 1
 fi
 
-echo "No CI jobs failed or were cancelled."
+echo "All completed CI jobs succeeded or were skipped."
