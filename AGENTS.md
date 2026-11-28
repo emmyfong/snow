@@ -226,9 +226,13 @@ folder, without edits across the codebase.
   speed you measure. Timing limits skip under `-race`: a `raceDetector`
   constant from a `race_on_test.go` / `race_off_test.go` build-tag pair
   (see `internal/convstore`) tells the test.
-- Locally, run only: `go build ./...`, then `go vet` and `go test` on the
-  packages you touched. Do not run the full suite. CI runs everything on
-  Linux, macOS, and Windows and gates the merge.
+- During implementation and review, run `go build ./...`, then `go vet` and
+  `go test` on the packages you touched. After the final code or test change,
+  run the full test suite once before opening the PR: `go test -race ./...` on
+  Linux or macOS, or `go test ./...` on Windows. Reuse a passing result when
+  no Go source, test, fixture, dependency, or build configuration changed
+  afterward. CI runs the full matrix on Linux, macOS, and Windows and gates
+  the merge.
 
 ## Issues and worktrees
 

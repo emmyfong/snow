@@ -1,9 +1,10 @@
 # Local gate
 
-Run the same checks CI runs, on the packages the branch touched, before the
-reviewers start and again after the fixes, before the PR. CI runs the whole
-suite on three OSes; this gate catches most failures in a few minutes and
-spares the user a red PR. It does not catch every flaky test.
+Run checks for the packages the branch touched before the reviewers start and
+after selected fixes. Then run the full host-platform test suite once on the
+final tree before the PR. CI still runs the whole suite on three OSes; the
+final host run catches failures in tests outside the directly changed packages.
+It does not catch every platform-specific or flaky test.
 
 ## Packages
 
@@ -44,6 +45,22 @@ the package folder, so tests find their `testdata`:
 
 On Linux or macOS without Windows, run `GOOS=windows go vet <packages>`
 instead and say in the report that Windows tests did not run.
+
+## Final pre-PR test
+
+After the final code or test change, run the full suite once on the host:
+
+```sh
+# Linux or macOS
+go test -race ./...
+
+# Windows
+go test ./...
+```
+
+Reuse a passing result if no Go source, test, fixture, dependency, or build
+configuration changed afterward. Keep the final result in the review report
+and the PR body. CI remains responsible for the other operating systems.
 
 ## Results
 
